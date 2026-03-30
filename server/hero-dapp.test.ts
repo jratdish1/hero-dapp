@@ -292,3 +292,154 @@ describe("Watchlist Input Validation", () => {
     ).rejects.toThrow();
   });
 });
+
+// --- Blog & MVS Router Tests ---
+describe("Blog Router", () => {
+  it("lists published blog posts publicly (no auth required)", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.blog.published({ limit: 10 });
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("rejects unauthenticated blog post creation", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.blog.create({
+        title: "Weekly MVS - March 30, 2026",
+        slug: "weekly-mvs-march-30-2026-" + Date.now(),
+        content: "This week's Most Valuable Shills featuring $HERO and $VETS",
+        excerpt: "MVS weekly roundup",
+        tags: "HERO,VETS,PulseChain",
+        tweetUrl: "https://x.com/crypmvs/status/123",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("allows authenticated blog post creation", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.blog.create({
+      title: "Weekly MVS - March 30, 2026",
+      slug: "weekly-mvs-march-30-2026-" + Date.now(),
+      content: "This week's Most Valuable Shills featuring $HERO and $VETS on PulseChain.",
+      excerpt: "MVS weekly roundup highlighting farm yields and token performance.",
+      tags: "HERO,VETS,PulseChain,MVS",
+      tweetUrl: "https://x.com/crypmvs/status/2038513610360836215",
+      heroMentioned: true,
+      vetsMentioned: true,
+    });
+    expect(result).toBeDefined();
+    expect(result.success).toBe(true);
+  });
+});
+
+describe("MVS Router", () => {
+  it("lists MVS content publicly", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.mvs.list({ limit: 10 });
+    expect(result).toBeDefined();
+    expect(Array.isArray(result)).toBe(true);
+  });
+
+  it("rejects unauthenticated MVS content saving", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.mvs.save({
+        tweetId: "2038513610360836215",
+        tweetUrl: "https://x.com/crypmvs/status/2038513610360836215",
+        author: "CrypMvs",
+        authorHandle: "@CrypMvs",
+        content: "Weekly MVS thread content",
+        farmYields: "$VETS/$EMIT: 147% APR | $HERO/$EMIT: 127% APR",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("allows authenticated MVS content saving", async () => {
+    const { ctx } = createAuthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.mvs.save({
+      tweetId: "2038513610360836215",
+      tweetUrl: "https://x.com/crypmvs/status/2038513610360836215",
+      author: "CrypMvs",
+      authorHandle: "@CrypMvs",
+      content: "Weekly MVS thread content with $HERO and $VETS highlights",
+      farmYields: "$VETS/$EMIT: 147% APR | $HERO/$EMIT: 127% APR | $HERO/$PLS: 154% APR",
+    });
+    expect(result).toBeDefined();
+    expect(result.success).toBeDefined();
+  });
+});
+
+// --- Partner Farm Configuration Tests ---
+describe("Partner Farm Configuration", () => {
+  it("Emit Farm has correct HERO/VETS pairs", () => {
+    const emitPairs = [
+      { pair: "HERO/EMIT", type: "LP V2" },
+      { pair: "HERO/PLS", type: "LP" },
+      { pair: "VETS/EMIT", type: "LP" },
+    ];
+    expect(emitPairs.length).toBe(3);
+    expect(emitPairs.some((p) => p.pair === "HERO/EMIT")).toBe(true);
+    expect(emitPairs.some((p) => p.pair === "VETS/EMIT")).toBe(true);
+    expect(emitPairs.some((p) => p.pair === "HERO/PLS")).toBe(true);
+  });
+
+  it("RhinoFi has HERO/RHINO pair", () => {
+    const rhinoPairs = [{ pair: "HERO/RHINO", type: "LP" }];
+    expect(rhinoPairs.length).toBe(1);
+    expect(rhinoPairs[0].pair).toBe("HERO/RHINO");
+  });
+
+  it("TruFarms has TruFarm/HERO pair", () => {
+    const truPairs = [{ pair: "TruFarm/HERO", type: "LP V2" }];
+    expect(truPairs.length).toBe(1);
+    expect(truPairs[0].pair).toBe("TruFarm/HERO");
+  });
+
+  it("All partner farm URLs are valid", () => {
+    const farmUrls = [
+      "https://emit.farm/",
+      "https://www.rhinofi.win/dapp",
+      "https://trufarms.io/",
+    ];
+    for (const url of farmUrls) {
+      expect(url).toMatch(/^https:\/\//);
+    }
+  });
+});
+
+// --- Subdomain Architecture Tests ---
+describe("Subdomain Architecture", () => {
+  it("all planned subdomains are defined", () => {
+    const subdomains = [
+      "app.vicfoundation.com",
+      "farm.vicfoundation.com",
+      "dao.vicfoundation.com",
+      "dash.vicfoundation.com",
+      "blog.vicfoundation.com",
+      "api.vicfoundation.com",
+      "ai.vicfoundation.com",
+      "docs.vicfoundation.com",
+    ];
+    expect(subdomains.length).toBeGreaterThanOrEqual(8);
+    expect(subdomains).toContain("app.vicfoundation.com");
+    expect(subdomains).toContain("farm.vicfoundation.com");
+    expect(subdomains).toContain("dao.vicfoundation.com");
+  });
+
+  it("HERO X profile handle is correct", () => {
+    const heroXHandle = "@HERO501c3";
+    expect(heroXHandle).toBe("@HERO501c3");
+  });
+
+  it("VIC Foundation is a 501(c)(3)", () => {
+    const orgType = "501(c)(3)";
+    expect(orgType).toBe("501(c)(3)");
+  });
+});

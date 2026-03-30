@@ -11,6 +11,9 @@ import Portfolio from "./pages/Portfolio";
 import DcaOrders from "./pages/DcaOrders";
 import LimitOrders from "./pages/LimitOrders";
 import Approvals from "./pages/Approvals";
+import Farm from "./pages/Farm";
+import Blog from "./pages/Blog";
+import Subdomains from "./pages/Subdomains";
 import AppLayout from "./components/AppLayout";
 
 function Router() {
@@ -23,6 +26,9 @@ function Router() {
       <Route path="/dca" component={() => <AppLayout><DcaOrders /></AppLayout>} />
       <Route path="/limits" component={() => <AppLayout><LimitOrders /></AppLayout>} />
       <Route path="/approvals" component={() => <AppLayout><Approvals /></AppLayout>} />
+      <Route path="/farm" component={() => <AppLayout><Farm /></AppLayout>} />
+      <Route path="/blog" component={() => <AppLayout><Blog /></AppLayout>} />
+      <Route path="/subdomains" component={() => <AppLayout><Subdomains /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

@@ -15,7 +15,16 @@ import {
   addToWatchlist,
   getWatchlistByUser,
   removeFromWatchlist,
+  createBlogPost,
+  getPublishedBlogPosts,
+  getBlogPostBySlug,
+  getAllBlogPosts,
+  updateBlogPost,
+  saveMvsContent,
+  getMvsContentList,
+  getMvsContentByTweetId,
 } from "./db";
+import { invokeLLM } from "./_core/llm";
 
 export const appRouter = router({
   system: systemRouter,
@@ -142,6 +151,150 @@ export const appRouter = router({
       .input(z.object({ id: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
         await removeFromWatchlist(input.id, ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
+  blog: router({
+    published: publicProcedure
+      .input(z.object({ limit: z.number().int().positive().max(50).optional() }).optional())
+      .query(async ({ input }) => {
+        return getPublishedBlogPosts(input?.limit ?? 20);
+      }),
+    bySlug: publicProcedure
+      .input(z.object({ slug: z.string() }))
+      .query(async ({ input }) => {
+        return getBlogPostBySlug(input.slug);
+      }),
+    all: protectedProcedure.query(async () => {
+      return getAllBlogPosts();
+    }),
+    create: protectedProcedure
+      .input(z.object({
+        title: z.string().min(1).max(500),
+        slug: z.string().min(1).max(500),
+        content: z.string().min(1),
+        excerpt: z.string().max(1000).optional(),
+        coverImageUrl: z.string().optional(),
+        tweetId: z.string().optional(),
+        tweetAuthor: z.string().optional(),
+        tweetUrl: z.string().optional(),
+        tags: z.string().optional(),
+        heroMentioned: z.boolean().optional(),
+        vetsMentioned: z.boolean().optional(),
+        status: z.enum(["draft", "published", "archived"]).optional(),
+        publishedAt: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await createBlogPost(input);
+        return { success: true };
+      }),
+    update: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        title: z.string().max(500).optional(),
+        content: z.string().optional(),
+        excerpt: z.string().max(1000).optional(),
+        status: z.enum(["draft", "published", "archived"]).optional(),
+        publishedAt: z.date().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const { id, ...data } = input;
+        await updateBlogPost(id, data);
+        return { success: true };
+      }),
+    generateFromMvs: protectedProcedure
+      .input(z.object({
+        tweetContent: z.string().min(1),
+        tweetUrl: z.string(),
+        tweetAuthor: z.string(),
+      }))
+      .mutation(async ({ input }) => {
+        const llmResponse = await invokeLLM({
+          messages: [
+            {
+              role: "system",
+              content: `You are a crypto blog writer for the VIC Foundation. Write engaging blog posts about $HERO and $VETS tokens on PulseChain. The VIC Foundation supports military veterans and first responders through DeFi. Always highlight the bullish case for $HERO and $VETS. Include farm yield data when available. Write in an energetic but professional tone. Output JSON with fields: title, content (markdown), excerpt, tags (comma-separated).`,
+            },
+            {
+              role: "user",
+              content: `Generate a blog post from this weekly MVS (Most Valuable Shills) tweet by ${input.tweetAuthor}:\n\n${input.tweetContent}\n\nTweet URL: ${input.tweetUrl}`,
+            },
+          ],
+          response_format: {
+            type: "json_schema",
+            json_schema: {
+              name: "blog_post",
+              strict: true,
+              schema: {
+                type: "object",
+                properties: {
+                  title: { type: "string", description: "Blog post title" },
+                  content: { type: "string", description: "Full blog post in markdown" },
+                  excerpt: { type: "string", description: "Short excerpt, max 200 chars" },
+                  tags: { type: "string", description: "Comma-separated tags" },
+                },
+                required: ["title", "content", "excerpt", "tags"],
+                additionalProperties: false,
+              },
+            },
+          },
+        });
+
+        const rawContent = llmResponse.choices[0].message.content;
+        const contentStr = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
+        const parsed = JSON.parse(contentStr || "{}");
+        const slug = parsed.title
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/^-|-$/g, "")
+          .slice(0, 200) + "-" + Date.now();
+
+        const heroMentioned = input.tweetContent.toLowerCase().includes("hero");
+        const vetsMentioned = input.tweetContent.toLowerCase().includes("vets");
+
+        await createBlogPost({
+          title: parsed.title,
+          slug,
+          content: parsed.content,
+          excerpt: parsed.excerpt,
+          tweetId: input.tweetUrl.split("/").pop() || "",
+          tweetAuthor: input.tweetAuthor,
+          tweetUrl: input.tweetUrl,
+          tags: parsed.tags,
+          heroMentioned,
+          vetsMentioned,
+          status: "published",
+          publishedAt: new Date(),
+        });
+
+        return { success: true, title: parsed.title, slug };
+      }),
+  }),
+
+  mvs: router({
+    list: publicProcedure
+      .input(z.object({ limit: z.number().int().positive().max(50).optional() }).optional())
+      .query(async ({ input }) => {
+        return getMvsContentList(input?.limit ?? 20);
+      }),
+    save: protectedProcedure
+      .input(z.object({
+        tweetId: z.string().min(1),
+        tweetUrl: z.string().min(1),
+        author: z.string().min(1),
+        authorHandle: z.string().min(1),
+        content: z.string().min(1),
+        weekLabel: z.string().optional(),
+        farmYields: z.string().optional(),
+        heroPrice: z.string().optional(),
+        vetsPrice: z.string().optional(),
+        mediaUrls: z.string().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const existing = await getMvsContentByTweetId(input.tweetId);
+        if (existing) return { success: false, message: "Already saved" };
+        await saveMvsContent(input);
         return { success: true };
       }),
   }),

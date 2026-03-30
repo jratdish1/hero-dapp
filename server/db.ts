@@ -7,10 +7,14 @@ import {
   limitOrders,
   swapHistory,
   watchlist,
+  blogPosts,
+  mvsContent,
   type InsertDcaOrder,
   type InsertLimitOrder,
   type InsertSwapHistory,
   type InsertWatchlist,
+  type InsertBlogPost,
+  type InsertMvsContent,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -167,4 +171,56 @@ export async function removeFromWatchlist(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(watchlist).where(and(eq(watchlist.id, id), eq(watchlist.userId, userId)));
+}
+
+// --- Blog Posts ---
+export async function createBlogPost(post: InsertBlogPost) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(blogPosts).values(post);
+}
+
+export async function getPublishedBlogPosts(limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(blogPosts).where(eq(blogPosts.status, "published")).orderBy(desc(blogPosts.publishedAt)).limit(limit);
+}
+
+export async function getBlogPostBySlug(slug: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function getAllBlogPosts(limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(blogPosts).orderBy(desc(blogPosts.createdAt)).limit(limit);
+}
+
+export async function updateBlogPost(id: number, data: Partial<InsertBlogPost>) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(blogPosts).set(data).where(eq(blogPosts.id, id));
+}
+
+// --- MVS Content ---
+export async function saveMvsContent(entry: InsertMvsContent) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(mvsContent).values(entry);
+}
+
+export async function getMvsContentList(limit = 20) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(mvsContent).orderBy(desc(mvsContent.createdAt)).limit(limit);
+}
+
+export async function getMvsContentByTweetId(tweetId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(mvsContent).where(eq(mvsContent.tweetId, tweetId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
 }

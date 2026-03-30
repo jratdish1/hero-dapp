@@ -16,15 +16,21 @@ import {
   Bot,
   LogOut,
   ChevronLeft,
+  Sprout,
+  Newspaper,
+  Globe,
 } from "lucide-react";
 
 const NAV_ITEMS = [
   { path: "/swap", label: "Swap", icon: ArrowLeftRight },
+  { path: "/farm", label: "Farm", icon: Sprout },
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/portfolio", label: "Portfolio", icon: Wallet },
   { path: "/dca", label: "DCA Orders", icon: Clock },
   { path: "/limits", label: "Limit Orders", icon: Target },
   { path: "/approvals", label: "Approvals", icon: Shield },
+  { path: "/blog", label: "MVS & Blog", icon: Newspaper },
+  { path: "/subdomains", label: "Ecosystem", icon: Globe },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {

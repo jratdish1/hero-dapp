@@ -85,3 +85,44 @@ export type SwapHistoryEntry = typeof swapHistory.$inferSelect;
 export type InsertSwapHistory = typeof swapHistory.$inferInsert;
 export type WatchlistEntry = typeof watchlist.$inferSelect;
 export type InsertWatchlist = typeof watchlist.$inferInsert;
+
+export const blogPosts = mysqlTable("blog_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  title: varchar("title", { length: 500 }).notNull(),
+  slug: varchar("slug", { length: 500 }).notNull().unique(),
+  content: text("content").notNull(),
+  excerpt: varchar("excerpt", { length: 1000 }),
+  coverImageUrl: text("coverImageUrl"),
+  tweetId: varchar("tweetId", { length: 100 }),
+  tweetAuthor: varchar("tweetAuthor", { length: 100 }),
+  tweetUrl: text("tweetUrl"),
+  tags: text("tags"),
+  heroMentioned: boolean("heroMentioned").default(false),
+  vetsMentioned: boolean("vetsMentioned").default(false),
+  status: mysqlEnum("status", ["draft", "published", "archived"]).default("draft").notNull(),
+  publishedAt: timestamp("publishedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
+export const mvsContent = mysqlTable("mvs_content", {
+  id: int("id").autoincrement().primaryKey(),
+  tweetId: varchar("tweetId", { length: 100 }).notNull().unique(),
+  tweetUrl: text("tweetUrl").notNull(),
+  author: varchar("author", { length: 100 }).notNull(),
+  authorHandle: varchar("authorHandle", { length: 100 }).notNull(),
+  content: text("content").notNull(),
+  weekLabel: varchar("weekLabel", { length: 50 }),
+  farmYields: text("farmYields"),
+  heroPrice: decimal("heroPrice", { precision: 36, scale: 18 }),
+  vetsPrice: decimal("vetsPrice", { precision: 36, scale: 18 }),
+  mediaUrls: text("mediaUrls"),
+  blogPostId: int("blogPostId"),
+  processedAt: timestamp("processedAt"),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type BlogPost = typeof blogPosts.$inferSelect;
+export type InsertBlogPost = typeof blogPosts.$inferInsert;
+export type MvsContent = typeof mvsContent.$inferSelect;
+export type InsertMvsContent = typeof mvsContent.$inferInsert;

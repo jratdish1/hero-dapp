@@ -13,6 +13,9 @@ import {
   ExternalLink,
   TrendingUp,
   ChevronRight,
+  Sprout,
+  Newspaper,
+  Heart,
 } from "lucide-react";
 import { HERO_TOKEN, VETS_TOKEN } from "../../../shared/tokens";
 
@@ -59,6 +62,27 @@ const FEATURES = [
     href: "/approvals",
     color: "var(--hero-green)",
   },
+  {
+    icon: Sprout,
+    title: "HERO Farm",
+    description: "Yield farming across Emit Farm, RhinoFi, and TruFarms. All HERO/VETS pairs in one place.",
+    href: "/farm",
+    color: "var(--hero-green)",
+  },
+  {
+    icon: Newspaper,
+    title: "MVS & Blog",
+    description: "Weekly Most Valuable Shills and AI-generated blog posts highlighting $HERO and $VETS.",
+    href: "/blog",
+    color: "var(--hero-orange)",
+  },
+  {
+    icon: Heart,
+    title: "501(c)(3) Mission",
+    description: "Supporting military veterans and first responders through the VIC Foundation.",
+    href: "/subdomains",
+    color: "var(--hero-orange)",
+  },
 ];
 
 export default function Home() {
@@ -79,6 +103,8 @@ export default function Home() {
             <Link href="/portfolio" className="text-muted-foreground hover:text-foreground transition-colors">Portfolio</Link>
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
             <Link href="/limits" className="text-muted-foreground hover:text-foreground transition-colors">Limits</Link>
+            <Link href="/farm" className="text-muted-foreground hover:text-foreground transition-colors">Farm</Link>
+            <Link href="/blog" className="text-muted-foreground hover:text-foreground transition-colors">Blog</Link>
           </div>
           <Link href="/swap">
             <Button className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 text-sm">
