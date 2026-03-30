@@ -1,0 +1,22 @@
+# HERO Dapp - Project TODO
+
+- [x] Dark theme setup with orange/green accents (Squirrel Swap + Liberty Swap inspired)
+- [x] Database schema for DCA orders, limit orders, portfolio, and token approvals
+- [x] Core token configuration ($HERO, $VETS, PulseChain tokens)
+- [x] Swap aggregator interface with token selection
+- [x] Gasless transaction mode toggle with ERC-4337 Paymaster info
+- [ ] Wallet connection using wagmi (MetaMask, Trust Wallet, WalletConnect)
+- [x] Live PulseChain stats dashboard (gas price, TVL, volume, tx costs)
+- [x] DCA order creation and management
+- [x] Limit order functionality with target price
+- [x] Portfolio tracker (balances, P&L, transaction history)
+- [x] Token approval manager (view and revoke allowances)
+- [x] Liberty token list API integration for $HERO and $VETS
+- [ ] Grok AI integration for market analysis
+- [x] Navigation and layout (sidebar for dashboard, top nav for public)
+- [x] Unit tests for backend procedures (20 tests passing)
+- [ ] Security audit and penetration testing
+- [x] Landing page with hero section, feature cards, and CTAs
+- [x] tRPC routers for DCA, limit orders, swap history, watchlist
+- [x] Input validation with Zod schemas
+- [x] Protected procedures for authenticated operations
