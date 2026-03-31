@@ -212,3 +212,25 @@
 ::-webkit-scrollbar-track { background: oklch(0.12 0.01 260); }
 ::-webkit-scrollbar-thumb { background: oklch(0.35 0.015 260); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: oklch(0.45 0.015 260); }
+
+/* OpenTang-inspired animations */
+@keyframes orangePulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
+  50% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
+}
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+.animate-orange-pulse {
+  animation: orangePulse 1.5s ease-in-out infinite;
+}
+.animate-fade-slide-up {
+  animation: fadeSlideUp 200ms ease-out;
+}
+
+/* Hero token colors */
+.text-hero-orange { color: var(--hero-orange); }
+.text-hero-green { color: var(--hero-green); }
+.bg-hero-orange { background-color: var(--hero-orange); }
+.bg-hero-green { background-color: var(--hero-green); }

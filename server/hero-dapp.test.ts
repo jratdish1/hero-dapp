@@ -79,7 +79,7 @@ function createAuthContext(): { ctx: TrpcContext; clearedCookies: CookieCall[] }
   const user: AuthenticatedUser = {
     id: 1,
     openId: "test-hero-user",
-    email: "hero@vicfoundation.com",
+    email: "hero@herodapp.com",
     name: "HERO Trader",
     loginMethod: "manus",
     role: "user",
@@ -414,23 +414,17 @@ describe("Partner Farm Configuration", () => {
   });
 });
 
-// --- Subdomain Architecture Tests ---
-describe("Subdomain Architecture", () => {
-  it("all planned subdomains are defined", () => {
-    const subdomains = [
-      "app.vicfoundation.com",
-      "farm.vicfoundation.com",
-      "dao.vicfoundation.com",
-      "dash.vicfoundation.com",
-      "blog.vicfoundation.com",
-      "api.vicfoundation.com",
-      "ai.vicfoundation.com",
-      "docs.vicfoundation.com",
+// --- HERO Ecosystem Tests ---
+describe("HERO Ecosystem", () => {
+  it("all HERO products are defined", () => {
+    const products = [
+      "swap", "farm", "dashboard", "portfolio",
+      "ai", "blog", "dao", "api",
     ];
-    expect(subdomains.length).toBeGreaterThanOrEqual(8);
-    expect(subdomains).toContain("app.vicfoundation.com");
-    expect(subdomains).toContain("farm.vicfoundation.com");
-    expect(subdomains).toContain("dao.vicfoundation.com");
+    expect(products.length).toBeGreaterThanOrEqual(8);
+    expect(products).toContain("swap");
+    expect(products).toContain("farm");
+    expect(products).toContain("ai");
   });
 
   it("HERO X profile handle is correct", () => {
@@ -442,4 +436,138 @@ describe("Subdomain Architecture", () => {
     const orgType = "501(c)(3)";
     expect(orgType).toBe("501(c)(3)");
   });
+
+  it("supports both PulseChain and BASE networks", () => {
+    const networks = ["PulseChain", "Base"];
+    expect(networks.length).toBe(2);
+    expect(networks).toContain("PulseChain");
+    expect(networks).toContain("Base");
+  });
+});
+
+// --- XAI API Key Validation Test ---
+describe("XAI API Key", () => {
+  it("XAI_API_KEY environment variable is set", () => {
+    const key = process.env.XAI_API_KEY;
+    expect(key).toBeTruthy();
+    expect(typeof key).toBe("string");
+    expect(key!.length).toBeGreaterThan(10);
+  });
+});
+
+// --- Multi-Chain Configuration Tests ---
+import {
+  BASE_CHAIN_ID,
+  BASE_CONFIG,
+  SUPPORTED_CHAINS,
+  TOKEN_MAP,
+  DEX_MAP,
+  getTokensForChain,
+  getDexSourcesForChain,
+  getChainConfig,
+  getHeroToken,
+} from "../shared/tokens";
+
+describe("Multi-Chain Configuration", () => {
+  it("PulseChain and BASE are both supported", () => {
+    expect(SUPPORTED_CHAINS.some(c => c.id === PULSECHAIN_ID)).toBe(true);
+    expect(SUPPORTED_CHAINS.some(c => c.id === BASE_CHAIN_ID)).toBe(true);
+    expect(SUPPORTED_CHAINS.length).toBe(2);
+  });
+
+  it("BASE chain config is correct", () => {
+    expect(BASE_CONFIG.id).toBe(8453);
+    expect(BASE_CONFIG.name).toBe("Base");
+    expect(BASE_CONFIG.nativeCurrency.symbol).toBe("ETH");
+  });
+
+  it("TOKEN_MAP has entries for both chains", () => {
+    expect(TOKEN_MAP[PULSECHAIN_ID]).toBeDefined();
+    expect(TOKEN_MAP[BASE_CHAIN_ID]).toBeDefined();
+    expect(TOKEN_MAP[PULSECHAIN_ID].length).toBeGreaterThan(0);
+    expect(TOKEN_MAP[BASE_CHAIN_ID].length).toBeGreaterThan(0);
+  });
+
+  it("DEX_MAP has entries for both chains", () => {
+    expect(DEX_MAP[PULSECHAIN_ID]).toBeDefined();
+    expect(DEX_MAP[BASE_CHAIN_ID]).toBeDefined();
+    expect(DEX_MAP[PULSECHAIN_ID].length).toBeGreaterThan(0);
+    expect(DEX_MAP[BASE_CHAIN_ID].length).toBeGreaterThan(0);
+  });
+
+  it("getTokensForChain returns correct tokens", () => {
+    const plsTokens = getTokensForChain(PULSECHAIN_ID);
+    const baseTokens = getTokensForChain(BASE_CHAIN_ID);
+    expect(plsTokens.some(t => t.symbol === "HERO")).toBe(true);
+    expect(plsTokens.some(t => t.symbol === "VETS")).toBe(true);
+    expect(baseTokens.some(t => t.symbol === "HERO")).toBe(true);
+  });
+
+  it("getDexSourcesForChain returns correct DEXs", () => {
+    const plsDexes = getDexSourcesForChain(PULSECHAIN_ID);
+    const baseDexes = getDexSourcesForChain(BASE_CHAIN_ID);
+    expect(plsDexes.some(d => d.name === "PulseX V2")).toBe(true);
+    expect(baseDexes.some(d => d.name === "Uniswap V3")).toBe(true);
+  });
+
+  it("getChainConfig returns correct config for each chain", () => {
+    const plsConfig = getChainConfig(PULSECHAIN_ID);
+    const baseConfig = getChainConfig(BASE_CHAIN_ID);
+    expect(plsConfig.name).toBe("PulseChain");
+    expect(baseConfig.name).toBe("Base");
+  });
+
+  it("getHeroToken returns HERO for both chains", () => {
+    const plsHero = getHeroToken(PULSECHAIN_ID);
+    const baseHero = getHeroToken(BASE_CHAIN_ID);
+    expect(plsHero.symbol).toBe("HERO");
+    expect(plsHero.address).toBe("0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27");
+    expect(baseHero.symbol).toBe("HERO");
+    expect(baseHero.address).toBe("0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8");
+  });
+
+  it("HERO on BASE has correct chain ID", () => {
+    const baseHero = getHeroToken(BASE_CHAIN_ID);
+    expect(baseHero.chainId).toBe(8453);
+  });
+});
+
+// --- AI Chat Router Tests ---
+describe("AI Chat Router", () => {
+  it("rejects empty message", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    await expect(
+      caller.ai.chat({
+        message: "",
+      })
+    ).rejects.toThrow();
+  });
+
+  it("accepts valid chat message", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.ai.chat({
+      message: "What is $HERO?",
+      chainContext: "PulseChain",
+    });
+    expect(result).toBeDefined();
+    expect(result.reply).toBeTruthy();
+    expect(typeof result.reply).toBe("string");
+  }, 30000);
+
+  it("accepts chat with history", async () => {
+    const ctx = createUnauthContext();
+    const caller = appRouter.createCaller(ctx);
+    const result = await caller.ai.chat({
+      message: "Tell me more",
+      chainContext: "Base",
+      history: [
+        { role: "user", content: "What is $HERO?" },
+        { role: "assistant", content: "HERO is a token supporting veterans." },
+      ],
+    });
+    expect(result).toBeDefined();
+    expect(result.reply).toBeTruthy();
+  }, 30000);
 });

@@ -426,16 +426,9 @@ export default function Farm() {
               </h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
                 Our partner farms are <strong className="text-foreground">benevolent protocols</strong> that
-                support the HERO/VETS community. Through liquidity bonding on PulseChain, they help fund{" "}
-                <a
-                  href="https://vicfoundation.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[var(--hero-orange)] hover:underline font-medium"
-                >
-                  vicfoundation.com
-                </a>
-                , a legitimate <strong className="text-foreground">501(c)(3) nonprofit organization</strong>{" "}
+                support the HERO/VETS community. Through liquidity bonding on PulseChain, they help fund
+                the <strong className="text-foreground">VIC Foundation</strong>, a legitimate{" "}
+                <strong className="text-foreground">501(c)(3) nonprofit organization</strong>{" "}
                 dedicated to military veterans and first responders.
               </p>
               <div className="flex items-center gap-3 mt-3">
@@ -450,13 +443,11 @@ export default function Farm() {
                   </Button>
                 </a>
                 <a
-                  href="https://vicfoundation.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href="/ai"
                 >
                   <Button size="sm" variant="outline" className="border-[var(--hero-green)]/30 text-[var(--hero-green)] hover:bg-[var(--hero-green)]/10">
                     <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                    VIC Foundation
+                    HERO AI Assistant
                   </Button>
                 </a>
               </div>

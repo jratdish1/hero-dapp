@@ -298,6 +298,51 @@ export const appRouter = router({
         return { success: true };
       }),
   }),
+
+  ai: router({
+    chat: publicProcedure
+      .input(z.object({
+        message: z.string().min(1).max(5000),
+        chainContext: z.string().optional(),
+        history: z.array(z.object({
+          role: z.enum(["user", "assistant"]),
+          content: z.string(),
+        })).max(20).optional(),
+      }))
+      .mutation(async ({ input }) => {
+        const systemPrompt = `You are the HERO AI Assistant, a crypto market analyst specializing in $HERO and $VETS tokens on PulseChain and BASE networks. You are built for the VIC Foundation, a 501(c)(3) nonprofit supporting military veterans and first responders through DeFi.
+
+Key knowledge:
+- $HERO on PulseChain: 0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27
+- $HERO on BASE: 0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8
+- $VETS on PulseChain: 0x4013abBf94A745EfA7cc848989Ee83424A770060
+- Partner farms: Emit Farm (HERO/EMIT, HERO/PLS, VETS/EMIT), RhinoFi (HERO/RHINO), TruFarms (TruFarm/HERO)
+- DEXs: PulseX V1/V2, 9inch, Liberty Swap (PulseChain); Uniswap V3, Aerodrome, BaseSwap (BASE)
+
+Current chain context: ${input.chainContext || "PulseChain"}
+
+Be helpful, accurate, and concise. Use markdown formatting. Always include disclaimers that this is not financial advice. Be bullish but honest about $HERO and $VETS. Detect and warn about potential scams when asked. Keep responses under 500 words unless detailed analysis is requested.`;
+
+        const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
+          { role: "system", content: systemPrompt },
+        ];
+
+        if (input.history) {
+          for (const msg of input.history) {
+            messages.push({ role: msg.role, content: msg.content });
+          }
+        }
+
+        messages.push({ role: "user", content: input.message });
+
+        const response = await invokeLLM({ messages });
+        const reply = typeof response.choices[0].message.content === "string"
+          ? response.choices[0].message.content
+          : JSON.stringify(response.choices[0].message.content);
+
+        return { reply: reply || "I couldn't generate a response. Please try again." };
+      }),
+  }),
 });
 
 export type AppRouter = typeof appRouter;

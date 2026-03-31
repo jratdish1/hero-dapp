@@ -4,6 +4,7 @@ import NotFound from "@/pages/NotFound";
 import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { NetworkProvider } from "./contexts/NetworkContext";
 import Home from "./pages/Home";
 import Swap from "./pages/Swap";
 import Dashboard from "./pages/Dashboard";
@@ -13,7 +14,7 @@ import LimitOrders from "./pages/LimitOrders";
 import Approvals from "./pages/Approvals";
 import Farm from "./pages/Farm";
 import Blog from "./pages/Blog";
-import Subdomains from "./pages/Subdomains";
+import AiAssistant from "./pages/AiAssistant";
 import AppLayout from "./components/AppLayout";
 
 function Router() {
@@ -28,7 +29,7 @@ function Router() {
       <Route path="/approvals" component={() => <AppLayout><Approvals /></AppLayout>} />
       <Route path="/farm" component={() => <AppLayout><Farm /></AppLayout>} />
       <Route path="/blog" component={() => <AppLayout><Blog /></AppLayout>} />
-      <Route path="/subdomains" component={() => <AppLayout><Subdomains /></AppLayout>} />
+      <Route path="/ai" component={() => <AppLayout><AiAssistant /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -39,10 +40,12 @@ function App() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark">
-        <TooltipProvider>
-          <Toaster />
-          <Router />
-        </TooltipProvider>
+        <NetworkProvider>
+          <TooltipProvider>
+            <Toaster />
+            <Router />
+          </TooltipProvider>
+        </NetworkProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );

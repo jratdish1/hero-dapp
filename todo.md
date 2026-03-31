@@ -12,15 +12,15 @@
 - [x] Portfolio tracker (balances, P&L, transaction history)
 - [x] Token approval manager (view and revoke allowances)
 - [x] Liberty token list API integration for $HERO and $VETS
-- [ ] Grok AI integration for market analysis
+- [x] Grok AI integration for market analysis
 - [x] Navigation and layout (sidebar for dashboard, top nav for public)
-- [x] Unit tests for backend procedures (33 tests passing)
+- [x] Unit tests for backend procedures (47 tests passing)
 - [ ] Security audit and penetration testing
 - [x] Landing page with hero section, feature cards, and CTAs
 - [x] tRPC routers for DCA, limit orders, swap history, watchlist
 - [x] Input validation with Zod schemas
 - [x] Protected procedures for authenticated operations
-- [x] Subdomain architecture page for vicfoundation.com ecosystem
+- [x] HERO Ecosystem page (replaced vicfoundation.com subdomain page)
 - [x] HERO Farm page with tabbed partner farms
 - [x] X/Twitter integration to pull weekly MVS content
 - [x] Automated blog system creating posts from weekly MVS (LLM-powered)
@@ -30,9 +30,20 @@
 - [x] Highlight HERO/VETS pairs only from each partner farm
 - [x] 501(c)(3) benevolent protocol attribution for partner farms
 - [x] HERO X profile integration (@hero501c3)
-- [ ] Ensure all API keys (Grok/xAI, OpenAI) are utilized
+- [x] Grok/xAI API key integrated for AI assistant chat
 - [x] Cross-links between farm tabs and partner sites
 - [x] Blog database tables (blog_posts, mvs_content)
 - [x] tRPC routers for blog and MVS CRUD operations
 - [x] Updated landing page nav with Farm and Blog links
 - [x] Updated sidebar nav with Farm, MVS & Blog, and Ecosystem
+- [x] Multi-chain support: PulseChain + BASE network toggle
+- [x] BASE network $HERO token configuration (contract address on BASE)
+- [x] Network switcher UI component in header/sidebar
+- [x] Token lists update per selected network
+- [ ] wagmi wallet connection (MetaMask, Trust Wallet, WalletConnect)
+- [x] Wallet connect button in header with address display
+- [x] Grok AI market analysis chat panel
+- [x] Remove vicfoundation.com subdomain references, standalone HERO site
+- [x] Integrate OpenTang design tokens (orangePulse animation, deeper dark tones)
+- [ ] Set up GitHub export for HERO Dapp project storage
+- [ ] Periodic reminder: Get VPS login details from user

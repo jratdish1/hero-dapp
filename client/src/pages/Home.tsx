@@ -281,12 +281,12 @@ export default function Home() {
                 $VETS Contract <ExternalLink className="w-3 h-3" />
               </a>
               <a
-                href="https://vicfoundation.com"
+                href="https://x.com/hero501c3"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
-                VIC Foundation <ExternalLink className="w-3 h-3" />
+                @HERO501c3 <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           </div>

@@ -13,7 +13,9 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownUp, Zap, Info, RefreshCw, Settings2, ChevronDown } from "lucide-react";
-import { FEATURED_TOKENS, DEX_SOURCES, type TokenInfo } from "../../../shared/tokens";
+import { type TokenInfo } from "../../../shared/tokens";
+import { useNetwork } from "../contexts/NetworkContext";
+import { NetworkBadge } from "../components/NetworkSwitcher";
 
 function TokenSelector({
   selected,
@@ -72,8 +74,9 @@ function TokenSelector({
 }
 
 export default function Swap() {
-  const [tokenIn, setTokenIn] = useState<TokenInfo>(FEATURED_TOKENS[0]);
-  const [tokenOut, setTokenOut] = useState<TokenInfo>(FEATURED_TOKENS[1]);
+  const { tokens, dexSources, chain } = useNetwork();
+  const [tokenIn, setTokenIn] = useState<TokenInfo>(tokens[0]);
+  const [tokenOut, setTokenOut] = useState<TokenInfo>(tokens[1]);
   const [amountIn, setAmountIn] = useState("");
   const [gaslessMode, setGaslessMode] = useState(false);
   const [slippage, setSlippage] = useState("0.5");
@@ -96,7 +99,7 @@ export default function Swap() {
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Swap</h1>
-          <p className="text-sm text-muted-foreground">Trade tokens on PulseChain</p>
+          <p className="text-sm text-muted-foreground">Trade tokens on {chain.name}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -110,7 +113,7 @@ export default function Swap() {
 
       {/* Quick token row */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
-        {FEATURED_TOKENS.slice(0, 6).map((t) => (
+        {tokens.slice(0, 6).map((t) => (
           <button
             key={t.address}
             onClick={() => setTokenIn(t)}
@@ -207,7 +210,7 @@ export default function Swap() {
               <TokenSelector
                 selected={tokenIn}
                 onSelect={setTokenIn}
-                tokens={FEATURED_TOKENS}
+                tokens={tokens}
                 label="From"
               />
             </div>
@@ -240,7 +243,7 @@ export default function Swap() {
               <TokenSelector
                 selected={tokenOut}
                 onSelect={setTokenOut}
-                tokens={FEATURED_TOKENS}
+                tokens={tokens}
                 label="To"
               />
             </div>
@@ -312,7 +315,7 @@ export default function Swap() {
       {/* DEX sources */}
       <div className="mt-4 flex items-center justify-center gap-3 text-xs text-muted-foreground">
         <span>Aggregating from:</span>
-        {DEX_SOURCES.map((dex) => (
+        {dexSources.map((dex: { id: string; name: string }) => (
           <span key={dex.id} className="px-2 py-1 rounded bg-secondary">
             {dex.name}
           </span>

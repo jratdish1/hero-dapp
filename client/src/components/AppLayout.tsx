@@ -3,6 +3,9 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
+import { NetworkSwitcher } from "./NetworkSwitcher";
+import { WalletButton } from "./WalletButton";
+import { useNetwork } from "../contexts/NetworkContext";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -12,13 +15,12 @@ import {
   Shield,
   Menu,
   X,
-  Home,
-  Bot,
   LogOut,
   ChevronLeft,
   Sprout,
   Newspaper,
-  Globe,
+  Bot,
+  Sparkles,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -30,13 +32,14 @@ const NAV_ITEMS = [
   { path: "/limits", label: "Limit Orders", icon: Target },
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/blog", label: "MVS & Blog", icon: Newspaper },
-  { path: "/subdomains", label: "Ecosystem", icon: Globe },
+  { path: "/ai", label: "AI Assistant", icon: Bot },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
+  const { chain } = useNetwork();
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -57,12 +60,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className="p-4 border-b border-sidebar-border">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shadow-lg shadow-[var(--hero-orange)]/20">
               <span className="text-white font-bold text-lg">H</span>
             </div>
             <div>
               <h1 className="font-bold text-lg text-sidebar-foreground">HERO</h1>
-              <p className="text-xs text-muted-foreground">PulseChain DEX</p>
+              <p className="text-xs text-muted-foreground">{chain.name} DEX</p>
             </div>
           </Link>
           <button
@@ -73,11 +76,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
         </div>
 
+        {/* Network Switcher in sidebar */}
+        <div className="px-3 py-3 border-b border-sidebar-border">
+          <NetworkSwitcher />
+        </div>
+
         {/* Nav items */}
         <nav className="flex-1 p-3 space-y-1 overflow-y-auto">
           {NAV_ITEMS.map((item) => {
             const isActive = location === item.path;
             const Icon = item.icon;
+            const isAi = item.path === "/ai";
             return (
               <Link
                 key={item.path}
@@ -85,12 +94,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
                   isActive
                     ? "bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20"
+                    : isAi
+                    ? "text-hero-orange/70 hover:text-hero-orange hover:bg-hero-orange/5 border border-transparent hover:border-hero-orange/20"
                     : "text-muted-foreground hover:text-foreground hover:bg-secondary"
                 }`}
                 onClick={() => setSidebarOpen(false)}
               >
                 <Icon className="w-4.5 h-4.5" />
                 {item.label}
+                {isAi && (
+                  <Sparkles className="w-3 h-3 ml-auto text-hero-orange/50" />
+                )}
               </Link>
             );
           })}
@@ -141,10 +155,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="text-sm">Home</span>
           </Link>
           <div className="flex-1" />
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <div className="w-2 h-2 rounded-full bg-[var(--hero-green)] animate-pulse" />
-            PulseChain
+          <div className="hidden sm:block">
+            <NetworkSwitcher compact />
           </div>
+          <WalletButton />
         </header>
 
         {/* Page content */}
