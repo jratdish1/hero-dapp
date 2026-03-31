@@ -71,6 +71,9 @@ if (wcProjectId) {
 }
 
 // ─── Wagmi Config ───────────────────────────────────────────────────────
+// SECURITY: reconnectOnMount disabled — users must explicitly click
+// "Connect Wallet" each session. This prevents auto-connecting to
+// potentially compromised or stale wallet sessions.
 export const wagmiConfig = createConfig({
   chains: [pulsechain, base],
   connectors: connectorList,
@@ -78,6 +81,10 @@ export const wagmiConfig = createConfig({
     [pulsechain.id]: http("https://rpc.pulsechain.com"),
     [base.id]: http("https://mainnet.base.org"),
   },
+  // Explicitly disable auto-reconnect on page load
+  // Users must manually connect their wallet each session
+  // This is a security best practice for DeFi applications
+  storage: null,
 });
 
 // ─── Export helpers ─────────────────────────────────────────────────────

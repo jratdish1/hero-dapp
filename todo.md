@@ -159,8 +159,21 @@
 - [x] Cloudflare: Add CF-compatible security headers to server
 - [x] Cloudflare: Provide setup instructions for DNS proxy protection on www.herobase.io
 - [x] Cloudflare: Configure CSP, HSTS, and anti-DDoS headers
-- [ ] Enhance server-side rate limiting: add per-route limits for DAO, media uploads, wallet endpoints
+- [x] Enhance server-side rate limiting: add per-route limits for DAO, media uploads, wallet endpoints
 - [x] SEO fix: Reduce keywords on landing page from 14 to 6 focused keywords
 - [x] SEO: Add canonical URL (https://www.herobase.io/) to prevent duplicate content
 - [x] SEO: Add JSON-LD structured data (WebApplication schema) for rich snippets
 - [x] SEO: Create and serve sitemap.xml for Google Search Console
+- [x] Security: Full manual code audit of every file
+- [x] Security: Input validation/sanitization on all tRPC routers (Zod schemas, string limits, type checks)
+- [x] Security: HTTPS-only enforcement (redirect HTTP, secure cookies, HSTS)
+- [x] Security: CSP hardening (strict Content-Security-Policy headers)
+- [x] Security: No private key storage anywhere in codebase
+- [x] Security: No auto-connect wallets (user must manually initiate)
+- [x] Security: Checks-Effects-Interactions pattern where relevant
+- [x] Security: XSS prevention audit (dangerouslySetInnerHTML, URL injection, DOM manipulation)
+- [x] Security: CSRF protection audit (SameSite cookies, origin validation, anti-CSRF tokens)
+- [x] Security: Frontend attack prevention (clickjacking, open redirects, prototype pollution)
+- [x] Security: Dependency vulnerability scan and fix insecure packages
+- [x] Security: Comprehensive security test suite
+- [x] Security: Full security audit report

@@ -42,10 +42,10 @@ export function useAuth(options?: UseAuthOptions) {
   }, [logoutMutation, utils]);
 
   const state = useMemo(() => {
-    localStorage.setItem(
-      "manus-runtime-user-info",
-      JSON.stringify(meQuery.data)
-    );
+    // SECURITY: Removed localStorage.setItem("manus-runtime-user-info")
+    // Storing user PII in localStorage is an XSS blast radius amplifier.
+    // If an attacker achieves XSS, they could exfiltrate user data.
+    // Auth state is already managed via httpOnly cookies + tRPC queries.
     return {
       user: meQuery.data ?? null,
       loading: meQuery.isLoading || logoutMutation.isPending,

@@ -21,28 +21,30 @@ function isSecureRequest(req: Request) {
   return protoList.some(proto => proto.trim().toLowerCase() === "https");
 }
 
+/**
+ * Session cookie options — hardened for production:
+ * - httpOnly: true — prevents JavaScript access (XSS mitigation)
+ * - secure: true in production — cookie only sent over HTTPS
+ * - sameSite: "none" — required for cross-origin OAuth callback flow
+ *   NOTE: We use "none" because the Manus OAuth flow redirects from a
+ *   different origin (api.manus.im) back to our app. SameSite=Lax would
+ *   block the cookie set during this cross-origin redirect. The cookie is
+ *   still protected by httpOnly + secure flags.
+ * - path: "/" — cookie available site-wide
+ */
 export function getSessionCookieOptions(
   req: Request
 ): Pick<CookieOptions, "domain" | "httpOnly" | "path" | "sameSite" | "secure"> {
-  // const hostname = req.hostname;
-  // const shouldSetDomain =
-  //   hostname &&
-  //   !LOCAL_HOSTS.has(hostname) &&
-  //   !isIpAddress(hostname) &&
-  //   hostname !== "127.0.0.1" &&
-  //   hostname !== "::1";
-
-  // const domain =
-  //   shouldSetDomain && !hostname.startsWith(".")
-  //     ? `.${hostname}`
-  //     : shouldSetDomain
-  //       ? hostname
-  //       : undefined;
+  const secure = isSecureRequest(req);
+  const isDev = process.env.NODE_ENV === "development";
 
   return {
     httpOnly: true,
     path: "/",
-    sameSite: "none",
-    secure: isSecureRequest(req),
+    // SameSite=None is required for cross-origin OAuth callback
+    // In dev without HTTPS, fall back to Lax to avoid cookie rejection
+    sameSite: secure ? "none" : (isDev ? "lax" : "none"),
+    // Always secure in production; in dev, only if HTTPS is available
+    secure: secure || !isDev,
   };
 }

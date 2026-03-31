@@ -67,6 +67,22 @@ function ChartContainer({
   );
 }
 
+// SECURITY: Sanitize CSS values to prevent CSS injection attacks
+// Only allow valid CSS color values (hex, rgb, hsl, oklch, named colors)
+function sanitizeCssValue(value: string): string {
+  // Remove anything that could be CSS injection (url(), expression(), import, etc.)
+  const cleaned = value.replace(/[;{}\\]/g, "").trim();
+  if (/(?:url|expression|import|@|javascript|eval)\s*\(/i.test(cleaned)) {
+    return "transparent";
+  }
+  return cleaned;
+}
+
+function sanitizeCssKey(key: string): string {
+  // Only allow alphanumeric, hyphens, and underscores in CSS custom property names
+  return key.replace(/[^a-zA-Z0-9_-]/g, "");
+}
+
 const ChartStyle = ({ id, config }: { id: string; config: ChartConfig }) => {
   const colorConfig = Object.entries(config).filter(
     ([, config]) => config.theme || config.color
@@ -88,7 +104,7 @@ ${colorConfig
     const color =
       itemConfig.theme?.[theme as keyof typeof itemConfig.theme] ||
       itemConfig.color;
-    return color ? `  --color-${key}: ${color};` : null;
+    return color ? `  --color-${sanitizeCssKey(key)}: ${sanitizeCssValue(color)};` : null;
   })
   .join("\n")}
 }

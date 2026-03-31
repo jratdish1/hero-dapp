@@ -6,7 +6,7 @@ import type { Express, Request, Response, NextFunction } from "express";
  * HERO Dapp — Server-Side Security Middleware
  * ============================================
  * Comprehensive rate limiting, HTTP security headers, request sanitization,
- * and Cloudflare proxy compatibility.
+ * CSRF origin validation, HTTPS enforcement, and Cloudflare proxy compatibility.
  *
  * Rate Limit Tiers:
  * ┌──────────────────────┬──────────┬───────────┬────────────────────────────┐
@@ -23,6 +23,13 @@ import type { Express, Request, Response, NextFunction } from "express";
  * │ Wallet Operations    │ 30       │ 1 min     │ Moderate wallet actions     │
  * └──────────────────────┴──────────┴───────────┴────────────────────────────┘
  */
+
+// ─── Allowed Origins (CSRF protection) ─────────────────────────────────
+const ALLOWED_ORIGINS = new Set([
+  "https://www.herobase.io",
+  "https://herobase.io",
+  "https://herodapp-kcdtjud9.manus.space",
+]);
 
 // ─── Helper: Extract real client IP (Cloudflare-aware) ──────────────────
 function getClientIp(req: Request): string {
@@ -62,7 +69,8 @@ export function setupHelmet(app: Express) {
       contentSecurityPolicy: {
         directives: {
           defaultSrc: ["'self'"],
-          scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'"],
+          // REMOVED 'unsafe-eval' — only 'unsafe-inline' needed for Vite HMR in dev
+          scriptSrc: ["'self'", "'unsafe-inline'"],
           styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
           fontSrc: ["'self'", "https://fonts.gstatic.com"],
           imgSrc: [
@@ -180,7 +188,52 @@ export const walletLimiter = createLimiter({
   message: "Too many wallet requests. Please try again later.",
 });
 
-// ─── Request Sanitization ───────────────────────────────────────────────
+// ─── CSRF Origin Validation ─────────────────────────────────────────────
+// Validates Origin/Referer header on state-changing requests (POST, PUT, DELETE, PATCH)
+export function csrfOriginValidation(req: Request, res: Response, next: NextFunction) {
+  // Only check state-changing methods
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    return next();
+  }
+
+  const origin = req.headers["origin"] as string | undefined;
+  const referer = req.headers["referer"] as string | undefined;
+
+  // In development, allow requests without origin (e.g., curl, Postman)
+  if (process.env.NODE_ENV === "development") {
+    return next();
+  }
+
+  // Extract origin from referer if origin header is missing
+  let requestOrigin = origin;
+  if (!requestOrigin && referer) {
+    try {
+      requestOrigin = new URL(referer).origin;
+    } catch {
+      // Invalid referer URL
+    }
+  }
+
+  // If we have an origin, validate it
+  if (requestOrigin) {
+    if (!ALLOWED_ORIGINS.has(requestOrigin)) {
+      console.warn(`[CSRF] Blocked cross-origin request from: ${requestOrigin} to ${req.path}`);
+      res.status(403).json({ error: "Cross-origin request blocked." });
+      return;
+    }
+  }
+
+  // If no origin/referer at all (some legitimate cases like mobile apps),
+  // allow but log for monitoring
+  if (!requestOrigin && !origin && !referer) {
+    // Allow — some wallet interactions and API clients don't send origin
+    // In production with Cloudflare, CF headers provide additional validation
+  }
+
+  next();
+}
+
+// ─── Request Sanitization (Deep XSS Scrubbing) ─────────────────────────
 export function sanitizeRequestBody(req: Request, _res: Response, next: NextFunction) {
   if (req.body && typeof req.body === "object") {
     sanitizeObject(req.body);
@@ -190,15 +243,49 @@ export function sanitizeRequestBody(req: Request, _res: Response, next: NextFunc
 
 function sanitizeObject(obj: Record<string, unknown>) {
   for (const key of Object.keys(obj)) {
+    // Protect against prototype pollution
+    if (key === "__proto__" || key === "constructor" || key === "prototype") {
+      delete obj[key];
+      continue;
+    }
+
     const value = obj[key];
     if (typeof value === "string") {
-      obj[key] = value
-        .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
-        .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "");
-    } else if (value && typeof value === "object" && !Array.isArray(value)) {
+      obj[key] = sanitizeString(value);
+    } else if (Array.isArray(value)) {
+      for (let i = 0; i < value.length; i++) {
+        if (typeof value[i] === "string") {
+          value[i] = sanitizeString(value[i]);
+        } else if (value[i] && typeof value[i] === "object") {
+          sanitizeObject(value[i] as Record<string, unknown>);
+        }
+      }
+    } else if (value && typeof value === "object") {
       sanitizeObject(value as Record<string, unknown>);
     }
   }
+}
+
+function sanitizeString(input: string): string {
+  return input
+    // Remove <script> tags and content
+    .replace(/<script\b[^<]*(?:(?!<\/script>)<[^<]*)*<\/script>/gi, "")
+    // Remove event handlers (onclick, onerror, onload, etc.)
+    .replace(/on\w+\s*=\s*["'][^"']*["']/gi, "")
+    .replace(/on\w+\s*=\s*[^\s>]*/gi, "")
+    // Remove javascript: protocol in URLs
+    .replace(/javascript\s*:/gi, "")
+    // Remove data: protocol with script content
+    .replace(/data\s*:\s*text\/html/gi, "")
+    // Remove <iframe>, <object>, <embed>, <applet> tags
+    .replace(/<(iframe|object|embed|applet)\b[^>]*>/gi, "")
+    .replace(/<\/(iframe|object|embed|applet)>/gi, "")
+    // Remove <style> tags with expression() (IE CSS injection)
+    .replace(/expression\s*\(/gi, "")
+    // Remove <svg> onload and similar
+    .replace(/<svg\b[^>]*\bon\w+\s*=/gi, "<svg ")
+    // Trim excessive whitespace
+    .trim();
 }
 
 // ─── Cloudflare Security Headers ────────────────────────────────────────
@@ -255,11 +342,17 @@ export function blockSuspiciousRequests(req: Request, res: Response, next: NextF
     /\bexec\s*\(/i,             // Command injection
     /\beval\s*\(/i,             // Code injection
     /0x[0-9a-f]{20,}/i,         // Hex-encoded payloads (not ETH addresses — those are 40 chars)
+    /\bor\s+1\s*=\s*1/i,       // SQL injection (OR 1=1)
+    /\band\s+1\s*=\s*1/i,      // SQL injection (AND 1=1)
+    /\/\.env/i,                  // Environment file access
+    /\/\.git/i,                  // Git directory access
+    /\/wp-admin/i,              // WordPress admin probing
+    /\/phpMyAdmin/i,            // phpMyAdmin probing
   ];
 
   const fullUrl = req.originalUrl || req.url;
   for (const pattern of suspiciousPatterns) {
-    // Skip the hex pattern for legitimate blockchain addresses
+    // Skip the hex pattern for legitimate blockchain addresses in tRPC calls
     if (pattern.source.includes("0x") && fullUrl.includes("/api/trpc")) {
       continue;
     }
@@ -329,15 +422,18 @@ export function setupSecurity(app: Express) {
   // 5. Cloudflare origin validation
   app.use(validateCloudflareOrigin);
 
-  // 6. Per-route rate limiting for tRPC API
+  // 6. CSRF origin validation for state-changing requests
+  app.use("/api", csrfOriginValidation);
+
+  // 7. Per-route rate limiting for tRPC API
   app.use("/api/trpc", trpcRouteLimiter);
 
-  // 7. Auth-specific rate limiting
+  // 8. Auth-specific rate limiting
   app.use("/api/oauth", authLimiter);
 
-  // 8. Request body sanitization (XSS prevention)
+  // 9. Request body sanitization (XSS prevention)
   app.use(sanitizeRequestBody);
 
-  // 9. Request size guard for non-upload API routes (1MB max)
+  // 10. Request size guard for non-upload API routes (1MB max)
   app.use("/api/trpc", requestSizeGuard(1 * 1024 * 1024));
 }

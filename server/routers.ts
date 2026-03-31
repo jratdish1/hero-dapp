@@ -3,6 +3,19 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+
+// ─── Reusable Validation Schemas ────────────────────────────────────────
+// Ethereum/PulseChain hex address: exactly 42 chars, 0x prefix + 40 hex chars
+const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet address format");
+// Transaction hash: 0x prefix + 64 hex chars
+const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
+// Safe string: no HTML tags, no script injection
+const safeStringSchema = (maxLen: number) => z.string().max(maxLen).refine(
+  (s) => !/<script/i.test(s) && !/javascript:/i.test(s) && !/on\w+=/.test(s),
+  { message: "Input contains disallowed content" }
+);
+// Token symbol: alphanumeric + common symbols only
+const tokenSymbolSchema = z.string().max(20).regex(/^[a-zA-Z0-9$_.\-]+$/, "Invalid token symbol");
 import {
   createDcaOrder,
   getDcaOrdersByUser,
@@ -70,13 +83,13 @@ export const appRouter = router({
     }),
     create: protectedProcedure
       .input(z.object({
-        walletAddress: z.string().min(42).max(42),
-        tokenInAddress: z.string().min(42).max(42),
-        tokenInSymbol: z.string().max(20),
-        tokenOutAddress: z.string().min(42).max(42),
-        tokenOutSymbol: z.string().max(20),
-        amountPerInterval: z.string(),
-        intervalSeconds: z.number().int().positive(),
+        walletAddress: ethAddressSchema,
+        tokenInAddress: ethAddressSchema,
+        tokenInSymbol: tokenSymbolSchema,
+        tokenOutAddress: ethAddressSchema,
+        tokenOutSymbol: tokenSymbolSchema,
+        amountPerInterval: z.string().regex(/^\d+\.?\d*$/, "Invalid amount"),
+        intervalSeconds: z.number().int().positive().max(86400 * 30),
         totalIntervals: z.number().int().positive().max(365),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -104,13 +117,13 @@ export const appRouter = router({
     }),
     create: protectedProcedure
       .input(z.object({
-        walletAddress: z.string().min(42).max(42),
-        tokenInAddress: z.string().min(42).max(42),
-        tokenInSymbol: z.string().max(20),
-        tokenOutAddress: z.string().min(42).max(42),
-        tokenOutSymbol: z.string().max(20),
-        amountIn: z.string(),
-        targetPrice: z.string(),
+        walletAddress: ethAddressSchema,
+        tokenInAddress: ethAddressSchema,
+        tokenInSymbol: tokenSymbolSchema,
+        tokenOutAddress: ethAddressSchema,
+        tokenOutSymbol: tokenSymbolSchema,
+        amountIn: z.string().regex(/^\d+\.?\d*$/, "Invalid amount"),
+        targetPrice: z.string().regex(/^\d+\.?\d*$/, "Invalid price"),
         orderType: z.enum(["buy", "sell"]),
         expiresAt: z.date().optional(),
       }))
@@ -131,22 +144,22 @@ export const appRouter = router({
 
   swap: router({
     history: protectedProcedure
-      .input(z.object({ walletAddress: z.string().min(42).max(42) }))
+      .input(z.object({ walletAddress: ethAddressSchema }))
       .query(async ({ input }) => {
         return getSwapHistoryByWallet(input.walletAddress);
       }),
     record: protectedProcedure
       .input(z.object({
-        walletAddress: z.string().min(42).max(42),
-        tokenInAddress: z.string().min(42).max(42),
-        tokenInSymbol: z.string().max(20),
-        tokenOutAddress: z.string().min(42).max(42),
-        tokenOutSymbol: z.string().max(20),
-        amountIn: z.string(),
-        amountOut: z.string(),
-        dexSource: z.string().optional(),
-        txHash: z.string().optional(),
-        gasUsed: z.string().optional(),
+        walletAddress: ethAddressSchema,
+        tokenInAddress: ethAddressSchema,
+        tokenInSymbol: tokenSymbolSchema,
+        tokenOutAddress: ethAddressSchema,
+        tokenOutSymbol: tokenSymbolSchema,
+        amountIn: z.string().regex(/^\d+\.?\d*$/, "Invalid amount"),
+        amountOut: z.string().regex(/^\d+\.?\d*$/, "Invalid amount"),
+        dexSource: z.string().max(100).optional(),
+        txHash: txHashSchema,
+        gasUsed: z.string().regex(/^\d+$/, "Invalid gas").optional(),
         gasless: z.boolean().optional(),
       }))
       .mutation(async ({ ctx, input }) => {
@@ -164,8 +177,8 @@ export const appRouter = router({
     }),
     add: protectedProcedure
       .input(z.object({
-        tokenAddress: z.string().min(42).max(42),
-        tokenSymbol: z.string().max(20),
+        tokenAddress: ethAddressSchema,
+        tokenSymbol: tokenSymbolSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         await addToWatchlist({
@@ -343,16 +356,16 @@ export const appRouter = router({
     }),
     upload: protectedProcedure
       .input(z.object({
-        walletAddress: z.string().min(42).max(42),
+        walletAddress: ethAddressSchema,
         category: z.enum(["instructional", "photos", "memories", "memes", "announcements", "nfts"]),
-        title: z.string().min(1).max(500),
-        description: z.string().max(2000).optional(),
+        title: safeStringSchema(500).pipe(z.string().min(1)),
+        description: safeStringSchema(2000).optional(),
         mediaType: z.enum(["image", "video", "nft"]),
-        fileBase64: z.string().min(1),
-        fileName: z.string().min(1).max(255),
-        contentType: z.string().min(1).max(100),
+        fileBase64: z.string().min(1).max(70_000_000),
+        fileName: z.string().min(1).max(255).regex(/^[a-zA-Z0-9._\-\s]+$/, "Invalid filename"),
+        contentType: z.string().min(1).max(100).regex(/^(image|video)\/(jpeg|jpg|png|gif|webp|mp4|webm|mov)$/, "Invalid content type"),
         fileSizeMb: z.number().positive().max(50).optional(),
-        nftContractAddress: z.string().max(42).optional(),
+        nftContractAddress: ethAddressSchema.optional(),
         nftTokenId: z.string().max(100).optional(),
         nftChainId: z.number().int().optional(),
         nftCollectionName: z.string().max(200).optional(),
@@ -383,11 +396,11 @@ export const appRouter = router({
       }),
     shareNft: protectedProcedure
       .input(z.object({
-        walletAddress: z.string().min(42).max(42),
-        title: z.string().min(1).max(500),
-        description: z.string().max(2000).optional(),
-        nftImageUrl: z.string().url(),
-        nftContractAddress: z.string().min(42).max(42),
+        walletAddress: ethAddressSchema,
+        title: safeStringSchema(500).pipe(z.string().min(1)),
+        description: safeStringSchema(2000).optional(),
+        nftImageUrl: z.string().url().refine((u) => u.startsWith("https://"), "Must be HTTPS URL"),
+        nftContractAddress: ethAddressSchema,
         nftTokenId: z.string().min(1).max(100),
         nftChainId: z.number().int(),
         nftCollectionName: z.string().max(200).optional(),
@@ -503,7 +516,7 @@ export const appRouter = router({
         .input(z.object({
           title: z.string().min(1).max(512),
           description: z.string().min(1).max(10000),
-          walletAddress: z.string().min(42).max(42),
+          walletAddress: ethAddressSchema,
           chain: z.enum(["base", "pulsechain", "both"]).optional(),
           category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
           durationDays: z.number().int().min(1).max(30).optional(),
@@ -554,11 +567,11 @@ export const appRouter = router({
         .input(z.object({
           proposalDbId: z.number().int().positive(),
           proposalId: z.string().min(1),
-          voterAddress: z.string().min(42).max(42),
+          voterAddress: ethAddressSchema,
           choice: z.enum(["for", "against", "abstain"]),
-          votingPower: z.number().int().positive(),
+          votingPower: z.number().int().positive().max(1_000_000_000),
           chain: z.enum(["base", "pulsechain"]),
-          txHash: z.string().max(66).optional(),
+          txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
@@ -591,17 +604,17 @@ export const appRouter = router({
           return getDelegates(input?.limit ?? 50);
         }),
       byAddress: publicProcedure
-        .input(z.object({ address: z.string().min(42).max(42) }))
+        .input(z.object({ address: ethAddressSchema }))
         .query(async ({ input }) => {
           return getDelegateByAddress(input.address);
         }),
       register: protectedProcedure
         .input(z.object({
-          address: z.string().min(42).max(42),
-          displayName: z.string().max(128).optional(),
-          statement: z.string().max(5000).optional(),
-        }))
-        .mutation(async ({ ctx, input }) => {
+        address: ethAddressSchema,
+        displayName: safeStringSchema(128).optional(),
+        statement: safeStringSchema(5000).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
           const existing = await getDelegateByAddress(input.address);
           if (existing) throw new Error("Already registered as delegate");
           await registerDelegate({
@@ -614,11 +627,11 @@ export const appRouter = router({
         }),
       update: protectedProcedure
         .input(z.object({
-          address: z.string().min(42).max(42),
-          displayName: z.string().max(128).optional(),
-          statement: z.string().max(5000).optional(),
-        }))
-        .mutation(async ({ input }) => {
+        address: ethAddressSchema,
+        displayName: safeStringSchema(128).optional(),
+        statement: safeStringSchema(5000).optional(),
+      }))
+      .mutation(async ({ input }) => {
           const delegate = await getDelegateByAddress(input.address);
           if (!delegate) throw new Error("Delegate not found");
           await updateDelegate(delegate.id, {
@@ -640,11 +653,11 @@ export const appRouter = router({
         }),
       create: protectedProcedure
         .input(z.object({
-          delegatorAddress: z.string().min(42).max(42),
-          delegateAddress: z.string().min(42).max(42),
-          amount: z.number().int().positive(),
+          delegatorAddress: ethAddressSchema,
+          delegateAddress: ethAddressSchema,
+          amount: z.number().int().positive().max(1_000_000_000),
           chain: z.enum(["base", "pulsechain"]),
-          txHash: z.string().max(66).optional(),
+          txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
           const delegate = await getDelegateByAddress(input.delegateAddress);
@@ -682,10 +695,10 @@ export const appRouter = router({
       record: protectedProcedure
         .input(z.object({
           chain: z.enum(["base", "pulsechain"]),
-          tokenSymbol: z.string().max(16),
-          tokenAddress: z.string().min(42).max(42),
-          balance: z.string(),
-          valueUsd: z.string().optional(),
+          tokenSymbol: tokenSymbolSchema,
+          tokenAddress: ethAddressSchema,
+          balance: z.string().regex(/^\d+\.?\d*$/, "Invalid balance"),
+          valueUsd: z.string().regex(/^\d+\.?\d*$/, "Invalid USD value").optional(),
         }))
         .mutation(async ({ input }) => {
           await saveTreasurySnapshot(input);
