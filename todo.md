@@ -14,7 +14,7 @@
 - [x] Liberty token list API integration for $HERO and $VETS
 - [x] Grok AI integration for market analysis
 - [x] Navigation and layout (sidebar for dashboard, top nav for public)
-- [x] Unit tests for backend procedures (47 tests passing)
+- [x] Unit tests for backend procedures (66 tests passing)
 - [ ] Security audit and penetration testing
 - [x] Landing page with hero section, feature cards, and CTAs
 - [x] tRPC routers for DCA, limit orders, swap history, watchlist
@@ -45,7 +45,32 @@
 - [x] Grok AI market analysis chat panel
 - [x] Remove vicfoundation.com subdomain references, standalone HERO site
 - [x] Integrate OpenTang design tokens (orangePulse animation, deeper dark tones)
-- [ ] Set up GitHub export for HERO Dapp project storage
+- [x] Set up GitHub export for HERO Dapp project storage (available in Settings > GitHub)
 - [ ] Periodic reminder: Get VPS login details from user
 - [x] Fix SEO: Add meta description (50-160 chars) to landing page
 - [x] Fix SEO: Add keywords meta tag to landing page
+- [x] Integrate Farm Blueprint: Real smart contract addresses (MasterChef, Zapper, Buy&Burn, LP tokens)
+- [x] Integrate Farm Blueprint: Staking pools data (Pool 9 HERO/TruFarm, Pool 67 HERO/PLS)
+- [x] Integrate Farm Blueprint: Military Command Center design theme (gold/green accents)
+- [x] Integrate Farm Blueprint: Service branch ribbons (Army, Navy, Marines, Air Force, etc.)
+- [x] Integrate Farm Blueprint: CDN assets (HERO banner, HERO emblem)
+- [x] Integrate Farm Blueprint: Cross-link to live Farm DApp at herofarm-445vqaqz.manus.space
+- [x] Integrate Farm Blueprint: All PulseChain + Base contract addresses in shared tokens
+- [x] Open Graph meta tags for social sharing (og:title, og:description, og:image)
+- [x] Link existing dashboard (dashboard.vicfoundation.com) into Dapp navigation
+- [x] Link whitepaper (docs.vicfoundation.com) into Dapp navigation
+- [x] Military/first responder theme throughout entire Dapp
+- [x] Tokenomics page: Closed-loop infinite money printer flywheel visualization
+- [x] Tokenomics: LP pairs → native token rewards → single-sided staking → DAI → buy HERO cycle
+- [x] Tokenomics: Emit Farm integration (HERO/EMIT LP → EMIT rewards → DAI)
+- [x] Tokenomics: TruFarm integration (HERO/TruFarm LP → TruFarm rewards → DAI)
+- [x] Tokenomics: Buy & Burn deflationary mechanism display
+- [x] Tokenomics: Treasury continuous buy pressure from DAI → HERO
+- [x] TruDefi 2X protocol integration (community amplifier for external revenue)
+- [x] External revenue streams visualization (multiple streams into protocol)
+- [x] NFT Collection page: Military/first responder themed 1000-piece collection
+- [x] NFT: Ranking insignia system based on token holdings in wallet
+- [x] NFT: Utility framework (reduce buy/sell fee by holding NFT)
+- [x] NFT: Diamond hands reward system (longer hold = more earnings)
+- [x] NFT: Rarity tiers tied to military ranks
+- [x] NFT: Future script framework for implementing utility and rarity

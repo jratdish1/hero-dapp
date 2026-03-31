@@ -571,3 +571,137 @@ describe("AI Chat Router", () => {
     expect(result.reply).toBeTruthy();
   }, 30000);
 });
+
+// --- Farm Blueprint Integration Tests ---
+import {
+  FARM_CONTRACTS_PLS,
+  FARM_CONTRACTS_BASE,
+  FARM_POOLS_PLS,
+  CDN_ASSETS,
+  LIVE_DAPP_URLS,
+  SERVICE_BRANCHES,
+  HERO_TOKEN_PLS,
+  HERO_TOKEN_BASE,
+} from "../shared/tokens";
+
+describe("Farm Blueprint - Smart Contracts", () => {
+  it("MasterChef V2 address is correct", () => {
+    expect(FARM_CONTRACTS_PLS.masterChefV2).toBe("0xc9798c7447B209e79F12542691d4cdA64b98bD96");
+    expect(FARM_CONTRACTS_PLS.masterChefV2).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  it("Buy & Burn addresses are correct for both chains", () => {
+    expect(FARM_CONTRACTS_PLS.buyAndBurn).toBe("0x9016a0DAA30bD29A51a1a2905352877947f904E9");
+    expect(FARM_CONTRACTS_BASE.buyAndBurn).toBe("0x67bEF0A8Be3ef576bF4ab2D904FCbe82E9846670");
+    expect(FARM_CONTRACTS_PLS.buyAndBurn).toMatch(/^0x[0-9a-fA-F]{40}$/);
+    expect(FARM_CONTRACTS_BASE.buyAndBurn).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+
+  it("Zapper address is correct", () => {
+    expect(FARM_CONTRACTS_PLS.zapper).toBe("0x5a67C1dbb3F27C8C0D2B62F12C3Ed1704D14200c");
+  });
+
+  it("PulseX Router address is correct", () => {
+    expect(FARM_CONTRACTS_PLS.pulseXRouter).toBe("0x165C3410fC91EF562C50559f7d2289fEbed552d9");
+  });
+});
+
+describe("Farm Blueprint - Staking Pools", () => {
+  it("has 2 active staking pools on PulseChain", () => {
+    expect(FARM_POOLS_PLS.length).toBe(2);
+    expect(FARM_POOLS_PLS.every(p => p.active)).toBe(true);
+  });
+
+  it("HERO/TruFarm pool has correct ID and LP token", () => {
+    const pool = FARM_POOLS_PLS.find(p => p.name === "HERO/TruFarm");
+    expect(pool).toBeDefined();
+    expect(pool!.id).toBe(9);
+    expect(pool!.lpToken).toBe("0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5");
+    expect(pool!.token0.symbol).toBe("HERO");
+    expect(pool!.token1.symbol).toBe("TruFarm");
+  });
+
+  it("HERO/PLS pool has correct ID and LP token", () => {
+    const pool = FARM_POOLS_PLS.find(p => p.name === "HERO/PLS");
+    expect(pool).toBeDefined();
+    expect(pool!.id).toBe(67);
+    expect(pool!.lpToken).toBe("0x34948e125033a697332202964de96af85becd78f");
+    expect(pool!.token0.symbol).toBe("HERO");
+    expect(pool!.token1.symbol).toBe("PLS");
+  });
+
+  it("HERO token addresses match between pool config and token config", () => {
+    const pool = FARM_POOLS_PLS[0];
+    expect(pool.token0.address).toBe(HERO_TOKEN_PLS.address);
+  });
+});
+
+describe("Farm Blueprint - CDN Assets", () => {
+  it("CDN asset URLs are valid HTTPS URLs", () => {
+    expect(CDN_ASSETS.heroBanner).toMatch(/^https:\/\//);
+    expect(CDN_ASSETS.heroEmblem).toMatch(/^https:\/\//);
+  });
+
+  it("CDN assets have correct file extensions", () => {
+    expect(CDN_ASSETS.heroBanner).toContain(".webp");
+    expect(CDN_ASSETS.heroEmblem).toContain(".webp");
+  });
+});
+
+describe("Farm Blueprint - Live DApp URLs", () => {
+  it("Farm DApp URL is valid", () => {
+    expect(LIVE_DAPP_URLS.farm).toMatch(/^https:\/\//);
+    expect(LIVE_DAPP_URLS.farm).toContain("manus.space");
+  });
+
+  it("DAO DApp URL is valid", () => {
+    expect(LIVE_DAPP_URLS.dao).toMatch(/^https:\/\//);
+    expect(LIVE_DAPP_URLS.dao).toContain("manus.space");
+  });
+});
+
+describe("Farm Blueprint - Service Branches", () => {
+  it("has all 9 service branches", () => {
+    expect(SERVICE_BRANCHES.length).toBe(9);
+  });
+
+  it("includes all military branches", () => {
+    const names = SERVICE_BRANCHES.map(b => b.name);
+    expect(names).toContain("Army");
+    expect(names).toContain("Navy");
+    expect(names).toContain("Marines");
+    expect(names).toContain("Air Force");
+    expect(names).toContain("Space Force");
+  });
+
+  it("includes first responder categories", () => {
+    const names = SERVICE_BRANCHES.map(b => b.name);
+    expect(names).toContain("Firefighters");
+    expect(names).toContain("Police");
+    expect(names).toContain("EMTs");
+  });
+
+  it("Marines color is red (Semper Fi)", () => {
+    const marines = SERVICE_BRANCHES.find(b => b.name === "Marines");
+    expect(marines).toBeDefined();
+    expect(marines!.color).toBe("#CC0000");
+  });
+
+  it("all branches have valid hex colors", () => {
+    for (const branch of SERVICE_BRANCHES) {
+      expect(branch.color).toMatch(/^#[0-9a-fA-F]{6}$/);
+    }
+  });
+});
+
+describe("Farm Blueprint - HERO on BASE", () => {
+  it("HERO BASE contract address is correct", () => {
+    expect(HERO_TOKEN_BASE.address).toBe("0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8");
+    expect(HERO_TOKEN_BASE.chainId).toBe(8453);
+  });
+
+  it("BASE Buy & Burn contract is set", () => {
+    expect(FARM_CONTRACTS_BASE.buyAndBurn).toBeTruthy();
+    expect(FARM_CONTRACTS_BASE.buyAndBurn).toMatch(/^0x[0-9a-fA-F]{40}$/);
+  });
+});

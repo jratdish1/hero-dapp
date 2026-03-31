@@ -21,6 +21,10 @@ import {
   Newspaper,
   Bot,
   Sparkles,
+  Infinity,
+  Globe,
+  ExternalLink,
+  Gem,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -31,7 +35,10 @@ const NAV_ITEMS = [
   { path: "/dca", label: "DCA Orders", icon: Clock },
   { path: "/limits", label: "Limit Orders", icon: Target },
   { path: "/approvals", label: "Approvals", icon: Shield },
+  { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
+  { path: "/nft", label: "NFT Collection", icon: Gem },
   { path: "/blog", label: "MVS & Blog", icon: Newspaper },
+  { path: "/ecosystem", label: "Ecosystem", icon: Globe },
   { path: "/ai", label: "AI Assistant", icon: Bot },
 ];
 

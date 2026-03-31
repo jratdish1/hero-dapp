@@ -218,6 +218,66 @@ export const TOKEN_MAP: Record<SupportedChainId, TokenInfo[]> = {
   [BASE_CHAIN_ID]: BASE_TOKENS,
 };
 
+// ─── Farm Smart Contracts - PulseChain ──────────────────────────────────
+export const FARM_CONTRACTS_PLS = {
+  masterChefV2: "0xc9798c7447B209e79F12542691d4cdA64b98bD96",
+  buyAndBurn: "0x9016a0DAA30bD29A51a1a2905352877947f904E9",
+  zapper: "0x5a67C1dbb3F27C8C0D2B62F12C3Ed1704D14200c",
+  pulseXRouter: "0x165C3410fC91EF562C50559f7d2289fEbed552d9",
+  heroTruFarmLP: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5",
+  heroPLSLP: "0x34948e125033a697332202964de96af85becd78f",
+  truFarmToken: "0xCA942990EF21446Db490532E66992eD1EF76A82b",
+} as const;
+
+export const FARM_POOLS_PLS = [
+  {
+    id: 9,
+    name: "HERO/TruFarm",
+    lpToken: FARM_CONTRACTS_PLS.heroTruFarmLP,
+    token0: { symbol: "HERO", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
+    token1: { symbol: "TruFarm", address: FARM_CONTRACTS_PLS.truFarmToken },
+    active: true,
+  },
+  {
+    id: 67,
+    name: "HERO/PLS",
+    lpToken: FARM_CONTRACTS_PLS.heroPLSLP,
+    token0: { symbol: "HERO", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
+    token1: { symbol: "PLS", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
+    active: true,
+  },
+] as const;
+
+// ─── Farm Smart Contracts - Base ────────────────────────────────────────
+export const FARM_CONTRACTS_BASE = {
+  buyAndBurn: "0x67bEF0A8Be3ef576bF4ab2D904FCbe82E9846670",
+} as const;
+
+// ─── CDN Assets ─────────────────────────────────────────────────────────
+export const CDN_ASSETS = {
+  heroBanner: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/445vqAqzbQinaz2K7dFjjJ/hero-banner-QpyKdvivL5TcgqnXxrRZh5.webp",
+  heroEmblem: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/445vqAqzbQinaz2K7dFjjJ/hero-emblem-aHVuQc59ySp2SrqEGw29rZ.webp",
+} as const;
+
+// ─── Live DApp URLs ─────────────────────────────────────────────────────
+export const LIVE_DAPP_URLS = {
+  farm: "https://herofarm-445vqaqz.manus.space",
+  dao: "https://herodapp-parejpux.manus.space",
+} as const;
+
+// ─── Service Branch Ribbons ─────────────────────────────────────────────
+export const SERVICE_BRANCHES = [
+  { name: "Army", color: "#4B5320", emoji: "🪖" },
+  { name: "Navy", color: "#000080", emoji: "⚓" },
+  { name: "Marines", color: "#CC0000", emoji: "🦅" },
+  { name: "Air Force", color: "#00308F", emoji: "✈️" },
+  { name: "Coast Guard", color: "#FF8C00", emoji: "🚢" },
+  { name: "Space Force", color: "#0B3D91", emoji: "🚀" },
+  { name: "Firefighters", color: "#FF4500", emoji: "🔥" },
+  { name: "Police", color: "#003366", emoji: "🛡️" },
+  { name: "EMTs", color: "#FF6600", emoji: "🚑" },
+] as const;
+
 // ─── Backward-compat aliases ────────────────────────────────────────────
 export const HERO_TOKEN = HERO_TOKEN_PLS;
 export const VETS_TOKEN = VETS_TOKEN_PLS;

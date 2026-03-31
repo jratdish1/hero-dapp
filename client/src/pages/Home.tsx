@@ -16,6 +16,10 @@ import {
   Sprout,
   Newspaper,
   Heart,
+  Infinity,
+  Gem,
+  BookOpen,
+  Globe,
 } from "lucide-react";
 import { HERO_TOKEN, VETS_TOKEN } from "../../../shared/tokens";
 
@@ -77,10 +81,24 @@ const FEATURES = [
     color: "var(--hero-orange)",
   },
   {
+    icon: Infinity,
+    title: "Tokenomics",
+    description: "Closed-loop flywheel: farm, stake, earn stablecoins, buy HERO. Infinite money printer.",
+    href: "/tokenomics",
+    color: "var(--hero-green)",
+  },
+  {
+    icon: Gem,
+    title: "NFT Collection",
+    description: "1,000 military-themed NFTs with rank-based utility. Hold more HERO, earn higher rank.",
+    href: "/nft",
+    color: "var(--hero-orange)",
+  },
+  {
     icon: Heart,
     title: "501(c)(3) Mission",
     description: "Supporting military veterans and first responders through the VIC Foundation.",
-    href: "/subdomains",
+    href: "/ecosystem",
     color: "var(--hero-orange)",
   },
 ];
@@ -104,7 +122,9 @@ export default function Home() {
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
             <Link href="/limits" className="text-muted-foreground hover:text-foreground transition-colors">Limits</Link>
             <Link href="/farm" className="text-muted-foreground hover:text-foreground transition-colors">Farm</Link>
-            <Link href="/blog" className="text-muted-foreground hover:text-foreground transition-colors">Blog</Link>
+            <Link href="/tokenomics" className="text-muted-foreground hover:text-foreground transition-colors">Tokenomics</Link>
+            <Link href="/nft" className="text-muted-foreground hover:text-foreground transition-colors">NFTs</Link>
+            <a href="https://docs.vicfoundation.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">Whitepaper <ExternalLink className="w-3 h-3" /></a>
           </div>
           <Link href="/swap">
             <Button className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 text-sm">
@@ -225,7 +245,7 @@ export default function Home() {
               { label: "DEX Sources", value: "4+" },
               { label: "Supported Tokens", value: "500+" },
               { label: "Avg Gas Savings", value: "~99%" },
-              { label: "Chain", value: "PulseChain" },
+              { label: "Chains", value: "PLS + BASE" },
             ].map((stat) => (
               <div key={stat.label}>
                 <p className="text-3xl md:text-4xl font-bold gradient-text">{stat.value}</p>
@@ -287,6 +307,22 @@ export default function Home() {
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
                 @HERO501c3 <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://dashboard.vicfoundation.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[var(--hero-orange)] flex items-center gap-1"
+              >
+                Dashboard <ExternalLink className="w-3 h-3" />
+              </a>
+              <a
+                href="https://docs.vicfoundation.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="hover:text-[var(--hero-orange)] flex items-center gap-1"
+              >
+                Whitepaper <ExternalLink className="w-3 h-3" />
               </a>
             </div>
           </div>

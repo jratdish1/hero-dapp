@@ -15,6 +15,9 @@ import Approvals from "./pages/Approvals";
 import Farm from "./pages/Farm";
 import Blog from "./pages/Blog";
 import AiAssistant from "./pages/AiAssistant";
+import Tokenomics from "./pages/Tokenomics";
+import NftCollection from "./pages/NftCollection";
+import Ecosystem from "./pages/Subdomains";
 import AppLayout from "./components/AppLayout";
 
 function Router() {
@@ -30,6 +33,9 @@ function Router() {
       <Route path="/farm" component={() => <AppLayout><Farm /></AppLayout>} />
       <Route path="/blog" component={() => <AppLayout><Blog /></AppLayout>} />
       <Route path="/ai" component={() => <AppLayout><AiAssistant /></AppLayout>} />
+      <Route path="/tokenomics" component={() => <AppLayout><Tokenomics /></AppLayout>} />
+      <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
+      <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
