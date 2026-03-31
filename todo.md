@@ -160,3 +160,4 @@
 - [x] Cloudflare: Provide setup instructions for DNS proxy protection on www.herobase.io
 - [x] Cloudflare: Configure CSP, HSTS, and anti-DDoS headers
 - [ ] Enhance server-side rate limiting: add per-route limits for DAO, media uploads, wallet endpoints
+- [x] SEO fix: Reduce keywords on landing page from 14 to 6 focused keywords
