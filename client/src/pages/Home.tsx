@@ -79,7 +79,7 @@ const FEATURES = [
     icon: Newspaper,
     title: "Media",
     description: "Influencer mentions, guest posts, and press coverage of the HERO ecosystem.",
-    href: "/blog",
+    href: "/media",
     color: "var(--hero-orange)",
   },
   {

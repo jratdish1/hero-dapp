@@ -92,7 +92,7 @@ const HERO_PRODUCTS: ProductConfig[] = [
       "Influencer mentions, guest posts, and press coverage of the HERO ecosystem and VIC Foundation mission.",
     icon: Newspaper,
     status: "live",
-    url: "/blog",
+    url: "/media",
     color: "#ec4899",
     tag: "Community",
   },

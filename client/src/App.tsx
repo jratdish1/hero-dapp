@@ -33,12 +33,12 @@ function Router() {
       <Route path="/limits" component={() => <AppLayout><LimitOrders /></AppLayout>} />
       <Route path="/approvals" component={() => <AppLayout><Approvals /></AppLayout>} />
       <Route path="/farm" component={() => <AppLayout><Farm /></AppLayout>} />
-      <Route path="/blog" component={() => <AppLayout><Blog /></AppLayout>} />
+      <Route path="/media" component={() => <AppLayout><Blog /></AppLayout>} />
       <Route path="/ai" component={() => <AppLayout><AiAssistant /></AppLayout>} />
       <Route path="/tokenomics" component={() => <AppLayout><Tokenomics /></AppLayout>} />
       <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
       <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
-      <Route path="/media" component={() => <AppLayout><MediaHub /></AppLayout>} />
+      <Route path="/community" component={() => <AppLayout><MediaHub /></AppLayout>} />
       <Route path="/dao" component={() => <AppLayout><DaoDashboard /></AppLayout>} />
       <Route path="/dao/proposals" component={() => <AppLayout><Proposals /></AppLayout>} />
       <Route path="/dao/proposals/create" component={() => <AppLayout><CreateProposal /></AppLayout>} />

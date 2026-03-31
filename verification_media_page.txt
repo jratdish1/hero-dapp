@@ -1,0 +1,14 @@
+Media Page Verification — March 31, 2026
+
+CONFIRMED WORKING:
+- /media route now loads the influencer tracking Media page (Blog.tsx)
+- /community route loads the Community Hub (MediaHub.tsx)
+- Sidebar nav shows "Media" and "Community Hub" as separate items
+- Media page header: "Media" with subtitle "Live influencer mentions, guest posts, and HERO ecosystem coverage"
+- Tabs: Influencer Mentions, Articles & Guest Posts, Press Kit
+- Category filters: All, Influencers, Community, Press, Partners
+- Refresh Mentions and Generate Article buttons visible (authenticated)
+- Featured static mentions showing as fallback (CrypMvs, VIC Foundation Blog, PulseChain Community)
+- CTA to click "Refresh Mentions" to pull live tweets
+- Connect Wallet button visible in orange
+- No Manus branding visible in app (only platform preview banner at bottom)
