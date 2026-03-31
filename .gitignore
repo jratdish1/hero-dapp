@@ -111,3 +111,13 @@ temp/
 
 # Manus version file (auto-generated, not part of source)
 client/public/__manus__/version.json
+
+# Manus logs
+.manus-logs/
+
+# Migration scripts
+run-migration.mjs
+
+# Verification notes
+verification_*.txt
+notes_*.txt
