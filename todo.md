@@ -161,3 +161,6 @@
 - [x] Cloudflare: Configure CSP, HSTS, and anti-DDoS headers
 - [ ] Enhance server-side rate limiting: add per-route limits for DAO, media uploads, wallet endpoints
 - [x] SEO fix: Reduce keywords on landing page from 14 to 6 focused keywords
+- [x] SEO: Add canonical URL (https://www.herobase.io/) to prevent duplicate content
+- [x] SEO: Add JSON-LD structured data (WebApplication schema) for rich snippets
+- [x] SEO: Create and serve sitemap.xml for Google Search Console
