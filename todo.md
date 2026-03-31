@@ -188,3 +188,7 @@
 - [x] Feature: Twitter/X influencer tracking — tRPC procedures for mention CRUD + manual refresh
 - [x] Feature: Twitter/X influencer tracking — update Media page to show real mentions with engagement metrics
 - [x] Feature: Twitter/X influencer tracking — write tests for all new endpoints (28 tests passing)
+- [x] Feature: Scheduled auto-refresh for Twitter mentions (server-side setInterval, every 4 hours)
+- [x] Feature: Pin to Top for best influencer mentions (isPinned column, admin toggle, optimistic UI, pinned sort first)
+- [x] Feature: Telegram bot notifications for high-follower $HERO mentions (1k+ followers, press, partners → VetsInCrypto)
+- [ ] Feature: Domain setup guidance for vicfoundation.com (CNAME to dapp.vicfoundation.com)

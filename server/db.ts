@@ -478,7 +478,8 @@ export async function getInfluencerMentions(
     ? db.select().from(influencerMentions).where(and(...conditions))
     : db.select().from(influencerMentions);
 
-  return query.orderBy(desc(influencerMentions.tweetCreatedAt)).limit(limit).offset(offset);
+  // Sort: pinned first, then by tweet date descending
+  return query.orderBy(desc(influencerMentions.isPinned), desc(influencerMentions.tweetCreatedAt)).limit(limit).offset(offset);
 }
 
 export async function getInfluencerMentionByTweetId(tweetId: string) {
@@ -487,6 +488,12 @@ export async function getInfluencerMentionByTweetId(tweetId: string) {
   const result = await db.select().from(influencerMentions)
     .where(eq(influencerMentions.tweetId, tweetId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+export async function toggleMentionPinned(id: number, isPinned: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(influencerMentions).set({ isPinned }).where(eq(influencerMentions.id, id));
 }
 
 export async function toggleMentionHighlight(id: number, isHighlighted: boolean) {

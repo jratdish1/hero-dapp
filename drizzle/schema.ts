@@ -269,6 +269,7 @@ export const influencerMentions = mysqlTable("influencer_mentions", {
   vetsMentioned: boolean("vetsMentioned").default(false),
   sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]).default("neutral"),
   isHighlighted: boolean("isHighlighted").default(false),
+  isPinned: boolean("isPinned").default(false),
   isHidden: boolean("isHidden").default(false),
   fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

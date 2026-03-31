@@ -64,6 +64,7 @@ import {
   upsertInfluencerMention,
   getInfluencerMentions,
   getInfluencerMentionByTweetId,
+  toggleMentionPinned,
   toggleMentionHighlight,
   toggleMentionHidden,
   updateMentionCategory,
@@ -72,6 +73,8 @@ import {
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
 import { getHeroRestId, fetchHeroTweets, toDbRecord } from "./twitterFetcher";
+import { alertNewMention } from "./telegramBot";
+import { getSchedulerStatus } from "./mentionScheduler";
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData } from "./priceFeed";
 
 export const appRouter = router({
@@ -788,20 +791,43 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
     refresh: protectedProcedure.mutation(async () => {
       const restId = await getHeroRestId();
       if (!restId) {
-        return { success: false, message: "Could not resolve @HERO501c3 Twitter ID. API rate limit may be hit.", fetched: 0, newCount: 0 };
+        return { success: false, message: "Could not resolve @HERO501c3 Twitter ID. API rate limit may be hit.", fetched: 0, newCount: 0, alertsSent: 0 };
       }
 
       const tweets = await fetchHeroTweets(restId, 40);
       let newCount = 0;
+      let alertsSent = 0;
 
       for (const tweet of tweets) {
         const existing = await getInfluencerMentionByTweetId(tweet.tweetId);
-        if (!existing) newCount++;
+        const isNew = !existing;
         await upsertInfluencerMention(toDbRecord(tweet));
+        // Send Telegram alert for new high-profile mentions
+        if (isNew) {
+          newCount++;
+          const sent = await alertNewMention(tweet);
+          if (sent) alertsSent++;
+        }
       }
 
-      return { success: true, message: `Fetched ${tweets.length} tweets, ${newCount} new.`, fetched: tweets.length, newCount };
+      return { success: true, message: `Fetched ${tweets.length} tweets, ${newCount} new, ${alertsSent} alerts sent.`, fetched: tweets.length, newCount, alertsSent };
     }),
+
+    /** Public: get scheduler status */
+    schedulerStatus: publicProcedure.query(() => {
+      return getSchedulerStatus();
+    }),
+
+    /** Protected (admin): toggle pin on a mention */
+    togglePin: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        isPinned: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        await toggleMentionPinned(input.id, input.isPinned);
+        return { success: true };
+      }),
 
     /** Protected (admin): toggle highlight on a mention */
     toggleHighlight: protectedProcedure

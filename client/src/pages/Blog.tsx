@@ -22,13 +22,18 @@ import {
   Quote,
   Star,
   Filter,
+  Pin,
+  PinOff,
+  Clock,
+  CheckCircle2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { Streamdown } from "streamdown";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 
-// ─── DRY: Reusable badge helper ──────────────────────────────────────────
+// ─── DRY: Reusable helpers ──────────────────────────────────────────
+
 function TokenBadge({ symbol, variant }: { symbol: string; variant: "hero" | "vets" }) {
   const color = variant === "hero" ? "var(--hero-orange)" : "var(--hero-green)";
   return (
@@ -45,7 +50,6 @@ function TokenBadge({ symbol, variant }: { symbol: string; variant: "hero" | "ve
   );
 }
 
-// ─── DRY: Reusable date display ──────────────────────────────────────────
 function DateLabel({ date }: { date: string | Date | null }) {
   if (!date) return null;
   return (
@@ -56,7 +60,6 @@ function DateLabel({ date }: { date: string | Date | null }) {
   );
 }
 
-// ─── DRY: Engagement metric ─────────────────────────────────────────────
 function EngagementStat({ icon: Icon, count, label }: { icon: React.ElementType; count: number; label: string }) {
   if (count === 0) return null;
   return (
@@ -67,7 +70,6 @@ function EngagementStat({ icon: Icon, count, label }: { icon: React.ElementType;
   );
 }
 
-// ─── DRY: Category badge ────────────────────────────────────────────────
 function CategoryBadge({ category }: { category: string }) {
   const styles: Record<string, string> = {
     influencer: "bg-purple-500/10 text-purple-400 border-purple-500/20",
@@ -82,14 +84,35 @@ function CategoryBadge({ category }: { category: string }) {
   );
 }
 
-// ─── Live Influencer Mention Card (from DB) ─────────────────────────────
-function LiveMentionCard({ mention }: { mention: any }) {
+// ─── Live Mention Card with Pin/Highlight controls ──────────────────
+
+function LiveMentionCard({
+  mention,
+  isAuthenticated,
+  onTogglePin,
+  onToggleHighlight,
+}: {
+  mention: any;
+  isAuthenticated: boolean;
+  onTogglePin: (id: number, isPinned: boolean) => void;
+  onToggleHighlight: (id: number, isHighlighted: boolean) => void;
+}) {
   const typeIcon = mention.mentionType === "retweet" ? Repeat2 : mention.mentionType === "quote" ? Quote : Twitter;
   const TypeIcon = typeIcon;
 
   return (
-    <Card className={`border-border/50 bg-card/80 hover:border-[var(--hero-orange)]/30 transition-all ${mention.isHighlighted ? "ring-1 ring-[var(--hero-orange)]/30" : ""}`}>
+    <Card className={`border-border/50 bg-card/80 hover:border-[var(--hero-orange)]/30 transition-all ${
+      mention.isPinned ? "ring-2 ring-[var(--hero-orange)]/40 border-[var(--hero-orange)]/30" : ""
+    } ${mention.isHighlighted ? "ring-1 ring-[var(--hero-orange)]/20" : ""}`}>
       <CardContent className="p-5">
+        {/* Pinned indicator */}
+        {mention.isPinned && (
+          <div className="flex items-center gap-1.5 mb-2 text-[var(--hero-orange)]">
+            <Pin className="w-3 h-3" />
+            <span className="text-[10px] font-semibold uppercase tracking-wider">Pinned</span>
+          </div>
+        )}
+
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-start gap-3">
             {mention.authorProfileImageUrl && (
@@ -117,12 +140,35 @@ function LiveMentionCard({ mention }: { mention: any }) {
               </div>
             </div>
           </div>
-          <a href={mention.tweetUrl} target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="border-border/50 shrink-0">
-              <ExternalLink className="w-3 h-3 mr-1" />
-              View
-            </Button>
-          </a>
+          <div className="flex items-center gap-1 shrink-0">
+            {/* Admin controls: Pin & Highlight */}
+            {isAuthenticated && (
+              <>
+                <Button
+                  size="sm" variant="ghost"
+                  className={`h-7 w-7 p-0 ${mention.isPinned ? "text-[var(--hero-orange)]" : "text-muted-foreground hover:text-[var(--hero-orange)]"}`}
+                  title={mention.isPinned ? "Unpin" : "Pin to Top"}
+                  onClick={() => onTogglePin(mention.id, !mention.isPinned)}
+                >
+                  {mention.isPinned ? <PinOff className="w-3.5 h-3.5" /> : <Pin className="w-3.5 h-3.5" />}
+                </Button>
+                <Button
+                  size="sm" variant="ghost"
+                  className={`h-7 w-7 p-0 ${mention.isHighlighted ? "text-[var(--hero-orange)]" : "text-muted-foreground hover:text-[var(--hero-orange)]"}`}
+                  title={mention.isHighlighted ? "Remove highlight" : "Highlight"}
+                  onClick={() => onToggleHighlight(mention.id, !mention.isHighlighted)}
+                >
+                  <Star className="w-3.5 h-3.5" />
+                </Button>
+              </>
+            )}
+            <a href={mention.tweetUrl} target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="outline" className="border-border/50">
+                <ExternalLink className="w-3 h-3 mr-1" />
+                View
+              </Button>
+            </a>
+          </div>
         </div>
 
         <div className="flex gap-2 mb-3 flex-wrap">
@@ -134,7 +180,6 @@ function LiveMentionCard({ mention }: { mention: any }) {
           {mention.tweetText}
         </p>
 
-        {/* Engagement metrics */}
         <div className="flex items-center gap-4 mt-3 pt-3 border-t border-border/30">
           <EngagementStat icon={Heart} count={mention.likeCount || 0} label="Likes" />
           <EngagementStat icon={Repeat2} count={mention.retweetCount || 0} label="Retweets" />
@@ -154,7 +199,8 @@ function LiveMentionCard({ mention }: { mention: any }) {
   );
 }
 
-// ─── Static Mention Card (fallback for when DB is empty) ────────────────
+// ─── Static Mention Card (fallback) ────────────────────────────────
+
 function StaticMentionCard({
   title, sourceUrl, source, date, content, heroPrice, vetsPrice, farmYields, sourceType = "twitter",
 }: {
@@ -204,7 +250,8 @@ function StaticMentionCard({
   );
 }
 
-// ─── Blog / Guest Post Card ──────────────────────────────────────────────
+// ─── Article Card ──────────────────────────────────────────────────
+
 function ArticleCard({
   title, slug, excerpt, publishedAt, tags, heroMentioned, vetsMentioned,
 }: {
@@ -253,7 +300,8 @@ function ArticleCard({
   );
 }
 
-// ─── Featured Mentions (static fallback) ────────────────────────────────
+// ─── Static Data ───────────────────────────────────────────────────
+
 const FEATURED_MENTIONS = [
   {
     title: "Weekly HERO Ecosystem Roundup — March 30, 2026",
@@ -286,25 +334,50 @@ const GUEST_POST_TARGETS = [
   { name: "Military Times", url: "https://www.militarytimes.com/", status: "Pitching", icon: "🎖️" },
 ];
 
-// ─── Main Media Page ────────────────────────────────────────────────────
+// ─── Scheduler Status Indicator ────────────────────────────────────
+
+function SchedulerIndicator() {
+  const statusQuery = trpc.influencer.schedulerStatus.useQuery(undefined, { refetchInterval: 60000 });
+  const status = statusQuery.data;
+  if (!status) return null;
+
+  return (
+    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+      {status.isActive ? (
+        <CheckCircle2 className="w-3 h-3 text-[var(--hero-green)]" />
+      ) : (
+        <Clock className="w-3 h-3 text-muted-foreground" />
+      )}
+      <span>
+        Auto-refresh: {status.isActive ? `every ${status.intervalHours}h` : "off"}
+        {status.lastRunAt && ` · Last: ${new Date(status.lastRunAt).toLocaleTimeString()}`}
+        {status.lastRunResult && ` (${status.lastRunResult.newCount} new)`}
+      </span>
+    </div>
+  );
+}
+
+// ─── Main Media Page ────────────────────────────────────────────────
+
 export default function Blog() {
   const { isAuthenticated } = useAuth();
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
+  const utils = trpc.useUtils();
 
   // Live data from DB
   const mentionsQuery = trpc.influencer.list.useQuery(
     { category: categoryFilter as any, limit: 50 },
-    { refetchInterval: 60000 } // Auto-refresh every 60s
+    { refetchInterval: 60000 }
   );
   const statsQuery = trpc.influencer.stats.useQuery(undefined, { refetchInterval: 60000 });
   const blogQuery = trpc.blog.published.useQuery({});
 
-  // Refresh mutation
+  // Mutations
   const refreshMutation = trpc.influencer.refresh.useMutation({
     onSuccess: (data) => {
       toast.success(data.message);
-      mentionsQuery.refetch();
-      statsQuery.refetch();
+      utils.influencer.list.invalidate();
+      utils.influencer.stats.invalidate();
     },
     onError: (err) => toast.error(`Refresh failed: ${err.message}`),
   });
@@ -312,15 +385,47 @@ export default function Blog() {
   const generateMutation = trpc.blog.generateFromMvs.useMutation({
     onSuccess: (data) => {
       toast.success(`Article created: ${data.title}`);
-      blogQuery.refetch();
+      utils.blog.published.invalidate();
     },
     onError: (err) => toast.error(`Failed to generate: ${err.message}`),
+  });
+
+  // Pin/Highlight mutations (optimistic updates — DRY pattern)
+  const pinMutation = trpc.influencer.togglePin.useMutation({
+    onMutate: async ({ id, isPinned }) => {
+      await utils.influencer.list.cancel();
+      const prev = utils.influencer.list.getData();
+      utils.influencer.list.setData({ category: categoryFilter as any, limit: 50 }, (old: any) =>
+        old?.map((m: any) => m.id === id ? { ...m, isPinned } : m)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) utils.influencer.list.setData({ category: categoryFilter as any, limit: 50 }, ctx.prev);
+      toast.error("Failed to update pin");
+    },
+    onSettled: () => utils.influencer.list.invalidate(),
+  });
+
+  const highlightMutation = trpc.influencer.toggleHighlight.useMutation({
+    onMutate: async ({ id, isHighlighted }) => {
+      await utils.influencer.list.cancel();
+      const prev = utils.influencer.list.getData();
+      utils.influencer.list.setData({ category: categoryFilter as any, limit: 50 }, (old: any) =>
+        old?.map((m: any) => m.id === id ? { ...m, isHighlighted } : m)
+      );
+      return { prev };
+    },
+    onError: (_err, _vars, ctx) => {
+      if (ctx?.prev) utils.influencer.list.setData({ category: categoryFilter as any, limit: 50 }, ctx.prev);
+      toast.error("Failed to update highlight");
+    },
+    onSettled: () => utils.influencer.list.invalidate(),
   });
 
   const hasLiveMentions = (mentionsQuery.data?.length ?? 0) > 0;
   const stats = statsQuery.data;
 
-  // Category filter options (DRY)
   const filterOptions = useMemo(() => [
     { value: undefined, label: "All", count: stats?.total },
     { value: "influencer", label: "Influencers", count: stats?.influencer },
@@ -341,6 +446,7 @@ export default function Blog() {
           <p className="text-muted-foreground mt-1 text-sm">
             Live influencer mentions, guest posts, and HERO ecosystem coverage
           </p>
+          <SchedulerIndicator />
         </div>
         <div className="flex gap-2">
           {isAuthenticated && (
@@ -414,7 +520,6 @@ export default function Blog() {
 
         {/* ─── Influencer Mentions Tab ─────────────────────────────── */}
         <TabsContent value="mentions" className="mt-6 space-y-4">
-          {/* Category filter */}
           <div className="flex items-center gap-2 flex-wrap">
             <Filter className="w-3.5 h-3.5 text-muted-foreground" />
             {filterOptions.map((opt) => (
@@ -443,7 +548,13 @@ export default function Blog() {
             </div>
           ) : hasLiveMentions ? (
             mentionsQuery.data!.map((mention: any) => (
-              <LiveMentionCard key={mention.id} mention={mention} />
+              <LiveMentionCard
+                key={mention.id}
+                mention={mention}
+                isAuthenticated={isAuthenticated}
+                onTogglePin={(id, isPinned) => pinMutation.mutate({ id, isPinned })}
+                onToggleHighlight={(id, isHighlighted) => highlightMutation.mutate({ id, isHighlighted })}
+              />
             ))
           ) : (
             <>

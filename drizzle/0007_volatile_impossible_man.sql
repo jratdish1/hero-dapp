@@ -1,0 +1,1 @@
+ALTER TABLE `influencer_mentions` ADD `isPinned` boolean DEFAULT false;

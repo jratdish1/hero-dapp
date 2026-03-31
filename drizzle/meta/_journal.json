@@ -50,6 +50,13 @@
       "when": 1774989612325,
       "tag": "0006_slim_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "5",
+      "when": 1774991600738,
+      "tag": "0007_volatile_impossible_man",
+      "breakpoints": true
     }
   ]
 }
