@@ -251,6 +251,7 @@ export const FARM_POOLS_PLS = [
 // ─── Farm Smart Contracts - Base ────────────────────────────────────────
 export const FARM_CONTRACTS_BASE = {
   buyAndBurn: "0x67bEF0A8Be3ef576bF4ab2D904FCbe82E9846670",
+  heroEthPair: "0x3bb159de8604ab7e0148edc24f2a568c430476cf",
 } as const;
 
 // ─── CDN Assets ─────────────────────────────────────────────────────────

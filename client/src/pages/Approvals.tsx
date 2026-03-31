@@ -60,7 +60,7 @@ export default function Approvals() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
         <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-          <Shield className="w-10 h-10 text-white" />
+          <Shield className="w-10 h-10 text-foreground" />
         </div>
         <div className="text-center">
           <h2 className="text-2xl font-bold text-foreground mb-2">Token Approval Manager</h2>
@@ -70,7 +70,7 @@ export default function Approvals() {
         </div>
         <Button
           onClick={() => setConnected(true)}
-          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 px-8 h-12"
+          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 px-8 h-12"
         >
           Connect Wallet to Scan
         </Button>

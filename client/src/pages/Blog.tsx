@@ -341,7 +341,7 @@ export default function Blog() {
                 {isAuthenticated && (
                   <Button
                     size="sm"
-                    className="mt-4 bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0"
+                    className="mt-4 bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0"
                     onClick={() => {
                       generateMutation.mutate({
                         tweetContent: SAMPLE_MVS[0].content,

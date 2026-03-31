@@ -9,12 +9,14 @@ import {
   watchlist,
   blogPosts,
   mvsContent,
+  mediaPosts,
   type InsertDcaOrder,
   type InsertLimitOrder,
   type InsertSwapHistory,
   type InsertWatchlist,
   type InsertBlogPost,
   type InsertMvsContent,
+  type InsertMediaPost,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -223,4 +225,48 @@ export async function getMvsContentByTweetId(tweetId: string) {
   if (!db) return undefined;
   const result = await db.select().from(mvsContent).where(eq(mvsContent.tweetId, tweetId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
+}
+
+// --- Media Posts ---
+export async function createMediaPost(post: InsertMediaPost) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.insert(mediaPosts).values(post);
+}
+
+export async function getMediaPostsByCategory(
+  category: "instructional" | "photos" | "memories" | "memes" | "announcements" | "nfts",
+  limit = 50
+) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(mediaPosts)
+    .where(and(eq(mediaPosts.category, category), eq(mediaPosts.status, "active")))
+    .orderBy(desc(mediaPosts.createdAt))
+    .limit(limit);
+}
+
+export async function getAllMediaPosts(limit = 100) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(mediaPosts)
+    .where(eq(mediaPosts.status, "active"))
+    .orderBy(desc(mediaPosts.createdAt))
+    .limit(limit);
+}
+
+export async function getMediaPostsByUser(userId: number, limit = 50) {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(mediaPosts)
+    .where(eq(mediaPosts.userId, userId))
+    .orderBy(desc(mediaPosts.createdAt))
+    .limit(limit);
+}
+
+export async function deleteMediaPost(id: number, userId: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(mediaPosts).set({ status: "removed" })
+    .where(and(eq(mediaPosts.id, id), eq(mediaPosts.userId, userId)));
 }

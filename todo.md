@@ -90,3 +90,41 @@
 - [x] Security audit: API key exposure prevention
 - [x] Security audit: Rate limiting on sensitive endpoints
 - [x] Penetration test: Simulated attack vectors and findings report
+- [x] Visual infographic: Tokenomics flywheel (LP → rewards → DAI → buy HERO cycle)
+- [x] Visual infographic: NFT rank system (E-1 to O-10 with fee reductions)
+- [x] Visual infographic: Swap aggregator flow (multi-DEX routing)
+- [x] Visual infographic: Farm yield ecosystem (Emit, TruFarms, RhinoFi)
+- [x] AI explainer video script covering full HERO ecosystem
+- [x] AI explainer video production and CDN upload
+- [ ] Explainer page on Dapp with embedded video and visual breakdowns
+- [ ] Add Explainer page to navigation (sidebar + landing page)
+- [x] Visual infographic: Tokenomics flywheel (LP → rewards → DAI → buy HERO cycle)
+- [x] Visual infographic: NFT rank system (E-1 to O-10 with fee reductions)
+- [x] Visual infographic: Swap aggregator flow (multi-DEX routing)
+- [x] Visual infographic: Farm yield ecosystem (Emit, TruFarms, RhinoFi)
+- [x] Media Hub page: categories (Instructional Videos, Community Photos, Mission Memories, Memes/Fun, Announcements)
+- [x] Media Hub: wallet-gated upload (pop-up prompts wallet connect when clicking upload)
+- [x] Media Hub: S3 file storage for uploaded photos and videos
+- [x] Media Hub: browse/view uploaded content by category
+- [x] Media Hub: database schema for media posts (media_posts table)
+- [x] Media Hub: tRPC routers for CRUD operations on media posts
+- [x] Explainer video pop-up modal on first visit with skip button
+- [x] Explainer video: localStorage persistence (show once, don't show again)
+- [x] Explainer video: skip button appears after a few seconds
+- [x] AI explainer video script and production
+- [x] Add Media Hub and Explainer to navigation (sidebar + landing page)
+- [x] Grok AI: Update system prompt to direct users to https://t.me/VetsInCrypto/1 Telegram for assistance
+- [x] Media Hub: NFT showcase — wallet-connected users can post/share their NFTs
+- [x] Media Hub: Add "NFTs" as a category alongside Instructional Videos, Photos, Memories, Memes, Announcements
+- [x] Bug fix: Donation box and crypto payment box overlapping — investigated, no overlap found on any page (may have been resolved in prior updates)
+- [x] Site-wide dark/light mode toggle button available on every page (persistent via localStorage)
+- [x] Update shared/tokens.ts with all correct contract addresses from blueprint (already correct)
+- [x] Build server-side price feed service (DexScreener API + on-chain reads)
+- [x] Wire real-time HERO, VETS, PLS, ETH prices across all pages
+- [ ] Wire real-time LP pair data (reserves, TVL, APR) for farm pools
+- [ ] Wire real-time Buy & Burn data (total burned, last burn, burn rate)
+- [x] Wire real-time market cap and liquidity data to Dashboard
+- [x] Add scrolling price ticker to AppLayout header (HERO, VETS, PLS, ETH)
+- [x] Finish assembling explainer video (ffmpeg merge clips + narration + upload)
+- [x] Update BASE HERO contract address to 0x00fa69ed03d3337085a6a87b691e8a02d04eb5f8 (already correct)
+- [x] Update BASE HERO pair address to 0x3bb159de8604ab7e0148edc24f2a568c430476cf

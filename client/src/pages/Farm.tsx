@@ -158,7 +158,7 @@ function HeroPoolCard({ pool }: { pool: typeof FARM_POOLS_PLS[number] }) {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#e8b84b] to-[#c08020] flex items-center justify-center">
-              <Sprout className="w-4 h-4 text-white" />
+              <Sprout className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <h4 className="font-bold text-foreground">{pool.name}</h4>
@@ -217,7 +217,7 @@ function PoolCard({ pool }: { pool: FarmPool }) {
     >
       {pool.isHeroVets && (
         <div className="absolute -top-2.5 left-3">
-          <Badge className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white text-[10px] px-2 py-0.5 border-0">
+          <Badge className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground text-[10px] px-2 py-0.5 border-0">
             <Star className="w-3 h-3 mr-1" />
             HERO/VETS
           </Badge>
@@ -259,7 +259,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-2">
                 <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${farm.color} flex items-center justify-center`}>
-                  <Sprout className="w-5 h-5 text-white" />
+                  <Sprout className="w-5 h-5 text-foreground" />
                 </div>
                 <div>
                   <h3 className="font-bold text-lg text-foreground">{farm.name}</h3>
@@ -285,7 +285,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
           </div>
           <div className="flex items-center gap-3 mt-4">
             <a href={farm.url} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0">
+              <Button size="sm" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0">
                 <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
                 Open {farm.name}
               </Button>
@@ -452,7 +452,7 @@ export default function Farm() {
         <CardContent className="p-5">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shrink-0">
-              <Heart className="w-6 h-6 text-white" />
+              <Heart className="w-6 h-6 text-foreground" />
             </div>
             <div>
               <h3 className="font-bold text-foreground mb-1">Supporting Veterans & First Responders</h3>
@@ -617,7 +617,7 @@ export default function Farm() {
                 className="relative rounded-xl border border-[var(--hero-orange)]/30 bg-[var(--hero-orange)]/5 p-4 hover:border-[var(--hero-orange)]/50 transition-all"
               >
                 <div className="absolute -top-2.5 left-3">
-                  <Badge className={`bg-gradient-to-r ${pool.farmColor} text-white text-[10px] px-2 py-0.5 border-0`}>
+                  <Badge className={`bg-gradient-to-r ${pool.farmColor} text-foreground text-[10px] px-2 py-0.5 border-0`}>
                     {pool.farmName}
                   </Badge>
                 </div>

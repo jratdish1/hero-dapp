@@ -22,6 +22,20 @@
       "when": 1774911282138,
       "tag": "0002_amusing_timeslip",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "5",
+      "when": 1774942181698,
+      "tag": "0003_true_firelord",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "5",
+      "when": 1774942893169,
+      "tag": "0004_supreme_korvac",
+      "breakpoints": true
     }
   ]
 }

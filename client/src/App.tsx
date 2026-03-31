@@ -18,6 +18,7 @@ import AiAssistant from "./pages/AiAssistant";
 import Tokenomics from "./pages/Tokenomics";
 import NftCollection from "./pages/NftCollection";
 import Ecosystem from "./pages/Subdomains";
+import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
 
 function Router() {
@@ -36,6 +37,7 @@ function Router() {
       <Route path="/tokenomics" component={() => <AppLayout><Tokenomics /></AppLayout>} />
       <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
       <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
+      <Route path="/media" component={() => <AppLayout><MediaHub /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -45,7 +47,7 @@ function Router() {
 function App() {
   return (
     <ErrorBoundary>
-      <ThemeProvider defaultTheme="dark">
+      <ThemeProvider defaultTheme="dark" switchable>
         <NetworkProvider>
           <TooltipProvider>
             <Toaster />

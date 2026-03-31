@@ -70,7 +70,7 @@ export default function LimitOrders() {
         </div>
         <Button
           onClick={() => setShowCreate(!showCreate)}
-          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0"
+          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0"
         >
           <Plus className="w-4 h-4 mr-1.5" />
           New Limit Order
@@ -164,7 +164,7 @@ export default function LimitOrders() {
 
             <Button
               onClick={() => toast.info("Connect wallet to create limit order")}
-              className="w-full bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 h-11"
+              className="w-full bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 h-11"
             >
               Create {orderType === "buy" ? "Buy" : "Sell"} Limit Order
             </Button>

@@ -30,8 +30,8 @@ function FlywheelStep({ step, title, description, icon: Icon, color, isLast }: {
         <div className="flex items-center gap-2 mb-1">
           <span className="text-xs text-orange-400 font-mono">STEP {step}</span>
         </div>
-        <h4 className="text-white font-semibold text-lg">{title}</h4>
-        <p className="text-zinc-400 text-sm mt-1 leading-relaxed">{description}</p>
+        <h4 className="text-foreground font-semibold text-lg">{title}</h4>
+        <p className="text-muted-foreground text-sm mt-1 leading-relaxed">{description}</p>
       </div>
     </div>
   );
@@ -42,7 +42,7 @@ function RevenueCard({ title, description, icon: Icon, badge, link, linkText }: 
   title: string; description: string; icon: any; badge: string; link?: string; linkText?: string;
 }) {
   return (
-    <Card className="bg-zinc-900/60 border-zinc-800 hover:border-orange-500/30 transition-all">
+    <Card className="bg-card/60 border-border hover:border-orange-500/30 transition-all">
       <CardContent className="p-5">
         <div className="flex items-start gap-3">
           <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
@@ -50,10 +50,10 @@ function RevenueCard({ title, description, icon: Icon, badge, link, linkText }: 
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2 mb-1">
-              <h4 className="text-white font-semibold text-sm">{title}</h4>
+              <h4 className="text-foreground font-semibold text-sm">{title}</h4>
               <Badge variant="outline" className="text-[10px] border-green-500/40 text-green-400">{badge}</Badge>
             </div>
-            <p className="text-zinc-400 text-xs leading-relaxed">{description}</p>
+            <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
             {link && (
               <a href={link} target="_blank" rel="noopener noreferrer"
                 className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300 transition-colors">
@@ -85,21 +85,21 @@ export default function Tokenomics() {
         <Badge variant="outline" className="border-orange-500/40 text-orange-400">
           <Infinity className="w-3 h-3 mr-1" /> Closed-Loop Economics
         </Badge>
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="text-3xl font-bold text-foreground">
           HERO <span className="text-orange-400">Tokenomics</span>
         </h1>
-        <p className="text-zinc-400 max-w-2xl mx-auto">
+        <p className="text-muted-foreground max-w-2xl mx-auto">
           A self-sustaining deflationary flywheel that creates continuous buy pressure, 
           funds the treasury, and rewards holders — all without stressing the protocol.
         </p>
         <div className="flex justify-center gap-3">
           <a href="https://docs.vicfoundation.com/" target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white">
+            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground">
               <ExternalLink className="w-3 h-3 mr-1" /> Whitepaper
             </Button>
           </a>
           <a href="https://dashboard.vicfoundation.com/" target="_blank" rel="noopener noreferrer">
-            <Button variant="outline" size="sm" className="border-zinc-700 text-zinc-300 hover:text-white">
+            <Button variant="outline" size="sm" className="border-border text-muted-foreground hover:text-foreground">
               <TrendingUp className="w-3 h-3 mr-1" /> Live Dashboard
             </Button>
           </a>
@@ -114,11 +114,11 @@ export default function Tokenomics() {
           { label: "LP Donated", value: "$2,567.46", icon: CircleDollarSign, color: "text-green-400" },
           { label: "Active Pools", value: "2 PLS + BASE", icon: Coins, color: "text-blue-400" },
         ].map((stat) => (
-          <Card key={stat.label} className="bg-zinc-900/60 border-zinc-800">
+          <Card key={stat.label} className="bg-card/60 border-border">
             <CardContent className="p-4 text-center">
               <stat.icon className={`w-5 h-5 mx-auto mb-2 ${stat.color}`} />
-              <p className="text-white font-semibold text-sm">{stat.value}</p>
-              <p className="text-zinc-500 text-xs">{stat.label}</p>
+              <p className="text-foreground font-semibold text-sm">{stat.value}</p>
+              <p className="text-muted-foreground/70 text-xs">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -126,7 +126,7 @@ export default function Tokenomics() {
 
       {/* ── Main Tabs ─────────────────────────────────────────────────── */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-zinc-900 border border-zinc-800 w-full justify-start">
+        <TabsList className="bg-card border border-border w-full justify-start">
           <TabsTrigger value="flywheel" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
             <Repeat className="w-4 h-4 mr-1" /> The Flywheel
           </TabsTrigger>
@@ -144,14 +144,14 @@ export default function Tokenomics() {
         {/* ── FLYWHEEL TAB ──────────────────────────────────────────── */}
         <TabsContent value="flywheel" className="mt-4 space-y-6">
           {/* Flywheel Diagram */}
-          <Card className="bg-zinc-900/40 border-zinc-800 overflow-hidden">
+          <Card className="bg-card/40 border-border overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-green-500/5" />
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <Infinity className="w-5 h-5 text-orange-400" />
                 The Infinite Money Printer
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-muted-foreground">
                 A closed-loop system where every step feeds the next, creating perpetual buy pressure for $HERO
               </CardDescription>
             </CardHeader>
@@ -203,7 +203,7 @@ export default function Tokenomics() {
                     {/* Center */}
                     <div className="absolute inset-0 flex items-center justify-center">
                       <div className="w-24 h-24 rounded-full bg-gradient-to-br from-orange-500 to-orange-700 flex items-center justify-center shadow-lg shadow-orange-500/20 animate-pulse">
-                        <span className="text-white font-bold text-lg">$HERO</span>
+                        <span className="text-foreground font-bold text-lg">$HERO</span>
                       </div>
                     </div>
                     {/* Orbit items */}
@@ -220,7 +220,7 @@ export default function Tokenomics() {
                       return (
                         <div
                           key={item.label}
-                          className={`absolute w-14 h-14 rounded-full ${item.color} flex items-center justify-center text-white text-xs font-bold shadow-lg`}
+                          className={`absolute w-14 h-14 rounded-full ${item.color} flex items-center justify-center text-foreground text-xs font-bold shadow-lg`}
                           style={{ left: `${x}%`, top: `${y}%`, transform: "translate(-50%, -50%)" }}
                         >
                           {item.label}
@@ -240,8 +240,8 @@ export default function Tokenomics() {
                   <Rocket className="w-5 h-5 text-green-400 shrink-0 mt-0.5" />
                   <div>
                     <h4 className="text-green-400 font-semibold text-sm">Why This Works</h4>
-                    <p className="text-zinc-300 text-sm mt-1">
-                      The key insight is that <strong className="text-white">DAI rewards come from external protocol fees</strong> — not from selling HERO. 
+                    <p className="text-muted-foreground text-sm mt-1">
+                      The key insight is that <strong className="text-foreground">DAI rewards come from external protocol fees</strong> — not from selling HERO. 
                       This means every cycle adds buy pressure without any corresponding sell pressure. 
                       Combined with Buy & Burn deflation, the supply shrinks while demand grows. 
                       Even a small holder benefits from this compounding effect over time.
@@ -254,9 +254,9 @@ export default function Tokenomics() {
 
           {/* Flywheel paths */}
           <div className="grid md:grid-cols-2 gap-4">
-            <Card className="bg-zinc-900/60 border-zinc-800">
+            <Card className="bg-card/60 border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="text-white text-base flex items-center gap-2">
+                <CardTitle className="text-foreground text-base flex items-center gap-2">
                   <img src="https://emit.farm/favicon.ico" alt="" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   Emit Farm Path
                 </CardTitle>
@@ -270,8 +270,8 @@ export default function Tokenomics() {
                 ].map((step, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-orange-500/20 flex items-center justify-center text-orange-400 text-xs font-bold">{i + 1}</div>
-                    <span className="text-zinc-300 text-sm">{step}</span>
-                    {i < 3 && <ArrowRight className="w-3 h-3 text-zinc-600 ml-auto" />}
+                    <span className="text-muted-foreground text-sm">{step}</span>
+                    {i < 3 && <ArrowRight className="w-3 h-3 text-muted-foreground/50 ml-auto" />}
                   </div>
                 ))}
                 <a href="https://emit.farm/" target="_blank" rel="noopener noreferrer"
@@ -281,9 +281,9 @@ export default function Tokenomics() {
               </CardContent>
             </Card>
 
-            <Card className="bg-zinc-900/60 border-zinc-800">
+            <Card className="bg-card/60 border-border">
               <CardHeader className="pb-3">
-                <CardTitle className="text-white text-base flex items-center gap-2">
+                <CardTitle className="text-foreground text-base flex items-center gap-2">
                   <img src="https://trufarms.io/favicon.ico" alt="" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   TruFarm Path
                 </CardTitle>
@@ -297,8 +297,8 @@ export default function Tokenomics() {
                 ].map((step, i) => (
                   <div key={i} className="flex items-center gap-2">
                     <div className="w-6 h-6 rounded-full bg-yellow-500/20 flex items-center justify-center text-yellow-400 text-xs font-bold">{i + 1}</div>
-                    <span className="text-zinc-300 text-sm">{step}</span>
-                    {i < 3 && <ArrowRight className="w-3 h-3 text-zinc-600 ml-auto" />}
+                    <span className="text-muted-foreground text-sm">{step}</span>
+                    {i < 3 && <ArrowRight className="w-3 h-3 text-muted-foreground/50 ml-auto" />}
                   </div>
                 ))}
                 <a href="https://trufarms.io/" target="_blank" rel="noopener noreferrer"
@@ -312,13 +312,13 @@ export default function Tokenomics() {
 
         {/* ── REVENUE STREAMS TAB ───────────────────────────────────── */}
         <TabsContent value="revenue" className="mt-4 space-y-6">
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-green-400" />
                 Multiple Revenue Streams
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-muted-foreground">
                 The HERO protocol doesn't rely on a single income source. Multiple external revenue streams 
                 ensure the protocol stays in the black — consistently high and to the right.
               </CardDescription>
@@ -370,37 +370,37 @@ export default function Tokenomics() {
           </Card>
 
           {/* Revenue flow diagram */}
-          <Card className="bg-zinc-900/60 border-zinc-800">
+          <Card className="bg-card/60 border-border">
             <CardHeader>
-              <CardTitle className="text-white text-base">Revenue Flow</CardTitle>
+              <CardTitle className="text-foreground text-base">Revenue Flow</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="flex flex-col items-center gap-3">
                 <div className="grid grid-cols-3 gap-4 w-full max-w-lg">
                   {["LP Yields", "TruDefi 2X", "NFT Sales"].map((src) => (
-                    <div key={src} className="bg-zinc-800 rounded-lg p-3 text-center">
-                      <p className="text-zinc-300 text-xs font-medium">{src}</p>
+                    <div key={src} className="bg-secondary rounded-lg p-3 text-center">
+                      <p className="text-muted-foreground text-xs font-medium">{src}</p>
                     </div>
                   ))}
                 </div>
                 <ArrowDown className="w-5 h-5 text-orange-400" />
                 <div className="bg-orange-500/10 border border-orange-500/30 rounded-lg p-4 text-center max-w-xs">
                   <p className="text-orange-400 font-semibold text-sm">HERO Treasury</p>
-                  <p className="text-zinc-400 text-xs mt-1">Accumulates DAI + HERO</p>
+                  <p className="text-muted-foreground text-xs mt-1">Accumulates DAI + HERO</p>
                 </div>
                 <div className="flex gap-8">
                   <div className="flex flex-col items-center gap-2">
                     <ArrowDown className="w-4 h-4 text-green-400" />
                     <div className="bg-green-500/10 border border-green-500/30 rounded-lg p-3 text-center">
                       <p className="text-green-400 text-xs font-semibold">Buy HERO</p>
-                      <p className="text-zinc-500 text-[10px]">Buy pressure</p>
+                      <p className="text-muted-foreground/70 text-[10px]">Buy pressure</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-center gap-2">
                     <ArrowDown className="w-4 h-4 text-red-400" />
                     <div className="bg-red-500/10 border border-red-500/30 rounded-lg p-3 text-center">
                       <p className="text-red-400 text-xs font-semibold">Burn HERO</p>
-                      <p className="text-zinc-500 text-[10px]">Reduce supply</p>
+                      <p className="text-muted-foreground/70 text-[10px]">Reduce supply</p>
                     </div>
                   </div>
                 </div>
@@ -411,37 +411,37 @@ export default function Tokenomics() {
 
         {/* ── BUY & BURN TAB ────────────────────────────────────────── */}
         <TabsContent value="burn" className="mt-4 space-y-4">
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <Flame className="w-5 h-5 text-red-400" />
                 Buy & Burn Mechanism
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-muted-foreground">
                 HERO uses a deflationary Buy & Burn mechanism. When the burn period elapses, 
                 anyone can trigger the buyAndBurn() function to buy HERO from the market and burn it permanently.
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid md:grid-cols-2 gap-4">
-                <div className="bg-zinc-800/50 rounded-lg p-4">
+                <div className="bg-secondary/50 rounded-lg p-4">
                   <h4 className="text-orange-400 font-semibold text-sm mb-3">PulseChain</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Contract</span>
-                      <code className="text-zinc-300 text-xs">{FARM_CONTRACTS_PLS.buyAndBurn.slice(0, 10)}...{FARM_CONTRACTS_PLS.buyAndBurn.slice(-6)}</code>
+                      <span className="text-muted-foreground">Contract</span>
+                      <code className="text-muted-foreground text-xs">{FARM_CONTRACTS_PLS.buyAndBurn.slice(0, 10)}...{FARM_CONTRACTS_PLS.buyAndBurn.slice(-6)}</code>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Total Burned</span>
+                      <span className="text-muted-foreground">Total Burned</span>
                       <span className="text-red-400 font-semibold">1,208,733.61 HERO</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Balance</span>
+                      <span className="text-muted-foreground">Balance</span>
                       <span className="text-green-400">$65.27 (8.7M PLS)</span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Last Burn</span>
-                      <span className="text-zinc-300">Mar 24, 2026</span>
+                      <span className="text-muted-foreground">Last Burn</span>
+                      <span className="text-muted-foreground">Mar 24, 2026</span>
                     </div>
                   </div>
                   <a href={`https://scan.pulsechain.com/address/${FARM_CONTRACTS_PLS.buyAndBurn}`}
@@ -450,15 +450,15 @@ export default function Tokenomics() {
                     View on PulseScan <ExternalLink className="w-3 h-3" />
                   </a>
                 </div>
-                <div className="bg-zinc-800/50 rounded-lg p-4">
+                <div className="bg-secondary/50 rounded-lg p-4">
                   <h4 className="text-blue-400 font-semibold text-sm mb-3">Base Chain</h4>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Contract</span>
-                      <code className="text-zinc-300 text-xs">{FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 10)}...{FARM_CONTRACTS_BASE.buyAndBurn.slice(-6)}</code>
+                      <span className="text-muted-foreground">Contract</span>
+                      <code className="text-muted-foreground text-xs">{FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 10)}...{FARM_CONTRACTS_BASE.buyAndBurn.slice(-6)}</code>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-zinc-400">Status</span>
+                      <span className="text-muted-foreground">Status</span>
                       <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">Deployed</Badge>
                     </div>
                   </div>
@@ -481,7 +481,7 @@ export default function Tokenomics() {
                   ].map((s) => (
                     <div key={s.step} className="flex items-start gap-2">
                       <div className="w-6 h-6 rounded-full bg-red-500/20 flex items-center justify-center text-red-400 text-xs font-bold shrink-0">{s.step}</div>
-                      <p className="text-zinc-300 text-xs leading-relaxed">{s.text}</p>
+                      <p className="text-muted-foreground text-xs leading-relaxed">{s.text}</p>
                     </div>
                   ))}
                 </div>
@@ -492,13 +492,13 @@ export default function Tokenomics() {
 
         {/* ── CONTRACTS TAB ─────────────────────────────────────────── */}
         <TabsContent value="contracts" className="mt-4 space-y-4">
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <Shield className="w-5 h-5 text-green-400" />
                 Verified Smart Contracts
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-muted-foreground">
                 All HERO smart contracts are verified and audited. SpyWolf Audit + KYC verified.
               </CardDescription>
             </CardHeader>
@@ -514,13 +514,13 @@ export default function Tokenomics() {
                   { name: "Zapper", address: FARM_CONTRACTS_PLS.zapper, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
                   { name: "PulseX Router", address: FARM_CONTRACTS_PLS.pulseXRouter, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
                 ].map((c) => (
-                  <div key={c.name} className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
+                  <div key={c.name} className="flex items-center justify-between p-3 bg-secondary/50 rounded-lg">
                     <div>
-                      <p className="text-white text-sm font-medium">{c.name}</p>
-                      <p className="text-zinc-500 text-xs">{c.chain}</p>
+                      <p className="text-foreground text-sm font-medium">{c.name}</p>
+                      <p className="text-muted-foreground/70 text-xs">{c.chain}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <code className="text-zinc-400 text-xs hidden md:block">{c.address.slice(0, 10)}...{c.address.slice(-6)}</code>
+                      <code className="text-muted-foreground text-xs hidden md:block">{c.address.slice(0, 10)}...{c.address.slice(-6)}</code>
                       <a href={`${c.explorer}/address/${c.address}`} target="_blank" rel="noopener noreferrer"
                         className="text-orange-400 hover:text-orange-300">
                         <ExternalLink className="w-4 h-4" />
@@ -535,21 +535,21 @@ export default function Tokenomics() {
       </Tabs>
 
       {/* ── Founder's Vision ──────────────────────────────────────────── */}
-      <Card className="bg-gradient-to-br from-zinc-900 to-zinc-900/60 border-zinc-800">
+      <Card className="bg-gradient-to-br from-card to-card/60 border-border">
         <CardContent className="p-6">
           <div className="flex items-start gap-4">
             <div className="w-12 h-12 rounded-full bg-orange-500/10 flex items-center justify-center shrink-0">
               <Target className="w-6 h-6 text-orange-400" />
             </div>
             <div>
-              <h3 className="text-white font-semibold text-lg mb-2">The Founder's Vision</h3>
-              <p className="text-zinc-300 text-sm leading-relaxed">
+              <h3 className="text-foreground font-semibold text-lg mb-2">The Founder's Vision</h3>
+              <p className="text-muted-foreground text-sm leading-relaxed">
                 The goal is to create a self-sustaining protocol that continuously funds the treasury with HERO buys, 
                 creating perpetual buy pressure. With multiple external revenue streams — LP farming yields, TruDefi 2X 
                 community amplifier, NFT sales, and more — the protocol doesn't carry the stress of trying to stay 
                 in the black. <strong className="text-orange-400">Consistently high and to the right</strong> is the objective.
               </p>
-              <p className="text-zinc-400 text-sm mt-3">
+              <p className="text-muted-foreground text-sm mt-3">
                 Even a small holder benefits: the longer you hold, the more the flywheel compounds in your favor. 
                 Diamond hands are rewarded. The little guy can become a whale someday.
               </p>

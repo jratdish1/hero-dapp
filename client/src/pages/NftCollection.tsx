@@ -73,7 +73,7 @@ const RANK_TIERS = [
   {
     rank: "Private (E-1)",
     tier: "Common",
-    color: "text-zinc-400",
+    color: "text-muted-foreground",
     bg: "bg-zinc-500/10",
     border: "border-zinc-500/30",
     holdingReq: "1,000+ HERO",
@@ -194,11 +194,11 @@ const UTILITY_FEATURES = [
 function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-zinc-900/80 hover:shadow-xl hover:${nft.glow} transition-all duration-300 hover:scale-[1.02]`}>
+    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl hover:${nft.glow} transition-all duration-300 hover:scale-[1.02]`}>
       <div className="aspect-square relative overflow-hidden">
         {!loaded && (
-          <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
-            <ImageIcon className="w-8 h-8 text-zinc-600" />
+          <div className="absolute inset-0 bg-secondary animate-pulse flex items-center justify-center">
+            <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
           </div>
         )}
         <img
@@ -212,7 +212,7 @@ function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
         <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
       </div>
       <div className="p-3 text-center">
-        <h4 className="text-white font-semibold text-sm">{nft.name}</h4>
+        <h4 className="text-foreground font-semibold text-sm">{nft.name}</h4>
         <Badge variant="outline" className={`text-[10px] mt-1 ${nft.color}`}>{nft.tier}</Badge>
       </div>
     </div>
@@ -236,10 +236,10 @@ export default function NftCollection() {
         <Badge variant="outline" className="border-orange-500/40 text-orange-400">
           <Swords className="w-3 h-3 mr-1" /> 1,000 Piece Collection
         </Badge>
-        <h1 className="text-3xl font-bold text-white">
+        <h1 className="text-3xl font-bold text-foreground">
           HERO <span className="text-orange-400">NFT Collection</span>
         </h1>
-        <p className="text-zinc-400 max-w-2xl mx-auto">
+        <p className="text-muted-foreground max-w-2xl mx-auto">
           Military and first responder themed NFTs with real utility. Your rank reflects your commitment — 
           hold more HERO, earn a higher rank, unlock greater rewards. Even the little guy can become a whale someday.
         </p>
@@ -253,11 +253,11 @@ export default function NftCollection() {
           { label: "Max Fee Reduction", value: "7%", icon: TrendingUp, color: "text-green-400" },
           { label: "Status", value: "In Development", icon: Lock, color: "text-yellow-400" },
         ].map((stat) => (
-          <Card key={stat.label} className="bg-zinc-900/60 border-zinc-800">
+          <Card key={stat.label} className="bg-card/60 border-border">
             <CardContent className="p-4 text-center">
               <stat.icon className={`w-5 h-5 mx-auto mb-2 ${stat.color}`} />
-              <p className="text-white font-semibold text-sm">{stat.value}</p>
-              <p className="text-zinc-500 text-xs">{stat.label}</p>
+              <p className="text-foreground font-semibold text-sm">{stat.value}</p>
+              <p className="text-muted-foreground/70 text-xs">{stat.label}</p>
             </CardContent>
           </Card>
         ))}
@@ -265,7 +265,7 @@ export default function NftCollection() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-zinc-900 border border-zinc-800 w-full justify-start">
+        <TabsList className="bg-card border border-border w-full justify-start">
           <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
             <ImageIcon className="w-4 h-4 mr-1" /> Gallery
           </TabsTrigger>
@@ -289,7 +289,7 @@ export default function NftCollection() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Swords className="w-5 h-5 text-orange-400" />
-              <h3 className="text-white font-semibold text-lg">Military Rank Collection</h3>
+              <h3 className="text-foreground font-semibold text-lg">Military Rank Collection</h3>
               <Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">Sample Artwork</Badge>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
@@ -303,7 +303,7 @@ export default function NftCollection() {
           <div>
             <div className="flex items-center gap-2 mb-4">
               <Heart className="w-5 h-5 text-red-400" />
-              <h3 className="text-white font-semibold text-lg">First Responder Collection</h3>
+              <h3 className="text-foreground font-semibold text-lg">First Responder Collection</h3>
               <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">Sample Artwork</Badge>
             </div>
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
@@ -320,7 +320,7 @@ export default function NftCollection() {
                 <Wallet className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-orange-400 font-semibold text-sm">Minting Coming Soon</h4>
-                  <p className="text-zinc-300 text-sm mt-1">
+                  <p className="text-muted-foreground text-sm mt-1">
                     The full 1,000 piece collection is being generated with unique traits, rank insignias, and 
                     service branch variations. Mint date and pricing will be announced on our X account. 
                     A portion of all mint revenue goes directly to veteran support through the VIC Foundation.
@@ -341,7 +341,7 @@ export default function NftCollection() {
             {RANK_TIERS.map((rank) => {
               const Icon = rank.icon;
               return (
-                <Card key={rank.rank} className={`bg-zinc-900/60 ${rank.border} hover:shadow-lg transition-all`}>
+                <Card key={rank.rank} className={`bg-card/60 ${rank.border} hover:shadow-lg transition-all`}>
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
@@ -350,7 +350,7 @@ export default function NftCollection() {
                         </div>
                         <div>
                           <CardTitle className={`text-sm ${rank.color}`}>{rank.rank}</CardTitle>
-                          <p className="text-xs text-zinc-500">{rank.tier}</p>
+                          <p className="text-xs text-muted-foreground/70">{rank.tier}</p>
                         </div>
                       </div>
                       <Badge variant="outline" className={`text-[10px] ${rank.border} ${rank.color}`}>
@@ -359,18 +359,18 @@ export default function NftCollection() {
                     </div>
                   </CardHeader>
                   <CardContent className="space-y-3">
-                    <p className="text-zinc-400 text-xs leading-relaxed">{rank.description}</p>
+                    <p className="text-muted-foreground text-xs leading-relaxed">{rank.description}</p>
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Holding Requirement</span>
-                        <span className="text-white font-medium">{rank.holdingReq}</span>
+                        <span className="text-muted-foreground/70">Holding Requirement</span>
+                        <span className="text-foreground font-medium">{rank.holdingReq}</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Fee Reduction</span>
+                        <span className="text-muted-foreground/70">Fee Reduction</span>
                         <span className="text-green-400 font-medium">-{rank.feeReduction}</span>
                       </div>
                       <div className="flex justify-between text-xs">
-                        <span className="text-zinc-500">Rarity</span>
+                        <span className="text-muted-foreground/70">Rarity</span>
                         <span className={rank.color}>{rank.rarity}</span>
                       </div>
                       <Progress value={parseInt(rank.rarity)} className="h-1.5" />
@@ -388,8 +388,8 @@ export default function NftCollection() {
                 <Gem className="w-6 h-6 text-yellow-400 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-yellow-400 font-semibold text-sm">Diamond Hands Philosophy</h4>
-                  <p className="text-zinc-300 text-sm mt-1">
-                    The longer you hold, the more you earn. Your NFT rank can be <strong className="text-white">promoted</strong> as 
+                  <p className="text-muted-foreground text-sm mt-1">
+                    The longer you hold, the more you earn. Your NFT rank can be <strong className="text-foreground">promoted</strong> as 
                     your wallet accumulates more HERO tokens. A Private today could become a General tomorrow. 
                     Time in the market beats timing the market — and your NFT reflects that journey.
                   </p>
@@ -405,7 +405,7 @@ export default function NftCollection() {
             {UTILITY_FEATURES.map((feature) => {
               const Icon = feature.icon;
               return (
-                <Card key={feature.title} className="bg-zinc-900/60 border-zinc-800 hover:border-orange-500/30 transition-all">
+                <Card key={feature.title} className="bg-card/60 border-border hover:border-orange-500/30 transition-all">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3">
                       <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
@@ -413,10 +413,10 @@ export default function NftCollection() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-white font-semibold text-sm">{feature.title}</h4>
+                          <h4 className="text-foreground font-semibold text-sm">{feature.title}</h4>
                           <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">{feature.status}</Badge>
                         </div>
-                        <p className="text-zinc-400 text-xs leading-relaxed">{feature.description}</p>
+                        <p className="text-muted-foreground text-xs leading-relaxed">{feature.description}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -426,9 +426,9 @@ export default function NftCollection() {
           </div>
 
           {/* How Fee Reduction Works */}
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white text-base flex items-center gap-2">
+              <CardTitle className="text-foreground text-base flex items-center gap-2">
                 <TrendingUp className="w-5 h-5 text-green-400" />
                 How Fee Reduction Works
               </CardTitle>
@@ -443,7 +443,7 @@ export default function NftCollection() {
                 ].map((s) => (
                   <div key={s.step} className="flex items-center gap-3">
                     <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 text-sm font-bold shrink-0">{s.step}</div>
-                    <p className="text-zinc-300 text-sm">{s.text}</p>
+                    <p className="text-muted-foreground text-sm">{s.text}</p>
                   </div>
                 ))}
               </div>
@@ -453,13 +453,13 @@ export default function NftCollection() {
 
         {/* SERVICE BRANCHES TAB */}
         <TabsContent value="branches" className="mt-4 space-y-4">
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <Heart className="w-5 h-5 text-red-400" />
                 Honoring Those Who Serve
               </CardTitle>
-              <CardDescription className="text-zinc-400">
+              <CardDescription className="text-muted-foreground">
                 Each NFT features artwork representing military branches and first responders. 
                 The collection honors the brave men and women who serve our communities and nation.
               </CardDescription>
@@ -469,7 +469,7 @@ export default function NftCollection() {
                 {SERVICE_BRANCHES.map((branch) => (
                   <div
                     key={branch.name}
-                    className="bg-zinc-800/50 rounded-lg p-4 text-center hover:bg-zinc-800 transition-colors"
+                    className="bg-secondary/50 rounded-lg p-4 text-center hover:bg-secondary transition-colors"
                   >
                     <div
                       className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl"
@@ -477,8 +477,8 @@ export default function NftCollection() {
                     >
                       {branch.emoji}
                     </div>
-                    <p className="text-white text-sm font-medium">{branch.name}</p>
-                    <p className="text-zinc-500 text-xs mt-1" style={{ color: branch.color }}>
+                    <p className="text-foreground text-sm font-medium">{branch.name}</p>
+                    <p className="text-muted-foreground/70 text-xs mt-1" style={{ color: branch.color }}>
                       {branch.name === "Army" ? "Hooah!" :
                        branch.name === "Navy" ? "Hooyah!" :
                        branch.name === "Marines" ? "Oorah!" :
@@ -500,8 +500,8 @@ export default function NftCollection() {
               <div className="flex items-start gap-3">
                 <Shield className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-white font-semibold text-sm">Supporting Veterans & First Responders</h4>
-                  <p className="text-zinc-300 text-sm mt-1">
+                  <h4 className="text-foreground font-semibold text-sm">Supporting Veterans & First Responders</h4>
+                  <p className="text-muted-foreground text-sm mt-1">
                     HERO is a 501(c)(3) nonprofit supporting military veterans and first responders through the 
                     VIC Foundation. A portion of all NFT mint revenue goes directly to veteran support programs.
                   </p>
@@ -517,9 +517,9 @@ export default function NftCollection() {
 
         {/* ROADMAP TAB */}
         <TabsContent value="roadmap" className="mt-4 space-y-4">
-          <Card className="bg-zinc-900/40 border-zinc-800">
+          <Card className="bg-card/40 border-border">
             <CardHeader>
-              <CardTitle className="text-white flex items-center gap-2">
+              <CardTitle className="text-foreground flex items-center gap-2">
                 <Target className="w-5 h-5 text-orange-400" />
                 NFT Development Roadmap
               </CardTitle>
@@ -555,7 +555,7 @@ export default function NftCollection() {
                   phase: "Phase 3",
                   title: "Advanced Features",
                   status: "Future",
-                  statusColor: "text-zinc-400 border-zinc-500/40",
+                  statusColor: "text-muted-foreground border-muted-foreground/40",
                   items: [
                     "Rank promotion system (upgrade NFT as holdings grow)",
                     "Staking APY boost based on NFT rank",
@@ -565,15 +565,15 @@ export default function NftCollection() {
                   ],
                 },
               ].map((phase) => (
-                <div key={phase.phase} className="relative pl-8 border-l-2 border-zinc-800">
+                <div key={phase.phase} className="relative pl-8 border-l-2 border-border">
                   <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-orange-500 -translate-x-[9px]" />
                   <div className="flex items-center gap-2 mb-2">
-                    <h4 className="text-white font-semibold">{phase.phase}: {phase.title}</h4>
+                    <h4 className="text-foreground font-semibold">{phase.phase}: {phase.title}</h4>
                     <Badge variant="outline" className={`text-[10px] ${phase.statusColor}`}>{phase.status}</Badge>
                   </div>
                   <ul className="space-y-1.5">
                     {phase.items.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-zinc-400 text-sm">
+                      <li key={i} className="flex items-start gap-2 text-muted-foreground text-sm">
                         <ChevronRight className="w-3 h-3 text-orange-400 shrink-0 mt-1" />
                         {item}
                       </li>

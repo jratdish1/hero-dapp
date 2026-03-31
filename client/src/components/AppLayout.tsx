@@ -5,6 +5,8 @@ import { getLoginUrl } from "@/const";
 import { Button } from "@/components/ui/button";
 import { NetworkSwitcher } from "./NetworkSwitcher";
 import { WalletButton } from "./WalletButton";
+import { ThemeToggle } from "./ThemeToggle";
+import PriceTicker from "./PriceTicker";
 import { useNetwork } from "../contexts/NetworkContext";
 import {
   ArrowLeftRight,
@@ -25,6 +27,7 @@ import {
   Globe,
   ExternalLink,
   Gem,
+  ImageIcon,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -39,6 +42,7 @@ const NAV_ITEMS = [
   { path: "/nft", label: "NFT Collection", icon: Gem },
   { path: "/blog", label: "MVS & Blog", icon: Newspaper },
   { path: "/ecosystem", label: "Ecosystem", icon: Globe },
+  { path: "/media", label: "Media Hub", icon: ImageIcon },
   { path: "/ai", label: "AI Assistant", icon: Bot },
 ];
 
@@ -68,7 +72,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="p-4 border-b border-sidebar-border">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shadow-lg shadow-[var(--hero-orange)]/20">
-              <span className="text-white font-bold text-lg">H</span>
+              <span className="text-foreground font-bold text-lg">H</span>
             </div>
             <div>
               <h1 className="font-bold text-lg text-sidebar-foreground">HERO</h1>
@@ -121,7 +125,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <div className="p-3 border-t border-sidebar-border">
           {isAuthenticated && user ? (
             <div className="flex items-center gap-3 px-3 py-2">
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center text-white text-xs font-bold">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center text-foreground text-xs font-bold">
                 {user.name?.charAt(0)?.toUpperCase() || "U"}
               </div>
               <div className="flex-1 min-w-0">
@@ -149,6 +153,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* Price Ticker */}
+        <PriceTicker />
         {/* Top bar */}
         <header className="sticky top-0 z-30 h-14 bg-background/80 backdrop-blur-md border-b border-border flex items-center px-4 gap-3">
           <button
@@ -165,6 +171,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <div className="hidden sm:block">
             <NetworkSwitcher compact />
           </div>
+          <ThemeToggle />
           <WalletButton />
         </header>
 

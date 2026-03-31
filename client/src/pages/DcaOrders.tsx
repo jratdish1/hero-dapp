@@ -80,7 +80,7 @@ export default function DcaOrders() {
         </div>
         <Button
           onClick={() => setShowCreate(!showCreate)}
-          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0"
+          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0"
         >
           <Plus className="w-4 h-4 mr-1.5" />
           New DCA
@@ -189,7 +189,7 @@ export default function DcaOrders() {
               </div>
             </div>
 
-            <Button onClick={handleCreate} className="w-full bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 h-11">
+            <Button onClick={handleCreate} className="w-full bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 h-11">
               Create DCA Order
             </Button>
           </CardContent>

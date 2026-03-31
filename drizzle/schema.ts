@@ -122,7 +122,31 @@ export const mvsContent = mysqlTable("mvs_content", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });
 
+export const mediaPosts = mysqlTable("media_posts", {
+  id: int("id").autoincrement().primaryKey(),
+  userId: int("userId").notNull(),
+  walletAddress: varchar("walletAddress", { length: 42 }).notNull(),
+  authorName: varchar("authorName", { length: 200 }),
+  category: mysqlEnum("category", ["instructional", "photos", "memories", "memes", "announcements", "nfts"]).notNull(),
+  title: varchar("title", { length: 500 }).notNull(),
+  description: text("description"),
+  mediaType: mysqlEnum("mediaType", ["image", "video", "nft"]).notNull(),
+  mediaUrl: text("mediaUrl").notNull(),
+  mediaKey: text("mediaKey").notNull(),
+  thumbnailUrl: text("thumbnailUrl"),
+  fileSizeMb: decimal("fileSizeMb", { precision: 10, scale: 2 }),
+  nftContractAddress: varchar("nftContractAddress", { length: 42 }),
+  nftTokenId: varchar("nftTokenId", { length: 100 }),
+  nftChainId: int("nftChainId"),
+  nftCollectionName: varchar("nftCollectionName", { length: 200 }),
+  status: mysqlEnum("status", ["active", "flagged", "removed"]).default("active").notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
+});
+
 export type BlogPost = typeof blogPosts.$inferSelect;
 export type InsertBlogPost = typeof blogPosts.$inferInsert;
 export type MvsContent = typeof mvsContent.$inferSelect;
 export type InsertMvsContent = typeof mvsContent.$inferInsert;
+export type MediaPost = typeof mediaPosts.$inferSelect;
+export type InsertMediaPost = typeof mediaPosts.$inferInsert;

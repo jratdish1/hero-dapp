@@ -1,0 +1,9 @@
+{
+  "query": "CREATE TABLE `media_posts` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`walletAddress` varchar(42) NOT NULL,\n\t`authorName` varchar(200),\n\t`category` enum('instructional','photos','memories','memes','announcements') NOT NULL,\n\t`title` varchar(500) NOT NULL,\n\t`description` text,\n\t`mediaType` enum('image','video') NOT NULL,\n\t`mediaUrl` text NOT NULL,\n\t`mediaKey` text NOT NULL,\n\t`thumbnailUrl` text,\n\t`fileSizeMb` decimal(10,2),\n\t`status` enum('active','flagged','removed') NOT NULL DEFAULT 'active',\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `media_posts_id` PRIMARY KEY(`id`)\n);",
+  "command": "mysql --batch --raw --column-names --default-character-set=utf8mb4 --host gateway02.us-east-1.prod.aws.tidbcloud.com --port 4000 --user 2YSxg7qkkfz5m9B.827b682ccdbe --database KCDTjud9tRyLDD264mUCsK --execute CREATE TABLE `media_posts` (\n\t`id` int AUTO_INCREMENT NOT NULL,\n\t`userId` int NOT NULL,\n\t`walletAddress` varchar(42) NOT NULL,\n\t`authorName` varchar(200),\n\t`category` enum('instructional','photos','memories','memes','announcements') NOT NULL,\n\t`title` varchar(500) NOT NULL,\n\t`description` text,\n\t`mediaType` enum('image','video') NOT NULL,\n\t`mediaUrl` text NOT NULL,\n\t`mediaKey` text NOT NULL,\n\t`thumbnailUrl` text,\n\t`fileSizeMb` decimal(10,2),\n\t`status` enum('active','flagged','removed') NOT NULL DEFAULT 'active',\n\t`createdAt` timestamp NOT NULL DEFAULT (now()),\n\t`updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,\n\tCONSTRAINT `media_posts_id` PRIMARY KEY(`id`)\n);",
+  "rows": [],
+  "messages": [],
+  "stdout": "",
+  "stderr": "",
+  "execution_time_ms": 331
+}

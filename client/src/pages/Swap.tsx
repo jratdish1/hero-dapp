@@ -12,12 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDownUp, Zap, Info, Settings2, Loader2 } from "lucide-react";
+import { ArrowDownUp, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown } from "lucide-react";
 import { type TokenInfo } from "../../../shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
 import { useAccount } from "wagmi";
 import { useTokenBalance, formatTokenBalance } from "../hooks/useTokenBalance";
+import { useMarketOverview, formatPrice, formatChange } from "../hooks/usePrices";
 import { toast } from "sonner";
 
 function TokenSelector({
@@ -73,6 +74,31 @@ function TokenSelector({
         ))}
       </SelectContent>
     </Select>
+  );
+}
+
+function LivePriceBanner() {
+  const { data: market, isLoading } = useMarketOverview();
+  if (isLoading || !market) return <div className="text-xs text-muted-foreground animate-pulse">Loading live prices...</div>;
+  const items = [
+    { symbol: "HERO", price: market.heroPrice?.priceUsd, change: market.heroPrice?.priceChange24h },
+    { symbol: "VETS", price: market.vetsPrice?.priceUsd, change: market.vetsPrice?.priceChange24h },
+    { symbol: "PLS", price: market.plsPrice?.priceUsd, change: market.plsPrice?.priceChange24h },
+  ].filter(i => i.price);
+  return (
+    <div className="flex items-center gap-4 overflow-x-auto">
+      <span className="text-xs text-muted-foreground whitespace-nowrap">Live:</span>
+      {items.map(i => {
+        const { text, positive } = formatChange(i.change);
+        return (
+          <div key={i.symbol} className="flex items-center gap-1.5 whitespace-nowrap">
+            <span className="text-xs font-semibold text-foreground">{i.symbol}</span>
+            <span className="text-xs font-mono text-foreground">{formatPrice(i.price)}</span>
+            <span className={`text-xs font-mono ${positive ? "text-[var(--hero-green)]" : "text-destructive"}`}>{text}</span>
+          </div>
+        );
+      })}
+    </div>
   );
 }
 
@@ -136,6 +162,13 @@ export default function Swap() {
           </button>
         </div>
       </div>
+
+      {/* Live price banner */}
+      <Card className="mb-4 bg-card border-border">
+        <CardContent className="p-3">
+          <LivePriceBanner />
+        </CardContent>
+      </Card>
 
       {/* Quick token row */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -360,7 +393,7 @@ export default function Swap() {
 
           {/* Swap button */}
           <Button
-            className="w-full h-12 text-base font-semibold bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] hover:opacity-90 text-white border-0"
+            className="w-full h-12 text-base font-semibold bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] hover:opacity-90 text-foreground border-0"
             disabled={isConnected && (!amountIn || parseFloat(amountIn) <= 0)}
             onClick={handleSwap}
           >

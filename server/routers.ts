@@ -23,8 +23,15 @@ import {
   saveMvsContent,
   getMvsContentList,
   getMvsContentByTweetId,
+  createMediaPost,
+  getMediaPostsByCategory,
+  getAllMediaPosts,
+  getMediaPostsByUser,
+  deleteMediaPost,
 } from "./db";
+import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs } from "./priceFeed";
 
 export const appRouter = router({
   system: systemRouter,
@@ -299,6 +306,139 @@ export const appRouter = router({
       }),
   }),
 
+  media: router({
+    list: publicProcedure
+      .input(z.object({
+        category: z.enum(["instructional", "photos", "memories", "memes", "announcements", "nfts"]).optional(),
+        limit: z.number().int().positive().max(100).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        if (input?.category) {
+          return getMediaPostsByCategory(input.category, input?.limit ?? 50);
+        }
+        return getAllMediaPosts(input?.limit ?? 50);
+      }),
+    myPosts: protectedProcedure.query(async ({ ctx }) => {
+      return getMediaPostsByUser(ctx.user.id);
+    }),
+    upload: protectedProcedure
+      .input(z.object({
+        walletAddress: z.string().min(42).max(42),
+        category: z.enum(["instructional", "photos", "memories", "memes", "announcements", "nfts"]),
+        title: z.string().min(1).max(500),
+        description: z.string().max(2000).optional(),
+        mediaType: z.enum(["image", "video", "nft"]),
+        fileBase64: z.string().min(1),
+        fileName: z.string().min(1).max(255),
+        contentType: z.string().min(1).max(100),
+        fileSizeMb: z.number().positive().max(50).optional(),
+        nftContractAddress: z.string().max(42).optional(),
+        nftTokenId: z.string().max(100).optional(),
+        nftChainId: z.number().int().optional(),
+        nftCollectionName: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        const buffer = Buffer.from(input.fileBase64, "base64");
+        const randomSuffix = Math.random().toString(36).substring(2, 10);
+        const safeFileName = input.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const fileKey = `media/${ctx.user.id}/${randomSuffix}-${safeFileName}`;
+        const { url } = await storagePut(fileKey, buffer, input.contentType);
+        await createMediaPost({
+          userId: ctx.user.id,
+          walletAddress: input.walletAddress,
+          authorName: ctx.user.name || "Anonymous",
+          category: input.category,
+          title: input.title,
+          description: input.description || null,
+          mediaType: input.mediaType,
+          mediaUrl: url,
+          mediaKey: fileKey,
+          fileSizeMb: input.fileSizeMb?.toString() || null,
+          nftContractAddress: input.nftContractAddress || null,
+          nftTokenId: input.nftTokenId || null,
+          nftChainId: input.nftChainId || null,
+          nftCollectionName: input.nftCollectionName || null,
+        });
+        return { success: true, url };
+      }),
+    shareNft: protectedProcedure
+      .input(z.object({
+        walletAddress: z.string().min(42).max(42),
+        title: z.string().min(1).max(500),
+        description: z.string().max(2000).optional(),
+        nftImageUrl: z.string().url(),
+        nftContractAddress: z.string().min(42).max(42),
+        nftTokenId: z.string().min(1).max(100),
+        nftChainId: z.number().int(),
+        nftCollectionName: z.string().max(200).optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        await createMediaPost({
+          userId: ctx.user.id,
+          walletAddress: input.walletAddress,
+          authorName: ctx.user.name || "Anonymous",
+          category: "nfts",
+          title: input.title,
+          description: input.description || null,
+          mediaType: "nft",
+          mediaUrl: input.nftImageUrl,
+          mediaKey: `nft/${input.nftContractAddress}/${input.nftTokenId}`,
+          nftContractAddress: input.nftContractAddress,
+          nftTokenId: input.nftTokenId,
+          nftChainId: input.nftChainId,
+          nftCollectionName: input.nftCollectionName || null,
+        });
+        return { success: true };
+      }),
+    delete: protectedProcedure
+      .input(z.object({ id: z.number().int().positive() }))
+      .mutation(async ({ ctx, input }) => {
+        await deleteMediaPost(input.id, ctx.user.id);
+        return { success: true };
+      }),
+  }),
+
+  prices: router({
+    overview: publicProcedure
+      .input(z.object({ chain: z.enum(["pulsechain", "base"]).optional() }).optional())
+      .query(async ({ input }) => {
+        return getMarketOverview(input?.chain || "pulsechain");
+      }),
+    ticker: publicProcedure.query(async () => {
+      const [tokenData, plsPrice, ethPrice] = await Promise.all([
+        fetchTokenPrices(),
+        fetchPlsPrice(),
+        fetchEthPrice(),
+      ]);
+      const heroPair = tokenData.heroPairs[0];
+      const vetsPair = tokenData.vetsPairs[0];
+      return {
+        hero: heroPair ? { price: heroPair.priceUsd || "0", change24h: heroPair.priceChange?.h24 || 0 } : null,
+        vets: vetsPair ? { price: vetsPair.priceUsd || "0", change24h: vetsPair.priceChange?.h24 || 0 } : null,
+        pls: plsPrice ? { price: plsPrice.priceUsd, change24h: plsPrice.priceChange24h } : null,
+        eth: ethPrice ? { price: ethPrice.priceUsd, change24h: ethPrice.priceChange24h } : null,
+        updatedAt: Date.now(),
+      };
+    }),
+    basePairs: publicProcedure.query(async () => {
+      const pairs = await fetchBaseTokenPrices();
+      return pairs.map(p => ({
+        pairAddress: p.pairAddress,
+        baseSymbol: p.baseToken.symbol,
+        quoteSymbol: p.quoteToken.symbol,
+        priceUsd: p.priceUsd || "0",
+        liquidity: p.liquidity?.usd || 0,
+        volume24h: p.volume?.h24 || 0,
+        priceChange24h: p.priceChange?.h24 || 0,
+      }));
+    }),
+    search: publicProcedure
+      .input(z.object({ query: z.string().min(1).max(100) }))
+      .query(async ({ input }) => {
+        return searchPairs(input.query);
+      }),
+  }),
+
   ai: router({
     chat: publicProcedure
       .input(z.object({
@@ -321,7 +461,9 @@ Key knowledge:
 
 Current chain context: ${input.chainContext || "PulseChain"}
 
-Be helpful, accurate, and concise. Use markdown formatting. Always include disclaimers that this is not financial advice. Be bullish but honest about $HERO and $VETS. Detect and warn about potential scams when asked. Keep responses under 500 words unless detailed analysis is requested.`;
+Be helpful, accurate, and concise. Use markdown formatting. Always include disclaimers that this is not financial advice. Be bullish but honest about $HERO and $VETS. Detect and warn about potential scams when asked. Keep responses under 500 words unless detailed analysis is requested.
+
+IMPORTANT: If a user asks for help, support, has questions you cannot answer, or needs to speak with the team, ALWAYS direct them to the official Telegram community: https://t.me/VetsInCrypto/1 — Say something like "For further assistance or to connect with the HERO community, join our Telegram: https://t.me/VetsInCrypto/1" Include this link whenever someone asks for help, support, or community resources.`;
 
         const messages: Array<{ role: "system" | "user" | "assistant"; content: string }> = [
           { role: "system", content: systemPrompt },

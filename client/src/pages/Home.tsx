@@ -22,6 +22,8 @@ import {
   Globe,
 } from "lucide-react";
 import { HERO_TOKEN, VETS_TOKEN } from "../../../shared/tokens";
+import { ThemeToggle } from "../components/ThemeToggle";
+import { ExplainerVideoModal } from "../components/ExplainerVideoModal";
 
 const FEATURES = [
   {
@@ -106,12 +108,14 @@ const FEATURES = [
 export default function Home() {
   return (
     <div className="min-h-screen bg-background">
+      {/* Explainer video pop-up on first visit */}
+      <ExplainerVideoModal videoUrl="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/hero-explainer-final_c910c53b.mp4" />
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-              <span className="text-white font-bold text-base">H</span>
+              <span className="text-foreground font-bold text-base">H</span>
             </div>
             <span className="font-bold text-lg text-foreground">HERO Dapp</span>
           </div>
@@ -126,11 +130,14 @@ export default function Home() {
             <Link href="/nft" className="text-muted-foreground hover:text-foreground transition-colors">NFTs</Link>
             <a href="https://docs.vicfoundation.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">Whitepaper <ExternalLink className="w-3 h-3" /></a>
           </div>
-          <Link href="/swap">
-            <Button className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 text-sm">
-              Launch App
-            </Button>
-          </Link>
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <Link href="/swap">
+              <Button className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 text-sm">
+                Launch App
+              </Button>
+            </Link>
+          </div>
         </div>
       </nav>
 
@@ -159,7 +166,7 @@ export default function Home() {
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center mb-12">
             <Link href="/swap">
-              <Button size="lg" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 h-12 px-8 text-base">
+              <Button size="lg" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 h-12 px-8 text-base">
                 Start Trading <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
@@ -265,7 +272,7 @@ export default function Home() {
           Connect your wallet and start trading $HERO and $VETS with the best rates on PulseChain.
         </p>
         <Link href="/swap">
-          <Button size="lg" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 h-12 px-10 text-base">
+          <Button size="lg" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 h-12 px-10 text-base">
             Launch Swap <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         </Link>
@@ -277,7 +284,7 @@ export default function Home() {
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-                <span className="text-white font-bold text-sm">H</span>
+                <span className="text-foreground font-bold text-sm">H</span>
               </div>
               <span className="text-sm text-muted-foreground">
                 HERO Dapp — Built for Veterans, by Veterans
