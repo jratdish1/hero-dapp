@@ -43,6 +43,13 @@
       "when": 1774949948377,
       "tag": "0005_acoustic_mystique",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "5",
+      "when": 1774989612325,
+      "tag": "0006_slim_lionheart",
+      "breakpoints": true
     }
   ]
 }

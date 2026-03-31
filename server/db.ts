@@ -29,6 +29,8 @@ import {
   type InsertDelegation,
   type InsertTreasurySnapshot,
   type InsertChainDataCache,
+  influencerMentions,
+  type InsertInfluencerMention,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
 
@@ -442,4 +444,78 @@ export async function setCachedChainData(chain: string, dataKey: string, dataVal
   } else {
     await db.insert(chainDataCache).values({ chain: chain as any, dataKey, dataValue });
   }
+}
+
+// ─── Influencer Mentions ────────────────────────────────────────
+
+export async function upsertInfluencerMention(mention: InsertInfluencerMention) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  // Upsert by tweetId — update engagement metrics if already exists
+  await db.insert(influencerMentions).values(mention).onDuplicateKeyUpdate({
+    set: {
+      retweetCount: mention.retweetCount,
+      likeCount: mention.likeCount,
+      replyCount: mention.replyCount,
+      quoteCount: mention.quoteCount,
+      fetchedAt: new Date(),
+    },
+  });
+}
+
+export async function getInfluencerMentions(
+  opts: { category?: string; limit?: number; offset?: number; includeHidden?: boolean } = {}
+) {
+  const db = await getDb();
+  if (!db) return [];
+  const { category, limit = 50, offset = 0, includeHidden = false } = opts;
+
+  const conditions = [];
+  if (!includeHidden) conditions.push(eq(influencerMentions.isHidden, false));
+  if (category) conditions.push(eq(influencerMentions.category, category as any));
+
+  const query = conditions.length > 0
+    ? db.select().from(influencerMentions).where(and(...conditions))
+    : db.select().from(influencerMentions);
+
+  return query.orderBy(desc(influencerMentions.tweetCreatedAt)).limit(limit).offset(offset);
+}
+
+export async function getInfluencerMentionByTweetId(tweetId: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const result = await db.select().from(influencerMentions)
+    .where(eq(influencerMentions.tweetId, tweetId)).limit(1);
+  return result.length > 0 ? result[0] : undefined;
+}
+
+export async function toggleMentionHighlight(id: number, isHighlighted: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(influencerMentions).set({ isHighlighted }).where(eq(influencerMentions.id, id));
+}
+
+export async function toggleMentionHidden(id: number, isHidden: boolean) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(influencerMentions).set({ isHidden }).where(eq(influencerMentions.id, id));
+}
+
+export async function updateMentionCategory(id: number, category: "influencer" | "community" | "press" | "partner") {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.update(influencerMentions).set({ category }).where(eq(influencerMentions.id, id));
+}
+
+export async function getInfluencerMentionStats() {
+  const db = await getDb();
+  if (!db) return { total: 0, influencer: 0, community: 0, press: 0, partner: 0 };
+  const all = await db.select().from(influencerMentions).where(eq(influencerMentions.isHidden, false));
+  return {
+    total: all.length,
+    influencer: all.filter(m => m.category === "influencer").length,
+    community: all.filter(m => m.category === "community").length,
+    press: all.filter(m => m.category === "press").length,
+    partner: all.filter(m => m.category === "partner").length,
+  };
 }

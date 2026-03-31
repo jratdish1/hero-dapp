@@ -61,9 +61,17 @@ import {
   getLatestTreasurySnapshots,
   getCachedChainData,
   setCachedChainData,
+  upsertInfluencerMention,
+  getInfluencerMentions,
+  getInfluencerMentionByTweetId,
+  toggleMentionHighlight,
+  toggleMentionHidden,
+  updateMentionCategory,
+  getInfluencerMentionStats,
 } from "./db";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
+import { getHeroRestId, fetchHeroTweets, toDbRecord } from "./twitterFetcher";
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData } from "./priceFeed";
 
 export const appRouter = router({
@@ -751,6 +759,113 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
           : JSON.stringify(response.choices[0].message.content);
 
         return { reply: reply || "I couldn't generate a response. Please try again." };
+      }),
+  }),
+
+  // ─── Influencer Mentions (Twitter/X Tracking) ──────────────────
+  influencer: router({
+    /** Public: list mentions with optional category filter */
+    list: publicProcedure
+      .input(z.object({
+        category: z.enum(["influencer", "community", "press", "partner"]).optional(),
+        limit: z.number().int().positive().max(100).optional(),
+        offset: z.number().int().min(0).optional(),
+      }).optional())
+      .query(async ({ input }) => {
+        return getInfluencerMentions({
+          category: input?.category,
+          limit: input?.limit ?? 50,
+          offset: input?.offset ?? 0,
+        });
+      }),
+
+    /** Public: get mention stats (counts by category) */
+    stats: publicProcedure.query(async () => {
+      return getInfluencerMentionStats();
+    }),
+
+    /** Protected: trigger a manual fetch from Twitter API */
+    refresh: protectedProcedure.mutation(async () => {
+      const restId = await getHeroRestId();
+      if (!restId) {
+        return { success: false, message: "Could not resolve @HERO501c3 Twitter ID. API rate limit may be hit.", fetched: 0, newCount: 0 };
+      }
+
+      const tweets = await fetchHeroTweets(restId, 40);
+      let newCount = 0;
+
+      for (const tweet of tweets) {
+        const existing = await getInfluencerMentionByTweetId(tweet.tweetId);
+        if (!existing) newCount++;
+        await upsertInfluencerMention(toDbRecord(tweet));
+      }
+
+      return { success: true, message: `Fetched ${tweets.length} tweets, ${newCount} new.`, fetched: tweets.length, newCount };
+    }),
+
+    /** Protected (admin): toggle highlight on a mention */
+    toggleHighlight: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        isHighlighted: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        await toggleMentionHighlight(input.id, input.isHighlighted);
+        return { success: true };
+      }),
+
+    /** Protected (admin): hide/unhide a mention */
+    toggleHidden: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        isHidden: z.boolean(),
+      }))
+      .mutation(async ({ input }) => {
+        await toggleMentionHidden(input.id, input.isHidden);
+        return { success: true };
+      }),
+
+    /** Protected (admin): update mention category */
+    updateCategory: protectedProcedure
+      .input(z.object({
+        id: z.number().int().positive(),
+        category: z.enum(["influencer", "community", "press", "partner"]),
+      }))
+      .mutation(async ({ input }) => {
+        await updateMentionCategory(input.id, input.category);
+        return { success: true };
+      }),
+
+    /** Protected: manually add a mention (for press/partner entries) */
+    addManual: protectedProcedure
+      .input(z.object({
+        tweetId: z.string().min(1).max(30),
+        authorUsername: z.string().min(1).max(100),
+        authorDisplayName: z.string().max(200).optional(),
+        authorFollowerCount: z.number().int().min(0).optional(),
+        tweetText: safeStringSchema(5000),
+        tweetUrl: z.string().url().max(500),
+        category: z.enum(["influencer", "community", "press", "partner"]),
+        heroMentioned: z.boolean().optional(),
+        vetsMentioned: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        await upsertInfluencerMention({
+          tweetId: input.tweetId,
+          authorUsername: input.authorUsername,
+          authorDisplayName: input.authorDisplayName || input.authorUsername,
+          authorFollowerCount: input.authorFollowerCount || 0,
+          tweetText: input.tweetText,
+          tweetUrl: input.tweetUrl,
+          mentionType: "direct_mention",
+          category: input.category,
+          heroMentioned: input.heroMentioned ?? true,
+          vetsMentioned: input.vetsMentioned ?? false,
+          sentiment: "positive",
+          isHighlighted: false,
+          isHidden: false,
+        });
+        return { success: true };
       }),
   }),
 });

@@ -1,0 +1,8 @@
+Visual verification of all fixes — March 31, 2026
+
+1. WHITE SCREEN FIX: ✅ App renders correctly. CSP env-aware fix working.
+2. CONNECT WALLET BUTTON: ✅ Visible as solid orange button with white text in top-right header. Clearly visible without hover.
+3. NETWORK SWITCHER: ✅ Shows PLS and BASE buttons in sidebar. Compact version in header shows "PLS" with switch icon.
+4. MVS → MEDIA RENAME: ✅ Sidebar shows "Media" (not "MVS & Blog"). Community Hub separate.
+5. MANUS LOGO: CSS hide added. Platform preview banner only visible in dev mode, disappears on publish.
+6. DRY/KISS: Reusable TokenBadge, DateLabel components. NetworkContext bridges UI + wagmi.

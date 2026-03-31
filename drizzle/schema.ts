@@ -245,3 +245,34 @@ export type TreasurySnapshot = typeof treasurySnapshots.$inferSelect;
 export type InsertTreasurySnapshot = typeof treasurySnapshots.$inferInsert;
 export type ChainDataCache = typeof chainDataCache.$inferSelect;
 export type InsertChainDataCache = typeof chainDataCache.$inferInsert;
+
+// ─── Influencer Mentions (Twitter/X Tracking) ──────────────────
+
+export const influencerMentions = mysqlTable("influencer_mentions", {
+  id: int("id").autoincrement().primaryKey(),
+  tweetId: varchar("tweetId", { length: 30 }).notNull().unique(),
+  authorUsername: varchar("authorUsername", { length: 100 }).notNull(),
+  authorDisplayName: varchar("authorDisplayName", { length: 200 }),
+  authorProfileImageUrl: text("authorProfileImageUrl"),
+  authorFollowerCount: int("authorFollowerCount").default(0),
+  tweetText: text("tweetText").notNull(),
+  tweetUrl: text("tweetUrl").notNull(),
+  tweetCreatedAt: timestamp("tweetCreatedAt"),
+  retweetCount: int("retweetCount").default(0),
+  likeCount: int("likeCount").default(0),
+  replyCount: int("replyCount").default(0),
+  quoteCount: int("quoteCount").default(0),
+  mediaUrls: text("mediaUrls"),
+  mentionType: mysqlEnum("mentionType", ["direct_mention", "retweet", "quote", "hero_tweet"]).default("direct_mention").notNull(),
+  category: mysqlEnum("category", ["influencer", "community", "press", "partner"]).default("community").notNull(),
+  heroMentioned: boolean("heroMentioned").default(false),
+  vetsMentioned: boolean("vetsMentioned").default(false),
+  sentiment: mysqlEnum("sentiment", ["positive", "neutral", "negative"]).default("neutral"),
+  isHighlighted: boolean("isHighlighted").default(false),
+  isHidden: boolean("isHidden").default(false),
+  fetchedAt: timestamp("fetchedAt").defaultNow().notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type InfluencerMention = typeof influencerMentions.$inferSelect;
+export type InsertInfluencerMention = typeof influencerMentions.$inferInsert;

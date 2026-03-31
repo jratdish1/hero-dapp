@@ -183,3 +183,8 @@
 - [x] Feature: Rename MVS to "Media" — influencer mentions, guest posts, press kit, Forbes-style targets
 - [x] Feature: Hide Manus logo permanently (CSS hide + platform preview banner disappears on publish)
 - [x] Refactor: Apply DRY/KISS principles (reusable TokenBadge, DateLabel, NetworkContext bridge, toggleChain helper)
+- [x] Feature: Twitter/X influencer tracking — DB schema for mentions table
+- [x] Feature: Twitter/X influencer tracking — server-side fetcher using Data API (get_user_tweets + get_user_profile)
+- [x] Feature: Twitter/X influencer tracking — tRPC procedures for mention CRUD + manual refresh
+- [x] Feature: Twitter/X influencer tracking — update Media page to show real mentions with engagement metrics
+- [x] Feature: Twitter/X influencer tracking — write tests for all new endpoints (28 tests passing)
