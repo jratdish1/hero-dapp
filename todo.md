@@ -134,3 +134,11 @@
 - [x] On-chain Buy & Burn tracker: read contract for total burned, last burn, burn rate
 - [x] Add tRPC procedure for Buy & Burn data
 - [x] Tokenomics page: display live Buy & Burn stats (total burned, last burn timestamp, deflationary rate)
+- [x] Bug fix: PulseChain HERO price shows dashes — investigated, prices display correctly via DexScreener API
+- [x] DAO Integration: Add proposals, votes, delegates, delegations, treasury_snapshots, chain_data_cache tables
+- [x] DAO Integration: Merge DAO database helpers into server/db.ts
+- [x] DAO Integration: Add DAO tRPC routers (proposals, votes, delegates, chain, treasury, dao stats)
+- [x] DAO Integration: Port 6 DAO pages (Dashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates)
+- [x] DAO Integration: Add DAO routes and navigation (/dao, /dao/proposals, etc.)
+- [x] DAO Integration: Fix blockchain.ts address bug (use correct per-chain HERO addresses — using existing priceFeed.ts)
+- [x] DAO Integration: Write tests for DAO backend routes

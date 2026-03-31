@@ -36,6 +36,13 @@
       "when": 1774942893169,
       "tag": "0004_supreme_korvac",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "5",
+      "when": 1774949948377,
+      "tag": "0005_acoustic_mystique",
+      "breakpoints": true
     }
   ]
 }

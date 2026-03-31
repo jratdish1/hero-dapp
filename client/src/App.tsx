@@ -20,6 +20,7 @@ import NftCollection from "./pages/NftCollection";
 import Ecosystem from "./pages/Subdomains";
 import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
+import { DaoDashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates } from "./pages/dao";
 
 function Router() {
   return (
@@ -38,6 +39,12 @@ function Router() {
       <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
       <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
       <Route path="/media" component={() => <AppLayout><MediaHub /></AppLayout>} />
+      <Route path="/dao" component={() => <AppLayout><DaoDashboard /></AppLayout>} />
+      <Route path="/dao/proposals" component={() => <AppLayout><Proposals /></AppLayout>} />
+      <Route path="/dao/proposals/create" component={() => <AppLayout><CreateProposal /></AppLayout>} />
+      <Route path="/dao/proposals/:id" component={() => <AppLayout><ProposalDetail /></AppLayout>} />
+      <Route path="/dao/treasury" component={() => <AppLayout><Treasury /></AppLayout>} />
+      <Route path="/dao/delegates" component={() => <AppLayout><Delegates /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

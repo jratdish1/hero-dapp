@@ -28,6 +28,10 @@ import {
   ExternalLink,
   Gem,
   ImageIcon,
+  Landmark,
+  FileText,
+  Users2,
+  Wallet2,
 } from "lucide-react";
 
 const NAV_ITEMS = [
@@ -44,6 +48,13 @@ const NAV_ITEMS = [
   { path: "/ecosystem", label: "Ecosystem", icon: Globe },
   { path: "/media", label: "Media Hub", icon: ImageIcon },
   { path: "/ai", label: "AI Assistant", icon: Bot },
+];
+
+const DAO_NAV_ITEMS = [
+  { path: "/dao", label: "DAO Overview", icon: Landmark },
+  { path: "/dao/proposals", label: "Proposals", icon: FileText },
+  { path: "/dao/delegates", label: "Delegates", icon: Users2 },
+  { path: "/dao/treasury", label: "Treasury", icon: Wallet2 },
 ];
 
 export default function AppLayout({ children }: { children: ReactNode }) {
@@ -119,6 +130,29 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </Link>
             );
           })}
+          {/* DAO Section Divider */}
+          <div className="mt-3 pt-3 border-t border-sidebar-border">
+            <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Governance</p>
+            {DAO_NAV_ITEMS.map((item) => {
+              const isActive = location === item.path || (item.path === "/dao" && location.startsWith("/dao") && location !== "/dao/proposals" && location !== "/dao/delegates" && location !== "/dao/treasury");
+              const Icon = item.icon;
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                    isActive
+                      ? "bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20"
+                      : "text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  }`}
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Icon className="w-4.5 h-4.5" />
+                  {item.label}
+                </Link>
+              );
+            })}
+          </div>
         </nav>
 
         {/* User section */}

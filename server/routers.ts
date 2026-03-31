@@ -28,6 +28,26 @@ import {
   getAllMediaPosts,
   getMediaPostsByUser,
   deleteMediaPost,
+  createProposal,
+  getProposals,
+  getProposalById,
+  updateProposal,
+  updateProposalVotes,
+  castVote,
+  getVotesByProposal,
+  getUserVote,
+  registerDelegate,
+  getDelegates,
+  getDelegateByAddress,
+  updateDelegate,
+  createDelegation,
+  getDelegationsByDelegator,
+  getDelegationsByDelegate,
+  revokeDelegation,
+  saveTreasurySnapshot,
+  getLatestTreasurySnapshots,
+  getCachedChainData,
+  setCachedChainData,
 } from "./db";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
@@ -444,6 +464,233 @@ export const appRouter = router({
       }),
     buyAndBurn: publicProcedure.query(async () => {
       return fetchBuyAndBurnData();
+    }),
+  }),
+
+  dao: router({
+    stats: publicProcedure.query(async () => {
+      const [allProposals, activeDelegates, treasury] = await Promise.all([
+        getProposals(undefined, 1000),
+        getDelegates(1000),
+        getLatestTreasurySnapshots(),
+      ]);
+      const active = allProposals.filter(p => p.status === "active").length;
+      const passed = allProposals.filter(p => p.status === "passed" || p.status === "executed").length;
+      const totalVotingPower = activeDelegates.reduce((sum, d) => sum + (d.votingPower || 0), 0);
+      const totalTreasuryUsd = treasury.reduce((sum, t) => sum + parseFloat(t.valueUsd || "0"), 0);
+      return {
+        totalProposals: allProposals.length,
+        activeProposals: active,
+        passedProposals: passed,
+        totalDelegates: activeDelegates.length,
+        totalVotingPower,
+        treasuryValueUsd: totalTreasuryUsd,
+      };
+    }),
+
+    proposals: router({
+      list: publicProcedure
+        .input(z.object({ status: z.string().optional(), limit: z.number().int().positive().max(100).optional() }).optional())
+        .query(async ({ input }) => {
+          return getProposals(input?.status, input?.limit ?? 50);
+        }),
+      get: publicProcedure
+        .input(z.object({ proposalId: z.string().min(1) }))
+        .query(async ({ input }) => {
+          return getProposalById(input.proposalId);
+        }),
+      create: protectedProcedure
+        .input(z.object({
+          title: z.string().min(1).max(512),
+          description: z.string().min(1).max(10000),
+          walletAddress: z.string().min(42).max(42),
+          chain: z.enum(["base", "pulsechain", "both"]).optional(),
+          category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
+          durationDays: z.number().int().min(1).max(30).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const proposalId = "HERO-" + Date.now().toString(36).toUpperCase();
+          const now = new Date();
+          const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
+          const endTime = new Date(now.getTime() + durationMs);
+          await createProposal({
+            proposalId,
+            title: input.title,
+            description: input.description,
+            proposerId: ctx.user.id,
+            proposerAddress: input.walletAddress,
+            chain: input.chain || "both",
+            category: input.category || "protocol",
+            startTime: now,
+            endTime,
+          });
+          return { success: true, proposalId };
+        }),
+      updateStatus: protectedProcedure
+        .input(z.object({
+          proposalId: z.string().min(1),
+          status: z.enum(["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]),
+        }))
+        .mutation(async ({ input }) => {
+          const proposal = await getProposalById(input.proposalId);
+          if (!proposal) throw new Error("Proposal not found");
+          await updateProposal(proposal.id, { status: input.status });
+          return { success: true };
+        }),
+    }),
+
+    votes: router({
+      list: publicProcedure
+        .input(z.object({ proposalDbId: z.number().int().positive() }))
+        .query(async ({ input }) => {
+          return getVotesByProposal(input.proposalDbId);
+        }),
+      myVote: protectedProcedure
+        .input(z.object({ proposalDbId: z.number().int().positive() }))
+        .query(async ({ ctx, input }) => {
+          return getUserVote(input.proposalDbId, ctx.user.id);
+        }),
+      cast: protectedProcedure
+        .input(z.object({
+          proposalDbId: z.number().int().positive(),
+          proposalId: z.string().min(1),
+          voterAddress: z.string().min(42).max(42),
+          choice: z.enum(["for", "against", "abstain"]),
+          votingPower: z.number().int().positive(),
+          chain: z.enum(["base", "pulsechain"]),
+          txHash: z.string().max(66).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const existing = await getUserVote(input.proposalDbId, ctx.user.id);
+          if (existing) throw new Error("Already voted on this proposal");
+          await castVote({
+            proposalId: input.proposalDbId,
+            voterId: ctx.user.id,
+            voterAddress: input.voterAddress,
+            choice: input.choice,
+            votingPower: input.votingPower,
+            chain: input.chain,
+            txHash: input.txHash || null,
+          });
+          // Update proposal vote tallies
+          const proposal = await getProposalById(input.proposalId);
+          if (proposal) {
+            const newFor = input.choice === "for" ? proposal.votesFor + input.votingPower : proposal.votesFor;
+            const newAgainst = input.choice === "against" ? proposal.votesAgainst + input.votingPower : proposal.votesAgainst;
+            const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + input.votingPower : proposal.votesAbstain;
+            await updateProposalVotes(input.proposalId, newFor, newAgainst, newAbstain);
+          }
+          return { success: true };
+        }),
+    }),
+
+    delegates: router({
+      list: publicProcedure
+        .input(z.object({ limit: z.number().int().positive().max(100).optional() }).optional())
+        .query(async ({ input }) => {
+          return getDelegates(input?.limit ?? 50);
+        }),
+      byAddress: publicProcedure
+        .input(z.object({ address: z.string().min(42).max(42) }))
+        .query(async ({ input }) => {
+          return getDelegateByAddress(input.address);
+        }),
+      register: protectedProcedure
+        .input(z.object({
+          address: z.string().min(42).max(42),
+          displayName: z.string().max(128).optional(),
+          statement: z.string().max(5000).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const existing = await getDelegateByAddress(input.address);
+          if (existing) throw new Error("Already registered as delegate");
+          await registerDelegate({
+            userId: ctx.user.id,
+            address: input.address,
+            displayName: input.displayName || null,
+            statement: input.statement || null,
+          });
+          return { success: true };
+        }),
+      update: protectedProcedure
+        .input(z.object({
+          address: z.string().min(42).max(42),
+          displayName: z.string().max(128).optional(),
+          statement: z.string().max(5000).optional(),
+        }))
+        .mutation(async ({ input }) => {
+          const delegate = await getDelegateByAddress(input.address);
+          if (!delegate) throw new Error("Delegate not found");
+          await updateDelegate(delegate.id, {
+            displayName: input.displayName || delegate.displayName,
+            statement: input.statement || delegate.statement,
+          });
+          return { success: true };
+        }),
+    }),
+
+    delegations: router({
+      myDelegations: protectedProcedure.query(async ({ ctx }) => {
+        return getDelegationsByDelegator(ctx.user.id);
+      }),
+      receivedDelegations: protectedProcedure
+        .input(z.object({ delegateId: z.number().int().positive() }))
+        .query(async ({ input }) => {
+          return getDelegationsByDelegate(input.delegateId);
+        }),
+      create: protectedProcedure
+        .input(z.object({
+          delegatorAddress: z.string().min(42).max(42),
+          delegateAddress: z.string().min(42).max(42),
+          amount: z.number().int().positive(),
+          chain: z.enum(["base", "pulsechain"]),
+          txHash: z.string().max(66).optional(),
+        }))
+        .mutation(async ({ ctx, input }) => {
+          const delegate = await getDelegateByAddress(input.delegateAddress);
+          if (!delegate) throw new Error("Delegate not found");
+          await createDelegation({
+            delegatorId: ctx.user.id,
+            delegatorAddress: input.delegatorAddress,
+            delegateId: delegate.id,
+            delegateAddress: input.delegateAddress,
+            amount: input.amount,
+            chain: input.chain,
+            txHash: input.txHash || null,
+          });
+          // Update delegate's voting power and delegator count
+          await updateDelegate(delegate.id, {
+            votingPower: delegate.votingPower + input.amount,
+            delegatorCount: delegate.delegatorCount + 1,
+          });
+          return { success: true };
+        }),
+      revoke: protectedProcedure
+        .input(z.object({ id: z.number().int().positive() }))
+        .mutation(async ({ ctx, input }) => {
+          await revokeDelegation(input.id, ctx.user.id);
+          return { success: true };
+        }),
+    }),
+
+    treasury: router({
+      snapshots: publicProcedure
+        .input(z.object({ chain: z.string().optional() }).optional())
+        .query(async ({ input }) => {
+          return getLatestTreasurySnapshots(input?.chain);
+        }),
+      record: protectedProcedure
+        .input(z.object({
+          chain: z.enum(["base", "pulsechain"]),
+          tokenSymbol: z.string().max(16),
+          tokenAddress: z.string().min(42).max(42),
+          balance: z.string(),
+          valueUsd: z.string().optional(),
+        }))
+        .mutation(async ({ input }) => {
+          await saveTreasurySnapshot(input);
+          return { success: true };
+        }),
     }),
   }),
 
