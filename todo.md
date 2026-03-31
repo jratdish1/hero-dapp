@@ -142,3 +142,21 @@
 - [x] DAO Integration: Add DAO routes and navigation (/dao, /dao/proposals, etc.)
 - [x] DAO Integration: Fix blockchain.ts address bug (use correct per-chain HERO addresses — using existing priceFeed.ts)
 - [x] DAO Integration: Write tests for DAO backend routes
+- [x] Test: Audit wagmi config — verified all connectors (MetaMask, Coinbase, WalletConnect, Safe, Injected)
+- [x] Test: Verify PulseChain (369) and BASE (8453) chain definitions are correct
+- [x] Test: MetaMask connection dialog verified (needs real browser with extension for full e2e)
+- [x] Test: WalletConnect graceful fallback when no Project ID configured
+- [x] Test: Coinbase Wallet connector displayed and clickable
+- [x] Test: Hardware wallet (Ledger/Trezor) listed via MetaMask bridge
+- [x] Test: Connect/disconnect UI verified (needs real wallet for full test)
+- [x] Test: Chain switching UI verified (PLS/BASE toggle works)
+- [x] Test: Wallet address and balance display components verified
+- [x] Fix: No wallet connection issues found — all connectors display correctly
+- [x] Add WalletConnect connector to wagmi config (graceful fallback when no Project ID)
+- [x] Add Safe (Gnosis) connector for multisig/DAO treasury wallets
+- [x] Request VITE_WALLETCONNECT_PROJECT_ID secret from user
+- [x] Update WalletButton to properly display all connector types including hardware wallets
+- [x] Cloudflare: Add CF-compatible security headers to server
+- [x] Cloudflare: Provide setup instructions for DNS proxy protection on www.herobase.io
+- [x] Cloudflare: Configure CSP, HSTS, and anti-DDoS headers
+- [ ] Enhance server-side rate limiting: add per-route limits for DAO, media uploads, wallet endpoints
