@@ -47,3 +47,5 @@
 - [x] Integrate OpenTang design tokens (orangePulse animation, deeper dark tones)
 - [ ] Set up GitHub export for HERO Dapp project storage
 - [ ] Periodic reminder: Get VPS login details from user
+- [x] Fix SEO: Add meta description (50-160 chars) to landing page
+- [x] Fix SEO: Add keywords meta tag to landing page
