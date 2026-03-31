@@ -1,189 +1,194 @@
-import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Wallet,
-  TrendingUp,
-  TrendingDown,
-  History,
-  PieChart,
-  ArrowUpRight,
-  ArrowDownRight,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
-import { HERO_TOKEN, VETS_TOKEN, FEATURED_TOKENS } from "../../../shared/tokens";
+import { useNetwork } from "../contexts/NetworkContext";
+import { useAccount, useBalance } from "wagmi";
+import { useTokenBalance, formatTokenBalance } from "../hooks/useTokenBalance";
+import { type TokenInfo } from "../../../shared/tokens";
+
+function TokenRow({ token, chainId }: { token: TokenInfo; chainId: number }) {
+  const { balance, isLoading } = useTokenBalance(
+    token.address,
+    chainId,
+    token.isNative
+  );
+
+  const formattedBalance = formatTokenBalance(balance, token.decimals);
+  const hasBalance = balance !== undefined && balance > BigInt(0);
+
+  return (
+    <tr className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
+      <td className="py-3 px-4">
+        <div className="flex items-center gap-3">
+          <img
+            src={token.logoURI}
+            alt={token.symbol}
+            className="w-8 h-8 rounded-full"
+            onError={(e) => {
+              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${token.symbol}&background=random&size=32`;
+            }}
+          />
+          <div>
+            <p className="font-semibold text-foreground">{token.symbol}</p>
+            <p className="text-xs text-muted-foreground">{token.name}</p>
+          </div>
+        </div>
+      </td>
+      <td className="py-3 px-4 text-right">
+        {isLoading ? (
+          <Loader2 className="w-4 h-4 animate-spin text-muted-foreground ml-auto" />
+        ) : (
+          <span className={hasBalance ? "text-foreground font-medium" : "text-muted-foreground"}>
+            {formattedBalance}
+          </span>
+        )}
+      </td>
+      <td className="py-3 px-4 text-right text-muted-foreground text-sm">
+        —
+      </td>
+      <td className="py-3 px-4 text-right text-muted-foreground text-sm">
+        —
+      </td>
+    </tr>
+  );
+}
 
 export default function Portfolio() {
-  const [connected, setConnected] = useState(false);
+  const { tokens, chain, chainId } = useNetwork();
+  const { address, isConnected } = useAccount();
+  const { data: nativeBalance } = useBalance({
+    address,
+    chainId: chainId as 369 | 8453,
+  });
 
-  const mockHoldings = [
-    { token: HERO_TOKEN, balance: "1,250,000", value: "$52.50", change: "+8.5%", positive: true },
-    { token: VETS_TOKEN, balance: "500,000", value: "$9.00", change: "+3.2%", positive: true },
-    { token: FEATURED_TOKENS[0], balance: "15,000", value: "$4.50", change: "-2.1%", positive: false },
-    { token: FEATURED_TOKENS[3], balance: "100,000", value: "$12.00", change: "+1.8%", positive: true },
-  ];
-
-  const mockHistory = [
-    { type: "Swap", from: "PLS", to: "HERO", amount: "10,000 PLS", time: "2 hours ago", hash: "0x1234...abcd" },
-    { type: "Swap", from: "HERO", to: "VETS", amount: "50,000 HERO", time: "5 hours ago", hash: "0x5678...efgh" },
-    { type: "Swap", from: "USDC", to: "PLS", amount: "100 USDC", time: "1 day ago", hash: "0x9abc...ijkl" },
-    { type: "DCA Buy", from: "USDC", to: "HERO", amount: "10 USDC", time: "2 days ago", hash: "0xdef0...mnop" },
-  ];
-
-  if (!connected) {
+  if (!isConnected) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-6">
-        <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-          <Wallet className="w-10 h-10 text-white" />
-        </div>
-        <div className="text-center">
-          <h2 className="text-2xl font-bold text-foreground mb-2">Connect Your Wallet</h2>
-          <p className="text-muted-foreground max-w-md">
-            Connect your wallet to view your portfolio, track P&L, and manage your PulseChain assets.
-          </p>
-        </div>
-        <Button
-          onClick={() => setConnected(true)}
-          className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-white border-0 px-8 h-12"
-        >
-          Connect Wallet
-        </Button>
+      <div className="max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-foreground mb-2">Portfolio</h1>
+        <p className="text-muted-foreground mb-8">
+          Track your token holdings and transaction history on {chain.name}
+        </p>
+        <Card className="bg-card border-border">
+          <CardContent className="p-12 text-center">
+            <div className="w-16 h-16 rounded-full bg-[var(--hero-orange)]/10 flex items-center justify-center mx-auto mb-4">
+              <Wallet className="w-8 h-8 text-[var(--hero-orange)]" />
+            </div>
+            <h2 className="text-xl font-bold text-foreground mb-2">
+              Connect Your Wallet
+            </h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Connect your wallet using the button in the header to view your
+              portfolio, token balances, and transaction history.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Supports MetaMask, Trust Wallet, Coinbase Wallet, and WalletConnect
+            </p>
+          </CardContent>
+        </Card>
       </div>
     );
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-foreground">Portfolio</h1>
-        <p className="text-sm text-muted-foreground">Track your PulseChain assets</p>
+    <div className="max-w-4xl mx-auto">
+      <div className="flex items-center justify-between mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-foreground">Portfolio</h1>
+          <p className="text-sm text-muted-foreground">
+            {address?.slice(0, 6)}...{address?.slice(-4)} on {chain.name}
+          </p>
+        </div>
+        <a
+          href={`${chain.blockExplorers.default.url}/address/${address}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center gap-1 text-sm text-[var(--hero-orange)] hover:underline"
+        >
+          View on {chain.blockExplorers.default.name}
+          <ExternalLink className="w-3 h-3" />
+        </a>
       </div>
 
-      {/* Portfolio summary */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card className="bg-card border-border hero-glow">
+      {/* Summary cards */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Value</p>
-            <p className="text-2xl font-bold text-foreground">$78.00</p>
-            <span className="text-xs text-[var(--hero-green)] flex items-center gap-0.5 mt-1">
-              <ArrowUpRight className="w-3 h-3" /> +5.2% (24h)
-            </span>
+            <p className="text-xs text-muted-foreground mb-1">Native Balance</p>
+            <p className="text-lg font-bold text-foreground">
+              {nativeBalance
+                ? `${formatTokenBalance(nativeBalance.value, nativeBalance.decimals)} ${nativeBalance.symbol}`
+                : "Loading..."}
+            </p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Unrealized P&L</p>
-            <p className="text-2xl font-bold text-[var(--hero-green)]">+$12.40</p>
-            <span className="text-xs text-muted-foreground mt-1">Since first trade</span>
+            <p className="text-xs text-muted-foreground mb-1">Tokens Tracked</p>
+            <p className="text-lg font-bold text-foreground">{tokens.length}</p>
           </CardContent>
         </Card>
         <Card className="bg-card border-border">
           <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground mb-1">Total Trades</p>
-            <p className="text-2xl font-bold text-foreground">24</p>
-            <span className="text-xs text-muted-foreground mt-1">Last 30 days</span>
+            <p className="text-xs text-muted-foreground mb-1">Network</p>
+            <p className="text-lg font-bold text-foreground">{chain.name}</p>
           </CardContent>
         </Card>
       </div>
 
-      <Tabs defaultValue="holdings" className="w-full">
-        <TabsList className="bg-secondary border border-border">
-          <TabsTrigger value="holdings" className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]">
-            <PieChart className="w-4 h-4 mr-1.5" /> Holdings
-          </TabsTrigger>
-          <TabsTrigger value="history" className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]">
-            <History className="w-4 h-4 mr-1.5" /> History
-          </TabsTrigger>
+      <Tabs defaultValue="holdings">
+        <TabsList className="bg-secondary mb-4">
+          <TabsTrigger value="holdings">Holdings</TabsTrigger>
+          <TabsTrigger value="history">History</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="holdings" className="mt-4">
+        <TabsContent value="holdings">
           <Card className="bg-card border-border">
             <CardContent className="p-0">
               <table className="w-full">
                 <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Token</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">Balance</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">Value</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">24h</th>
+                  <tr className="border-b border-border text-xs text-muted-foreground">
+                    <th className="py-3 px-4 text-left font-medium">Token</th>
+                    <th className="py-3 px-4 text-right font-medium">Balance</th>
+                    <th className="py-3 px-4 text-right font-medium">Value</th>
+                    <th className="py-3 px-4 text-right font-medium">24h</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {mockHoldings.map((h) => (
-                    <tr key={h.token.symbol} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                      <td className="py-3 px-4">
-                        <div className="flex items-center gap-3">
-                          <img
-                            src={h.token.logoURI}
-                            alt={h.token.symbol}
-                            className="w-8 h-8 rounded-full"
-                            onError={(e) => {
-                              (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${h.token.symbol}&background=random&size=32`;
-                            }}
-                          />
-                          <div>
-                            <p className="font-semibold text-foreground">{h.token.symbol}</p>
-                            <p className="text-xs text-muted-foreground">{h.token.name}</p>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="text-right py-3 px-4 font-medium text-foreground">{h.balance}</td>
-                      <td className="text-right py-3 px-4 font-medium text-foreground">{h.value}</td>
-                      <td className="text-right py-3 px-4">
-                        <span className={`text-sm font-medium flex items-center justify-end gap-0.5 ${h.positive ? "text-[var(--hero-green)]" : "text-destructive"}`}>
-                          {h.positive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
-                          {h.change}
-                        </span>
-                      </td>
-                    </tr>
+                  {tokens.map((token) => (
+                    <TokenRow
+                      key={token.address}
+                      token={token}
+                      chainId={chainId}
+                    />
                   ))}
                 </tbody>
               </table>
             </CardContent>
           </Card>
+          <p className="text-xs text-muted-foreground mt-3 text-center">
+            Price data and USD values coming soon via DEX price feeds
+          </p>
         </TabsContent>
 
-        <TabsContent value="history" className="mt-4">
+        <TabsContent value="history">
           <Card className="bg-card border-border">
-            <CardContent className="p-0">
-              <table className="w-full">
-                <thead>
-                  <tr className="border-b border-border">
-                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Type</th>
-                    <th className="text-left text-xs text-muted-foreground font-medium py-3 px-4">Details</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">Amount</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">Time</th>
-                    <th className="text-right text-xs text-muted-foreground font-medium py-3 px-4">Tx</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {mockHistory.map((h, i) => (
-                    <tr key={i} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
-                      <td className="py-3 px-4">
-                        <span className="text-xs font-medium px-2 py-1 rounded bg-[var(--hero-orange)]/10 text-[var(--hero-orange)]">
-                          {h.type}
-                        </span>
-                      </td>
-                      <td className="py-3 px-4 text-sm text-foreground">
-                        {h.from} → {h.to}
-                      </td>
-                      <td className="text-right py-3 px-4 text-sm font-medium text-foreground">{h.amount}</td>
-                      <td className="text-right py-3 px-4 text-xs text-muted-foreground">{h.time}</td>
-                      <td className="text-right py-3 px-4">
-                        <a
-                          href={`https://scan.pulsechain.com/tx/${h.hash}`}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-[var(--hero-orange)] hover:underline text-xs flex items-center justify-end gap-0.5"
-                        >
-                          {h.hash} <ExternalLink className="w-3 h-3" />
-                        </a>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <CardContent className="p-8 text-center">
+              <p className="text-muted-foreground mb-2">
+                Transaction history will be available once on-chain indexing is connected.
+              </p>
+              <a
+                href={`${chain.blockExplorers.default.url}/address/${address}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm text-[var(--hero-orange)] hover:underline inline-flex items-center gap-1"
+              >
+                View full history on {chain.blockExplorers.default.name}
+                <ExternalLink className="w-3 h-3" />
+              </a>
             </CardContent>
           </Card>
         </TabsContent>

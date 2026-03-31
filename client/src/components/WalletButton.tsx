@@ -8,96 +8,72 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useNetwork } from "../contexts/NetworkContext";
-import { Wallet, Copy, ExternalLink, LogOut, Check } from "lucide-react";
+import {
+  Wallet,
+  Copy,
+  ExternalLink,
+  LogOut,
+  Check,
+  Loader2,
+} from "lucide-react";
 import { toast } from "sonner";
-
-// Simulated wallet state (will be replaced with real wagmi hooks when on-chain)
-interface WalletState {
-  address: string | null;
-  isConnected: boolean;
-  balance: string;
-  connector: string;
-}
-
-const WALLET_OPTIONS = [
-  {
-    id: "metamask",
-    name: "MetaMask",
-    icon: "🦊",
-    description: "Connect using MetaMask browser extension",
-  },
-  {
-    id: "trust",
-    name: "Trust Wallet",
-    icon: "🛡️",
-    description: "Connect using Trust Wallet",
-  },
-  {
-    id: "walletconnect",
-    name: "WalletConnect",
-    icon: "🔗",
-    description: "Scan QR code with any compatible wallet",
-  },
-  {
-    id: "coinbase",
-    name: "Coinbase Wallet",
-    icon: "🔵",
-    description: "Connect using Coinbase Wallet",
-  },
-];
+import {
+  useAccount,
+  useBalance,
+  useConnect,
+  useDisconnect,
+  useSwitchChain,
+} from "wagmi";
 
 export function WalletButton() {
-  const { chain } = useNetwork();
-  const [wallet, setWallet] = useState<WalletState>({
-    address: null,
-    isConnected: false,
-    balance: "0",
-    connector: "",
-  });
+  const { chain, chainId } = useNetwork();
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const connectWallet = (connectorId: string) => {
-    // Check if MetaMask or other wallet is available
-    const hasProvider = typeof window !== "undefined" && (window as any).ethereum;
+  // wagmi hooks
+  const { address, isConnected, connector: activeConnector } = useAccount();
+  const { data: balanceData } = useBalance({
+    address,
+    chainId: chainId as 369 | 8453,
+  });
+  const { connect, connectors, isPending: isConnecting } = useConnect();
+  const { disconnect } = useDisconnect();
+  const { switchChain } = useSwitchChain();
 
-    if (connectorId === "metamask" && !hasProvider) {
-      toast.error("MetaMask not detected", {
-        description: "Please install MetaMask browser extension to connect.",
-        action: {
-          label: "Install",
-          onClick: () => window.open("https://metamask.io/download/", "_blank"),
-        },
-      });
-      return;
+  const handleConnect = (connector: (typeof connectors)[number]) => {
+    try {
+      connect(
+        { connector, chainId: chainId as 369 | 8453 },
+        {
+          onSuccess: () => {
+            toast.success("Wallet connected", {
+              description: `Connected to ${chain.name} via ${connector.name}`,
+            });
+            setIsOpen(false);
+          },
+          onError: (err) => {
+            const msg = (err as Error)?.message ?? "Connection failed";
+            if (msg.includes("User rejected") || msg.includes("rejected")) {
+              toast.info("Connection cancelled");
+            } else {
+              toast.error("Connection failed", { description: msg });
+            }
+          },
+        }
+      );
+    } catch {
+      toast.error("Could not connect wallet");
     }
-
-    if (connectorId === "trust" && !hasProvider) {
-      toast.error("Trust Wallet not detected", {
-        description: "Please install Trust Wallet to connect.",
-        action: {
-          label: "Install",
-          onClick: () => window.open("https://trustwallet.com/", "_blank"),
-        },
-      });
-      return;
-    }
-
-    // For demo/preview: simulate connection
-    toast.info("Wallet Connection", {
-      description: `${connectorId === "walletconnect" ? "WalletConnect" : connectorId === "coinbase" ? "Coinbase Wallet" : connectorId === "metamask" ? "MetaMask" : "Trust Wallet"} integration ready. Connect your wallet on ${chain.name} to start trading.`,
-    });
-    setIsOpen(false);
   };
 
-  const disconnectWallet = () => {
-    setWallet({ address: null, isConnected: false, balance: "0", connector: "" });
+  const handleDisconnect = () => {
+    disconnect();
     toast.success("Wallet disconnected");
   };
 
   const copyAddress = () => {
-    if (wallet.address) {
-      navigator.clipboard.writeText(wallet.address);
+    if (address) {
+      navigator.clipboard.writeText(address);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       toast.success("Address copied to clipboard");
@@ -107,19 +83,27 @@ export function WalletButton() {
   const truncateAddress = (addr: string) =>
     `${addr.slice(0, 6)}...${addr.slice(-4)}`;
 
-  if (wallet.isConnected && wallet.address) {
+  const formatBalance = (val: bigint | undefined, decimals: number) => {
+    if (val === undefined) return "0";
+    const num = Number(val) / 10 ** decimals;
+    return num < 0.001 ? "<0.001" : num.toFixed(3);
+  };
+
+  // ─── Connected State ────────────────────────────────────────────────
+  if (isConnected && address) {
     return (
       <div className="flex items-center gap-2">
         <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 px-3 py-1.5">
           <span className="text-xs text-hero-green font-medium">
-            {wallet.balance} {chain.nativeCurrency.symbol}
+            {formatBalance(balanceData?.value, balanceData?.decimals ?? 18)}{" "}
+            {chain.nativeCurrency.symbol}
           </span>
           <div className="h-4 w-px bg-border/50" />
           <button
             onClick={copyAddress}
             className="flex items-center gap-1.5 text-sm font-mono text-foreground/80 hover:text-foreground transition-colors"
           >
-            {truncateAddress(wallet.address)}
+            {truncateAddress(address)}
             {copied ? (
               <Check className="h-3 w-3 text-hero-green" />
             ) : (
@@ -130,7 +114,7 @@ export function WalletButton() {
         <Button
           variant="ghost"
           size="icon"
-          onClick={disconnectWallet}
+          onClick={handleDisconnect}
           className="h-8 w-8 text-muted-foreground hover:text-destructive"
           title="Disconnect wallet"
         >
@@ -140,6 +124,7 @@ export function WalletButton() {
     );
   }
 
+  // ─── Disconnected State ─────────────────────────────────────────────
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
@@ -158,24 +143,49 @@ export function WalletButton() {
           </DialogTitle>
         </DialogHeader>
         <div className="grid gap-2 py-4">
-          {WALLET_OPTIONS.map((opt) => (
-            <button
-              key={opt.id}
-              onClick={() => connectWallet(opt.id)}
-              className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-orange/30 hover:shadow-md group"
-            >
-              <span className="text-2xl">{opt.icon}</span>
-              <div className="flex-1">
-                <div className="font-medium text-foreground group-hover:text-hero-orange transition-colors">
-                  {opt.name}
+          {connectors.map((connector) => {
+            // Deduplicate — wagmi can list injected + metaMask as separate entries
+            const icon =
+              connector.name === "MetaMask"
+                ? "🦊"
+                : connector.name === "Coinbase Wallet"
+                  ? "🔵"
+                  : connector.name === "WalletConnect"
+                    ? "🔗"
+                    : connector.name === "Trust Wallet"
+                      ? "🛡️"
+                      : "🔌";
+
+            return (
+              <button
+                key={connector.uid}
+                onClick={() => handleConnect(connector)}
+                disabled={isConnecting}
+                className="flex items-center gap-3 rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-orange/30 hover:shadow-md group disabled:opacity-50"
+              >
+                <span className="text-2xl">{icon}</span>
+                <div className="flex-1">
+                  <div className="font-medium text-foreground group-hover:text-hero-orange transition-colors">
+                    {connector.name}
+                  </div>
+                  <div className="text-xs text-muted-foreground">
+                    {connector.name === "MetaMask"
+                      ? "Connect using MetaMask browser extension"
+                      : connector.name === "Coinbase Wallet"
+                        ? "Connect using Coinbase Wallet"
+                        : connector.name === "WalletConnect"
+                          ? "Scan QR code with any compatible wallet"
+                          : `Connect using ${connector.name}`}
+                  </div>
                 </div>
-                <div className="text-xs text-muted-foreground">
-                  {opt.description}
-                </div>
-              </div>
-              <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
-            </button>
-          ))}
+                {isConnecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin text-hero-orange" />
+                ) : (
+                  <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                )}
+              </button>
+            );
+          })}
         </div>
         <div className="text-center text-xs text-muted-foreground">
           By connecting, you agree to the Terms of Service

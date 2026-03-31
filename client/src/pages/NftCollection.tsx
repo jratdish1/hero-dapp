@@ -7,9 +7,66 @@ import { Progress } from "@/components/ui/progress";
 import {
   Shield, Star, Award, Crown, Gem, Flame, Clock, Wallet,
   ExternalLink, ChevronRight, Zap, Lock, TrendingUp, Users,
-  Swords, Heart, Target
+  Swords, Heart, Target, ImageIcon
 } from "lucide-react";
 import { SERVICE_BRANCHES } from "@shared/tokens";
+
+// ─── NFT Artwork Gallery ────────────────────────────────────────────────
+const NFT_ARTWORK = {
+  military: [
+    {
+      name: "Private (E-1)",
+      tier: "Common",
+      color: "border-zinc-500/50",
+      glow: "shadow-zinc-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-private-e1-Yy9rYAR7xd75QbdjevTEnY.webp",
+    },
+    {
+      name: "Sergeant (E-5)",
+      tier: "Rare",
+      color: "border-blue-500/50",
+      glow: "shadow-blue-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-sergeant-e5-Qujwqya6Jo5YYtSJSiBfzm.webp",
+    },
+    {
+      name: "Captain (O-3)",
+      tier: "Epic",
+      color: "border-purple-500/50",
+      glow: "shadow-purple-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-captain-o3-Tt9MpLvXVJTotLpn6HWRvg.webp",
+    },
+    {
+      name: "General (O-10)",
+      tier: "Mythic",
+      color: "border-yellow-500/50",
+      glow: "shadow-yellow-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-general-o10-8QuVfgoUYWWC9CUZow3hn6.webp",
+    },
+  ],
+  firstResponders: [
+    {
+      name: "Firefighter",
+      tier: "First Responder",
+      color: "border-red-500/50",
+      glow: "shadow-red-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-firefighter-aqshSw4jLasFvWD8VjJKDW.webp",
+    },
+    {
+      name: "Police Officer",
+      tier: "First Responder",
+      color: "border-blue-500/50",
+      glow: "shadow-blue-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-police-4HcqiVtwhKaLbqvroziSKC.webp",
+    },
+    {
+      name: "EMT / Paramedic",
+      tier: "First Responder",
+      color: "border-emerald-500/50",
+      glow: "shadow-emerald-500/20",
+      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-emt-JaN4AJkoBPm9YSgMVjUvSs.webp",
+    },
+  ],
+};
 
 // ─── Military Rank Tiers ─────────────────────────────────────────────────
 const RANK_TIERS = [
@@ -133,8 +190,37 @@ const UTILITY_FEATURES = [
   },
 ];
 
+// ─── NFT Card Component ─────────────────────────────────────────────────
+function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-zinc-900/80 hover:shadow-xl hover:${nft.glow} transition-all duration-300 hover:scale-[1.02]`}>
+      <div className="aspect-square relative overflow-hidden">
+        {!loaded && (
+          <div className="absolute inset-0 bg-zinc-800 animate-pulse flex items-center justify-center">
+            <ImageIcon className="w-8 h-8 text-zinc-600" />
+          </div>
+        )}
+        <img
+          src={nft.image}
+          alt={`HERO NFT - ${nft.name}`}
+          className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${loaded ? 'opacity-100' : 'opacity-0'}`}
+          loading="lazy"
+          onLoad={() => setLoaded(true)}
+        />
+        {/* Overlay gradient */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+      </div>
+      <div className="p-3 text-center">
+        <h4 className="text-white font-semibold text-sm">{nft.name}</h4>
+        <Badge variant="outline" className={`text-[10px] mt-1 ${nft.color}`}>{nft.tier}</Badge>
+      </div>
+    </div>
+  );
+}
+
 export default function NftCollection() {
-  const [activeTab, setActiveTab] = useState("ranks");
+  const [activeTab, setActiveTab] = useState("gallery");
 
   return (
     <div className="space-y-6">
@@ -180,6 +266,9 @@ export default function NftCollection() {
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-zinc-900 border border-zinc-800 w-full justify-start">
+          <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
+            <ImageIcon className="w-4 h-4 mr-1" /> Gallery
+          </TabsTrigger>
           <TabsTrigger value="ranks" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
             <Award className="w-4 h-4 mr-1" /> Rank System
           </TabsTrigger>
@@ -193,6 +282,58 @@ export default function NftCollection() {
             <Target className="w-4 h-4 mr-1" /> Roadmap
           </TabsTrigger>
         </TabsList>
+
+        {/* GALLERY TAB */}
+        <TabsContent value="gallery" className="mt-4 space-y-6">
+          {/* Military Ranks Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Swords className="w-5 h-5 text-orange-400" />
+              <h3 className="text-white font-semibold text-lg">Military Rank Collection</h3>
+              <Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">Sample Artwork</Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {NFT_ARTWORK.military.map((nft) => (
+                <NftArtCard key={nft.name} nft={nft} />
+              ))}
+            </div>
+          </div>
+
+          {/* First Responders Section */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Heart className="w-5 h-5 text-red-400" />
+              <h3 className="text-white font-semibold text-lg">First Responder Collection</h3>
+              <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">Sample Artwork</Badge>
+            </div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+              {NFT_ARTWORK.firstResponders.map((nft) => (
+                <NftArtCard key={nft.name} nft={nft} />
+              ))}
+            </div>
+          </div>
+
+          {/* Mint Info Card */}
+          <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <Wallet className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-orange-400 font-semibold text-sm">Minting Coming Soon</h4>
+                  <p className="text-zinc-300 text-sm mt-1">
+                    The full 1,000 piece collection is being generated with unique traits, rank insignias, and 
+                    service branch variations. Mint date and pricing will be announced on our X account. 
+                    A portion of all mint revenue goes directly to veteran support through the VIC Foundation.
+                  </p>
+                  <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">
+                    Follow @HERO501c3 for mint updates <ExternalLink className="w-3 h-3" />
+                  </a>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* RANKS TAB */}
         <TabsContent value="ranks" className="mt-4 space-y-4">

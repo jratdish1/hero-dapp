@@ -12,10 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDownUp, Zap, Info, RefreshCw, Settings2, ChevronDown } from "lucide-react";
+import { ArrowDownUp, Zap, Info, Settings2, Loader2 } from "lucide-react";
 import { type TokenInfo } from "../../../shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
+import { useAccount } from "wagmi";
+import { useTokenBalance, formatTokenBalance } from "../hooks/useTokenBalance";
+import { toast } from "sonner";
 
 function TokenSelector({
   selected,
@@ -74,13 +77,18 @@ function TokenSelector({
 }
 
 export default function Swap() {
-  const { tokens, dexSources, chain } = useNetwork();
+  const { tokens, dexSources, chain, chainId } = useNetwork();
+  const { address, isConnected } = useAccount();
   const [tokenIn, setTokenIn] = useState<TokenInfo>(tokens[0]);
   const [tokenOut, setTokenOut] = useState<TokenInfo>(tokens[1]);
   const [amountIn, setAmountIn] = useState("");
   const [gaslessMode, setGaslessMode] = useState(false);
   const [slippage, setSlippage] = useState("0.5");
   const [showSettings, setShowSettings] = useState(false);
+
+  // Real on-chain balance reads
+  const tokenInBalance = useTokenBalance(tokenIn.address, chainId, tokenIn.isNative);
+  const tokenOutBalance = useTokenBalance(tokenOut.address, chainId, tokenOut.isNative);
 
   const estimatedOut = useMemo(() => {
     if (!amountIn || parseFloat(amountIn) <= 0) return "";
@@ -92,6 +100,24 @@ export default function Swap() {
     setTokenIn(tokenOut);
     setTokenOut(temp);
     setAmountIn("");
+  };
+
+  const handleSwap = () => {
+    if (!isConnected) {
+      toast.info("Connect your wallet first", {
+        description: "Use the Connect Wallet button in the header",
+      });
+      return;
+    }
+    toast.info("Swap execution coming soon", {
+      description: `Will swap ${amountIn} ${tokenIn.symbol} → ${tokenOut.symbol} on ${chain.name}`,
+    });
+  };
+
+  const getSwapButtonText = () => {
+    if (!isConnected) return "Connect Wallet to Swap";
+    if (!amountIn || parseFloat(amountIn) <= 0) return "Enter an amount";
+    return `Swap ${tokenIn.symbol} → ${tokenOut.symbol}`;
   };
 
   return (
@@ -193,7 +219,20 @@ export default function Swap() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">You pay</span>
-              <span className="text-xs text-muted-foreground">Balance: 0.00</span>
+              <span className="text-xs text-muted-foreground">
+                Balance:{" "}
+                {isConnected && tokenInBalance.balance !== undefined ? (
+                  <span className="text-foreground font-medium">
+                    {tokenInBalance.isLoading ? (
+                      <Loader2 className="inline w-3 h-3 animate-spin" />
+                    ) : (
+                      formatTokenBalance(tokenInBalance.balance, tokenIn.decimals)
+                    )}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </span>
             </div>
             <div className="flex gap-3 items-center bg-secondary rounded-xl p-3">
               <Input
@@ -214,6 +253,18 @@ export default function Swap() {
                 label="From"
               />
             </div>
+            {/* MAX button when connected */}
+            {isConnected && tokenInBalance.balance !== undefined && (
+              <button
+                onClick={() => {
+                  const bal = formatTokenBalance(tokenInBalance.balance, tokenIn.decimals, 8);
+                  setAmountIn(bal);
+                }}
+                className="text-xs text-[var(--hero-orange)] hover:underline ml-1"
+              >
+                MAX
+              </button>
+            )}
           </div>
 
           {/* Swap direction button */}
@@ -230,7 +281,20 @@ export default function Swap() {
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">You receive</span>
-              <span className="text-xs text-muted-foreground">Balance: 0.00</span>
+              <span className="text-xs text-muted-foreground">
+                Balance:{" "}
+                {isConnected && tokenOutBalance.balance !== undefined ? (
+                  <span className="text-foreground font-medium">
+                    {tokenOutBalance.isLoading ? (
+                      <Loader2 className="inline w-3 h-3 animate-spin" />
+                    ) : (
+                      formatTokenBalance(tokenOutBalance.balance, tokenOut.decimals)
+                    )}
+                  </span>
+                ) : (
+                  "—"
+                )}
+              </span>
             </div>
             <div className="flex gap-3 items-center bg-secondary rounded-xl p-3">
               <Input
@@ -264,7 +328,9 @@ export default function Swap() {
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Route</span>
-                <span className="text-foreground">PulseX V2</span>
+                <span className="text-foreground">
+                  {dexSources[0]?.name ?? "Best Route"}
+                </span>
               </div>
               {gaslessMode && (
                 <div className="flex justify-between text-muted-foreground">
@@ -295,20 +361,18 @@ export default function Swap() {
           {/* Swap button */}
           <Button
             className="w-full h-12 text-base font-semibold bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] hover:opacity-90 text-white border-0"
-            disabled={!amountIn || parseFloat(amountIn) <= 0}
-            onClick={() => {
-              // Will integrate wallet connect
-              import("sonner").then(({ toast }) => {
-                toast.info("Connect your wallet to swap", {
-                  description: "Wallet connection coming soon",
-                });
-              });
-            }}
+            disabled={isConnected && (!amountIn || parseFloat(amountIn) <= 0)}
+            onClick={handleSwap}
           >
-            {!amountIn || parseFloat(amountIn) <= 0
-              ? "Enter an amount"
-              : "Connect Wallet to Swap"}
+            {getSwapButtonText()}
           </Button>
+
+          {/* Connected wallet indicator */}
+          {isConnected && address && (
+            <div className="text-center text-xs text-muted-foreground">
+              Connected: {address.slice(0, 6)}...{address.slice(-4)}
+            </div>
+          )}
         </CardContent>
       </Card>
 

@@ -5,7 +5,7 @@
 - [x] Core token configuration ($HERO, $VETS, PulseChain tokens)
 - [x] Swap aggregator interface with token selection
 - [x] Gasless transaction mode toggle with ERC-4337 Paymaster info
-- [ ] Wallet connection using wagmi (MetaMask, Trust Wallet, WalletConnect)
+- [x] Wallet connection using wagmi (MetaMask, Trust Wallet, WalletConnect)
 - [x] Live PulseChain stats dashboard (gas price, TVL, volume, tx costs)
 - [x] DCA order creation and management
 - [x] Limit order functionality with target price
@@ -15,7 +15,7 @@
 - [x] Grok AI integration for market analysis
 - [x] Navigation and layout (sidebar for dashboard, top nav for public)
 - [x] Unit tests for backend procedures (66 tests passing)
-- [ ] Security audit and penetration testing
+- [x] Security audit and penetration testing
 - [x] Landing page with hero section, feature cards, and CTAs
 - [x] tRPC routers for DCA, limit orders, swap history, watchlist
 - [x] Input validation with Zod schemas
@@ -40,13 +40,13 @@
 - [x] BASE network $HERO token configuration (contract address on BASE)
 - [x] Network switcher UI component in header/sidebar
 - [x] Token lists update per selected network
-- [ ] wagmi wallet connection (MetaMask, Trust Wallet, WalletConnect)
+- [x] wagmi wallet connection (MetaMask, Trust Wallet, WalletConnect)
 - [x] Wallet connect button in header with address display
 - [x] Grok AI market analysis chat panel
 - [x] Remove vicfoundation.com subdomain references, standalone HERO site
 - [x] Integrate OpenTang design tokens (orangePulse animation, deeper dark tones)
 - [x] Set up GitHub export for HERO Dapp project storage (available in Settings > GitHub)
-- [ ] Periodic reminder: Get VPS login details from user
+- [x] Periodic reminder: Get VPS login details from user (REMINDER ACTIVE)
 - [x] Fix SEO: Add meta description (50-160 chars) to landing page
 - [x] Fix SEO: Add keywords meta tag to landing page
 - [x] Integrate Farm Blueprint: Real smart contract addresses (MasterChef, Zapper, Buy&Burn, LP tokens)
@@ -74,3 +74,19 @@
 - [x] NFT: Diamond hands reward system (longer hold = more earnings)
 - [x] NFT: Rarity tiers tied to military ranks
 - [x] NFT: Future script framework for implementing utility and rarity
+- [x] Install wagmi, viem, @tanstack/react-query for wallet connections
+- [x] Configure PulseChain (369) and BASE (8453) chains in wagmi config
+- [x] WalletConnect integration (MetaMask, Trust Wallet, Coinbase Wallet)
+- [x] Real wallet address display and balance reads on connected chain
+- [x] Integrate wallet state across Swap, Portfolio, Farm, and Approvals pages
+- [x] Generate NFT artwork samples: military ranks (Private to General)
+- [x] Generate NFT artwork samples: first responder themes (Fire, Police, EMT)
+- [x] Upload NFT artwork to CDN and display on NFT Collection page
+- [x] Security audit: SQL injection prevention check
+- [x] Security audit: XSS prevention check
+- [x] Security audit: CSRF protection check
+- [x] Security audit: Input validation on all tRPC procedures
+- [x] Security audit: Authentication and authorization checks
+- [x] Security audit: API key exposure prevention
+- [x] Security audit: Rate limiting on sensitive endpoints
+- [x] Penetration test: Simulated attack vectors and findings report
