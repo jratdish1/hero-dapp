@@ -44,9 +44,9 @@ const NAV_ITEMS = [
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
   { path: "/nft", label: "NFT Collection", icon: Gem },
-  { path: "/blog", label: "MVS & Blog", icon: Newspaper },
+  { path: "/blog", label: "Media", icon: Newspaper },
   { path: "/ecosystem", label: "Ecosystem", icon: Globe },
-  { path: "/media", label: "Media Hub", icon: ImageIcon },
+  { path: "/media", label: "Community Hub", icon: ImageIcon },
   { path: "/ai", label: "AI Assistant", icon: Bot },
 ];
 

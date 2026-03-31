@@ -258,7 +258,7 @@ export const appRouter = router({
             },
             {
               role: "user",
-              content: `Generate a blog post from this weekly MVS (Most Valuable Shills) tweet by ${input.tweetAuthor}:\n\n${input.tweetContent}\n\nTweet URL: ${input.tweetUrl}`,
+              content: `Generate a blog article from this media mention / influencer post by ${input.tweetAuthor}:\n\n${input.tweetContent}\n\nSource URL: ${input.tweetUrl}`,
             },
           ],
           response_format: {

@@ -63,43 +63,49 @@ function createLimiter(opts: {
 }
 
 // ─── Helmet: HTTP Security Headers (Cloudflare-compatible) ────────────
+// ─── CSP Directives (DRY helper) ──────────────────────────────────────
+function buildCspDirectives() {
+  const isDev = process.env.NODE_ENV === "development";
+
+  // Base script sources — dev needs 'unsafe-eval' for Vite HMR + React Refresh
+  const scriptSrc = isDev
+    ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+    : ["'self'", "'unsafe-inline'"];
+
+  // Base connect sources — dev needs ws: for Vite HMR websocket
+  const connectSrc = [
+    "'self'",
+    "https://rpc.pulsechain.com", "https://mainnet.base.org",
+    "https://api.dexscreener.com",
+    "wss://relay.walletconnect.com", "wss://relay.walletconnect.org",
+    "https://*.walletconnect.com", "https://*.walletconnect.org",
+    "https://*.reown.com",
+    "https://*.manus.computer", "https://*.manus.space",
+    "https://api.manus.im",
+    ...(isDev ? ["ws:", "wss:"] : []),
+  ];
+
+  return {
+    defaultSrc: ["'self'"],
+    scriptSrc,
+    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+    fontSrc: ["'self'", "https://fonts.gstatic.com"],
+    imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
+    connectSrc,
+    frameSrc: ["'self'", "https://*.walletconnect.com", "https://*.walletconnect.org", "https://app.safe.global"],
+    mediaSrc: ["'self'", "https:", "blob:"],
+    objectSrc: ["'none'"],
+    baseUri: ["'self'"],
+    formAction: ["'self'"],
+    frameAncestors: ["'self'", "https://app.safe.global"],
+    ...(isDev ? {} : { upgradeInsecureRequests: [] }),
+  };
+}
+
 export function setupHelmet(app: Express) {
   app.use(
     helmet({
-      contentSecurityPolicy: {
-        directives: {
-          defaultSrc: ["'self'"],
-          // REMOVED 'unsafe-eval' — only 'unsafe-inline' needed for Vite HMR in dev
-          scriptSrc: ["'self'", "'unsafe-inline'"],
-          styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-          fontSrc: ["'self'", "https://fonts.gstatic.com"],
-          imgSrc: [
-            "'self'", "data:", "blob:", "https:",
-            "https://*.manus.computer", "https://*.manus.space",
-          ],
-          connectSrc: [
-            "'self'",
-            "https://rpc.pulsechain.com", "https://mainnet.base.org",
-            "https://api.dexscreener.com",
-            "wss://relay.walletconnect.com", "wss://relay.walletconnect.org",
-            "https://*.walletconnect.com", "https://*.walletconnect.org",
-            "https://*.reown.com",
-            "https://*.manus.computer", "https://*.manus.space",
-            "https://api.manus.im",
-          ],
-          frameSrc: [
-            "'self'",
-            "https://*.walletconnect.com", "https://*.walletconnect.org",
-            "https://app.safe.global",
-          ],
-          mediaSrc: ["'self'", "https:", "blob:"],
-          objectSrc: ["'none'"],
-          baseUri: ["'self'"],
-          formAction: ["'self'"],
-          frameAncestors: ["'self'", "https://app.safe.global"],
-          upgradeInsecureRequests: [],
-        },
-      },
+      contentSecurityPolicy: { directives: buildCspDirectives() },
       strictTransportSecurity: {
         maxAge: 31536000,
         includeSubDomains: true,

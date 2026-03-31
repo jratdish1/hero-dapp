@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useCallback, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
 import {
   PULSECHAIN_ID,
   BASE_CHAIN_ID,
@@ -11,7 +11,9 @@ import {
   type DexSource,
   type ChainConfig,
 } from "../../../shared/tokens";
+import { useAccount, useSwitchChain } from "wagmi";
 
+// ─── DRY: Single source of truth for network state ─────────────────────
 interface NetworkContextValue {
   chainId: SupportedChainId;
   chain: ChainConfig;
@@ -20,7 +22,8 @@ interface NetworkContextValue {
   supportedChains: ChainConfig[];
   isPulseChain: boolean;
   isBase: boolean;
-  switchChain: (chainId: SupportedChainId) => void;
+  switchNetwork: (chainId: SupportedChainId) => void;
+  isSwitching: boolean;
 }
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
@@ -28,9 +31,34 @@ const NetworkContext = createContext<NetworkContextValue | null>(null);
 export function NetworkProvider({ children }: { children: ReactNode }) {
   const [chainId, setChainId] = useState<SupportedChainId>(PULSECHAIN_ID);
 
-  const switchChain = useCallback((newChainId: SupportedChainId) => {
-    setChainId(newChainId);
-  }, []);
+  // wagmi hooks — bridge UI state with actual wallet chain
+  const { isConnected, chainId: walletChainId } = useAccount();
+  const { switchChain, isPending: isSwitching } = useSwitchChain();
+
+  // Sync UI state when wallet reports a chain change
+  useEffect(() => {
+    if (isConnected && walletChainId) {
+      const supported = [PULSECHAIN_ID, BASE_CHAIN_ID] as number[];
+      if (supported.includes(walletChainId)) {
+        setChainId(walletChainId as SupportedChainId);
+      }
+    }
+  }, [isConnected, walletChainId]);
+
+  // Switch both UI state AND wallet chain (if connected)
+  const switchNetwork = useCallback(
+    (newChainId: SupportedChainId) => {
+      setChainId(newChainId);
+      if (isConnected && switchChain) {
+        try {
+          switchChain({ chainId: newChainId });
+        } catch {
+          // Wallet may reject — UI state already updated for data display
+        }
+      }
+    },
+    [isConnected, switchChain]
+  );
 
   const value: NetworkContextValue = {
     chainId,
@@ -40,7 +68,8 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     supportedChains: SUPPORTED_CHAINS,
     isPulseChain: chainId === PULSECHAIN_ID,
     isBase: chainId === BASE_CHAIN_ID,
-    switchChain,
+    switchNetwork,
+    isSwitching,
   };
 
   return (

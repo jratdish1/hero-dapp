@@ -1,0 +1,13 @@
+The "Manus logo" the user sees is the "Preview mode" banner at the bottom of the page:
+"Preview mode - This page is not live and cannot be shared directly. Please publish to get a public link."
+
+This is injected by the Manus platform hosting, NOT by the app code.
+It will disappear once the site is published via the Publish button.
+
+The ManusDialog.tsx component exists but is NOT imported or used anywhere.
+No other Manus branding exists in the app code.
+
+To hide it: 
+1. The user needs to publish the site (it's a platform-level preview banner)
+2. We can also set VITE_APP_LOGO and VITE_APP_TITLE to override any platform defaults
+3. We can add CSS to hide the preview banner as a workaround

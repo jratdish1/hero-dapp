@@ -25,7 +25,6 @@ import {
   useBalance,
   useConnect,
   useDisconnect,
-  useSwitchChain,
 } from "wagmi";
 import { hasWalletConnect } from "../lib/wagmi";
 
@@ -91,7 +90,6 @@ export function WalletButton() {
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
-  const { switchChain } = useSwitchChain();
 
   // Deduplicate and sort connectors
   const sortedConnectors = useMemo(() => {
@@ -227,7 +225,7 @@ export function WalletButton() {
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
         <Button
-          className="bg-gradient-to-r from-hero-orange to-hero-green text-black font-semibold hover:opacity-90 transition-opacity"
+          className="bg-hero-orange text-white font-bold shadow-lg shadow-hero-orange/25 hover:bg-hero-orange/90 hover:shadow-hero-orange/40 transition-all border-0"
           size="sm"
         >
           <Wallet className="mr-2 h-4 w-4" />

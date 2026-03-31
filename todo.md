@@ -177,3 +177,9 @@
 - [x] Security: Dependency vulnerability scan and fix insecure packages
 - [x] Security: Comprehensive security test suite
 - [x] Security: Full security audit report
+- [x] Bug fix: White screen — diagnose and fix (CSP blocking Vite dev scripts, made env-aware)
+- [x] Bug fix: Connect Wallet button not visible until hover — solid bg-hero-orange with white text
+- [x] Bug fix: Network switcher not actually switching networks — bridged to wagmi useSwitchChain
+- [x] Feature: Rename MVS to "Media" — influencer mentions, guest posts, press kit, Forbes-style targets
+- [x] Feature: Hide Manus logo permanently (CSS hide + platform preview banner disappears on publish)
+- [x] Refactor: Apply DRY/KISS principles (reusable TokenBadge, DateLabel, NetworkContext bridge, toggleChain helper)

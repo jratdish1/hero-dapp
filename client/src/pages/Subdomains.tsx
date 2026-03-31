@@ -87,9 +87,9 @@ const HERO_PRODUCTS: ProductConfig[] = [
   },
   {
     id: "blog",
-    title: "MVS Blog",
+    title: "Media",
     description:
-      "Weekly Most Valuable Shills coverage with AI-generated blog posts highlighting $HERO and $VETS ecosystem updates.",
+      "Influencer mentions, guest posts, and press coverage of the HERO ecosystem and VIC Foundation mission.",
     icon: Newspaper,
     status: "live",
     url: "/blog",

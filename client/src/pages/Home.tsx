@@ -77,8 +77,8 @@ const FEATURES = [
   },
   {
     icon: Newspaper,
-    title: "MVS & Blog",
-    description: "Weekly Most Valuable Shills and AI-generated blog posts highlighting $HERO and $VETS.",
+    title: "Media",
+    description: "Influencer mentions, guest posts, and press coverage of the HERO ecosystem.",
     href: "/blog",
     color: "var(--hero-orange)",
   },

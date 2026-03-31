@@ -213,6 +213,13 @@
 ::-webkit-scrollbar-thumb { background: oklch(0.35 0.015 260); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: oklch(0.45 0.015 260); }
 
+/* Hide platform preview mode banner */
+[data-manus-banner],
+[class*="preview-mode"],
+iframe[src*="manus"] {
+  display: none !important;
+}
+
 /* OpenTang-inspired animations */
 @keyframes orangePulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }

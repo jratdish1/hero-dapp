@@ -219,7 +219,7 @@ export async function updateBlogPost(id: number, data: Partial<InsertBlogPost>) 
   await db.update(blogPosts).set(data).where(eq(blogPosts.id, id));
 }
 
-// --- MVS Content ---
+// --- Media Mentions (formerly MVS Content) ---
 export async function saveMvsContent(entry: InsertMvsContent) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
