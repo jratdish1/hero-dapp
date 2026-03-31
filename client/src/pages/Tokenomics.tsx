@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useBuyAndBurn, formatPrice, formatCompact } from "@/hooks/usePrices";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -70,6 +71,7 @@ function RevenueCard({ title, description, icon: Icon, badge, link, linkText }: 
 export default function Tokenomics() {
   const { chain } = useNetwork();
   const [activeTab, setActiveTab] = useState("flywheel");
+  const { data: burnData, isLoading: burnLoading } = useBuyAndBurn();
 
   return (
     <div className="space-y-6">
@@ -106,22 +108,44 @@ export default function Tokenomics() {
         </div>
       </div>
 
-      {/* ── Quick Stats ───────────────────────────────────────────────── */}
+      {/* ── Quick Stats (Live from on-chain) ────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total Burned", value: "1,208,733 HERO", icon: Flame, color: "text-red-400" },
-          { label: "Buy & Burn", value: "$65.27 PLS", icon: Zap, color: "text-orange-400" },
-          { label: "LP Donated", value: "$2,567.46", icon: CircleDollarSign, color: "text-green-400" },
-          { label: "Active Pools", value: "2 PLS + BASE", icon: Coins, color: "text-blue-400" },
-        ].map((stat) => (
-          <Card key={stat.label} className="bg-card/60 border-border">
-            <CardContent className="p-4 text-center">
-              <stat.icon className={`w-5 h-5 mx-auto mb-2 ${stat.color}`} />
-              <p className="text-foreground font-semibold text-sm">{stat.value}</p>
-              <p className="text-muted-foreground/70 text-xs">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+        <Card className="bg-card/60 border-border">
+          <CardContent className="p-4 text-center">
+            <Flame className="w-5 h-5 mx-auto mb-2 text-red-400" />
+            <p className="text-foreground font-semibold text-sm">
+              {burnLoading ? <span className="animate-pulse">Loading...</span> : `${burnData?.totalBurned.toLocaleString("en-US", { maximumFractionDigits: 0 })} HERO`}
+            </p>
+            <p className="text-muted-foreground/70 text-xs">Total Burned</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 border-border">
+          <CardContent className="p-4 text-center">
+            <Zap className="w-5 h-5 mx-auto mb-2 text-orange-400" />
+            <p className="text-foreground font-semibold text-sm">
+              {burnLoading ? <span className="animate-pulse">Loading...</span> : `${burnData?.burnPercentage}% Supply`}
+            </p>
+            <p className="text-muted-foreground/70 text-xs">Burn Rate</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 border-border">
+          <CardContent className="p-4 text-center">
+            <CircleDollarSign className="w-5 h-5 mx-auto mb-2 text-green-400" />
+            <p className="text-foreground font-semibold text-sm">
+              {burnLoading ? <span className="animate-pulse">Loading...</span> : formatCompact(burnData?.totalBurnedUsd || 0)}
+            </p>
+            <p className="text-muted-foreground/70 text-xs">Burned Value (USD)</p>
+          </CardContent>
+        </Card>
+        <Card className="bg-card/60 border-border">
+          <CardContent className="p-4 text-center">
+            <Coins className="w-5 h-5 mx-auto mb-2 text-blue-400" />
+            <p className="text-foreground font-semibold text-sm">
+              {burnLoading ? <span className="animate-pulse">Loading...</span> : `${(burnData?.circulatingSupply || 100000000).toLocaleString("en-US", { maximumFractionDigits: 0 })}`}
+            </p>
+            <p className="text-muted-foreground/70 text-xs">Circulating Supply</p>
+          </CardContent>
+        </Card>
       </div>
 
       {/* ── Main Tabs ─────────────────────────────────────────────────── */}
@@ -433,15 +457,33 @@ export default function Tokenomics() {
                     </div>
                     <div className="flex justify-between text-sm">
                       <span className="text-muted-foreground">Total Burned</span>
-                      <span className="text-red-400 font-semibold">1,208,733.61 HERO</span>
+                      <span className="text-red-400 font-semibold">
+                        {burnLoading ? "Loading..." : `${burnData?.totalBurned.toLocaleString("en-US", { maximumFractionDigits: 2 })} HERO`}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Balance</span>
-                      <span className="text-green-400">$65.27 (8.7M PLS)</span>
+                      <span className="text-muted-foreground">Burn %</span>
+                      <span className="text-orange-400 font-semibold">
+                        {burnLoading ? "Loading..." : `${burnData?.burnPercentage}% of supply`}
+                      </span>
                     </div>
                     <div className="flex justify-between text-sm">
-                      <span className="text-muted-foreground">Last Burn</span>
-                      <span className="text-muted-foreground">Mar 24, 2026</span>
+                      <span className="text-muted-foreground">Burned USD Value</span>
+                      <span className="text-green-400">
+                        {burnLoading ? "Loading..." : formatCompact(burnData?.totalBurnedUsd || 0)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">HERO Price</span>
+                      <span className="text-foreground">
+                        {burnLoading ? "Loading..." : formatPrice(burnData?.heroPrice)}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Circulating Supply</span>
+                      <span className="text-muted-foreground">
+                        {burnLoading ? "Loading..." : `${burnData?.circulatingSupply.toLocaleString("en-US", { maximumFractionDigits: 0 })} HERO`}
+                      </span>
                     </div>
                   </div>
                   <a href={`https://scan.pulsechain.com/address/${FARM_CONTRACTS_PLS.buyAndBurn}`}

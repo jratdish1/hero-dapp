@@ -356,6 +356,208 @@ export async function getMarketOverview(chain: "pulsechain" | "base" = "pulsecha
 /**
  * Search for any token pair on DexScreener.
  */
+// ─── LP Pair TVL / APR ─────────────────────────────────────────────────────
+
+export interface FarmPoolData {
+  poolId: number;
+  name: string;
+  lpAddress: string;
+  tvlUsd: number;
+  volume24h: number;
+  priceChange24h: number;
+  baseToken: { symbol: string; name: string; address: string };
+  quoteToken: { symbol: string; name: string; address: string };
+  estimatedApr: number; // Based on 24h fees vs TVL
+  txns24h: { buys: number; sells: number };
+  dexId: string;
+  url: string;
+}
+
+const LP_PAIR_ADDRESSES = {
+  pulsechain: [
+    { poolId: 67, name: "HERO/PLS", address: "0x34948e125033a697332202964de96af85becd78f" },
+    { poolId: 9, name: "HERO/TruFarm", address: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5" },
+  ],
+  base: [
+    { poolId: 0, name: "HERO/ETH", address: "0x3bb159de8604ab7e0148edc24f2a568c430476cf" },
+  ],
+} as const;
+
+/**
+ * Fetch live LP pair data for farm pools with TVL and estimated APR.
+ * APR is estimated from 24h trading fees (0.3% fee tier) annualized against TVL.
+ */
+export async function fetchFarmPoolData(chain: "pulsechain" | "base" = "pulsechain"): Promise<FarmPoolData[]> {
+  const cacheKey = `farmPools_${chain}`;
+  const cached = getCached<FarmPoolData[]>(cacheKey);
+  if (cached) return cached;
+
+  const pools = LP_PAIR_ADDRESSES[chain];
+  const addresses = pools.map((p) => p.address).join(",");
+  const chainId = chain === "pulsechain" ? "pulsechain" : "base";
+
+  try {
+    const data = await fetchDexScreener(
+      `/latest/dex/pairs/${chainId}/${addresses}`
+    );
+    const pairs: DexScreenerPair[] = data.pairs || [];
+
+    const result: FarmPoolData[] = pools.map((pool) => {
+      const pair = pairs.find(
+        (p) => p.pairAddress.toLowerCase() === pool.address.toLowerCase()
+      );
+
+      if (!pair) {
+        return {
+          poolId: pool.poolId,
+          name: pool.name,
+          lpAddress: pool.address,
+          tvlUsd: 0,
+          volume24h: 0,
+          priceChange24h: 0,
+          baseToken: { symbol: "?", name: "Unknown", address: "" },
+          quoteToken: { symbol: "?", name: "Unknown", address: "" },
+          estimatedApr: 0,
+          txns24h: { buys: 0, sells: 0 },
+          dexId: "unknown",
+          url: "",
+        };
+      }
+
+      const tvl = pair.liquidity?.usd || 0;
+      const vol24h = pair.volume?.h24 || 0;
+      // Estimate APR from trading fees: 0.3% fee on volume, annualized
+      const dailyFees = vol24h * 0.003;
+      const estimatedApr = tvl > 0 ? (dailyFees * 365 / tvl) * 100 : 0;
+
+      return {
+        poolId: pool.poolId,
+        name: pool.name,
+        lpAddress: pool.address,
+        tvlUsd: tvl,
+        volume24h: vol24h,
+        priceChange24h: pair.priceChange?.h24 || 0,
+        baseToken: pair.baseToken,
+        quoteToken: pair.quoteToken,
+        estimatedApr: Math.round(estimatedApr * 100) / 100,
+        txns24h: pair.txns?.h24 || { buys: 0, sells: 0 },
+        dexId: pair.dexId,
+        url: pair.url || "",
+      };
+    });
+
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error(`[PriceFeed] Error fetching farm pool data for ${chain}:`, err);
+    return [];
+  }
+}
+
+// ─── Buy & Burn Tracker ────────────────────────────────────────────────────
+
+const PULSECHAIN_RPC = "https://rpc.pulsechain.com";
+const HERO_ADDRESS = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
+const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
+const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
+const HERO_TOTAL_SUPPLY = 100_000_000; // 100M HERO
+
+export interface BuyAndBurnData {
+  totalBurned: number;          // HERO tokens burned
+  totalBurnedUsd: number;       // USD value of burned tokens
+  burnPercentage: number;       // % of total supply burned
+  totalSupply: number;          // Original total supply
+  circulatingSupply: number;    // Total - burned
+  heroPrice: string;            // Current HERO price
+  lastUpdated: number;
+}
+
+async function rpcCall(to: string, data: string): Promise<string> {
+  const res = await fetch(PULSECHAIN_RPC, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      method: "eth_call",
+      params: [{ to, data }, "latest"],
+      id: 1,
+    }),
+    signal: AbortSignal.timeout(10000),
+  });
+  const json = await res.json();
+  if (json.error) throw new Error(json.error.message);
+  return json.result;
+}
+
+/**
+ * Read HERO token balance at a given address via PulseChain RPC.
+ * Uses balanceOf(address) = 0x70a08231
+ */
+async function getHeroBalance(address: string): Promise<number> {
+  const paddedAddr = address.replace("0x", "").toLowerCase().padStart(64, "0");
+  const result = await rpcCall(HERO_ADDRESS, `0x70a08231${paddedAddr}`);
+  return parseInt(result, 16) / 1e18;
+}
+
+/**
+ * Fetch Buy & Burn data: total burned, burn rate, circulating supply.
+ * Reads from the dead address balance on-chain + DexScreener for price.
+ */
+export async function fetchBuyAndBurnData(): Promise<BuyAndBurnData> {
+  const cacheKey = "buyAndBurn";
+  const cached = getCached<BuyAndBurnData>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // Fetch burned tokens and current price in parallel
+    const [deadBalance, zeroBalance, tokenData] = await Promise.all([
+      getHeroBalance(DEAD_ADDRESS),
+      getHeroBalance(ZERO_ADDRESS),
+      fetchTokenPrices(),
+    ]);
+
+    const totalBurned = deadBalance + zeroBalance;
+    const burnPercentage = (totalBurned / HERO_TOTAL_SUPPLY) * 100;
+    const circulatingSupply = HERO_TOTAL_SUPPLY - totalBurned;
+
+    // Get HERO price from the best pair
+    const heroPrimary = tokenData.heroPairs.length > 0
+      ? tokenData.heroPairs.reduce((best, p) =>
+          (p.liquidity?.usd || 0) > (best.liquidity?.usd || 0) ? p : best
+        )
+      : null;
+    const heroPrice = heroPrimary?.priceUsd || "0";
+    const totalBurnedUsd = totalBurned * parseFloat(heroPrice);
+
+    const data: BuyAndBurnData = {
+      totalBurned,
+      totalBurnedUsd,
+      burnPercentage: Math.round(burnPercentage * 100) / 100,
+      totalSupply: HERO_TOTAL_SUPPLY,
+      circulatingSupply,
+      heroPrice,
+      lastUpdated: Date.now(),
+    };
+
+    setCache(cacheKey, data);
+    return data;
+  } catch (err) {
+    console.error("[PriceFeed] Error fetching Buy & Burn data:", err);
+    return {
+      totalBurned: 0,
+      totalBurnedUsd: 0,
+      burnPercentage: 0,
+      totalSupply: HERO_TOTAL_SUPPLY,
+      circulatingSupply: HERO_TOTAL_SUPPLY,
+      heroPrice: "0",
+      lastUpdated: Date.now(),
+    };
+  }
+}
+
+/**
+ * Search for any token pair on DexScreener.
+ */
 export async function searchPairs(query: string): Promise<LpPairData[]> {
   const cacheKey = `search_${query}`;
   const cached = getCached<LpPairData[]>(cacheKey);

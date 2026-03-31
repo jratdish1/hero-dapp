@@ -30,6 +30,25 @@ export function useBasePairs() {
   });
 }
 
+export function useFarmPools(chain?: "pulsechain" | "base") {
+  return trpc.prices.farmPools.useQuery(
+    chain ? { chain } : undefined,
+    {
+      refetchInterval: 30_000,
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+    }
+  );
+}
+
+export function useBuyAndBurn() {
+  return trpc.prices.buyAndBurn.useQuery(undefined, {
+    refetchInterval: 30_000,
+    staleTime: 15_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
 export function usePairSearch(query: string) {
   return trpc.prices.search.useQuery(
     { query },

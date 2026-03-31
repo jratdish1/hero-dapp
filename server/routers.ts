@@ -31,7 +31,7 @@ import {
 } from "./db";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
-import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs } from "./priceFeed";
+import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData } from "./priceFeed";
 
 export const appRouter = router({
   system: systemRouter,
@@ -437,6 +437,14 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return searchPairs(input.query);
       }),
+    farmPools: publicProcedure
+      .input(z.object({ chain: z.enum(["pulsechain", "base"]).optional() }).optional())
+      .query(async ({ input }) => {
+        return fetchFarmPoolData(input?.chain || "pulsechain");
+      }),
+    buyAndBurn: publicProcedure.query(async () => {
+      return fetchBuyAndBurnData();
+    }),
   }),
 
   ai: router({

@@ -33,6 +33,7 @@ import {
   HERO_TOKEN_BASE,
 } from "@shared/tokens";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { useFarmPools, formatCompact, formatChange } from "@/hooks/usePrices";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 interface FarmPool {
@@ -151,7 +152,8 @@ function ServiceBranchRibbon() {
 }
 
 // ─── HERO Staking Pool Card ─────────────────────────────────────────────
-function HeroPoolCard({ pool }: { pool: typeof FARM_POOLS_PLS[number] }) {
+function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number]; liveData?: { tvlUsd: number; volume24h: number; estimatedApr: number; priceChange24h: number } }) {
+  const change = formatChange(liveData?.priceChange24h);
   return (
     <Card className="border-[#e8b84b]/30 bg-gradient-to-br from-[#161825] to-[#0d0e14] hover:border-[#e8b84b]/50 transition-all group">
       <CardContent className="p-5">
@@ -169,6 +171,38 @@ function HeroPoolCard({ pool }: { pool: typeof FARM_POOLS_PLS[number] }) {
             Active
           </Badge>
         </div>
+
+        {/* Live TVL / APR / Volume */}
+        {liveData && liveData.tvlUsd > 0 ? (
+          <div className="grid grid-cols-3 gap-2 mb-3 p-2.5 rounded-lg bg-secondary/30 border border-border/20">
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">TVL</p>
+              <p className="font-bold text-sm text-foreground">{formatCompact(liveData.tvlUsd)}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Fee APR</p>
+              <p className="font-bold text-sm text-[var(--hero-green)]">{liveData.estimatedApr.toFixed(1)}%</p>
+            </div>
+            <div className="text-center">
+              <p className="text-[10px] text-muted-foreground uppercase tracking-wider">24h Vol</p>
+              <p className="font-bold text-sm text-foreground">{formatCompact(liveData.volume24h)}</p>
+            </div>
+          </div>
+        ) : (
+          <div className="mb-3 p-2.5 rounded-lg bg-secondary/20 border border-border/10 text-center">
+            <p className="text-xs text-muted-foreground animate-pulse">Loading live data...</p>
+          </div>
+        )}
+
+        {/* 24h Price Change */}
+        {liveData && (
+          <div className="flex items-center justify-between mb-3 text-sm">
+            <span className="text-muted-foreground">24h Change</span>
+            <span className={`font-semibold ${change.positive ? 'text-[var(--hero-green)]' : 'text-red-400'}`}>
+              {change.text}
+            </span>
+          </div>
+        )}
 
         <div className="space-y-2 text-sm">
           <div className="flex justify-between">
@@ -333,6 +367,16 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
 export default function Farm() {
   const [activeTab, setActiveTab] = useState("hero-farm");
   const { chainId } = useNetwork();
+  const { data: farmPools } = useFarmPools("pulsechain");
+  const { data: basePools } = useFarmPools("base");
+
+  // Map LP pair addresses to live data for quick lookup
+  const livePoolMap = new Map<number, { tvlUsd: number; volume24h: number; estimatedApr: number; priceChange24h: number }>();
+  if (farmPools) {
+    for (const fp of farmPools) {
+      livePoolMap.set(fp.poolId, { tvlUsd: fp.tvlUsd, volume24h: fp.volume24h, estimatedApr: fp.estimatedApr, priceChange24h: fp.priceChange24h });
+    }
+  }
 
   const allHeroVetsPools = PARTNER_FARMS.flatMap((farm) =>
     farm.pools
@@ -528,7 +572,7 @@ export default function Farm() {
 
           <div className="grid gap-4 sm:grid-cols-2">
             {FARM_POOLS_PLS.map((pool) => (
-              <HeroPoolCard key={pool.id} pool={pool} />
+              <HeroPoolCard key={pool.id} pool={pool} liveData={livePoolMap.get(pool.id)} />
             ))}
           </div>
 

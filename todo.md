@@ -121,10 +121,16 @@
 - [x] Update shared/tokens.ts with all correct contract addresses from blueprint (already correct)
 - [x] Build server-side price feed service (DexScreener API + on-chain reads)
 - [x] Wire real-time HERO, VETS, PLS, ETH prices across all pages
-- [ ] Wire real-time LP pair data (reserves, TVL, APR) for farm pools
-- [ ] Wire real-time Buy & Burn data (total burned, last burn, burn rate)
+- [x] Wire real-time LP pair data (reserves, TVL, APR) for farm pools
+- [x] Wire real-time Buy & Burn data (total burned, last burn, burn rate)
 - [x] Wire real-time market cap and liquidity data to Dashboard
 - [x] Add scrolling price ticker to AppLayout header (HERO, VETS, PLS, ETH)
 - [x] Finish assembling explainer video (ffmpeg merge clips + narration + upload)
 - [x] Update BASE HERO contract address to 0x00fa69ed03d3337085a6a87b691e8a02d04eb5f8 (already correct)
 - [x] Update BASE HERO pair address to 0x3bb159de8604ab7e0148edc24f2a568c430476cf
+- [x] Wire live LP pair TVL/APR data into Farm page (reserves, TVL, estimated APR)
+- [x] Add tRPC procedure for LP pair data from DexScreener
+- [x] Farm page: display real-time TVL, volume, and APR for each pool
+- [x] On-chain Buy & Burn tracker: read contract for total burned, last burn, burn rate
+- [x] Add tRPC procedure for Buy & Burn data
+- [x] Tokenomics page: display live Buy & Burn stats (total burned, last burn timestamp, deflationary rate)
