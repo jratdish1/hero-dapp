@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { ArrowLeft, FileText, AlertCircle } from "lucide-react";
+import { ArrowLeft, FileText } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 export default function CreateProposal() {
   const { user } = useAuth();
@@ -68,13 +69,13 @@ export default function CreateProposal() {
         </CardHeader>
         <CardContent>
           {!isConnected ? (
-            <div className="text-center py-8">
-              <AlertCircle className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
-              <p className="text-muted-foreground">Connect your wallet to create a proposal.</p>
-            </div>
+            <ConnectWalletPrompt
+              message="Connect your wallet to create a proposal."
+              subMessage="Your wallet address is used to sign and submit governance proposals on-chain."
+              icon="shield"
+            />
           ) : !user ? (
             <div className="text-center py-8">
-              <AlertCircle className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
               <p className="text-muted-foreground">Sign in to create a proposal.</p>
             </div>
           ) : (

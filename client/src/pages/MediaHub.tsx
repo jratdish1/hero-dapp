@@ -33,8 +33,8 @@ import {
   Hexagon,
   X,
   Loader2,
-  Wallet,
 } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 // Simple toast replacement
 const useToast = () => ({
   toast: ({ title, description, variant }: { title: string; description?: string; variant?: string }) => {
@@ -345,28 +345,20 @@ export default function MediaHub() {
       <Dialog open={showWalletPrompt} onOpenChange={setShowWalletPrompt}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Wallet className="w-5 h-5 text-orange-500" />
-              Connect Your Wallet
-            </DialogTitle>
+            <DialogTitle>Connect Wallet to Continue</DialogTitle>
             <DialogDescription>
-              You need to connect your wallet to upload content or share NFTs.
-              This verifies your identity and links your posts to your wallet address.
+              Connect your wallet to upload content or share NFTs. This verifies your identity and links posts to your address.
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-3 mt-4">
-            <Button variant="outline" onClick={() => setShowWalletPrompt(false)}>
+          <ConnectWalletPrompt
+            message="Wallet required to upload or share NFTs."
+            subMessage="Your wallet address verifies your identity and links your posts on-chain."
+            icon="wallet"
+            variant="card"
+          />
+          <div className="flex justify-end mt-2">
+            <Button variant="ghost" size="sm" onClick={() => setShowWalletPrompt(false)}>
               Cancel
-            </Button>
-            <Button
-              className="bg-orange-500 hover:bg-orange-600 text-white"
-              onClick={() => {
-                setShowWalletPrompt(false);
-                toast({ title: "Connect your wallet", description: "Use the wallet button in the header to connect MetaMask, Trust Wallet, or WalletConnect." });
-              }}
-            >
-              <Wallet className="w-4 h-4 mr-2" />
-              Got It
             </Button>
           </div>
         </DialogContent>

@@ -34,6 +34,8 @@ import {
 } from "@shared/tokens";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useFarmPools, formatCompact, formatChange } from "@/hooks/usePrices";
+import { useAccount } from "wagmi";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 // ─── Types ──────────────────────────────────────────────────────────────
 interface FarmPool {
@@ -367,6 +369,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
 export default function Farm() {
   const [activeTab, setActiveTab] = useState("hero-farm");
   const { chainId } = useNetwork();
+  const { isConnected } = useAccount();
   const { data: farmPools } = useFarmPools("pulsechain");
   const { data: basePools } = useFarmPools("base");
 
@@ -569,6 +572,16 @@ export default function Farm() {
               Native HERO staking pools on PulseChain via MasterChef V2
             </p>
           </div>
+
+          {/* Wallet connect prompt for staking actions */}
+          {!isConnected && (
+            <ConnectWalletPrompt
+              message="Connect your wallet to stake LP tokens and earn rewards."
+              subMessage="Stake HERO/PLS or HERO/USDC LP tokens on PulseChain to earn HERO rewards and support veterans."
+              icon="wallet"
+              variant="inline"
+            />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             {FARM_POOLS_PLS.map((pool) => (

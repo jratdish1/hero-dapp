@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Vote, Shield, Award, AlertCircle } from "lucide-react";
+import { Users, UserPlus, Vote, Award } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 export default function Delegates() {
   const { user } = useAuth();
@@ -181,8 +182,15 @@ export default function Delegates() {
               </p>
               {isConnected && user ? (
                 <Button onClick={() => setShowRegister(true)}>Become a Delegate</Button>
+              ) : !isConnected ? (
+                <ConnectWalletPrompt
+                  message="Connect your wallet to become a delegate."
+                  subMessage="Delegates represent the HERO community in governance votes."
+                  icon="shield"
+                  variant="inline"
+                />
               ) : (
-                <p className="text-sm text-muted-foreground">Connect your wallet and sign in to register.</p>
+                <p className="text-sm text-muted-foreground">Sign in to register as a delegate.</p>
               )}
             </CardContent>
           </Card>

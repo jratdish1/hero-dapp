@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, AlertCircle, Users } from "lucide-react";
+import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -230,9 +231,12 @@ export default function ProposalDetail() {
               </CardHeader>
               <CardContent className="space-y-3">
                 {!isConnected ? (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    Connect your wallet to vote
-                  </p>
+                  <ConnectWalletPrompt
+                    message="Connect your wallet to cast your vote."
+                    subMessage="1 HERO = 1 vote. Voting power is calculated from your wallet balance."
+                    icon="shield"
+                    variant="card"
+                  />
                 ) : !user ? (
                   <p className="text-sm text-muted-foreground text-center py-2">
                     Sign in to vote

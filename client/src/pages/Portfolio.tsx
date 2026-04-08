@@ -1,10 +1,10 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Wallet,
   ExternalLink,
   Loader2,
 } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount, useBalance } from "wagmi";
 import { useTokenBalance, formatTokenBalance } from "../hooks/useTokenBalance";
@@ -72,23 +72,11 @@ export default function Portfolio() {
         <p className="text-muted-foreground mb-8">
           Track your token holdings and transaction history on {chain.name}
         </p>
-        <Card className="bg-card border-border">
-          <CardContent className="p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-[var(--hero-orange)]/10 flex items-center justify-center mx-auto mb-4">
-              <Wallet className="w-8 h-8 text-[var(--hero-orange)]" />
-            </div>
-            <h2 className="text-xl font-bold text-foreground mb-2">
-              Connect Your Wallet
-            </h2>
-            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Connect your wallet using the button in the header to view your
-              portfolio, token balances, and transaction history.
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Supports MetaMask, Trust Wallet, Coinbase Wallet, and WalletConnect
-            </p>
-          </CardContent>
-        </Card>
+        <ConnectWalletPrompt
+          message="Connect your wallet to view your portfolio."
+          subMessage="See your token balances, holdings, and transaction history across PulseChain and Base."
+          icon="wallet"
+        />
       </div>
     );
   }

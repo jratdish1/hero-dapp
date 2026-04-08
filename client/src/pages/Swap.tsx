@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownUp, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown } from "lucide-react";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { type TokenInfo } from "../../../shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
@@ -399,6 +400,16 @@ export default function Swap() {
           >
             {getSwapButtonText()}
           </Button>
+
+          {/* Inline wallet connect prompt when not connected */}
+          {!isConnected && (
+            <ConnectWalletPrompt
+              message="Connect your wallet to execute swaps."
+              subMessage="Supports MetaMask, Coinbase, Rabby, and WalletConnect (Trust Wallet, Ledger, Rainbow)."
+              icon="wallet"
+              variant="inline"
+            />
+          )}
 
           {/* Connected wallet indicator */}
           {isConnected && address && (
