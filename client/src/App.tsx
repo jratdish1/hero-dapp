@@ -21,6 +21,7 @@ import Ecosystem from "./pages/Subdomains";
 import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
 import { DaoDashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates } from "./pages/dao";
+import Explainer from "./pages/Explainer";
 
 function Router() {
   return (
@@ -45,6 +46,7 @@ function Router() {
       <Route path="/dao/proposals/:id" component={() => <AppLayout><ProposalDetail /></AppLayout>} />
       <Route path="/dao/treasury" component={() => <AppLayout><Treasury /></AppLayout>} />
       <Route path="/dao/delegates" component={() => <AppLayout><Delegates /></AppLayout>} />
+      <Route path="/explainer" component={() => <AppLayout><Explainer /></AppLayout>} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

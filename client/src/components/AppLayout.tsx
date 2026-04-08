@@ -32,6 +32,7 @@ import {
   FileText,
   Users2,
   Wallet2,
+  PlayCircle,
 } from "lucide-react";
 
 // CDN asset URLs
@@ -52,6 +53,7 @@ const NAV_ITEMS = [
   { path: "/nft", label: "NFT Collection", icon: Gem },
   { path: "/media", label: "Media", icon: Newspaper },
   { path: "/community", label: "Community Hub", icon: ImageIcon },
+  { path: "/explainer", label: "Explainer", icon: PlayCircle },
   { path: "/ai", label: "AI Assistant", icon: Bot },
 ];
 
