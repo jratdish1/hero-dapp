@@ -34,13 +34,19 @@ import {
   Wallet2,
 } from "lucide-react";
 
+// CDN asset URLs
+const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg";
+const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
+const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif";
+const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
+
 const NAV_ITEMS = [
   { path: "/swap", label: "Swap", icon: ArrowLeftRight },
-  { path: "/farm", label: "Farm", icon: Sprout },
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/portfolio", label: "Portfolio", icon: Wallet },
   { path: "/dca", label: "DCA Orders", icon: Clock },
   { path: "/limits", label: "Limit Orders", icon: Target },
+  { path: "/farm", label: "Farm", icon: Sprout },
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
   { path: "/nft", label: "NFT Collection", icon: Gem },
@@ -81,9 +87,11 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Logo */}
         <div className="p-4 border-b border-sidebar-border">
           <Link href="/" className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shadow-lg shadow-[var(--hero-orange)]/20">
-              <span className="text-foreground font-bold text-lg">H</span>
-            </div>
+            <img
+              src={HERO_LOGO_URL}
+              alt="HERO Logo"
+              className="w-12 h-12 rounded-full object-cover shadow-lg shadow-[var(--hero-orange)]/30 border-2 border-[var(--hero-orange)]/40"
+            />
             <div>
               <h1 className="font-bold text-lg text-sidebar-foreground">HERO</h1>
               <p className="text-xs text-muted-foreground">{chain.name} DEX</p>
@@ -186,6 +194,20 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
       {/* Main content */}
       <div className="flex-1 flex flex-col min-w-0">
+        {/* HERO UN Banner Header - shown across all app tabs */}
+        <div className="w-full relative overflow-hidden" style={{maxHeight: '120px'}}>
+          <img
+            src={HERO_BANNER_URL}
+            alt="HERO United Nations Banner"
+            className="w-full object-cover object-center"
+            style={{height: '120px'}}
+          />
+          {/* KYC Badge top-right */}
+          <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
+            <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+            <span className="text-xs text-green-400 font-bold">KYC</span>
+          </div>
+        </div>
         {/* Price Ticker */}
         <PriceTicker />
         {/* Top bar */}
@@ -212,6 +234,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex-1 p-4 lg:p-6">
           {children}
         </main>
+
+        {/* Blackbeard Footer Banner - shown across all app tabs */}
+        <footer className="w-full mt-auto">
+          {/* KYC Badge row above footer */}
+          <div className="flex items-center justify-center gap-3 bg-black/80 py-2 border-t border-[var(--hero-orange)]/20">
+            <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+            <span className="text-xs text-green-400 font-semibold tracking-wider">KYC CERTIFIED — VETS IN CRYPTO PROTOCOL</span>
+            <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+          </div>
+          {/* Blackbeard banner */}
+          <div className="w-full relative overflow-hidden" style={{maxHeight: '100px'}}>
+            <img
+              src={BLACKBEARD_URL}
+              alt="Black Bear Footer Banner"
+              className="w-full object-cover object-top"
+              style={{height: '100px', filter: 'brightness(0.85)'}}
+            />
+            <div className="absolute inset-0 flex items-center justify-center">
+              <span className="text-white/80 text-xs font-bold tracking-widest uppercase">HERO Dapp — Built for Veterans, by Veterans</span>
+            </div>
+          </div>
+        </footer>
       </div>
     </div>
   );

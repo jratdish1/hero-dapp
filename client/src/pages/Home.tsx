@@ -1,5 +1,11 @@
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
+
+// CDN Asset URLs
+const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg";
+const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
+const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif";
+const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
 import { Card, CardContent } from "@/components/ui/card";
 import {
   ArrowLeftRight,
@@ -110,19 +116,37 @@ export default function Home() {
     <div className="min-h-screen bg-background">
       {/* Explainer video pop-up on first visit */}
       <ExplainerVideoModal videoUrl="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/hero-explainer-final_c910c53b.mp4" />
+      {/* HERO UN Banner Header */}
+      <div className="w-full relative overflow-hidden" style={{maxHeight: '140px'}}>
+        <img
+          src={HERO_BANNER_URL}
+          alt="HERO United Nations Banner"
+          className="w-full object-cover object-center"
+          style={{height: '140px'}}
+        />
+        {/* KYC Badge overlay */}
+        <div className="absolute top-2 right-3 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
+          <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+          <span className="text-xs text-green-400 font-bold">KYC</span>
+        </div>
+      </div>
+
       {/* Navigation */}
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-              <span className="text-foreground font-bold text-base">H</span>
-            </div>
+            <img
+              src={HERO_LOGO_URL}
+              alt="HERO Logo"
+              className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"
+            />
             <span className="font-bold text-lg text-foreground">HERO Dapp</span>
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm">
             <Link href="/swap" className="text-muted-foreground hover:text-foreground transition-colors">Swap</Link>
             <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link href="/portfolio" className="text-muted-foreground hover:text-foreground transition-colors">Portfolio</Link>
+            <Link href="/swap" className="px-3 py-1 rounded-md bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/30 text-[var(--hero-orange)] font-semibold hover:bg-[var(--hero-orange)]/20 transition-colors">dApp</Link>
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
             <Link href="/limits" className="text-muted-foreground hover:text-foreground transition-colors">Limits</Link>
             <Link href="/farm" className="text-muted-foreground hover:text-foreground transition-colors">Farm</Link>
@@ -280,12 +304,43 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-border bg-card/30">
+        {/* YouTube Channel Section */}
+        <div className="border-t border-border bg-black/40 py-4">
+          <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-4">
+            <a
+              href="https://www.youtube.com/@LIFEWAVEPATCH1"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-red-600/90 hover:bg-red-600 transition-colors text-white font-semibold text-sm shadow-lg"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/></svg>
+              Watch on YouTube
+            </a>
+            <span className="text-muted-foreground text-xs">@LIFEWAVEPATCH1 — HERO Ecosystem Updates & Community</span>
+          </div>
+        </div>
+        {/* KYC Badge row */}
+        <div className="flex items-center justify-center gap-3 bg-black/60 py-2 border-t border-[var(--hero-orange)]/20">
+          <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+          <span className="text-xs text-green-400 font-semibold tracking-wider">KYC CERTIFIED — VETS IN CRYPTO PROTOCOL</span>
+          <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+        </div>
+        {/* Blackbeard footer banner */}
+        <div className="w-full relative overflow-hidden" style={{maxHeight: '90px'}}>
+          <img
+            src={BLACKBEARD_URL}
+            alt="Black Bear Footer"
+            className="w-full object-cover object-top"
+            style={{height: '90px', filter: 'brightness(0.8)'}}
+          />
+          <div className="absolute inset-0 flex items-center justify-center">
+            <span className="text-white/80 text-xs font-bold tracking-widest uppercase">HERO Dapp — Built for Veterans, by Veterans</span>
+          </div>
+        </div>
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-                <span className="text-foreground font-bold text-sm">H</span>
-              </div>
+              <img src={HERO_LOGO_URL} alt="HERO Logo" className="w-8 h-8 rounded-full object-cover border border-[var(--hero-orange)]/30" />
               <span className="text-sm text-muted-foreground">
                 HERO Dapp — Built for Veterans, by Veterans
               </span>

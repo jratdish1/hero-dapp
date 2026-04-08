@@ -173,9 +173,11 @@ export default function Subdomains() {
       <Card className="border-[var(--hero-orange)]/20 bg-gradient-to-r from-[var(--hero-orange)]/5 to-[var(--hero-green)]/5">
         <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-3">
-            <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center">
-              <Heart className="w-5 h-5 text-foreground" />
-            </div>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg"
+              alt="HERO Logo"
+              className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"
+            />
             <div>
               <h3 className="font-bold text-foreground">HERO — Supporting Those Who Served</h3>
               <p className="text-xs text-muted-foreground">

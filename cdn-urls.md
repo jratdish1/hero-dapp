@@ -1,0 +1,16 @@
+# CDN URLs for Hero Assets
+
+HERO_LOGO=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg
+HERO_BANNER_UN=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg
+BLACKBEARD=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif
+BLACK_BANNER=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/Blackfire,police,militarybanneronly_ba244299.jpg
+VIC_BANNER=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/vetsincryptobanner1500by500px3to1ratio_85f614f9.png
+UN_BANNER_VIC=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/UNBannerVIC_bafe9a37.jpg
+HERO_BLACK=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/heroblack_03822790.webp
+HERO_SUNSET=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/herouniversalgoodstonesunset_905fb0ba.webp
+HERO_RED=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/heroredearnrewardsusa_86ad1863.webp
+VETS_YT=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/VetsYT_6e388a85.jpeg
+VIC_INFOCHART=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/Vetsincryptoinfochartforvets,hero_c1479748.jpg
+HERO_TRUDEFI=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HeroTruDefi_4b9604ff.jpg
+VIC_CAMO=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/VICCamo_0f011a9e.png
+KYC_BADGE=https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png
