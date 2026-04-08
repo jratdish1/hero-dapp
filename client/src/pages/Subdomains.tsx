@@ -174,7 +174,7 @@ export default function Subdomains() {
         <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-3">
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg"
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png"
               alt="HERO Logo"
               className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"
             />

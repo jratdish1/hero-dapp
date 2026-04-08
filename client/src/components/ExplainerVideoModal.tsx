@@ -65,9 +65,11 @@ export function ExplainerVideoModal({ videoUrl }: ExplainerVideoModalProps) {
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-3 border-b border-border bg-card/50">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-orange-500 to-green-500 flex items-center justify-center">
-              <Play className="w-4 h-4 text-white ml-0.5" />
-            </div>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png"
+              alt="HERO Logo"
+              className="w-8 h-8 rounded-full object-cover border border-orange-500/40"
+            />
             <div>
               <h3 className="font-bold text-sm text-foreground">Welcome to HERO Dapp</h3>
               <p className="text-xs text-muted-foreground">Quick overview of the ecosystem</p>

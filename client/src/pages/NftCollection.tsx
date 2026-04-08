@@ -1,219 +1,159 @@
 import { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Progress } from "@/components/ui/progress";
 import {
   Shield, Star, Award, Crown, Gem, Flame, Clock, Wallet,
   ExternalLink, ChevronRight, Zap, Lock, TrendingUp, Users,
-  Swords, Heart, Target, ImageIcon
+  Swords, Heart, Target, ImageIcon, Play, Globe, Sparkles
 } from "lucide-react";
 import { SERVICE_BRANCHES } from "@shared/tokens";
 
-// ─── NFT Artwork Gallery ────────────────────────────────────────────────
+const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/n6wZKBCrhC57u7dtf5EHg8";
+const HERO_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png";
+
+const COLLECTION_STATS = [
+  { label: "Total Cards", value: "555", color: "text-orange-400", icon: Gem },
+  { label: "Rarity Tiers", value: "5", color: "text-yellow-400", icon: Star },
+  { label: "Categories", value: "10", color: "text-blue-400", icon: Shield },
+  { label: "Nations", value: "50+", color: "text-green-400", icon: Globe },
+  { label: "Animated NFTs", value: "4", color: "text-purple-400", icon: Play },
+  { label: "Charity Split", value: "25%", color: "text-red-400", icon: Heart },
+];
+
+const CATEGORIES = [
+  { name: "International Forces", count: 131, desc: "Military from 50+ nations worldwide", color: "text-blue-400", border: "border-blue-500/30", bg: "bg-blue-500/10" },
+  { name: "First Responders", count: 105, desc: "Fire, police, EMS, rescue, medical", color: "text-red-400", border: "border-red-500/30", bg: "bg-red-500/10" },
+  { name: "Historical Warriors", count: 88, desc: "Warriors spanning 3,000+ years", color: "text-yellow-400", border: "border-yellow-500/30", bg: "bg-yellow-500/10" },
+  { name: "Special / Community", count: 66, desc: "Veteran transition stories, crypto", color: "text-purple-400", border: "border-purple-500/30", bg: "bg-purple-500/10" },
+  { name: "US Army", count: 54, desc: "All ranks, specialties, diversity", color: "text-green-400", border: "border-green-500/30", bg: "bg-green-500/10" },
+  { name: "US Marines", count: 44, desc: "Semper Fi — all ranks and roles", color: "text-orange-400", border: "border-orange-500/30", bg: "bg-orange-500/10" },
+  { name: "US Navy", count: 31, desc: "SEALs, pilots, corpsmen, officers", color: "text-cyan-400", border: "border-cyan-500/30", bg: "bg-cyan-500/10" },
+  { name: "US Air Force", count: 23, desc: "Pilots, PJs, Thunderbirds, cyber", color: "text-sky-400", border: "border-sky-500/30", bg: "bg-sky-500/10" },
+  { name: "US Coast Guard", count: 10, desc: "Rescue swimmers, cutter crews", color: "text-teal-400", border: "border-teal-500/30", bg: "bg-teal-500/10" },
+  { name: "US Space Force", count: 8, desc: "Guardians, cyber warriors, orbital ops", color: "text-indigo-400", border: "border-indigo-500/30", bg: "bg-indigo-500/10" },
+];
+
+const RARITY_TIERS = [
+  { name: "Common", frame: "Bronze Metallic", count: "~112", pct: "20%", color: "text-amber-600", border: "border-amber-600/30" },
+  { name: "Uncommon", frame: "Silver Metallic", count: "~111", pct: "20%", color: "text-slate-300", border: "border-slate-300/30" },
+  { name: "Rare", frame: "Gold Metallic", count: "~166", pct: "30%", color: "text-yellow-400", border: "border-yellow-400/30" },
+  { name: "Ultra Rare", frame: "Purple Diamond", count: "~111", pct: "20%", color: "text-purple-400", border: "border-purple-400/30" },
+  { name: "Legendary", frame: "Holographic Rainbow", count: "~55", pct: "10%", color: "text-orange-400", border: "border-orange-400/30" },
+];
+
+const GRAIL_CARDS = [
+  { num: "001", name: "Devil Dog", codename: "US Marine Sergeant", category: "US Marines", rarity: "Legendary", chain: "Shared" },
+  { num: "100", name: "Spartan", codename: "Spartan Warrior", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "200", name: "Valkyrie", codename: "Viking Warrior", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "300", name: "Ghost Rider", codename: "F-22 Raptor Pilot", category: "US Air Force", rarity: "Legendary", chain: "Shared" },
+  { num: "400", name: "Veteran Barber", codename: "Veteran Entrepreneur", category: "Special", rarity: "Common", chain: "Shared" },
+  { num: "480", name: "Diamond Hands", codename: "Veteran Crypto Trader", category: "Special", rarity: "Ultra Rare", chain: "Shared" },
+  { num: "488", name: "Thunder Dreamer", codename: "Crazy Horse", category: "Historical", rarity: "Legendary", chain: "BASE" },
+  { num: "493", name: "Spirit Chief", codename: "Sitting Bull", category: "Historical", rarity: "Ultra Rare", chain: "PulseChain" },
+  { num: "503", name: "Last Pharaoh", codename: "Cleopatra", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "523", name: "King of Gold", codename: "Mansa Musa", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "543", name: "Zulu Thunder", codename: "Shaka Zulu", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "548", name: "World Conqueror", codename: "Genghis Khan", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "549", name: "Semper Fidelis", codename: "Iwo Jima Flag Raiser", category: "US Marines", rarity: "Legendary", chain: "Shared" },
+  { num: "553", name: "Art of War", codename: "Sun Tzu", category: "Historical", rarity: "Legendary", chain: "Shared" },
+  { num: "555", name: "VETS Forever", codename: "VETS Token", category: "Special", rarity: "Legendary", chain: "Shared" },
+];
+
+const ANIMATED_NFTS = [
+  { name: "UK Firefighter", country: "United Kingdom 🇬🇧", category: "Fire", rarity: "Rare", chain: "PulseChain", video: `${CDN}/uk_firefighter_with_music_63551385.mp4`, thumb: `${CDN}/uk_firefighter_first_59e6b5df.png`, color: "border-yellow-500/50" },
+  { name: "South Korean Firefighter", country: "South Korea 🇰🇷", category: "Fire", rarity: "Rare", chain: "BASE", video: `${CDN}/south_korea_firefighter_with_music_8040edfb.mp4`, thumb: `${CDN}/south_korea_firefighter_first_eeaf7bac.png`, color: "border-red-500/50" },
+  { name: "US Marine", country: "United States 🇺🇸", category: "Military", rarity: "Ultra Rare", chain: "Shared", video: `${CDN}/us_marine_with_music_212595d5.mp4`, thumb: `${CDN}/us_marine_combat_first_bb2a0e98.png`, color: "border-orange-500/50" },
+  { name: "Cruz Roja Paramedic", country: "Mexico 🇲🇽", category: "Medical", rarity: "Rare", chain: "PulseChain", video: `${CDN}/mexico_cruz_roja_with_music_dddf75f1.mp4`, thumb: `${CDN}/mexico_cruz_roja_first_18b422b0.png`, color: "border-green-500/50" },
+];
+
+const KEYFRAMES = [
+  { name: "UK Firefighter", url: `${CDN}/uk_firefighter_first_59e6b5df.png` },
+  { name: "Japan Paramedic", url: `${CDN}/japan_paramedic_first_4125bbe1.png` },
+  { name: "Nigeria Military Medic", url: `${CDN}/nigeria_military_medic_first_2a3aef70.png` },
+  { name: "Brazil SAMU", url: `${CDN}/brazil_samu_first_1c7e6dd7.png` },
+  { name: "US Marine Combat", url: `${CDN}/us_marine_combat_first_bb2a0e98.png` },
+  { name: "Germany THW Rescue", url: `${CDN}/germany_thw_rescue_first_5b58b205.png` },
+  { name: "India Female Doctor", url: `${CDN}/india_female_doctor_first_85ba4079.png` },
+  { name: "South Korea Firefighter", url: `${CDN}/south_korea_firefighter_first_eeaf7bac.png` },
+  { name: "Australia Paramedic", url: `${CDN}/australia_paramedic_first_56f572ef.png` },
+  { name: "Mexico Cruz Roja", url: `${CDN}/mexico_cruz_roja_first_18b422b0.png` },
+];
+
 const NFT_ARTWORK = {
   military: [
-    {
-      name: "Private (E-1)",
-      tier: "Common",
-      color: "border-zinc-500/50",
-      glow: "shadow-zinc-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-private-e1-Yy9rYAR7xd75QbdjevTEnY.webp",
-    },
-    {
-      name: "Sergeant (E-5)",
-      tier: "Rare",
-      color: "border-blue-500/50",
-      glow: "shadow-blue-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-sergeant-e5-Qujwqya6Jo5YYtSJSiBfzm.webp",
-    },
-    {
-      name: "Captain (O-3)",
-      tier: "Epic",
-      color: "border-purple-500/50",
-      glow: "shadow-purple-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-captain-o3-Tt9MpLvXVJTotLpn6HWRvg.webp",
-    },
-    {
-      name: "General (O-10)",
-      tier: "Mythic",
-      color: "border-yellow-500/50",
-      glow: "shadow-yellow-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-general-o10-8QuVfgoUYWWC9CUZow3hn6.webp",
-    },
+    { name: "Private (E-1)", tier: "Common", color: "border-zinc-500/50", glow: "shadow-zinc-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-private-e1-Yy9rYAR7xd75QbdjevTEnY.webp" },
+    { name: "Sergeant (E-5)", tier: "Rare", color: "border-blue-500/50", glow: "shadow-blue-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-sergeant-e5-Qujwqya6Jo5YYtSJSiBfzm.webp" },
+    { name: "Captain (O-3)", tier: "Epic", color: "border-purple-500/50", glow: "shadow-purple-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-captain-o3-Tt9MpLvXVJTotLpn6HWRvg.webp" },
+    { name: "General (O-10)", tier: "Mythic", color: "border-yellow-500/50", glow: "shadow-yellow-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-general-o10-8QuVfgoUYWWC9CUZow3hn6.webp" },
   ],
   firstResponders: [
-    {
-      name: "Firefighter",
-      tier: "First Responder",
-      color: "border-red-500/50",
-      glow: "shadow-red-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-firefighter-aqshSw4jLasFvWD8VjJKDW.webp",
-    },
-    {
-      name: "Police Officer",
-      tier: "First Responder",
-      color: "border-blue-500/50",
-      glow: "shadow-blue-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-police-4HcqiVtwhKaLbqvroziSKC.webp",
-    },
-    {
-      name: "EMT / Paramedic",
-      tier: "First Responder",
-      color: "border-emerald-500/50",
-      glow: "shadow-emerald-500/20",
-      image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-emt-JaN4AJkoBPm9YSgMVjUvSs.webp",
-    },
+    { name: "Firefighter", tier: "First Responder", color: "border-red-500/50", glow: "shadow-red-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-firefighter-aqshSw4jLasFvWD8VjJKDW.webp" },
+    { name: "Police Officer", tier: "First Responder", color: "border-blue-500/50", glow: "shadow-blue-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-police-4HcqiVtwhKaLbqvroziSKC.webp" },
+    { name: "EMT / Paramedic", tier: "First Responder", color: "border-emerald-500/50", glow: "shadow-emerald-500/20", image: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/KCDTjud9tRyLDD264mUCsK/nft-emt-JaN4AJkoBPm9YSgMVjUvSs.webp" },
   ],
 };
 
-// ─── Military Rank Tiers ─────────────────────────────────────────────────
 const RANK_TIERS = [
-  {
-    rank: "Private (E-1)",
-    tier: "Common",
-    color: "text-muted-foreground",
-    bg: "bg-zinc-500/10",
-    border: "border-zinc-500/30",
-    holdingReq: "1,000+ HERO",
-    feeReduction: "1%",
-    rarity: "40%",
-    count: 400,
-    icon: Shield,
-    description: "Entry rank. Every holder starts here. Basic fee reduction and community access.",
-  },
-  {
-    rank: "Corporal (E-4)",
-    tier: "Uncommon",
-    color: "text-green-400",
-    bg: "bg-green-500/10",
-    border: "border-green-500/30",
-    holdingReq: "10,000+ HERO",
-    feeReduction: "2%",
-    rarity: "25%",
-    count: 250,
-    icon: Star,
-    description: "Proven holder. Enhanced fee reduction and early access to new features.",
-  },
-  {
-    rank: "Sergeant (E-5)",
-    tier: "Rare",
-    color: "text-blue-400",
-    bg: "bg-blue-500/10",
-    border: "border-blue-500/30",
-    holdingReq: "50,000+ HERO",
-    feeReduction: "3%",
-    rarity: "18%",
-    count: 180,
-    icon: Award,
-    description: "Dedicated supporter. Priority access to governance proposals and boosted staking rewards.",
-  },
-  {
-    rank: "Lieutenant (O-2)",
-    tier: "Epic",
-    color: "text-purple-400",
-    bg: "bg-purple-500/10",
-    border: "border-purple-500/30",
-    holdingReq: "250,000+ HERO",
-    feeReduction: "4%",
-    rarity: "10%",
-    count: 100,
-    icon: Crown,
-    description: "Officer class. Significant fee reduction, exclusive Discord channels, and DAO voting power multiplier.",
-  },
-  {
-    rank: "Colonel (O-6)",
-    tier: "Legendary",
-    color: "text-orange-400",
-    bg: "bg-orange-500/10",
-    border: "border-orange-500/30",
-    holdingReq: "1,000,000+ HERO",
-    feeReduction: "5%",
-    rarity: "5%",
-    count: 50,
-    icon: Gem,
-    description: "Elite tier. Maximum fee reduction, exclusive airdrops, and direct founder access.",
-  },
-  {
-    rank: "General (O-10)",
-    tier: "Mythic",
-    color: "text-yellow-400",
-    bg: "bg-yellow-500/10",
-    border: "border-yellow-500/30",
-    holdingReq: "5,000,000+ HERO",
-    feeReduction: "7%",
-    rarity: "2%",
-    count: 20,
-    icon: Flame,
-    description: "Supreme commander. Highest rarity. Zero-fee trading, all utilities unlocked, and legendary status in the community.",
-  },
+  { rank: "Private (E-1)", tier: "Common", color: "text-muted-foreground", bg: "bg-zinc-500/10", border: "border-zinc-500/30", holdingReq: "1,000+ HERO", feeReduction: "1%", rarity: "40%", count: 400, icon: Shield, description: "Entry rank. Every holder starts here. Basic fee reduction and community access." },
+  { rank: "Corporal (E-4)", tier: "Uncommon", color: "text-green-400", bg: "bg-green-500/10", border: "border-green-500/30", holdingReq: "10,000+ HERO", feeReduction: "2%", rarity: "25%", count: 250, icon: Star, description: "Proven holder. Enhanced fee reduction and early access to new features." },
+  { rank: "Sergeant (E-5)", tier: "Rare", color: "text-blue-400", bg: "bg-blue-500/10", border: "border-blue-500/30", holdingReq: "50,000+ HERO", feeReduction: "3%", rarity: "18%", count: 180, icon: Award, description: "Dedicated supporter. Priority access to governance proposals and boosted staking rewards." },
+  { rank: "Lieutenant (O-2)", tier: "Epic", color: "text-purple-400", bg: "bg-purple-500/10", border: "border-purple-500/30", holdingReq: "250,000+ HERO", feeReduction: "4%", rarity: "10%", count: 100, icon: Crown, description: "Officer class. Significant fee reduction, exclusive Discord channels, and DAO voting power multiplier." },
+  { rank: "Colonel (O-6)", tier: "Legendary", color: "text-orange-400", bg: "bg-orange-500/10", border: "border-orange-500/30", holdingReq: "1,000,000+ HERO", feeReduction: "5%", rarity: "5%", count: 50, icon: Gem, description: "Elite tier. Maximum fee reduction, exclusive airdrops, and direct founder access." },
+  { rank: "General (O-10)", tier: "Mythic", color: "text-yellow-400", bg: "bg-yellow-500/10", border: "border-yellow-500/30", holdingReq: "5,000,000+ HERO", feeReduction: "7%", rarity: "2%", count: 20, icon: Flame, description: "Supreme commander. Highest rarity. Zero-fee trading, all utilities unlocked, and legendary status." },
 ];
 
-// ─── NFT Utility Features ────────────────────────────────────────────────
 const UTILITY_FEATURES = [
-  {
-    title: "Fee Reduction",
-    description: "Hold an NFT in your wallet to automatically reduce buy/sell fees. Higher rank = bigger reduction.",
-    icon: TrendingUp,
-    status: "Phase 1",
-  },
-  {
-    title: "Diamond Hands Rewards",
-    description: "The longer you hold your NFT + tokens, the more you earn. Time-weighted staking multiplier.",
-    icon: Clock,
-    status: "Phase 1",
-  },
-  {
-    title: "Governance Power",
-    description: "NFT holders get boosted voting power in DAO proposals. Officers get 2x, Generals get 5x.",
-    icon: Users,
-    status: "Phase 2",
-  },
-  {
-    title: "Exclusive Airdrops",
-    description: "Periodic airdrops of HERO, VETS, and partner tokens exclusively to NFT holders.",
-    icon: Zap,
-    status: "Phase 2",
-  },
-  {
-    title: "Staking Boost",
-    description: "NFT holders receive boosted APY on all farm staking pools. Rank determines boost percentage.",
-    icon: Flame,
-    status: "Phase 3",
-  },
-  {
-    title: "Rank Promotion",
-    description: "As your wallet accumulates more HERO, your NFT rank can be upgraded — reflecting your true commitment.",
-    icon: Award,
-    status: "Phase 3",
-  },
+  { title: "Fee Reduction", description: "Hold an NFT to automatically reduce buy/sell fees. Higher rank = bigger reduction.", icon: TrendingUp, status: "Phase 1" },
+  { title: "Diamond Hands Rewards", description: "The longer you hold your NFT + tokens, the more you earn. Time-weighted staking multiplier.", icon: Clock, status: "Phase 1" },
+  { title: "Governance Power", description: "NFT holders get boosted voting power in DAO proposals. Officers get 2x, Generals get 5x.", icon: Users, status: "Phase 2" },
+  { title: "Exclusive Airdrops", description: "Periodic airdrops of HERO, VETS, and partner tokens exclusively to NFT holders.", icon: Zap, status: "Phase 2" },
+  { title: "Staking Boost", description: "NFT holders receive boosted APY on all farm staking pools. Rank determines boost percentage.", icon: Flame, status: "Phase 3" },
+  { title: "Rank Promotion", description: "As your wallet accumulates more HERO, your NFT rank can be upgraded — reflecting your true commitment.", icon: Award, status: "Phase 3" },
 ];
 
-// ─── NFT Card Component ─────────────────────────────────────────────────
 function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
   const [loaded, setLoaded] = useState(false);
   return (
-    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl hover:${nft.glow} transition-all duration-300 hover:scale-[1.02]`}>
+    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl transition-all duration-300 hover:scale-[1.02]`}>
       <div className="aspect-square relative overflow-hidden">
-        {!loaded && (
-          <div className="absolute inset-0 bg-secondary animate-pulse flex items-center justify-center">
-            <ImageIcon className="w-8 h-8 text-muted-foreground/50" />
-          </div>
-        )}
-        <img
-          src={nft.image}
-          alt={`HERO NFT - ${nft.name}`}
-          className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${loaded ? 'opacity-100' : 'opacity-0'}`}
-          loading="lazy"
-          onLoad={() => setLoaded(true)}
-        />
-        {/* Overlay gradient */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
+        {!loaded && <div className="absolute inset-0 bg-secondary animate-pulse flex items-center justify-center"><ImageIcon className="w-8 h-8 text-muted-foreground/30" /></div>}
+        <img src={nft.image} alt={nft.name} className={`w-full h-full object-cover transition-all duration-500 group-hover:scale-105 ${loaded ? "opacity-100" : "opacity-0"}`} onLoad={() => setLoaded(true)} />
       </div>
-      <div className="p-3 text-center">
-        <h4 className="text-foreground font-semibold text-sm">{nft.name}</h4>
-        <Badge variant="outline" className={`text-[10px] mt-1 ${nft.color}`}>{nft.tier}</Badge>
+      <div className="p-2">
+        <p className="text-foreground font-semibold text-xs truncate">{nft.name}</p>
+        <Badge variant="outline" className="text-[9px] mt-0.5 border-current opacity-70">{nft.tier}</Badge>
+      </div>
+    </div>
+  );
+}
+
+function AnimatedNftCard({ nft }: { nft: typeof ANIMATED_NFTS[0] }) {
+  const [playing, setPlaying] = useState(false);
+  return (
+    <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl transition-all duration-300`}>
+      <div className="aspect-[9/16] relative overflow-hidden bg-black">
+        {playing ? (
+          <video src={nft.video} autoPlay loop controls className="w-full h-full object-cover" />
+        ) : (
+          <>
+            <img src={nft.thumb} alt={nft.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+              <button onClick={() => setPlaying(true)} className="w-14 h-14 rounded-full bg-orange-500/90 hover:bg-orange-400 flex items-center justify-center transition-all hover:scale-110 shadow-lg">
+                <Play className="w-6 h-6 text-white ml-1" />
+              </button>
+            </div>
+          </>
+        )}
+        <div className="absolute top-2 right-2"><Badge className="text-[9px] bg-black/70 border-0 text-white">{nft.chain}</Badge></div>
+      </div>
+      <div className="p-3">
+        <p className="text-foreground font-semibold text-sm">{nft.name}</p>
+        <p className="text-muted-foreground text-xs">{nft.country}</p>
+        <div className="flex items-center gap-1 mt-1">
+          <Badge variant="outline" className="text-[9px] border-orange-500/40 text-orange-400">{nft.rarity}</Badge>
+          <Badge variant="outline" className="text-[9px] border-blue-500/40 text-blue-400">{nft.category}</Badge>
+        </div>
       </div>
     </div>
   );
@@ -223,119 +163,168 @@ export default function NftCollection() {
   const [activeTab, setActiveTab] = useState("gallery");
 
   return (
-    <div className="space-y-6">
-      {/* Service Branch Ribbon */}
-      <div className="flex gap-0 h-1.5 rounded-full overflow-hidden">
-        {SERVICE_BRANCHES.map((b) => (
-          <div key={b.name} className="flex-1" style={{ backgroundColor: b.color }} title={b.name} />
-        ))}
-      </div>
-
+    <div className="space-y-6 pb-8">
       {/* Header */}
-      <div className="text-center space-y-3">
-        <Badge variant="outline" className="border-orange-500/40 text-orange-400">
-          <Swords className="w-3 h-3 mr-1" /> 1,000 Piece Collection
-        </Badge>
-        <h1 className="text-3xl font-bold text-foreground">
-          HERO <span className="text-orange-400">NFT Collection</span>
-        </h1>
-        <p className="text-muted-foreground max-w-2xl mx-auto">
-          Military and first responder themed NFTs with real utility. Your rank reflects your commitment — 
-          hold more HERO, earn a higher rank, unlock greater rewards. Even the little guy can become a whale someday.
-        </p>
+      <div className="flex items-center gap-3">
+        <img src={HERO_LOGO} alt="HERO" className="w-10 h-10 rounded-full object-cover border-2 border-orange-500/40" />
+        <div>
+          <h1 className="text-foreground font-bold text-2xl">$HERO NFT Collection</h1>
+          <p className="text-muted-foreground text-sm">555 unique cards honoring military, first responders &amp; historical warriors worldwide</p>
+        </div>
       </div>
 
-      {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {[
-          { label: "Total Supply", value: "1,000", icon: Gem, color: "text-orange-400" },
-          { label: "Rank Tiers", value: "6 Ranks", icon: Award, color: "text-purple-400" },
-          { label: "Max Fee Reduction", value: "7%", icon: TrendingUp, color: "text-green-400" },
-          { label: "Status", value: "In Development", icon: Lock, color: "text-yellow-400" },
-        ].map((stat) => (
-          <Card key={stat.label} className="bg-card/60 border-border">
-            <CardContent className="p-4 text-center">
-              <stat.icon className={`w-5 h-5 mx-auto mb-2 ${stat.color}`} />
-              <p className="text-foreground font-semibold text-sm">{stat.value}</p>
-              <p className="text-muted-foreground/70 text-xs">{stat.label}</p>
-            </CardContent>
-          </Card>
-        ))}
+      {/* Stats */}
+      <div className="grid grid-cols-3 md:grid-cols-6 gap-3">
+        {COLLECTION_STATS.map((stat) => {
+          const Icon = stat.icon;
+          return (
+            <Card key={stat.label} className="bg-card/60 border-border text-center p-3">
+              <Icon className={`w-5 h-5 mx-auto mb-1 ${stat.color}`} />
+              <p className={`font-bold text-lg ${stat.color}`}>{stat.value}</p>
+              <p className="text-muted-foreground/70 text-[10px]">{stat.label}</p>
+            </Card>
+          );
+        })}
       </div>
 
-      {/* Main Tabs */}
+      {/* Dual-Chain Banner */}
+      <Card className="bg-gradient-to-r from-orange-500/10 via-purple-500/5 to-blue-500/10 border-orange-500/20">
+        <CardContent className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-foreground font-semibold text-sm flex items-center gap-2">
+                <Sparkles className="w-4 h-4 text-orange-400" />
+                Dual-Chain Deployment
+              </h3>
+              <p className="text-muted-foreground text-xs mt-0.5">555 cards split across PulseChain (~185), BASE (~185), and Shared (~185)</p>
+            </div>
+            <div className="flex gap-2">
+              <Badge variant="outline" className="border-orange-500/40 text-orange-400 text-xs">PulseChain Primary</Badge>
+              <Badge variant="outline" className="border-blue-500/40 text-blue-400 text-xs">BASE Secondary</Badge>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-card border border-border w-full justify-start">
-          <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
-            <ImageIcon className="w-4 h-4 mr-1" /> Gallery
-          </TabsTrigger>
-          <TabsTrigger value="ranks" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
-            <Award className="w-4 h-4 mr-1" /> Rank System
-          </TabsTrigger>
-          <TabsTrigger value="utility" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
-            <Zap className="w-4 h-4 mr-1" /> Utility
-          </TabsTrigger>
-          <TabsTrigger value="branches" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
-            <Shield className="w-4 h-4 mr-1" /> Service Branches
-          </TabsTrigger>
-          <TabsTrigger value="roadmap" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400">
-            <Target className="w-4 h-4 mr-1" /> Roadmap
-          </TabsTrigger>
+        <TabsList className="bg-card border border-border w-full justify-start flex-wrap h-auto gap-1 p-1">
+          <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><ImageIcon className="w-4 h-4 mr-1" />Gallery</TabsTrigger>
+          <TabsTrigger value="animated" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400"><Play className="w-4 h-4 mr-1" />Animated NFTs</TabsTrigger>
+          <TabsTrigger value="grails" className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400"><Crown className="w-4 h-4 mr-1" />Grail Cards</TabsTrigger>
+          <TabsTrigger value="categories" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"><Globe className="w-4 h-4 mr-1" />Categories</TabsTrigger>
+          <TabsTrigger value="ranks" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Award className="w-4 h-4 mr-1" />Rank System</TabsTrigger>
+          <TabsTrigger value="utility" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Zap className="w-4 h-4 mr-1" />Utility</TabsTrigger>
+          <TabsTrigger value="branches" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Shield className="w-4 h-4 mr-1" />Service Branches</TabsTrigger>
+          <TabsTrigger value="roadmap" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Target className="w-4 h-4 mr-1" />Roadmap</TabsTrigger>
         </TabsList>
 
-        {/* GALLERY TAB */}
+        {/* GALLERY */}
         <TabsContent value="gallery" className="mt-4 space-y-6">
-          {/* Military Ranks Section */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Swords className="w-5 h-5 text-orange-400" />
-              <h3 className="text-foreground font-semibold text-lg">Military Rank Collection</h3>
-              <Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">Sample Artwork</Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {NFT_ARTWORK.military.map((nft) => (
-                <NftArtCard key={nft.name} nft={nft} />
-              ))}
-            </div>
+            <div className="flex items-center gap-2 mb-4"><Swords className="w-5 h-5 text-orange-400" /><h3 className="text-foreground font-semibold text-lg">Military Rank Collection</h3><Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">Sample Artwork</Badge></div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{NFT_ARTWORK.military.map((nft) => <NftArtCard key={nft.name} nft={nft} />)}</div>
           </div>
-
-          {/* First Responders Section */}
           <div>
-            <div className="flex items-center gap-2 mb-4">
-              <Heart className="w-5 h-5 text-red-400" />
-              <h3 className="text-foreground font-semibold text-lg">First Responder Collection</h3>
-              <Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">Sample Artwork</Badge>
-            </div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-              {NFT_ARTWORK.firstResponders.map((nft) => (
-                <NftArtCard key={nft.name} nft={nft} />
-              ))}
-            </div>
+            <div className="flex items-center gap-2 mb-4"><Heart className="w-5 h-5 text-red-400" /><h3 className="text-foreground font-semibold text-lg">First Responder Collection</h3><Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">Sample Artwork</Badge></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">{NFT_ARTWORK.firstResponders.map((nft) => <NftArtCard key={nft.name} nft={nft} />)}</div>
           </div>
-
-          {/* Mint Info Card */}
           <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
                 <Wallet className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-orange-400 font-semibold text-sm">Minting Coming Soon</h4>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    The full 1,000 piece collection is being generated with unique traits, rank insignias, and 
-                    service branch variations. Mint date and pricing will be announced on our X account. 
-                    A portion of all mint revenue goes directly to veteran support through the VIC Foundation.
-                  </p>
-                  <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">
-                    Follow @HERO501c3 for mint updates <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <h4 className="text-orange-400 font-semibold text-sm">555-Card Collection — Minting Coming Soon</h4>
+                  <p className="text-muted-foreground text-sm mt-1">555 unique steampunk-military trading cards across 10 categories and 5 rarity tiers. ERC-721 smart contract blueprint ready for dual-chain deployment on PulseChain + BASE. 25% of all mint revenue goes directly to veteran support through the VIC Foundation.</p>
+                  <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">Follow @HERO501c3 for mint updates <ExternalLink className="w-3 h-3" /></a>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* RANKS TAB */}
+        {/* ANIMATED */}
+        <TabsContent value="animated" className="mt-4 space-y-6">
+          <div className="flex items-center gap-2"><Play className="w-5 h-5 text-purple-400" /><h3 className="text-foreground font-semibold text-lg">Animated NFT Collection</h3><Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-400">ERC-721 Video NFTs</Badge></div>
+          <p className="text-muted-foreground text-sm">Bold cartoon/comic book style. 8-second loops with patriotic orchestral music. 1080x1920 portrait format optimized for mobile and NFT display.</p>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{ANIMATED_NFTS.map((nft) => <AnimatedNftCard key={nft.name} nft={nft} />)}</div>
+          <div>
+            <div className="flex items-center gap-2 mb-3"><ImageIcon className="w-5 h-5 text-blue-400" /><h3 className="text-foreground font-semibold">Keyframe Gallery</h3><Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">10 Ready for Animation</Badge></div>
+            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
+              {KEYFRAMES.map((kf) => (
+                <div key={kf.name} className="group relative rounded-lg overflow-hidden border border-border bg-card/60 hover:border-blue-500/40 transition-all">
+                  <div className="aspect-[9/16] relative overflow-hidden">
+                    <img src={kf.url} alt={kf.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground p-1.5 truncate">{kf.name}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* GRAILS */}
+        <TabsContent value="grails" className="mt-4 space-y-4">
+          <div className="flex items-center gap-2 mb-2"><Crown className="w-5 h-5 text-yellow-400" /><h3 className="text-foreground font-semibold text-lg">Grail Cards — Top 15 Legendaries</h3></div>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {GRAIL_CARDS.map((card) => (
+              <Card key={card.num} className="bg-card/60 border-border hover:border-yellow-500/40 transition-all">
+                <CardContent className="p-4">
+                  <div className="flex items-start gap-3">
+                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center shrink-0"><span className="text-yellow-400 font-bold text-xs">#{card.num}</span></div>
+                    <div className="min-w-0">
+                      <p className="text-foreground font-semibold text-sm truncate">{card.codename}</p>
+                      <p className="text-muted-foreground text-xs">"{card.name}"</p>
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        <Badge variant="outline" className={`text-[9px] ${card.rarity === "Legendary" ? "border-yellow-500/40 text-yellow-400" : card.rarity === "Ultra Rare" ? "border-purple-500/40 text-purple-400" : "border-border text-muted-foreground"}`}>{card.rarity}</Badge>
+                        <Badge variant="outline" className="text-[9px] border-border text-muted-foreground">{card.category}</Badge>
+                        <Badge variant="outline" className="text-[9px] border-blue-500/30 text-blue-400">{card.chain}</Badge>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </TabsContent>
+
+        {/* CATEGORIES */}
+        <TabsContent value="categories" className="mt-4 space-y-4">
+          <div className="flex items-center gap-2 mb-2"><Globe className="w-5 h-5 text-blue-400" /><h3 className="text-foreground font-semibold text-lg">Collection Categories</h3><Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">555 Total Cards</Badge></div>
+          <div className="grid md:grid-cols-2 gap-3">
+            {CATEGORIES.map((cat) => (
+              <Card key={cat.name} className={`bg-card/60 ${cat.border} hover:shadow-lg transition-all`}>
+                <CardContent className="p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className={`w-10 h-10 rounded-lg ${cat.bg} flex items-center justify-center`}><span className={`font-bold text-sm ${cat.color}`}>{cat.count}</span></div>
+                      <div><p className={`font-semibold text-sm ${cat.color}`}>{cat.name}</p><p className="text-muted-foreground text-xs">{cat.desc}</p></div>
+                    </div>
+                    <p className="text-muted-foreground text-xs">{Math.round(cat.count / 555 * 100)}%</p>
+                  </div>
+                  <div className="mt-2 h-1.5 bg-secondary rounded-full overflow-hidden"><div className={`h-full rounded-full bg-current ${cat.color}`} style={{ width: `${Math.round(cat.count / 555 * 100)}%` }} /></div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="mt-4">
+            <h3 className="text-foreground font-semibold mb-3 flex items-center gap-2"><Sparkles className="w-4 h-4 text-yellow-400" />Rarity Distribution</h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              {RARITY_TIERS.map((r) => (
+                <Card key={r.name} className={`bg-card/60 ${r.border} text-center`}>
+                  <CardContent className="p-3">
+                    <p className={`font-bold text-sm ${r.color}`}>{r.name}</p>
+                    <p className="text-muted-foreground text-xs mt-0.5">{r.frame}</p>
+                    <p className={`font-semibold text-lg mt-1 ${r.color}`}>{r.count}</p>
+                    <p className="text-muted-foreground text-xs">{r.pct}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        </TabsContent>
+
+        {/* RANKS */}
         <TabsContent value="ranks" className="mt-4 space-y-4">
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {RANK_TIERS.map((rank) => {
@@ -345,78 +334,36 @@ export default function NftCollection() {
                   <CardHeader className="pb-3">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-2">
-                        <div className={`w-10 h-10 rounded-lg ${rank.bg} flex items-center justify-center`}>
-                          <Icon className={`w-5 h-5 ${rank.color}`} />
-                        </div>
-                        <div>
-                          <CardTitle className={`text-sm ${rank.color}`}>{rank.rank}</CardTitle>
-                          <p className="text-xs text-muted-foreground/70">{rank.tier}</p>
-                        </div>
+                        <div className={`w-10 h-10 rounded-lg ${rank.bg} flex items-center justify-center`}><Icon className={`w-5 h-5 ${rank.color}`} /></div>
+                        <div><CardTitle className={`text-sm ${rank.color}`}>{rank.rank}</CardTitle><Badge variant="outline" className={`text-[9px] ${rank.border} ${rank.color} mt-0.5`}>{rank.tier}</Badge></div>
                       </div>
-                      <Badge variant="outline" className={`text-[10px] ${rank.border} ${rank.color}`}>
-                        {rank.count} NFTs
-                      </Badge>
+                      <div className="text-right"><p className="text-muted-foreground text-xs">{rank.rarity}</p><p className="text-muted-foreground/60 text-[10px]">{rank.count} cards</p></div>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3">
-                    <p className="text-muted-foreground text-xs leading-relaxed">{rank.description}</p>
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground/70">Holding Requirement</span>
-                        <span className="text-foreground font-medium">{rank.holdingReq}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground/70">Fee Reduction</span>
-                        <span className="text-green-400 font-medium">-{rank.feeReduction}</span>
-                      </div>
-                      <div className="flex justify-between text-xs">
-                        <span className="text-muted-foreground/70">Rarity</span>
-                        <span className={rank.color}>{rank.rarity}</span>
-                      </div>
-                      <Progress value={parseInt(rank.rarity)} className="h-1.5" />
-                    </div>
+                  <CardContent className="pt-0 space-y-2">
+                    <p className="text-muted-foreground text-xs">{rank.description}</p>
+                    <div className="flex justify-between text-xs pt-1 border-t border-border"><span className="text-muted-foreground">Requires</span><span className={`font-semibold ${rank.color}`}>{rank.holdingReq}</span></div>
+                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Fee Reduction</span><span className="text-green-400 font-semibold">{rank.feeReduction}</span></div>
                   </CardContent>
                 </Card>
               );
             })}
           </div>
-
-          {/* Diamond Hands Insight */}
-          <Card className="bg-gradient-to-r from-yellow-500/5 to-orange-500/5 border-yellow-500/20">
-            <CardContent className="p-5">
-              <div className="flex items-start gap-3">
-                <Gem className="w-6 h-6 text-yellow-400 shrink-0 mt-0.5" />
-                <div>
-                  <h4 className="text-yellow-400 font-semibold text-sm">Diamond Hands Philosophy</h4>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    The longer you hold, the more you earn. Your NFT rank can be <strong className="text-foreground">promoted</strong> as 
-                    your wallet accumulates more HERO tokens. A Private today could become a General tomorrow. 
-                    Time in the market beats timing the market — and your NFT reflects that journey.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </TabsContent>
 
-        {/* UTILITY TAB */}
+        {/* UTILITY */}
         <TabsContent value="utility" className="mt-4 space-y-4">
-          <div className="grid md:grid-cols-2 gap-4">
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
             {UTILITY_FEATURES.map((feature) => {
               const Icon = feature.icon;
               return (
                 <Card key={feature.title} className="bg-card/60 border-border hover:border-orange-500/30 transition-all">
                   <CardContent className="p-5">
                     <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0">
-                        <Icon className="w-5 h-5 text-orange-400" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <h4 className="text-foreground font-semibold text-sm">{feature.title}</h4>
-                          <Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">{feature.status}</Badge>
-                        </div>
-                        <p className="text-muted-foreground text-xs leading-relaxed">{feature.description}</p>
+                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-orange-400" /></div>
+                      <div>
+                        <div className="flex items-center gap-2 mb-1"><h4 className="text-foreground font-semibold text-sm">{feature.title}</h4><Badge variant="outline" className="text-[9px] border-orange-500/30 text-orange-400">{feature.status}</Badge></div>
+                        <p className="text-muted-foreground text-xs">{feature.description}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -424,161 +371,66 @@ export default function NftCollection() {
               );
             })}
           </div>
-
-          {/* How Fee Reduction Works */}
-          <Card className="bg-card/40 border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground text-base flex items-center gap-2">
-                <TrendingUp className="w-5 h-5 text-green-400" />
-                How Fee Reduction Works
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {[
-                  { step: "1", text: "Hold a HERO NFT in your connected wallet" },
-                  { step: "2", text: "Smart contract automatically detects your NFT rank" },
-                  { step: "3", text: "Buy/sell fee is reduced based on your rank tier (1% to 7%)" },
-                  { step: "4", text: "No action needed — it's automatic and gasless" },
-                ].map((s) => (
-                  <div key={s.step} className="flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-green-500/20 flex items-center justify-center text-green-400 text-sm font-bold shrink-0">{s.step}</div>
-                    <p className="text-muted-foreground text-sm">{s.text}</p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        {/* SERVICE BRANCHES TAB */}
-        <TabsContent value="branches" className="mt-4 space-y-4">
-          <Card className="bg-card/40 border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Heart className="w-5 h-5 text-red-400" />
-                Honoring Those Who Serve
-              </CardTitle>
-              <CardDescription className="text-muted-foreground">
-                Each NFT features artwork representing military branches and first responders. 
-                The collection honors the brave men and women who serve our communities and nation.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {SERVICE_BRANCHES.map((branch) => (
-                  <div
-                    key={branch.name}
-                    className="bg-secondary/50 rounded-lg p-4 text-center hover:bg-secondary transition-colors"
-                  >
-                    <div
-                      className="w-12 h-12 rounded-full mx-auto mb-3 flex items-center justify-center text-2xl"
-                      style={{ backgroundColor: `${branch.color}20` }}
-                    >
-                      {branch.emoji}
-                    </div>
-                    <p className="text-foreground text-sm font-medium">{branch.name}</p>
-                    <p className="text-muted-foreground/70 text-xs mt-1" style={{ color: branch.color }}>
-                      {branch.name === "Army" ? "Hooah!" :
-                       branch.name === "Navy" ? "Hooyah!" :
-                       branch.name === "Marines" ? "Oorah!" :
-                       branch.name === "Air Force" ? "Aim High!" :
-                       branch.name === "Coast Guard" ? "Semper Paratus!" :
-                       branch.name === "Space Force" ? "Semper Supra!" :
-                       branch.name === "Firefighters" ? "Bravest!" :
-                       branch.name === "Police" ? "Finest!" :
-                       "Heroes!"}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-gradient-to-r from-red-500/5 to-blue-500/5 border-red-500/20">
+          <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
-                <Shield className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                <Lock className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-foreground font-semibold text-sm">Supporting Veterans & First Responders</h4>
-                  <p className="text-muted-foreground text-sm mt-1">
-                    HERO is a 501(c)(3) nonprofit supporting military veterans and first responders through the 
-                    VIC Foundation. A portion of all NFT mint revenue goes directly to veteran support programs.
-                  </p>
-                  <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">
-                    Follow @HERO501c3 on X <ExternalLink className="w-3 h-3" />
-                  </a>
+                  <h4 className="text-orange-400 font-semibold text-sm">Utility Unlocks With Your Rank</h4>
+                  <p className="text-muted-foreground text-sm mt-1">Every NFT holder gets Core Utility (Phase 1). Rare+ holders unlock Enhanced Utility. Legendary holders get Premium Utility including a custom animated NFT of their own military branch/unit.</p>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        {/* ROADMAP TAB */}
+        {/* BRANCHES */}
+        <TabsContent value="branches" className="mt-4 space-y-4">
+          <Card className="bg-card/40 border-border">
+            <CardContent className="p-5">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                {SERVICE_BRANCHES.map((branch: any) => (
+                  <div key={branch.name} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30 border border-border hover:border-orange-500/30 transition-all">
+                    <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center text-xl">{branch.emoji}</div>
+                    <div>
+                      <p className="text-foreground font-semibold text-sm">{branch.name}</p>
+                      <p className="text-muted-foreground text-xs">
+                        {branch.name === "Army" ? "This We'll Defend!" : branch.name === "Navy" ? "Forged by the Sea!" : branch.name === "Marines" ? "Semper Fi!" : branch.name === "Air Force" ? "Aim High!" : branch.name === "Coast Guard" ? "Semper Paratus!" : branch.name === "Space Force" ? "Semper Supra!" : branch.name === "Firefighters" ? "Bravest!" : branch.name === "Police" ? "Finest!" : "Heroes!"}
+                      </p>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-gradient-to-r from-red-500/5 to-blue-500/5 border-red-500/20">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-3">
+                <Shield className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
+                <div>
+                  <h4 className="text-foreground font-semibold text-sm">Supporting Veterans &amp; First Responders</h4>
+                  <p className="text-muted-foreground text-sm mt-1">HERO is a 501(c)(3) nonprofit supporting military veterans and first responders through the VIC Foundation. 25% of all NFT mint revenue goes directly to veteran support programs.</p>
+                  <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">Follow @HERO501c3 on X <ExternalLink className="w-3 h-3" /></a>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* ROADMAP */}
         <TabsContent value="roadmap" className="mt-4 space-y-4">
           <Card className="bg-card/40 border-border">
-            <CardHeader>
-              <CardTitle className="text-foreground flex items-center gap-2">
-                <Target className="w-5 h-5 text-orange-400" />
-                NFT Development Roadmap
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Target className="w-5 h-5 text-orange-400" />NFT Development Roadmap</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {[
-                {
-                  phase: "Phase 1",
-                  title: "Artwork & Minting",
-                  status: "In Progress",
-                  statusColor: "text-yellow-400 border-yellow-500/40",
-                  items: [
-                    "1,000 unique military/first responder artworks",
-                    "Ranking insignia system based on token holdings",
-                    "Rarity tiers tied to military ranks (E-1 to O-10)",
-                    "Smart contract deployment with fee reduction utility",
-                    "Mint event with proceeds to treasury",
-                  ],
-                },
-                {
-                  phase: "Phase 2",
-                  title: "Utility Activation",
-                  status: "Planned",
-                  statusColor: "text-blue-400 border-blue-500/40",
-                  items: [
-                    "Automatic fee reduction for NFT holders",
-                    "Diamond hands time-weighted staking multiplier",
-                    "Governance voting power boost",
-                    "Exclusive airdrop eligibility",
-                  ],
-                },
-                {
-                  phase: "Phase 3",
-                  title: "Advanced Features",
-                  status: "Future",
-                  statusColor: "text-muted-foreground border-muted-foreground/40",
-                  items: [
-                    "Rank promotion system (upgrade NFT as holdings grow)",
-                    "Staking APY boost based on NFT rank",
-                    "Cross-chain NFT bridging (PulseChain ↔ BASE)",
-                    "Community marketplace for trading",
-                    "Rarity script implementation for unique traits",
-                  ],
-                },
+                { phase: "Phase 1", title: "Artwork & Minting", status: "In Progress", statusColor: "text-yellow-400 border-yellow-500/40", items: ["555 unique steampunk-military trading cards complete", "4 animated video NFTs complete (UK, South Korea, US Marine, Mexico)", "ERC-721 smart contract blueprint ready", "Dual-chain deployment: PulseChain + BASE", "Mint event with 25% proceeds to VIC Foundation"] },
+                { phase: "Phase 2", title: "Utility Activation", status: "Planned", statusColor: "text-blue-400 border-blue-500/40", items: ["Automatic fee reduction for NFT holders", "Diamond hands time-weighted staking multiplier", "Governance voting power boost", "Exclusive airdrop eligibility for holders"] },
+                { phase: "Phase 3", title: "Advanced Features", status: "Future", statusColor: "text-muted-foreground border-muted-foreground/40", items: ["Rank promotion system (upgrade NFT as holdings grow)", "Staking APY boost based on NFT rank", "Cross-chain NFT bridging (PulseChain to BASE)", "Community marketplace for trading", "Custom animated NFT for Legendary holders"] },
               ].map((phase) => (
                 <div key={phase.phase} className="relative pl-8 border-l-2 border-border">
                   <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-orange-500 -translate-x-[9px]" />
-                  <div className="flex items-center gap-2 mb-2">
-                    <h4 className="text-foreground font-semibold">{phase.phase}: {phase.title}</h4>
-                    <Badge variant="outline" className={`text-[10px] ${phase.statusColor}`}>{phase.status}</Badge>
-                  </div>
-                  <ul className="space-y-1.5">
-                    {phase.items.map((item, i) => (
-                      <li key={i} className="flex items-start gap-2 text-muted-foreground text-sm">
-                        <ChevronRight className="w-3 h-3 text-orange-400 shrink-0 mt-1" />
-                        {item}
-                      </li>
-                    ))}
-                  </ul>
+                  <div className="flex items-center gap-2 mb-2"><h4 className="text-foreground font-semibold">{phase.phase}: {phase.title}</h4><Badge variant="outline" className={`text-[10px] ${phase.statusColor}`}>{phase.status}</Badge></div>
+                  <ul className="space-y-1.5">{phase.items.map((item, i) => (<li key={i} className="flex items-start gap-2 text-muted-foreground text-sm"><ChevronRight className="w-3 h-3 text-orange-400 shrink-0 mt-1" />{item}</li>))}</ul>
                 </div>
               ))}
             </CardContent>
