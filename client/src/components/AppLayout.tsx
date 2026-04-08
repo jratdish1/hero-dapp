@@ -33,6 +33,9 @@ import {
   Users2,
   Wallet2,
   PlayCircle,
+  Star,
+  Coins,
+  Layers,
 } from "lucide-react";
 
 // CDN asset URLs
@@ -42,12 +45,15 @@ const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536
 const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
 
 const NAV_ITEMS = [
+  { path: "/start", label: "🇺🇸 Start Here", icon: Star },
   { path: "/swap", label: "Swap", icon: ArrowLeftRight },
   { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
   { path: "/portfolio", label: "Portfolio", icon: Wallet },
   { path: "/dca", label: "DCA Orders", icon: Clock },
   { path: "/limits", label: "Limit Orders", icon: Target },
-  { path: "/farm", label: "Farm", icon: Sprout },
+  { path: "/farm", label: "Farm (PulseChain)", icon: Sprout },
+  { path: "/farm/base", label: "Farm (BASE)", icon: Layers },
+  { path: "/stake", label: "Stake HERO → DAI", icon: Coins },
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
   { path: "/nft", label: "NFT Collection", icon: Gem },

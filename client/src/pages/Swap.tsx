@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import SquirrelSwapWidget from "@/components/SquirrelSwapWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -148,11 +149,12 @@ export default function Swap() {
   };
 
   return (
-    <div className="max-w-lg mx-auto">
+    <div className="max-w-2xl mx-auto">
+      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Swap</h1>
-          <p className="text-sm text-muted-foreground">Trade tokens on {chain.name}</p>
+          <h1 className="text-2xl font-bold" style={{ color: '#C8A84B' }}>Swap</h1>
+          <p className="text-sm text-muted-foreground">Best rates across 12 DEXes on {chain.name}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -170,6 +172,22 @@ export default function Swap() {
           <LivePriceBanner />
         </CardContent>
       </Card>
+
+      {/* SquirrelSwap Widget — Primary Swap Interface */}
+      <div className="mb-6">
+        <SquirrelSwapWidget
+          defaultChain={chain.id === 8453 ? "base" : "pulsechain"}
+          modes="swap,limit,dca"
+          showChainToggle={true}
+        />
+      </div>
+
+      {/* Legacy UI (advanced / fallback) */}
+      <details className="mb-4">
+        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg bg-secondary/50 select-none">
+          Advanced / Custom Swap (legacy UI)
+        </summary>
+        <div className="mt-4">
 
       {/* Quick token row */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -429,6 +447,8 @@ export default function Swap() {
           </span>
         ))}
       </div>
+        </div>
+      </details>
     </div>
   );
 }

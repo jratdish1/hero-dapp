@@ -42,81 +42,114 @@
   --color-sidebar-ring: var(--sidebar-ring);
 }
 
+/* ============================================================
+   HERO PROTOCOL — MILITARY / VETERAN THEME
+   Primary: Military Gold  #C8A84B  (oklch 0.72 0.12 75)
+   Accent:  OD Green       #3D5A3D  (oklch 0.38 0.08 145)
+   Dark BG: Deep Forest    #0D1A0D  (oklch 0.12 0.025 145)
+   Card BG: Dark Olive     #1C2A1C  (oklch 0.18 0.025 145)
+   ============================================================ */
+
 :root {
-  --primary: oklch(0.65 0.18 55);
-  --primary-foreground: oklch(0.98 0.005 90);
-  --sidebar-primary: oklch(0.65 0.18 55);
-  --sidebar-primary-foreground: oklch(0.98 0.005 90);
-  --chart-1: oklch(0.65 0.18 55);
-  --chart-2: oklch(0.55 0.2 145);
-  --chart-3: oklch(0.5 0.15 250);
-  --chart-4: oklch(0.6 0.15 330);
-  --chart-5: oklch(0.7 0.12 80);
-  --radius: 0.625rem;
-  --background: oklch(0.97 0.005 260);
-  --foreground: oklch(0.15 0.015 260);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.015 260);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.015 260);
-  --secondary: oklch(0.93 0.005 260);
-  --secondary-foreground: oklch(0.25 0.015 260);
-  --muted: oklch(0.93 0.005 260);
-  --muted-foreground: oklch(0.45 0.015 260);
-  --accent: oklch(0.55 0.2 145);
-  --accent-foreground: oklch(0.98 0.005 145);
+  /* Primary: Military Gold */
+  --primary: oklch(0.72 0.12 75);
+  --primary-foreground: oklch(0.12 0.025 145);
+  --sidebar-primary: oklch(0.72 0.12 75);
+  --sidebar-primary-foreground: oklch(0.12 0.025 145);
+
+  /* Charts */
+  --chart-1: oklch(0.72 0.12 75);   /* gold */
+  --chart-2: oklch(0.55 0.12 145);  /* OD green */
+  --chart-3: oklch(0.5 0.15 250);   /* blue */
+  --chart-4: oklch(0.6 0.15 330);   /* purple */
+  --chart-5: oklch(0.7 0.1 30);     /* amber */
+
+  --radius: 0.75rem;
+
+  /* Light mode — olive/khaki tones */
+  --background: oklch(0.95 0.01 90);
+  --foreground: oklch(0.15 0.02 90);
+  --card: oklch(0.99 0.005 90);
+  --card-foreground: oklch(0.15 0.02 90);
+  --popover: oklch(0.99 0.005 90);
+  --popover-foreground: oklch(0.15 0.02 90);
+  --secondary: oklch(0.91 0.01 90);
+  --secondary-foreground: oklch(0.25 0.02 90);
+  --muted: oklch(0.91 0.01 90);
+  --muted-foreground: oklch(0.48 0.02 90);
+  --accent: oklch(0.38 0.08 145);
+  --accent-foreground: oklch(0.95 0.01 90);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.98 0.005 90);
-  --border: oklch(0.88 0.01 260);
-  --input: oklch(0.88 0.01 260);
-  --ring: oklch(0.65 0.18 55);
-  --sidebar: oklch(0.96 0.005 260);
-  --sidebar-foreground: oklch(0.15 0.015 260);
-  --sidebar-accent: oklch(0.93 0.005 260);
-  --sidebar-accent-foreground: oklch(0.15 0.015 260);
-  --sidebar-border: oklch(0.88 0.01 260);
-  --sidebar-ring: oklch(0.65 0.18 55);
-  --hero-orange: oklch(0.65 0.18 55);
-  --hero-green: oklch(0.55 0.2 145);
-  --hero-glow: oklch(0.65 0.18 55 / 0.15);
+  --border: oklch(0.85 0.015 90);
+  --input: oklch(0.85 0.015 90);
+  --ring: oklch(0.72 0.12 75);
+  --sidebar: oklch(0.93 0.012 90);
+  --sidebar-foreground: oklch(0.15 0.02 90);
+  --sidebar-accent: oklch(0.88 0.015 90);
+  --sidebar-accent-foreground: oklch(0.15 0.02 90);
+  --sidebar-border: oklch(0.82 0.015 90);
+  --sidebar-ring: oklch(0.72 0.12 75);
+
+  /* HERO custom tokens */
+  --hero-gold: #C8A84B;
+  --hero-green: #3D5A3D;
+  --hero-dark: #0D1A0D;
+  --hero-card: #1C2A1C;
+  --hero-glow: rgba(200, 168, 75, 0.15);
+  --hero-orange: oklch(0.72 0.12 75);
+  --hero-accent-green: oklch(0.55 0.12 145);
 }
 
 .dark {
-  --primary: oklch(0.75 0.18 55);
-  --primary-foreground: oklch(0.15 0.02 55);
-  --sidebar-primary: oklch(0.75 0.18 55);
-  --sidebar-primary-foreground: oklch(0.15 0.02 55);
-  --background: oklch(0.12 0.01 260);
-  --foreground: oklch(0.93 0.01 90);
-  --card: oklch(0.16 0.012 260);
-  --card-foreground: oklch(0.93 0.01 90);
-  --popover: oklch(0.16 0.012 260);
-  --popover-foreground: oklch(0.93 0.01 90);
-  --secondary: oklch(0.2 0.012 260);
-  --secondary-foreground: oklch(0.85 0.01 90);
-  --muted: oklch(0.22 0.012 260);
-  --muted-foreground: oklch(0.6 0.015 260);
-  --accent: oklch(0.65 0.2 145);
-  --accent-foreground: oklch(0.15 0.02 145);
+  /* Primary: Military Gold (brighter in dark) */
+  --primary: oklch(0.78 0.13 75);
+  --primary-foreground: oklch(0.1 0.02 145);
+  --sidebar-primary: oklch(0.78 0.13 75);
+  --sidebar-primary-foreground: oklch(0.1 0.02 145);
+
+  /* Dark forest background */
+  --background: oklch(0.11 0.025 145);
+  --foreground: oklch(0.92 0.015 90);
+  --card: oklch(0.16 0.025 145);
+  --card-foreground: oklch(0.92 0.015 90);
+  --popover: oklch(0.16 0.025 145);
+  --popover-foreground: oklch(0.92 0.015 90);
+  --secondary: oklch(0.2 0.025 145);
+  --secondary-foreground: oklch(0.85 0.015 90);
+  --muted: oklch(0.22 0.025 145);
+  --muted-foreground: oklch(0.58 0.02 90);
+  --accent: oklch(0.38 0.1 145);
+  --accent-foreground: oklch(0.92 0.015 90);
   --destructive: oklch(0.55 0.22 27);
   --destructive-foreground: oklch(0.95 0.01 90);
-  --border: oklch(0.28 0.015 260);
-  --input: oklch(0.22 0.012 260);
-  --ring: oklch(0.75 0.18 55);
-  --chart-1: oklch(0.75 0.18 55);
-  --chart-2: oklch(0.65 0.2 145);
-  --chart-3: oklch(0.6 0.15 250);
-  --chart-4: oklch(0.7 0.15 330);
-  --chart-5: oklch(0.8 0.12 80);
-  --sidebar: oklch(0.1 0.01 260);
-  --sidebar-foreground: oklch(0.9 0.01 90);
-  --sidebar-accent: oklch(0.2 0.012 260);
-  --sidebar-accent-foreground: oklch(0.93 0.01 90);
-  --sidebar-border: oklch(0.25 0.015 260);
-  --sidebar-ring: oklch(0.75 0.18 55);
-  --hero-orange: oklch(0.75 0.18 55);
-  --hero-green: oklch(0.65 0.2 145);
-  --hero-glow: oklch(0.75 0.18 55 / 0.15);
+  --border: oklch(0.28 0.025 145);
+  --input: oklch(0.22 0.025 145);
+  --ring: oklch(0.78 0.13 75);
+
+  /* Charts */
+  --chart-1: oklch(0.78 0.13 75);   /* gold */
+  --chart-2: oklch(0.62 0.12 145);  /* OD green */
+  --chart-3: oklch(0.6 0.15 250);   /* blue */
+  --chart-4: oklch(0.7 0.15 330);   /* purple */
+  --chart-5: oklch(0.8 0.1 30);     /* amber */
+
+  /* Sidebar */
+  --sidebar: oklch(0.09 0.02 145);
+  --sidebar-foreground: oklch(0.9 0.015 90);
+  --sidebar-accent: oklch(0.2 0.025 145);
+  --sidebar-accent-foreground: oklch(0.92 0.015 90);
+  --sidebar-border: oklch(0.25 0.025 145);
+  --sidebar-ring: oklch(0.78 0.13 75);
+
+  /* HERO custom tokens */
+  --hero-gold: #C8A84B;
+  --hero-green: #3D5A3D;
+  --hero-dark: #0D1A0D;
+  --hero-card: #1C2A1C;
+  --hero-glow: rgba(200, 168, 75, 0.15);
+  --hero-orange: oklch(0.78 0.13 75);
+  --hero-accent-green: oklch(0.62 0.12 145);
 }
 
 @layer base {
@@ -141,114 +174,62 @@
 }
 
 @layer components {
-  /**
-   * Custom container utility that centers content and adds responsive padding.
-   *
-   * This overrides Tailwind's default container behavior to:
-   * - Auto-center content (mx-auto)
-   * - Add responsive horizontal padding
-   * - Set max-width for large screens
-   *
-   * Usage: <div className="container">...</div>
-   *
-   * For custom widths, use max-w-* utilities directly:
-   * <div className="max-w-6xl mx-auto px-4">...</div>
-   */
   .container {
     width: 100%;
     margin-left: auto;
     margin-right: auto;
-    padding-left: 1rem; /* 16px - mobile padding */
+    padding-left: 1rem;
     padding-right: 1rem;
   }
-
-  .flex {
-    min-height: 0;
-    min-width: 0;
-  }
-
   @media (min-width: 640px) {
-    .container {
-      padding-left: 1.5rem; /* 24px - tablet padding */
-      padding-right: 1.5rem;
-    }
+    .container { padding-left: 1.5rem; padding-right: 1.5rem; }
   }
-
   @media (min-width: 1024px) {
-    .container {
-      padding-left: 2rem; /* 32px - desktop padding */
-      padding-right: 2rem;
-      max-width: 1280px; /* Standard content width */
-    }
+    .container { max-width: 1280px; padding-left: 2rem; padding-right: 2rem; }
+  }
+
+  /* Military gold glow on primary buttons */
+  .btn-hero {
+    background: linear-gradient(135deg, #C8A84B 0%, #a8882b 100%);
+    color: #0D1A0D;
+    font-weight: 700;
+    border-radius: 0.75rem;
+    box-shadow: 0 4px 20px rgba(200, 168, 75, 0.25);
+    transition: all 0.2s;
+  }
+  .btn-hero:hover {
+    opacity: 0.92;
+    box-shadow: 0 6px 28px rgba(200, 168, 75, 0.35);
+  }
+
+  /* Card glow effect */
+  .card-hero {
+    background: linear-gradient(135deg, rgba(200,168,75,0.08), rgba(28,42,28,0.95));
+    border: 1px solid rgba(200,168,75,0.3);
+    border-radius: 1rem;
+  }
+
+  /* Subtle military green card */
+  .card-military {
+    background: rgba(28, 42, 28, 0.9);
+    border: 1px solid #3D5A3D;
+    border-radius: 1rem;
+  }
+
+  /* Gold text gradient */
+  .text-hero-gold {
+    background: linear-gradient(135deg, #C8A84B, #e8c86b);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
   }
 }
 
-/* HERO Dapp custom utilities */
-.hero-glow {
-  box-shadow: 0 0 20px var(--hero-glow), 0 0 60px oklch(0.75 0.18 55 / 0.05);
-}
-.hero-glow-green {
-  box-shadow: 0 0 20px oklch(0.65 0.2 145 / 0.15), 0 0 60px oklch(0.65 0.2 145 / 0.05);
-}
-.gradient-text {
-  background: linear-gradient(135deg, var(--hero-orange), var(--hero-green));
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-.gradient-border {
-  position: relative;
-}
-.gradient-border::before {
-  content: '';
-  position: absolute;
-  inset: -1px;
-  border-radius: inherit;
-  background: linear-gradient(135deg, var(--hero-orange), var(--hero-green));
-  z-index: -1;
-  opacity: 0.4;
-}
+/* Scrollbar styling — military dark */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
-::-webkit-scrollbar-track { background: oklch(0.12 0.01 260); }
-::-webkit-scrollbar-thumb { background: oklch(0.35 0.015 260); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: oklch(0.45 0.015 260); }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #3D5A3D; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #C8A84B; }
 
-/* Hide platform preview mode banner */
-[data-manus-banner],
-[class*="preview-mode"],
-iframe[src*="manus"] {
-  display: none !important;
-}
-
-/* OpenTang-inspired animations */
-@keyframes orangePulse {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 115, 22, 0.4); }
-  50% { box-shadow: 0 0 0 8px rgba(249, 115, 22, 0); }
-}
-@keyframes fadeSlideUp {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-.animate-orange-pulse {
-  animation: orangePulse 1.5s ease-in-out infinite;
-}
-.animate-fade-slide-up {
-  animation: fadeSlideUp 200ms ease-out;
-}
-
-@keyframes scroll-x {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-50%); }
-}
-.animate-scroll-x {
-  animation: scroll-x 20s linear infinite;
-}
-.animate-scroll-x:hover {
-  animation-play-state: paused;
-}
-
-/* Hero token colors */
-.text-hero-orange { color: var(--hero-orange); }
-.text-hero-green { color: var(--hero-green); }
-.bg-hero-orange { background-color: var(--hero-orange); }
-.bg-hero-green { background-color: var(--hero-green); }
+/* Selection color */
+::selection { background: rgba(200, 168, 75, 0.25); color: #fff; }
