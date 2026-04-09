@@ -25,7 +25,7 @@ function TickerItem({
       <span className="text-xs font-mono text-white/90 tabular-nums">{formatPrice(price)}</span>
       <span
         className={`text-xs font-mono font-semibold tabular-nums ${
-          positive ? "text-emerald-400" : "text-red-400"
+          positive ? "text-emerald-400" : "text-amber-400"
         }`}
       >
         {text}

@@ -54,7 +54,7 @@ export default function Dashboard() {
                 <DollarSign className="w-5 h-5 text-[var(--hero-orange)]" />
               </div>
               {heroPrice && (
-                <span className={`text-xs font-medium flex items-center gap-0.5 ${heroPrice.priceChange24h >= 0 ? "text-[var(--hero-green)]" : "text-destructive"}`}>
+                <span className={`text-xs font-medium flex items-center gap-0.5 ${heroPrice.priceChange24h >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
                   {heroPrice.priceChange24h >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                   {formatChange(heroPrice.priceChange24h).text}
                 </span>
@@ -88,7 +88,7 @@ export default function Dashboard() {
                 <Droplets className="w-5 h-5 text-[var(--hero-green)]" />
               </div>
               {vetsPrice && (
-                <span className={`text-xs font-medium flex items-center gap-0.5 ${vetsPrice.priceChange24h >= 0 ? "text-[var(--hero-green)]" : "text-destructive"}`}>
+                <span className={`text-xs font-medium flex items-center gap-0.5 ${vetsPrice.priceChange24h >= 0 ? "text-emerald-400" : "text-amber-400"}`}>
                   {vetsPrice.priceChange24h >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                   {formatChange(vetsPrice.priceChange24h).text}
                 </span>
@@ -297,7 +297,7 @@ export default function Dashboard() {
             </div>
             <div className="text-center p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground mb-1">HERO Sells</p>
-              <p className="text-lg font-bold text-destructive">{heroPrice?.txns24h?.sells ?? "—"}</p>
+              <p className="text-lg font-bold text-amber-400">{heroPrice?.txns24h?.sells ?? "—"}</p>
             </div>
             <div className="text-center p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground mb-1">VETS Buys</p>
@@ -305,7 +305,7 @@ export default function Dashboard() {
             </div>
             <div className="text-center p-3 rounded-lg bg-secondary">
               <p className="text-xs text-muted-foreground mb-1">VETS Sells</p>
-              <p className="text-lg font-bold text-destructive">{vetsPrice?.txns24h?.sells ?? "—"}</p>
+              <p className="text-lg font-bold text-amber-400">{vetsPrice?.txns24h?.sells ?? "—"}</p>
             </div>
           </div>
         </CardContent>
@@ -317,7 +317,7 @@ export default function Dashboard() {
 function PriceChangeCell({ change }: { change: number | undefined | null }) {
   const { text, positive } = formatChange(change);
   return (
-    <span className={`text-sm font-medium flex items-center justify-end gap-0.5 ${positive ? "text-[var(--hero-green)]" : "text-destructive"}`}>
+    <span className={`text-sm font-medium flex items-center justify-end gap-0.5 ${positive ? "text-emerald-400" : "text-amber-400"}`}>
       {positive ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
       {text}
     </span>

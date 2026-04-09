@@ -1,11 +1,11 @@
-# Graph Report - .  (2026-04-08)
+# Graph Report - .  (2026-04-09)
 
 ## Corpus Check
 - 498 files · ~0 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 6002 nodes · 14393 edges · 358 communities detected
+- 6002 nodes · 14393 edges · 356 communities detected
 - Extraction: 42% EXTRACTED · 58% INFERRED · 0% AMBIGUOUS · INFERRED: 8409 edges (avg confidence: 0.5)
 - Token cost: 0 input · 0 output
 
@@ -43,7 +43,7 @@ Nodes (402): A_(), aa(), ab(), Ac(), ad(), ae(), Af(), Ai() (+394 more)
 
 ### Community 2 - "Community 2"
 Cohesion: 0.01
-Nodes (209): $0(), $6(), ac(), ah, Al(), aoe, Ase, ate() (+201 more)
+Nodes (223): $6(), ac(), ah, AK(), ale(), aoe, Ase, ate() (+215 more)
 
 ### Community 3 - "Community 3"
 Cohesion: 0.01
@@ -70,80 +70,80 @@ Cohesion: 0.03
 Nodes (146): a(), ac(), ad(), af(), ag(), b(), bm(), bo() (+138 more)
 
 ### Community 9 - "Community 9"
-Cohesion: 0.02
-Nodes (128): _3e(), A2e(), a7(), AbsenceFunction(), add(), addGrammar(), ag, Assertion() (+120 more)
-
-### Community 10 - "Community 10"
 Cohesion: 0.03
 Nodes (128): addToWatchlist(), alertNewMention(), authenticateRequest(), blockSuspiciousRequests(), buildAuthHeaders(), buildCspDirectives(), buildUploadUrl(), callDataApi() (+120 more)
 
-### Community 11 - "Community 11"
+### Community 10 - "Community 10"
 Cohesion: 0.06
 Nodes (11): dbe(), eN(), ene(), Lbe, Lu(), Nf(), vbe(), vM() (+3 more)
 
+### Community 11 - "Community 11"
+Cohesion: 0.03
+Nodes (122): a4e(), a5e(), ade(), at(), autolink(), b5e(), B6e(), bae() (+114 more)
+
 ### Community 12 - "Community 12"
 Cohesion: 0.03
-Nodes (131): addObserver(), Aq(), AX(), B_(), b8(), bd, bindMethods(), build() (+123 more)
+Nodes (116): $6e(), aae(), aB(), $ae(), Boe(), Bpe(), cwe(), #d() (+108 more)
 
 ### Community 13 - "Community 13"
 Cohesion: 0.03
-Nodes (94): A3e(), aye(), bl(), c3e(), cB(), cJ(), createFromParsedTheme(), createFromRawTheme() (+86 more)
+Nodes (98): _3e(), A2e(), add(), addGrammar(), ag, bK(), Bv(), clear() (+90 more)
 
 ### Community 14 - "Community 14"
+Cohesion: 0.03
+Nodes (102): a7(), AbsenceFunction(), Aq(), Assertion(), AZ(), b4e(), Backreference(), bd (+94 more)
+
+### Community 15 - "Community 15"
 Cohesion: 0.06
 Nodes (93): A(), ae(), an(), ar(), B(), be(), Bn(), br() (+85 more)
 
-### Community 15 - "Community 15"
-Cohesion: 0.04
-Nodes (86): $6e(), aae(), aB(), $ae(), Bne, Bpe(), coe, cwe() (+78 more)
-
 ### Community 16 - "Community 16"
 Cohesion: 0.04
-Nodes (59): aa(), At(), B(), ba(), Be(), bn(), ca(), ce() (+51 more)
+Nodes (95): _4e(), A8(), aI(), AO(), Bde(), bee(), Ble(), bve() (+87 more)
 
 ### Community 17 - "Community 17"
 Cohesion: 0.03
-Nodes (86): a0e(), ade(), Aj(), ape(), cde(), che(), cme(), cpe() (+78 more)
+Nodes (87): A3e(), Aj(), ape(), aye(), c3e(), cB(), cJ(), cpe() (+79 more)
 
 ### Community 18 - "Community 18"
-Cohesion: 0.05
-Nodes (77): _4e(), A8(), aI(), AO(), Bde(), bee(), Ble(), bwe() (+69 more)
+Cohesion: 0.04
+Nodes (92): addObserver(), AX(), B_(), b8(), bindMethods(), build(), bx(), cancel() (+84 more)
 
 ### Community 19 - "Community 19"
-Cohesion: 0.05
-Nodes (73): at(), autolink(), B6e(), blockquote(), blockTokens(), Br(), c4e(), checkbox() (+65 more)
+Cohesion: 0.04
+Nodes (59): aa(), At(), B(), ba(), Be(), bn(), ca(), ce() (+51 more)
 
 ### Community 20 - "Community 20"
-Cohesion: 0.03
-Nodes (74): A(), acceptOverwrite(), AK(), b3e(), bK(), _buildAnchorCache(), #c(), c2e() (+66 more)
-
-### Community 21 - "Community 21"
 Cohesion: 0.07
 Nodes (51): An(), ar(), B(), bn(), bt(), C(), dn(), dr() (+43 more)
 
-### Community 22 - "Community 22"
+### Community 21 - "Community 21"
 Cohesion: 0.04
-Nodes (46): a5e(), b5e(), bae(), bH(), CL(), e4e(), Ej(), f5e() (+38 more)
+Nodes (55): a0e(), Al(), ave(), cme(), cne(), cve(), dne(), dve() (+47 more)
+
+### Community 22 - "Community 22"
+Cohesion: 0.05
+Nodes (39): bE(), Ce(), Cf(), dJ(), F0e(), gi(), h0e(), He() (+31 more)
 
 ### Community 23 - "Community 23"
-Cohesion: 0.05
-Nodes (45): bE(), Ce(), Cf(), $de(), dJ(), epe(), F0e(), fg (+37 more)
-
-### Community 24 - "Community 24"
 Cohesion: 0.08
 Nodes (43): build(), calculateHorizontalSpace(), calculateSpace(), calculateSpaceIfDrawnHorizontally(), calculateSpaceIfDrawnVertical(), calculateVerticalSpace(), constructor(), ei() (+35 more)
 
-### Community 25 - "Community 25"
+### Community 24 - "Community 24"
 Cohesion: 0.04
-Nodes (48): ale(), AN(), As(), clearTimeout(), CR(), ct(), ec(), fR() (+40 more)
+Nodes (41): aie(), AN(), As(), cie(), CN(), ct(), dB(), die (+33 more)
 
-### Community 26 - "Community 26"
+### Community 25 - "Community 25"
 Cohesion: 0.07
 Nodes (30): activationCount(), addActor(), addALink(), addBox(), addDetails(), addLinks(), addMessage(), addNote() (+22 more)
 
-### Community 27 - "Community 27"
+### Community 26 - "Community 26"
 Cohesion: 0.06
 Nodes (33): addLink(), addNodeFromVertex(), addSingleLink(), addSubGraph(), addVertex(), clear(), constructor(), countChar() (+25 more)
+
+### Community 27 - "Community 27"
+Cohesion: 0.06
+Nodes (28): bH(), c7(), Ej(), Fde(), Gde(), gH(), gpe(), Hde() (+20 more)
 
 ### Community 28 - "Community 28"
 Cohesion: 0.09
@@ -154,48 +154,48 @@ Cohesion: 0.15
 Nodes (3): Ct(), jl, w()
 
 ### Community 30 - "Community 30"
+Cohesion: 0.06
+Nodes (40): $0(), A(), acceptOverwrite(), bbe(), _buildAnchorCache(), #c(), c2e(), clone() (+32 more)
+
+### Community 31 - "Community 31"
 Cohesion: 0.07
 Nodes (21): addAnnotation(), addClass(), addClassesToNamespace(), addInterface(), addMember(), addRelation(), clear(), constructor() (+13 more)
 
-### Community 31 - "Community 31"
+### Community 32 - "Community 32"
 Cohesion: 0.1
 Nodes (4): C(), L, M(), y()
 
-### Community 32 - "Community 32"
+### Community 33 - "Community 33"
 Cohesion: 0.1
 Nodes (35): addClass(), addPoints(), ae(), build(), calculateSpace(), ce(), clear(), constructor() (+27 more)
 
-### Community 33 - "Community 33"
+### Community 34 - "Community 34"
 Cohesion: 0.07
 Nodes (4): $f, Ia(), on, yi
 
-### Community 34 - "Community 34"
+### Community 35 - "Community 35"
 Cohesion: 0.07
 Nodes (7): cc, ege, H7, iw, ki, lL(), os
 
-### Community 35 - "Community 35"
+### Community 36 - "Community 36"
 Cohesion: 0.1
 Nodes (8): DL(), dR(), gN(), htmlBuilder(), HZ(), Iz(), Pu, Tfe()
 
-### Community 36 - "Community 36"
+### Community 37 - "Community 37"
 Cohesion: 0.09
 Nodes (10): addElement(), addRequirement(), clear(), constructor(), getData(), getDirection(), getInitialElement(), getInitialRequirement() (+2 more)
 
-### Community 37 - "Community 37"
+### Community 38 - "Community 38"
 Cohesion: 0.15
 Nodes (24): an(), C(), d(), E(), en(), fn(), G(), H() (+16 more)
 
-### Community 38 - "Community 38"
+### Community 39 - "Community 39"
 Cohesion: 0.1
 Nodes (13): Bt(), ct(), Dt(), E(), ht(), kt(), Nt(), pt() (+5 more)
 
-### Community 39 - "Community 39"
-Cohesion: 0.09
-Nodes (20): Boe(), Dy(), #g(), Hoe(), KN, loe, mwe(), noe() (+12 more)
-
 ### Community 40 - "Community 40"
 Cohesion: 0.08
-Nodes (24): a4e(), cne(), d4e(), dne(), F7(), fP(), GP(), hP() (+16 more)
+Nodes (26): bl(), dde(), e8(), fg, Fw(), hO(), Ice(), jce() (+18 more)
 
 ### Community 41 - "Community 41"
 Cohesion: 0.11
@@ -210,56 +210,56 @@ Cohesion: 0.12
 Nodes (12): addNode(), assignSections(), clear(), constructor(), _e(), flattenNodes(), generateEdges(), getData() (+4 more)
 
 ### Community 44 - "Community 44"
-Cohesion: 0.1
-Nodes (17): aD(), cO(), getId(), gM(), Jbe(), Kge(), mathmlBuilder(), oR() (+9 more)
-
-### Community 45 - "Community 45"
-Cohesion: 0.14
-Nodes (12): aie(), cie(), dB(), die, iie(), jie(), lie(), mie() (+4 more)
-
-### Community 46 - "Community 46"
 Cohesion: 0.17
 Nodes (11): an(), H(), on(), Q(), R(), tn(), V(), vn() (+3 more)
 
-### Community 47 - "Community 47"
+### Community 45 - "Community 45"
+Cohesion: 0.12
+Nodes (14): aD(), cO(), gM(), Jbe(), Kge(), mathmlBuilder(), oR(), RN() (+6 more)
+
+### Community 46 - "Community 46"
 Cohesion: 0.15
 Nodes (1): fe
 
-### Community 48 - "Community 48"
+### Community 47 - "Community 47"
 Cohesion: 0.25
 Nodes (13): compactText(), describeElement(), elText(), formatArg(), formatArgs(), getInputValueSafe(), installUiEventListeners(), isSensitiveField() (+5 more)
 
-### Community 49 - "Community 49"
+### Community 48 - "Community 48"
 Cohesion: 0.28
 Nodes (3): Abe(), obe(), Rbe()
 
-### Community 50 - "Community 50"
+### Community 49 - "Community 49"
 Cohesion: 0.24
 Nodes (10): at(), J(), K(), O(), Q, S(), V, W() (+2 more)
 
-### Community 51 - "Community 51"
+### Community 50 - "Community 50"
 Cohesion: 0.33
 Nodes (5): c(), h(), l(), o, p()
 
-### Community 52 - "Community 52"
+### Community 51 - "Community 51"
 Cohesion: 0.27
 Nodes (6): G(), j(), K(), Q(), rn(), v()
 
-### Community 53 - "Community 53"
-Cohesion: 0.39
-Nodes (8): jK(), kV(), lK(), Lv(), QK(), uK(), y8(), zK()
-
-### Community 54 - "Community 54"
+### Community 52 - "Community 52"
 Cohesion: 0.29
 Nodes (1): Ku
 
-### Community 55 - "Community 55"
+### Community 53 - "Community 53"
 Cohesion: 0.67
 Nodes (1): Py
 
-### Community 56 - "Community 56"
+### Community 54 - "Community 54"
 Cohesion: 0.67
 Nodes (1): ns
+
+### Community 55 - "Community 55"
+Cohesion: 1.0
+Nodes (0): 
+
+### Community 56 - "Community 56"
+Cohesion: 1.0
+Nodes (0): 
 
 ### Community 57 - "Community 57"
 Cohesion: 1.0
@@ -1457,626 +1457,618 @@ Nodes (0):
 Cohesion: 1.0
 Nodes (0): 
 
-### Community 356 - "Community 356"
-Cohesion: 1.0
-Nodes (0): 
-
-### Community 357 - "Community 357"
-Cohesion: 1.0
-Nodes (0): 
-
 ## Knowledge Gaps
-- **Thin community `Community 57`** (2 nodes): `clone-Bt-CU1M7.js`, `a()`
+- **Thin community `Community 55`** (2 nodes): `clone-Bt-CU1M7.js`, `a()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 58`** (2 nodes): `init-Gi6I4Gst.js`, `t()`
+- **Thin community `Community 56`** (2 nodes): `init-Gi6I4Gst.js`, `t()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 59`** (2 nodes): `wasm-CG6Dc4jp.js`, `E()`
+- **Thin community `Community 57`** (2 nodes): `wasm-CG6Dc4jp.js`, `E()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 60`** (2 nodes): `priceFeed.test.ts`, `makeMockPair()`
+- **Thin community `Community 58`** (2 nodes): `priceFeed.test.ts`, `makeMockPair()`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 61`** (1 nodes): `SquirrelSwapWidget.tsx`
+- **Thin community `Community 59`** (1 nodes): `SquirrelSwapWidget.tsx`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 62`** (1 nodes): `abap-BdImnpbu.js`
+- **Thin community `Community 60`** (1 nodes): `abap-BdImnpbu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 63`** (1 nodes): `actionscript-3-CfeIJUat.js`
+- **Thin community `Community 61`** (1 nodes): `actionscript-3-CfeIJUat.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 64`** (1 nodes): `ada-bCR0ucgS.js`
+- **Thin community `Community 62`** (1 nodes): `ada-bCR0ucgS.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 65`** (1 nodes): `andromeeda-C-Jbm3Hp.js`
+- **Thin community `Community 63`** (1 nodes): `andromeeda-C-Jbm3Hp.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 66`** (1 nodes): `angular-html-CU67Zn6k.js`
+- **Thin community `Community 64`** (1 nodes): `angular-html-CU67Zn6k.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 67`** (1 nodes): `angular-ts-BwZT4LLn.js`
+- **Thin community `Community 65`** (1 nodes): `angular-ts-BwZT4LLn.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 68`** (1 nodes): `apache-Pmp26Uib.js`
+- **Thin community `Community 66`** (1 nodes): `apache-Pmp26Uib.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 69`** (1 nodes): `apex-C7Pw0Ztw.js`
+- **Thin community `Community 67`** (1 nodes): `apex-C7Pw0Ztw.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 70`** (1 nodes): `apl-dKokRX4l.js`
+- **Thin community `Community 68`** (1 nodes): `apl-dKokRX4l.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 71`** (1 nodes): `applescript-Co6uUVPk.js`
+- **Thin community `Community 69`** (1 nodes): `applescript-Co6uUVPk.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 72`** (1 nodes): `ara-BRHolxvo.js`
+- **Thin community `Community 70`** (1 nodes): `ara-BRHolxvo.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 73`** (1 nodes): `asciidoc-Dv7Oe6Be.js`
+- **Thin community `Community 71`** (1 nodes): `asciidoc-Dv7Oe6Be.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 74`** (1 nodes): `asm-D_Q5rh1f.js`
+- **Thin community `Community 72`** (1 nodes): `asm-D_Q5rh1f.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 75`** (1 nodes): `astro-CbQHKStN.js`
+- **Thin community `Community 73`** (1 nodes): `astro-CbQHKStN.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 76`** (1 nodes): `aurora-x-D-2ljcwZ.js`
+- **Thin community `Community 74`** (1 nodes): `aurora-x-D-2ljcwZ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 77`** (1 nodes): `awk-DMzUqQB5.js`
+- **Thin community `Community 75`** (1 nodes): `awk-DMzUqQB5.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 78`** (1 nodes): `ayu-dark-Cv9koXgw.js`
+- **Thin community `Community 76`** (1 nodes): `ayu-dark-Cv9koXgw.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 79`** (1 nodes): `ballerina-BFfxhgS-.js`
+- **Thin community `Community 77`** (1 nodes): `ballerina-BFfxhgS-.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 80`** (1 nodes): `bat-BkioyH1T.js`
+- **Thin community `Community 78`** (1 nodes): `bat-BkioyH1T.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 81`** (1 nodes): `beancount-k_qm7-4y.js`
+- **Thin community `Community 79`** (1 nodes): `beancount-k_qm7-4y.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 82`** (1 nodes): `berry-D08WgyRC.js`
+- **Thin community `Community 80`** (1 nodes): `berry-D08WgyRC.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 83`** (1 nodes): `bibtex-CHM0blh-.js`
+- **Thin community `Community 81`** (1 nodes): `bibtex-CHM0blh-.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 84`** (1 nodes): `bicep-6nHXG8SA.js`
+- **Thin community `Community 82`** (1 nodes): `bicep-6nHXG8SA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 85`** (1 nodes): `blade-DVc8C-J4.js`
+- **Thin community `Community 83`** (1 nodes): `blade-DVc8C-J4.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 86`** (1 nodes): `bsl-BO_Y6i37.js`
+- **Thin community `Community 84`** (1 nodes): `bsl-BO_Y6i37.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 87`** (1 nodes): `c-BIGW1oBm.js`
+- **Thin community `Community 85`** (1 nodes): `c-BIGW1oBm.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 88`** (1 nodes): `cadence-Bv_4Rxtq.js`
+- **Thin community `Community 86`** (1 nodes): `cadence-Bv_4Rxtq.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 89`** (1 nodes): `cairo-KRGpt6FW.js`
+- **Thin community `Community 87`** (1 nodes): `cairo-KRGpt6FW.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 90`** (1 nodes): `catppuccin-frappe-DFWUc33u.js`
+- **Thin community `Community 88`** (1 nodes): `catppuccin-frappe-DFWUc33u.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 91`** (1 nodes): `catppuccin-latte-C9dUb6Cb.js`
+- **Thin community `Community 89`** (1 nodes): `catppuccin-latte-C9dUb6Cb.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 92`** (1 nodes): `catppuccin-macchiato-DQyhUUbL.js`
+- **Thin community `Community 90`** (1 nodes): `catppuccin-macchiato-DQyhUUbL.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 93`** (1 nodes): `catppuccin-mocha-D87Tk5Gz.js`
+- **Thin community `Community 91`** (1 nodes): `catppuccin-mocha-D87Tk5Gz.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 94`** (1 nodes): `clarity-D53aC0YG.js`
+- **Thin community `Community 92`** (1 nodes): `clarity-D53aC0YG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 95`** (1 nodes): `clojure-P80f7IUj.js`
+- **Thin community `Community 93`** (1 nodes): `clojure-P80f7IUj.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 96`** (1 nodes): `cmake-D1j8_8rp.js`
+- **Thin community `Community 94`** (1 nodes): `cmake-D1j8_8rp.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 97`** (1 nodes): `cobol-nwyudZeR.js`
+- **Thin community `Community 95`** (1 nodes): `cobol-nwyudZeR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 98`** (1 nodes): `codeowners-Bp6g37R7.js`
+- **Thin community `Community 96`** (1 nodes): `codeowners-Bp6g37R7.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 99`** (1 nodes): `codeql-DsOJ9woJ.js`
+- **Thin community `Community 97`** (1 nodes): `codeql-DsOJ9woJ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 100`** (1 nodes): `coffee-Ch7k5sss.js`
+- **Thin community `Community 98`** (1 nodes): `coffee-Ch7k5sss.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 101`** (1 nodes): `common-lisp-Cg-RD9OK.js`
+- **Thin community `Community 99`** (1 nodes): `common-lisp-Cg-RD9OK.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 102`** (1 nodes): `connectors_false-CbuGjHSM.js`
+- **Thin community `Community 100`** (1 nodes): `connectors_false-CbuGjHSM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 103`** (1 nodes): `connectors_false-DGNxYq5v.js`
+- **Thin community `Community 101`** (1 nodes): `connectors_false-DGNxYq5v.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 104`** (1 nodes): `connectors_false-DLQAwR0T.js`
+- **Thin community `Community 102`** (1 nodes): `connectors_false-DLQAwR0T.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 105`** (1 nodes): `connectors_false-Dloxlzde.js`
+- **Thin community `Community 103`** (1 nodes): `connectors_false-Dloxlzde.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 106`** (1 nodes): `coq-DkFqJrB1.js`
+- **Thin community `Community 104`** (1 nodes): `coq-DkFqJrB1.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 107`** (1 nodes): `cpp-CofmeUqb.js`
+- **Thin community `Community 105`** (1 nodes): `cpp-CofmeUqb.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 108`** (1 nodes): `crystal-tKQVLTB8.js`
+- **Thin community `Community 106`** (1 nodes): `crystal-tKQVLTB8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 109`** (1 nodes): `csharp-CX12Zw3r.js`
+- **Thin community `Community 107`** (1 nodes): `csharp-CX12Zw3r.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 110`** (1 nodes): `css-DPfMkruS.js`
+- **Thin community `Community 108`** (1 nodes): `css-DPfMkruS.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 111`** (1 nodes): `csv-fuZLfV_i.js`
+- **Thin community `Community 109`** (1 nodes): `csv-fuZLfV_i.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 112`** (1 nodes): `cue-D82EKSYY.js`
+- **Thin community `Community 110`** (1 nodes): `cue-D82EKSYY.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 113`** (1 nodes): `cypher-COkxafJQ.js`
+- **Thin community `Community 111`** (1 nodes): `cypher-COkxafJQ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 114`** (1 nodes): `d-85-TOEBH.js`
+- **Thin community `Community 112`** (1 nodes): `d-85-TOEBH.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 115`** (1 nodes): `dark-plus-eOWES_5F.js`
+- **Thin community `Community 113`** (1 nodes): `dark-plus-eOWES_5F.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 116`** (1 nodes): `dart-CF10PKvl.js`
+- **Thin community `Community 114`** (1 nodes): `dart-CF10PKvl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 117`** (1 nodes): `dax-CEL-wOlO.js`
+- **Thin community `Community 115`** (1 nodes): `dax-CEL-wOlO.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 118`** (1 nodes): `desktop-BmXAJ9_W.js`
+- **Thin community `Community 116`** (1 nodes): `desktop-BmXAJ9_W.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 119`** (1 nodes): `diff-D97Zzqfu.js`
+- **Thin community `Community 117`** (1 nodes): `diff-D97Zzqfu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 120`** (1 nodes): `docker-BcOcwvcX.js`
+- **Thin community `Community 118`** (1 nodes): `docker-BcOcwvcX.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 121`** (1 nodes): `dotenv-Da5cRb03.js`
+- **Thin community `Community 119`** (1 nodes): `dotenv-Da5cRb03.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 122`** (1 nodes): `dracula-BzJJZx-M.js`
+- **Thin community `Community 120`** (1 nodes): `dracula-BzJJZx-M.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 123`** (1 nodes): `dracula-soft-BXkSAIEj.js`
+- **Thin community `Community 121`** (1 nodes): `dracula-soft-BXkSAIEj.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 124`** (1 nodes): `dream-maker-BtqSS_iP.js`
+- **Thin community `Community 122`** (1 nodes): `dream-maker-BtqSS_iP.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 125`** (1 nodes): `edge-BkV0erSs.js`
+- **Thin community `Community 123`** (1 nodes): `edge-BkV0erSs.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 126`** (1 nodes): `elixir-CDX3lj18.js`
+- **Thin community `Community 124`** (1 nodes): `elixir-CDX3lj18.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 127`** (1 nodes): `elm-DbKCFpqz.js`
+- **Thin community `Community 125`** (1 nodes): `elm-DbKCFpqz.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 128`** (1 nodes): `emacs-lisp-C9XAeP06.js`
+- **Thin community `Community 126`** (1 nodes): `emacs-lisp-C9XAeP06.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 129`** (1 nodes): `erb-BOJIQeun.js`
+- **Thin community `Community 127`** (1 nodes): `erb-BOJIQeun.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 130`** (1 nodes): `erlang-DsQrWhSR.js`
+- **Thin community `Community 128`** (1 nodes): `erlang-DsQrWhSR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 131`** (1 nodes): `everforest-dark-BgDCqdQA.js`
+- **Thin community `Community 129`** (1 nodes): `everforest-dark-BgDCqdQA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 132`** (1 nodes): `everforest-light-C8M2exoo.js`
+- **Thin community `Community 130`** (1 nodes): `everforest-light-C8M2exoo.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 133`** (1 nodes): `fennel-BYunw83y.js`
+- **Thin community `Community 131`** (1 nodes): `fennel-BYunw83y.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 134`** (1 nodes): `fish-BvzEVeQv.js`
+- **Thin community `Community 132`** (1 nodes): `fish-BvzEVeQv.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 135`** (1 nodes): `fluent-C4IJs8-o.js`
+- **Thin community `Community 133`** (1 nodes): `fluent-C4IJs8-o.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 136`** (1 nodes): `fortran-fixed-form-BZjJHVRy.js`
+- **Thin community `Community 134`** (1 nodes): `fortran-fixed-form-BZjJHVRy.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 137`** (1 nodes): `fortran-free-form-D22FLkUw.js`
+- **Thin community `Community 135`** (1 nodes): `fortran-free-form-D22FLkUw.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 138`** (1 nodes): `fsharp-CXgrBDvD.js`
+- **Thin community `Community 136`** (1 nodes): `fsharp-CXgrBDvD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 139`** (1 nodes): `gdresource-B7Tvp0Sc.js`
+- **Thin community `Community 137`** (1 nodes): `gdresource-B7Tvp0Sc.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 140`** (1 nodes): `gdscript-DTMYz4Jt.js`
+- **Thin community `Community 138`** (1 nodes): `gdscript-DTMYz4Jt.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 141`** (1 nodes): `gdshader-DkwncUOv.js`
+- **Thin community `Community 139`** (1 nodes): `gdshader-DkwncUOv.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 142`** (1 nodes): `genie-D0YGMca9.js`
+- **Thin community `Community 140`** (1 nodes): `genie-D0YGMca9.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 143`** (1 nodes): `gherkin-DyxjwDmM.js`
+- **Thin community `Community 141`** (1 nodes): `gherkin-DyxjwDmM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 144`** (1 nodes): `git-commit-F4YmCXRG.js`
+- **Thin community `Community 142`** (1 nodes): `git-commit-F4YmCXRG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 145`** (1 nodes): `git-rebase-r7XF79zn.js`
+- **Thin community `Community 143`** (1 nodes): `git-rebase-r7XF79zn.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 146`** (1 nodes): `github-dark-DHJKELXO.js`
+- **Thin community `Community 144`** (1 nodes): `github-dark-DHJKELXO.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 147`** (1 nodes): `github-dark-default-Cuk6v7N8.js`
+- **Thin community `Community 145`** (1 nodes): `github-dark-default-Cuk6v7N8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 148`** (1 nodes): `github-dark-dimmed-DH5Ifo-i.js`
+- **Thin community `Community 146`** (1 nodes): `github-dark-dimmed-DH5Ifo-i.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 149`** (1 nodes): `github-dark-high-contrast-E3gJ1_iC.js`
+- **Thin community `Community 147`** (1 nodes): `github-dark-high-contrast-E3gJ1_iC.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 150`** (1 nodes): `github-light-DAi9KRSo.js`
+- **Thin community `Community 148`** (1 nodes): `github-light-DAi9KRSo.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 151`** (1 nodes): `github-light-default-D7oLnXFd.js`
+- **Thin community `Community 149`** (1 nodes): `github-light-default-D7oLnXFd.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 152`** (1 nodes): `github-light-high-contrast-BfjtVDDH.js`
+- **Thin community `Community 150`** (1 nodes): `github-light-high-contrast-BfjtVDDH.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 153`** (1 nodes): `gleam-BspZqrRM.js`
+- **Thin community `Community 151`** (1 nodes): `gleam-BspZqrRM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 154`** (1 nodes): `glimmer-js-Rg0-pVw9.js`
+- **Thin community `Community 152`** (1 nodes): `glimmer-js-Rg0-pVw9.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 155`** (1 nodes): `glimmer-ts-U6CK756n.js`
+- **Thin community `Community 153`** (1 nodes): `glimmer-ts-U6CK756n.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 156`** (1 nodes): `glsl-DplSGwfg.js`
+- **Thin community `Community 154`** (1 nodes): `glsl-DplSGwfg.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 157`** (1 nodes): `gnuplot-DdkO51Og.js`
+- **Thin community `Community 155`** (1 nodes): `gnuplot-DdkO51Og.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 158`** (1 nodes): `go-Dn2_MT6a.js`
+- **Thin community `Community 156`** (1 nodes): `go-Dn2_MT6a.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 159`** (1 nodes): `graphql-ChdNCCLP.js`
+- **Thin community `Community 157`** (1 nodes): `graphql-ChdNCCLP.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 160`** (1 nodes): `groovy-gcz8RCvz.js`
+- **Thin community `Community 158`** (1 nodes): `groovy-gcz8RCvz.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 161`** (1 nodes): `gruvbox-dark-hard-CFHQjOhq.js`
+- **Thin community `Community 159`** (1 nodes): `gruvbox-dark-hard-CFHQjOhq.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 162`** (1 nodes): `gruvbox-dark-medium-GsRaNv29.js`
+- **Thin community `Community 160`** (1 nodes): `gruvbox-dark-medium-GsRaNv29.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 163`** (1 nodes): `gruvbox-dark-soft-CVdnzihN.js`
+- **Thin community `Community 161`** (1 nodes): `gruvbox-dark-soft-CVdnzihN.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 164`** (1 nodes): `gruvbox-light-hard-CH1njM8p.js`
+- **Thin community `Community 162`** (1 nodes): `gruvbox-light-hard-CH1njM8p.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 165`** (1 nodes): `gruvbox-light-medium-DRw_LuNl.js`
+- **Thin community `Community 163`** (1 nodes): `gruvbox-light-medium-DRw_LuNl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 166`** (1 nodes): `gruvbox-light-soft-hJgmCMqR.js`
+- **Thin community `Community 164`** (1 nodes): `gruvbox-light-soft-hJgmCMqR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 167`** (1 nodes): `hack-CaT9iCJl.js`
+- **Thin community `Community 165`** (1 nodes): `hack-CaT9iCJl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 168`** (1 nodes): `haml-B8DHNrY2.js`
+- **Thin community `Community 166`** (1 nodes): `haml-B8DHNrY2.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 169`** (1 nodes): `handlebars-BL8al0AC.js`
+- **Thin community `Community 167`** (1 nodes): `handlebars-BL8al0AC.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 170`** (1 nodes): `haskell-Df6bDoY_.js`
+- **Thin community `Community 168`** (1 nodes): `haskell-Df6bDoY_.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 171`** (1 nodes): `haxe-CzTSHFRz.js`
+- **Thin community `Community 169`** (1 nodes): `haxe-CzTSHFRz.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 172`** (1 nodes): `hcl-BWvSN4gD.js`
+- **Thin community `Community 170`** (1 nodes): `hcl-BWvSN4gD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 173`** (1 nodes): `hjson-D5-asLiD.js`
+- **Thin community `Community 171`** (1 nodes): `hjson-D5-asLiD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 174`** (1 nodes): `hlsl-D3lLCCz7.js`
+- **Thin community `Community 172`** (1 nodes): `hlsl-D3lLCCz7.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 175`** (1 nodes): `houston-DnULxvSX.js`
+- **Thin community `Community 173`** (1 nodes): `houston-DnULxvSX.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 176`** (1 nodes): `html-GMplVEZG.js`
+- **Thin community `Community 174`** (1 nodes): `html-GMplVEZG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 177`** (1 nodes): `html-derivative-BFtXZ54Q.js`
+- **Thin community `Community 175`** (1 nodes): `html-derivative-BFtXZ54Q.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 178`** (1 nodes): `http-jrhK8wxY.js`
+- **Thin community `Community 176`** (1 nodes): `http-jrhK8wxY.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 179`** (1 nodes): `hurl-irOxFIW8.js`
+- **Thin community `Community 177`** (1 nodes): `hurl-irOxFIW8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 180`** (1 nodes): `hxml-Bvhsp5Yf.js`
+- **Thin community `Community 178`** (1 nodes): `hxml-Bvhsp5Yf.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 181`** (1 nodes): `hy-DFXneXwc.js`
+- **Thin community `Community 179`** (1 nodes): `hy-DFXneXwc.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 182`** (1 nodes): `imba-DGztddWO.js`
+- **Thin community `Community 180`** (1 nodes): `imba-DGztddWO.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 183`** (1 nodes): `ini-BEwlwnbL.js`
+- **Thin community `Community 181`** (1 nodes): `ini-BEwlwnbL.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 184`** (1 nodes): `java-CylS5w8V.js`
+- **Thin community `Community 182`** (1 nodes): `java-CylS5w8V.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 185`** (1 nodes): `javascript-wDzz0qaB.js`
+- **Thin community `Community 183`** (1 nodes): `javascript-wDzz0qaB.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 186`** (1 nodes): `jinja-4LBKfQ-Z.js`
+- **Thin community `Community 184`** (1 nodes): `jinja-4LBKfQ-Z.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 187`** (1 nodes): `jison-wvAkD_A8.js`
+- **Thin community `Community 185`** (1 nodes): `jison-wvAkD_A8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 188`** (1 nodes): `json-Cp-IABpG.js`
+- **Thin community `Community 186`** (1 nodes): `json-Cp-IABpG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 189`** (1 nodes): `json5-C9tS-k6U.js`
+- **Thin community `Community 187`** (1 nodes): `json5-C9tS-k6U.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 190`** (1 nodes): `jsonc-Des-eS-w.js`
+- **Thin community `Community 188`** (1 nodes): `jsonc-Des-eS-w.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 191`** (1 nodes): `jsonl-DcaNXYhu.js`
+- **Thin community `Community 189`** (1 nodes): `jsonl-DcaNXYhu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 192`** (1 nodes): `jsonnet-DFQXde-d.js`
+- **Thin community `Community 190`** (1 nodes): `jsonnet-DFQXde-d.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 193`** (1 nodes): `jssm-C2t-YnRu.js`
+- **Thin community `Community 191`** (1 nodes): `jssm-C2t-YnRu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 194`** (1 nodes): `jsx-g9-lgVsj.js`
+- **Thin community `Community 192`** (1 nodes): `jsx-g9-lgVsj.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 195`** (1 nodes): `julia-C8NyazO9.js`
+- **Thin community `Community 193`** (1 nodes): `julia-C8NyazO9.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 196`** (1 nodes): `kanagawa-dragon-CkXjmgJE.js`
+- **Thin community `Community 194`** (1 nodes): `kanagawa-dragon-CkXjmgJE.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 197`** (1 nodes): `kanagawa-lotus-CfQXZHmo.js`
+- **Thin community `Community 195`** (1 nodes): `kanagawa-lotus-CfQXZHmo.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 198`** (1 nodes): `kanagawa-wave-DWedfzmr.js`
+- **Thin community `Community 196`** (1 nodes): `kanagawa-wave-DWedfzmr.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 199`** (1 nodes): `kdl-DV7GczEv.js`
+- **Thin community `Community 197`** (1 nodes): `kdl-DV7GczEv.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 200`** (1 nodes): `kotlin-BdnUsdx6.js`
+- **Thin community `Community 198`** (1 nodes): `kotlin-BdnUsdx6.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 201`** (1 nodes): `kusto-BvAqAH-y.js`
+- **Thin community `Community 199`** (1 nodes): `kusto-BvAqAH-y.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 202`** (1 nodes): `laserwave-DUszq2jm.js`
+- **Thin community `Community 200`** (1 nodes): `laserwave-DUszq2jm.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 203`** (1 nodes): `latex-BUKiar2Z.js`
+- **Thin community `Community 201`** (1 nodes): `latex-BUKiar2Z.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 204`** (1 nodes): `lean-DP1Csr6i.js`
+- **Thin community `Community 202`** (1 nodes): `lean-DP1Csr6i.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 205`** (1 nodes): `less-B1dDrJ26.js`
+- **Thin community `Community 203`** (1 nodes): `less-B1dDrJ26.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 206`** (1 nodes): `light-plus-B7mTdjB0.js`
+- **Thin community `Community 204`** (1 nodes): `light-plus-B7mTdjB0.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 207`** (1 nodes): `liquid-DYVedYrR.js`
+- **Thin community `Community 205`** (1 nodes): `liquid-DYVedYrR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 208`** (1 nodes): `llvm-BtvRca6l.js`
+- **Thin community `Community 206`** (1 nodes): `llvm-BtvRca6l.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 209`** (1 nodes): `log-2UxHyX5q.js`
+- **Thin community `Community 207`** (1 nodes): `log-2UxHyX5q.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 210`** (1 nodes): `logo-BtOb2qkB.js`
+- **Thin community `Community 208`** (1 nodes): `logo-BtOb2qkB.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 211`** (1 nodes): `lua-BbnMAYS6.js`
+- **Thin community `Community 209`** (1 nodes): `lua-BbnMAYS6.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 212`** (1 nodes): `luau-CXu1NL6O.js`
+- **Thin community `Community 210`** (1 nodes): `luau-CXu1NL6O.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 213`** (1 nodes): `make-CHLpvVh8.js`
+- **Thin community `Community 211`** (1 nodes): `make-CHLpvVh8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 214`** (1 nodes): `markdown-Cvjx9yec.js`
+- **Thin community `Community 212`** (1 nodes): `markdown-Cvjx9yec.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 215`** (1 nodes): `marko-CPi9NSCl.js`
+- **Thin community `Community 213`** (1 nodes): `marko-CPi9NSCl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 216`** (1 nodes): `material-theme-D5KoaKCx.js`
+- **Thin community `Community 214`** (1 nodes): `material-theme-D5KoaKCx.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 217`** (1 nodes): `material-theme-darker-BfHTSMKl.js`
+- **Thin community `Community 215`** (1 nodes): `material-theme-darker-BfHTSMKl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 218`** (1 nodes): `material-theme-lighter-B0m2ddpp.js`
+- **Thin community `Community 216`** (1 nodes): `material-theme-lighter-B0m2ddpp.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 219`** (1 nodes): `material-theme-ocean-CyktbL80.js`
+- **Thin community `Community 217`** (1 nodes): `material-theme-ocean-CyktbL80.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 220`** (1 nodes): `material-theme-palenight-Csfq5Kiy.js`
+- **Thin community `Community 218`** (1 nodes): `material-theme-palenight-Csfq5Kiy.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 221`** (1 nodes): `matlab-D7o27uSR.js`
+- **Thin community `Community 219`** (1 nodes): `matlab-D7o27uSR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 222`** (1 nodes): `mdc-DUICxH0z.js`
+- **Thin community `Community 220`** (1 nodes): `mdc-DUICxH0z.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 223`** (1 nodes): `mdx-Cmh6b_Ma.js`
+- **Thin community `Community 221`** (1 nodes): `mdx-Cmh6b_Ma.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 224`** (1 nodes): `mermaid-DKYwYmdq.js`
+- **Thin community `Community 222`** (1 nodes): `mermaid-DKYwYmdq.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 225`** (1 nodes): `min-dark-CafNBF8u.js`
+- **Thin community `Community 223`** (1 nodes): `min-dark-CafNBF8u.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 226`** (1 nodes): `min-light-CTRr51gU.js`
+- **Thin community `Community 224`** (1 nodes): `min-light-CTRr51gU.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 227`** (1 nodes): `mipsasm-CKIfxQSi.js`
+- **Thin community `Community 225`** (1 nodes): `mipsasm-CKIfxQSi.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 228`** (1 nodes): `mojo-1DNp92w6.js`
+- **Thin community `Community 226`** (1 nodes): `mojo-1DNp92w6.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 229`** (1 nodes): `monokai-D4h5O-jR.js`
+- **Thin community `Community 227`** (1 nodes): `monokai-D4h5O-jR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 230`** (1 nodes): `move-Bu9oaDYs.js`
+- **Thin community `Community 228`** (1 nodes): `move-Bu9oaDYs.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 231`** (1 nodes): `narrat-DRg8JJMk.js`
+- **Thin community `Community 229`** (1 nodes): `narrat-DRg8JJMk.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 232`** (1 nodes): `nextflow-CUEJCptM.js`
+- **Thin community `Community 230`** (1 nodes): `nextflow-CUEJCptM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 233`** (1 nodes): `nginx-DknmC5AR.js`
+- **Thin community `Community 231`** (1 nodes): `nginx-DknmC5AR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 234`** (1 nodes): `night-owl-C39BiMTA.js`
+- **Thin community `Community 232`** (1 nodes): `night-owl-C39BiMTA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 235`** (1 nodes): `nim-CVrawwO9.js`
+- **Thin community `Community 233`** (1 nodes): `nim-CVrawwO9.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 236`** (1 nodes): `nix-BbRYJGeE.js`
+- **Thin community `Community 234`** (1 nodes): `nix-BbRYJGeE.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 237`** (1 nodes): `nord-Ddv68eIx.js`
+- **Thin community `Community 235`** (1 nodes): `nord-Ddv68eIx.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 238`** (1 nodes): `nushell-C-sUppwS.js`
+- **Thin community `Community 236`** (1 nodes): `nushell-C-sUppwS.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 239`** (1 nodes): `objective-c-DXmwc3jG.js`
+- **Thin community `Community 237`** (1 nodes): `objective-c-DXmwc3jG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 240`** (1 nodes): `objective-cpp-CLxacb5B.js`
+- **Thin community `Community 238`** (1 nodes): `objective-cpp-CLxacb5B.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 241`** (1 nodes): `ocaml-C0hk2d4L.js`
+- **Thin community `Community 239`** (1 nodes): `ocaml-C0hk2d4L.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 242`** (1 nodes): `one-dark-pro-DVMEJ2y_.js`
+- **Thin community `Community 240`** (1 nodes): `one-dark-pro-DVMEJ2y_.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 243`** (1 nodes): `one-light-PoHY5YXO.js`
+- **Thin community `Community 241`** (1 nodes): `one-light-PoHY5YXO.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 244`** (1 nodes): `pascal-D93ZcfNL.js`
+- **Thin community `Community 242`** (1 nodes): `pascal-D93ZcfNL.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 245`** (1 nodes): `perl-C0TMdlhV.js`
+- **Thin community `Community 243`** (1 nodes): `perl-C0TMdlhV.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 246`** (1 nodes): `php-CDn_0X-4.js`
+- **Thin community `Community 244`** (1 nodes): `php-CDn_0X-4.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 247`** (1 nodes): `pkl-u5AG7uiY.js`
+- **Thin community `Community 245`** (1 nodes): `pkl-u5AG7uiY.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 248`** (1 nodes): `plastic-3e1v2bzS.js`
+- **Thin community `Community 246`** (1 nodes): `plastic-3e1v2bzS.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 249`** (1 nodes): `plsql-ChMvpjG-.js`
+- **Thin community `Community 247`** (1 nodes): `plsql-ChMvpjG-.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 250`** (1 nodes): `po-BTJTHyun.js`
+- **Thin community `Community 248`** (1 nodes): `po-BTJTHyun.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 251`** (1 nodes): `poimandres-CS3Unz2-.js`
+- **Thin community `Community 249`** (1 nodes): `poimandres-CS3Unz2-.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 252`** (1 nodes): `polar-C0HS_06l.js`
+- **Thin community `Community 250`** (1 nodes): `polar-C0HS_06l.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 253`** (1 nodes): `postcss-CXtECtnM.js`
+- **Thin community `Community 251`** (1 nodes): `postcss-CXtECtnM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 254`** (1 nodes): `powerquery-CEu0bR-o.js`
+- **Thin community `Community 252`** (1 nodes): `powerquery-CEu0bR-o.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 255`** (1 nodes): `powershell-Dpen1YoG.js`
+- **Thin community `Community 253`** (1 nodes): `powershell-Dpen1YoG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 256`** (1 nodes): `prisma-Dd19v3D-.js`
+- **Thin community `Community 254`** (1 nodes): `prisma-Dd19v3D-.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 257`** (1 nodes): `prolog-CbFg5uaA.js`
+- **Thin community `Community 255`** (1 nodes): `prolog-CbFg5uaA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 258`** (1 nodes): `proto-DyJlTyXw.js`
+- **Thin community `Community 256`** (1 nodes): `proto-DyJlTyXw.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 259`** (1 nodes): `pug-CGlum2m_.js`
+- **Thin community `Community 257`** (1 nodes): `pug-CGlum2m_.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 260`** (1 nodes): `puppet-BMWR74SV.js`
+- **Thin community `Community 258`** (1 nodes): `puppet-BMWR74SV.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 261`** (1 nodes): `purescript-CklMAg4u.js`
+- **Thin community `Community 259`** (1 nodes): `purescript-CklMAg4u.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 262`** (1 nodes): `python-B6aJPvgy.js`
+- **Thin community `Community 260`** (1 nodes): `python-B6aJPvgy.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 263`** (1 nodes): `qml-3beO22l8.js`
+- **Thin community `Community 261`** (1 nodes): `qml-3beO22l8.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 264`** (1 nodes): `qmldir-C8lEn-DE.js`
+- **Thin community `Community 262`** (1 nodes): `qmldir-C8lEn-DE.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 265`** (1 nodes): `qss-IeuSbFQv.js`
+- **Thin community `Community 263`** (1 nodes): `qss-IeuSbFQv.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 266`** (1 nodes): `r-DiinP2Uv.js`
+- **Thin community `Community 264`** (1 nodes): `r-DiinP2Uv.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 267`** (1 nodes): `racket-BqYA7rlc.js`
+- **Thin community `Community 265`** (1 nodes): `racket-BqYA7rlc.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 268`** (1 nodes): `raku-DXvB9xmW.js`
+- **Thin community `Community 266`** (1 nodes): `raku-DXvB9xmW.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 269`** (1 nodes): `razor-WgofotgN.js`
+- **Thin community `Community 267`** (1 nodes): `razor-WgofotgN.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 270`** (1 nodes): `red-bN70gL4F.js`
+- **Thin community `Community 268`** (1 nodes): `red-bN70gL4F.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 271`** (1 nodes): `reg-C-SQnVFl.js`
+- **Thin community `Community 269`** (1 nodes): `reg-C-SQnVFl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 272`** (1 nodes): `regexp-CDVJQ6XC.js`
+- **Thin community `Community 270`** (1 nodes): `regexp-CDVJQ6XC.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 273`** (1 nodes): `rel-C3B-1QV4.js`
+- **Thin community `Community 271`** (1 nodes): `rel-C3B-1QV4.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 274`** (1 nodes): `riscv-BM1_JUlF.js`
+- **Thin community `Community 272`** (1 nodes): `riscv-BM1_JUlF.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 275`** (1 nodes): `rose-pine-BHrmToEH.js`
+- **Thin community `Community 273`** (1 nodes): `rose-pine-BHrmToEH.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 276`** (1 nodes): `rose-pine-dawn-CnK8MTSM.js`
+- **Thin community `Community 274`** (1 nodes): `rose-pine-dawn-CnK8MTSM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 277`** (1 nodes): `rose-pine-moon-NleAzG8P.js`
+- **Thin community `Community 275`** (1 nodes): `rose-pine-moon-NleAzG8P.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 278`** (1 nodes): `rosmsg-BJDFO7_C.js`
+- **Thin community `Community 276`** (1 nodes): `rosmsg-BJDFO7_C.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 279`** (1 nodes): `rst-B0xPkSld.js`
+- **Thin community `Community 277`** (1 nodes): `rst-B0xPkSld.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 280`** (1 nodes): `ruby-BvKwtOVI.js`
+- **Thin community `Community 278`** (1 nodes): `ruby-BvKwtOVI.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 281`** (1 nodes): `rust-B1yitclQ.js`
+- **Thin community `Community 279`** (1 nodes): `rust-B1yitclQ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 282`** (1 nodes): `sas-cz2c8ADy.js`
+- **Thin community `Community 280`** (1 nodes): `sas-cz2c8ADy.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 283`** (1 nodes): `sass-Cj5Yp3dK.js`
+- **Thin community `Community 281`** (1 nodes): `sass-Cj5Yp3dK.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 284`** (1 nodes): `scala-C151Ov-r.js`
+- **Thin community `Community 282`** (1 nodes): `scala-C151Ov-r.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 285`** (1 nodes): `scheme-C98Dy4si.js`
+- **Thin community `Community 283`** (1 nodes): `scheme-C98Dy4si.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 286`** (1 nodes): `scss-OYdSNvt2.js`
+- **Thin community `Community 284`** (1 nodes): `scss-OYdSNvt2.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 287`** (1 nodes): `sdbl-DVxCFoDh.js`
+- **Thin community `Community 285`** (1 nodes): `sdbl-DVxCFoDh.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 288`** (1 nodes): `shaderlab-Dg9Lc6iA.js`
+- **Thin community `Community 286`** (1 nodes): `shaderlab-Dg9Lc6iA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 289`** (1 nodes): `shellscript-Yzrsuije.js`
+- **Thin community `Community 287`** (1 nodes): `shellscript-Yzrsuije.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 290`** (1 nodes): `shellsession-BADoaaVG.js`
+- **Thin community `Community 288`** (1 nodes): `shellsession-BADoaaVG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 291`** (1 nodes): `slack-dark-BthQWCQV.js`
+- **Thin community `Community 289`** (1 nodes): `slack-dark-BthQWCQV.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 292`** (1 nodes): `slack-ochin-DqwNpetd.js`
+- **Thin community `Community 290`** (1 nodes): `slack-ochin-DqwNpetd.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 293`** (1 nodes): `smalltalk-BERRCDM3.js`
+- **Thin community `Community 291`** (1 nodes): `smalltalk-BERRCDM3.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 294`** (1 nodes): `snazzy-light-Bw305WKR.js`
+- **Thin community `Community 292`** (1 nodes): `snazzy-light-Bw305WKR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 295`** (1 nodes): `solarized-dark-DXbdFlpD.js`
+- **Thin community `Community 293`** (1 nodes): `solarized-dark-DXbdFlpD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 296`** (1 nodes): `solarized-light-L9t79GZl.js`
+- **Thin community `Community 294`** (1 nodes): `solarized-light-L9t79GZl.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 297`** (1 nodes): `solidity-BbcW6ACK.js`
+- **Thin community `Community 295`** (1 nodes): `solidity-BbcW6ACK.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 298`** (1 nodes): `soy-Brmx7dQM.js`
+- **Thin community `Community 296`** (1 nodes): `soy-Brmx7dQM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 299`** (1 nodes): `sparql-rVzFXLq3.js`
+- **Thin community `Community 297`** (1 nodes): `sparql-rVzFXLq3.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 300`** (1 nodes): `splunk-BtCnVYZw.js`
+- **Thin community `Community 298`** (1 nodes): `splunk-BtCnVYZw.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 301`** (1 nodes): `sql-BLtJtn59.js`
+- **Thin community `Community 299`** (1 nodes): `sql-BLtJtn59.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 302`** (1 nodes): `ssh-config-_ykCGR6B.js`
+- **Thin community `Community 300`** (1 nodes): `ssh-config-_ykCGR6B.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 303`** (1 nodes): `stata-BH5u7GGu.js`
+- **Thin community `Community 301`** (1 nodes): `stata-BH5u7GGu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 304`** (1 nodes): `stylus-BEDo0Tqx.js`
+- **Thin community `Community 302`** (1 nodes): `stylus-BEDo0Tqx.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 305`** (1 nodes): `svelte-3Dk4HxPD.js`
+- **Thin community `Community 303`** (1 nodes): `svelte-3Dk4HxPD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 306`** (1 nodes): `swift-Dg5xB15N.js`
+- **Thin community `Community 304`** (1 nodes): `swift-Dg5xB15N.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 307`** (1 nodes): `synthwave-84-CbfX1IO0.js`
+- **Thin community `Community 305`** (1 nodes): `synthwave-84-CbfX1IO0.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 308`** (1 nodes): `system-verilog-CnnmHF94.js`
+- **Thin community `Community 306`** (1 nodes): `system-verilog-CnnmHF94.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 309`** (1 nodes): `systemd-4A_iFExJ.js`
+- **Thin community `Community 307`** (1 nodes): `systemd-4A_iFExJ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 310`** (1 nodes): `talonscript-CkByrt1z.js`
+- **Thin community `Community 308`** (1 nodes): `talonscript-CkByrt1z.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 311`** (1 nodes): `tasl-QIJgUcNo.js`
+- **Thin community `Community 309`** (1 nodes): `tasl-QIJgUcNo.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 312`** (1 nodes): `tcl-dwOrl1Do.js`
+- **Thin community `Community 310`** (1 nodes): `tcl-dwOrl1Do.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 313`** (1 nodes): `templ-W15q3VgB.js`
+- **Thin community `Community 311`** (1 nodes): `templ-W15q3VgB.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 314`** (1 nodes): `terraform-BETggiCN.js`
+- **Thin community `Community 312`** (1 nodes): `terraform-BETggiCN.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 315`** (1 nodes): `tex-Cppo0RY3.js`
+- **Thin community `Community 313`** (1 nodes): `tex-Cppo0RY3.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 316`** (1 nodes): `tokyo-night-hegEt444.js`
+- **Thin community `Community 314`** (1 nodes): `tokyo-night-hegEt444.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 317`** (1 nodes): `toml-vGWfd6FD.js`
+- **Thin community `Community 315`** (1 nodes): `toml-vGWfd6FD.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 318`** (1 nodes): `ts-tags-zn1MmPIZ.js`
+- **Thin community `Community 316`** (1 nodes): `ts-tags-zn1MmPIZ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 319`** (1 nodes): `tsv-B_m7g4N7.js`
+- **Thin community `Community 317`** (1 nodes): `tsv-B_m7g4N7.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 320`** (1 nodes): `tsx-COt5Ahok.js`
+- **Thin community `Community 318`** (1 nodes): `tsx-COt5Ahok.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 321`** (1 nodes): `turtle-BsS91CYL.js`
+- **Thin community `Community 319`** (1 nodes): `turtle-BsS91CYL.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 322`** (1 nodes): `twig-CO9l9SDP.js`
+- **Thin community `Community 320`** (1 nodes): `twig-CO9l9SDP.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 323`** (1 nodes): `typescript-BPQ3VLAy.js`
+- **Thin community `Community 321`** (1 nodes): `typescript-BPQ3VLAy.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 324`** (1 nodes): `typespec-Df68jz8_.js`
+- **Thin community `Community 322`** (1 nodes): `typespec-Df68jz8_.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 325`** (1 nodes): `typst-DHCkPAjA.js`
+- **Thin community `Community 323`** (1 nodes): `typst-DHCkPAjA.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 326`** (1 nodes): `v-BcVCzyr7.js`
+- **Thin community `Community 324`** (1 nodes): `v-BcVCzyr7.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 327`** (1 nodes): `vala-CsfeWuGM.js`
+- **Thin community `Community 325`** (1 nodes): `vala-CsfeWuGM.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 328`** (1 nodes): `vb-D17OF-Vu.js`
+- **Thin community `Community 326`** (1 nodes): `vb-D17OF-Vu.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 329`** (1 nodes): `verilog-BQ8w6xss.js`
+- **Thin community `Community 327`** (1 nodes): `verilog-BQ8w6xss.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 330`** (1 nodes): `vesper-DU1UobuO.js`
+- **Thin community `Community 328`** (1 nodes): `vesper-DU1UobuO.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 331`** (1 nodes): `vhdl-CeAyd5Ju.js`
+- **Thin community `Community 329`** (1 nodes): `vhdl-CeAyd5Ju.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 332`** (1 nodes): `viml-CJc9bBzg.js`
+- **Thin community `Community 330`** (1 nodes): `viml-CJc9bBzg.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 333`** (1 nodes): `vitesse-black-Bkuqu6BP.js`
+- **Thin community `Community 331`** (1 nodes): `vitesse-black-Bkuqu6BP.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 334`** (1 nodes): `vitesse-dark-D0r3Knsf.js`
+- **Thin community `Community 332`** (1 nodes): `vitesse-dark-D0r3Knsf.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 335`** (1 nodes): `vitesse-light-CVO1_9PV.js`
+- **Thin community `Community 333`** (1 nodes): `vitesse-light-CVO1_9PV.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 336`** (1 nodes): `vue-CCoi5OLL.js`
+- **Thin community `Community 334`** (1 nodes): `vue-CCoi5OLL.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 337`** (1 nodes): `vue-html-DAAvJJDi.js`
+- **Thin community `Community 335`** (1 nodes): `vue-html-DAAvJJDi.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 338`** (1 nodes): `vue-vine-_Ih-lPRR.js`
+- **Thin community `Community 336`** (1 nodes): `vue-vine-_Ih-lPRR.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 339`** (1 nodes): `vyper-CDx5xZoG.js`
+- **Thin community `Community 337`** (1 nodes): `vyper-CDx5xZoG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 340`** (1 nodes): `wasm-MzD3tlZU.js`
+- **Thin community `Community 338`** (1 nodes): `wasm-MzD3tlZU.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 341`** (1 nodes): `wenyan-BV7otONQ.js`
+- **Thin community `Community 339`** (1 nodes): `wenyan-BV7otONQ.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 342`** (1 nodes): `wgsl-Dx-B1_4e.js`
+- **Thin community `Community 340`** (1 nodes): `wgsl-Dx-B1_4e.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 343`** (1 nodes): `wikitext-BhOHFoWU.js`
+- **Thin community `Community 341`** (1 nodes): `wikitext-BhOHFoWU.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 344`** (1 nodes): `wit-5i3qLPDT.js`
+- **Thin community `Community 342`** (1 nodes): `wit-5i3qLPDT.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 345`** (1 nodes): `wolfram-lXgVvXCa.js`
+- **Thin community `Community 343`** (1 nodes): `wolfram-lXgVvXCa.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 346`** (1 nodes): `xml-sdJ4AIDG.js`
+- **Thin community `Community 344`** (1 nodes): `xml-sdJ4AIDG.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 347`** (1 nodes): `xsl-CtQFsRM5.js`
+- **Thin community `Community 345`** (1 nodes): `xsl-CtQFsRM5.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 348`** (1 nodes): `yaml-Buea-lGh.js`
+- **Thin community `Community 346`** (1 nodes): `yaml-Buea-lGh.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 349`** (1 nodes): `zenscript-DVFEvuxE.js`
+- **Thin community `Community 347`** (1 nodes): `zenscript-DVFEvuxE.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 350`** (1 nodes): `zig-VOosw3JB.js`
+- **Thin community `Community 348`** (1 nodes): `zig-VOosw3JB.js`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 351`** (1 nodes): `drizzle.config.ts`
+- **Thin community `Community 349`** (1 nodes): `drizzle.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 352`** (1 nodes): `cookie.d.ts`
+- **Thin community `Community 350`** (1 nodes): `cookie.d.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 353`** (1 nodes): `scheduler-telegram.test.ts`
+- **Thin community `Community 351`** (1 nodes): `scheduler-telegram.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 354`** (1 nodes): `seo.test.ts`
+- **Thin community `Community 352`** (1 nodes): `seo.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 355`** (1 nodes): `walletconnect.test.ts`
+- **Thin community `Community 353`** (1 nodes): `walletconnect.test.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 356`** (1 nodes): `types.ts`
+- **Thin community `Community 354`** (1 nodes): `types.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
-- **Thin community `Community 357`** (1 nodes): `vitest.config.ts`
+- **Thin community `Community 355`** (1 nodes): `vitest.config.ts`
   Too small to be a meaningful cluster - may be noise or needs more connections extracted.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `js()` connect `Community 4` to `Community 32`, `Community 1`, `Community 0`, `Community 36`, `Community 37`, `Community 38`, `Community 41`, `Community 43`, `Community 46`, `Community 14`, `Community 16`, `Community 21`, `Community 24`, `Community 26`, `Community 27`, `Community 30`, `Community 31`?**
+- **Why does `js()` connect `Community 4` to `Community 32`, `Community 1`, `Community 33`, `Community 0`, `Community 37`, `Community 38`, `Community 39`, `Community 41`, `Community 43`, `Community 44`, `Community 15`, `Community 19`, `Community 20`, `Community 23`, `Community 25`, `Community 26`, `Community 31`?**
   _High betweenness centrality (0.150) - this node is a cross-community bridge._
 - **Why does `up` connect `Community 6` to `Community 0`?**
   _High betweenness centrality (0.012) - this node is a cross-community bridge._
-- **Why does `Lbe` connect `Community 11` to `Community 2`?**
+- **Why does `Lbe` connect `Community 10` to `Community 2`?**
   _High betweenness centrality (0.010) - this node is a cross-community bridge._
 - **Are the 173 inferred relationships involving `push()` (e.g. with `$Q()` and `addObserver()`) actually correct?**
   _`push()` has 173 INFERRED edges - model-reasoned connections that need verification._

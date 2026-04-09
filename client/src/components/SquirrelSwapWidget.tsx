@@ -2,7 +2,7 @@ import { useState } from "react";
 import { ExternalLink, Info, Zap } from "lucide-react";
 
 // HERO token contract addresses
-const HERO_PULSECHAIN = "0x..."; // PulseChain HERO CA — update when available
+const HERO_PULSECHAIN = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"; // PulseChain HERO CA
 const HERO_BASE = "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
 
 // Military HERO theme colors for SquirrelSwap widget
@@ -37,7 +37,7 @@ export default function SquirrelSwapWidget({
     `?modes=${modes}`,
     `&tokenOut=${HERO_PULSECHAIN}`,
     `&accentColor=${HERO_THEME.accentColor}`,
-    `&bgColor=${HERO_THEME.bgColor}`,
+    `&bgColor=0d1a0d`,
     `&cardColor=${HERO_THEME.cardColor}`,
     `&borderColor=${HERO_THEME.borderColor}`,
     `&textColor=${HERO_THEME.textColor}`,

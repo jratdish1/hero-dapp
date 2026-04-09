@@ -94,7 +94,7 @@ function LivePriceBanner() {
           <div key={i.symbol} className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="text-xs font-semibold text-foreground">{i.symbol}</span>
             <span className="text-xs font-mono text-foreground">{formatPrice(i.price)}</span>
-            <span className={`text-xs font-mono ${positive ? "text-[var(--hero-green)]" : "text-destructive"}`}>{text}</span>
+            <span className={`text-xs font-mono ${positive ? "text-emerald-400" : "text-amber-400"}`}>{text}</span>
           </div>
         );
       })}
@@ -109,7 +109,7 @@ function SquirrelWidget({ tokenOut }: { tokenOut?: string }) {
     "https://app.squirrelswap.pro/#/widget",
     "?modes=swap,limit,dca",
     "&accentColor=e8b84b",
-    "&bgColor=transparent",
+    "&bgColor=0d1a0d",
     "&cardColor=161825",
     "&borderColor=2a2b3d",
     "&textColor=e6edf3",
