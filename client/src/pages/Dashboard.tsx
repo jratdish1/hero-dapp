@@ -85,13 +85,20 @@ export default function Dashboard() {
           <CardContent className="p-4">
             <div className="flex items-center justify-between mb-3">
               <div className="p-2 rounded-lg bg-secondary">
-                <Droplets className="w-5 h-5 text-[var(--hero-orange)]" />
+                <Droplets className="w-5 h-5 text-[var(--hero-green)]" />
               </div>
+              {vetsPrice && (
+                <span className={`text-xs font-medium flex items-center gap-0.5 ${vetsPrice.priceChange24h >= 0 ? "text-[var(--hero-green)]" : "text-destructive"}`}>
+                  {vetsPrice.priceChange24h >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
+                  {formatChange(vetsPrice.priceChange24h).text}
+                </span>
+              )}
             </div>
-            <p className="text-xs text-muted-foreground mb-1">HERO Total Liquidity</p>
+            <p className="text-xs text-muted-foreground mb-1">VETS Price</p>
             <p className="text-xl font-bold text-foreground">
-              {isLoading ? "..." : formatCompact(market?.totalHeroLiquidity)}
+              {isLoading ? "..." : formatPrice(vetsPrice?.priceUsd)}
             </p>
+            {vetsPrice && <p className="text-xs text-muted-foreground mt-0.5">Liq: {formatCompact(market?.totalVetsLiquidity)}</p>}
           </CardContent>
         </Card>
 

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "relations", "label": "relations.ts", "file_type": "code", "source_file": "drizzle/relations.ts", "source_location": "L1"}], "edges": [{"source": "relations", "target": "schema", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "drizzle/relations.ts", "source_location": "L1", "weight": 1.0}]}

@@ -1,0 +1,1 @@
+{"nodes": [{"id": "lua_bbnmays6", "label": "lua-BbnMAYS6.js", "file_type": "code", "source_file": "dist/public/assets/lua-BbnMAYS6.js", "source_location": "L1"}], "edges": [{"source": "lua_bbnmays6", "target": "c_bigw1obm_js", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "dist/public/assets/lua-BbnMAYS6.js", "source_location": "L1", "weight": 1.0}]}

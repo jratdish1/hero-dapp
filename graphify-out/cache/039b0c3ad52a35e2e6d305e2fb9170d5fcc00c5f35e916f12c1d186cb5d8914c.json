@@ -1,0 +1,1 @@
+{"nodes": [{"id": "bsl_bo_y6i37", "label": "bsl-BO_Y6i37.js", "file_type": "code", "source_file": "dist/public/assets/bsl-BO_Y6i37.js", "source_location": "L1"}], "edges": [{"source": "bsl_bo_y6i37", "target": "sdbl_dvxcfodh_js", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "dist/public/assets/bsl-BO_Y6i37.js", "source_location": "L1", "weight": 1.0}]}

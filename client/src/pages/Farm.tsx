@@ -201,20 +201,24 @@ function ServiceBranchRibbon() {
 // ─── HERO Staking Pool Card ─────────────────────────────────────────────
 function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number]; liveData?: { tvlUsd: number; volume24h: number; estimatedApr: number; priceChange24h: number } }) {
   const change = formatChange(liveData?.priceChange24h);
+  const isVets = pool.token0.symbol === "VETS";
+  const dexLink = isVets
+    ? `https://dexscreener.com/pulsechain/${pool.lpToken}`
+    : `https://dexscreener.com/pulsechain/${pool.lpToken}`;
   return (
-    <Card className="border-[#e8b84b]/30 bg-gradient-to-br from-[#161825] to-[#0d0e14] hover:border-[#e8b84b]/50 transition-all group">
+    <Card className={isVets ? "border-[#52d98c]/30 bg-gradient-to-br from-[#0d1a12] to-[#0d0e14] hover:border-[#52d98c]/50 transition-all group" : "border-[#e8b84b]/30 bg-gradient-to-br from-[#161825] to-[#0d0e14] hover:border-[#e8b84b]/50 transition-all group"}>
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#e8b84b] to-[#c08020] flex items-center justify-center">
-              <Sprout className="w-4 h-4 text-foreground" />
+            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br flex items-center justify-center ${isVets ? "from-[#52d98c] to-[#2ea86a]" : "from-[#e8b84b] to-[#c08020]"}`}>
+              {isVets ? <Shield className="w-4 h-4 text-black" /> : <Sprout className="w-4 h-4 text-foreground" />}
             </div>
             <div>
               <h4 className="font-bold text-foreground">{pool.name}</h4>
-              <p className="text-[10px] text-muted-foreground">Pool #{pool.id}</p>
+              <p className="text-[10px] text-muted-foreground">Pool #{pool.id} {isVets ? "· $VETS" : "· $HERO"}</p>
             </div>
           </div>
-          <Badge className="bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]">
+          <Badge className={isVets ? "bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]" : "bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]"}>
             Active
           </Badge>
         </div>
@@ -275,12 +279,19 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
           </div>
         </div>
 
-        <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="block mt-4">
-          <Button size="sm" className="w-full bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-semibold tracking-wide">
-            <Wallet className="w-3.5 h-3.5 mr-1.5" />
-            Stake on HERO Farm
-          </Button>
-        </a>
+        <div className="flex gap-2 mt-4">
+          <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <Button size="sm" className={`w-full font-semibold tracking-wide ${isVets ? "bg-gradient-to-r from-[#52d98c]/20 to-[#2ea86a]/25 border border-[#52d98c]/30 text-[#52d98c] hover:from-[#52d98c]/30 hover:to-[#2ea86a]/38" : "bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38"}`}>
+              <Wallet className="w-3.5 h-3.5 mr-1.5" />
+              {isVets ? "Stake VETS" : "Stake on HERO Farm"}
+            </Button>
+          </a>
+          <a href={dexLink} target="_blank" rel="noopener noreferrer">
+            <Button size="sm" variant="outline" className="border-border/40 text-muted-foreground hover:text-foreground px-2.5">
+              <ExternalLink className="w-3.5 h-3.5" />
+            </Button>
+          </a>
+        </div>
       </CardContent>
     </Card>
   );

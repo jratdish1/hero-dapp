@@ -1,0 +1,1 @@
+{"nodes": [{"id": "schema", "label": "schema.ts", "file_type": "code", "source_file": "drizzle/schema.ts", "source_location": "L1"}], "edges": [{"source": "schema", "target": "mysql_core", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "drizzle/schema.ts", "source_location": "L1", "weight": 1.0}]}

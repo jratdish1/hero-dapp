@@ -1,0 +1,1 @@
+{"nodes": [{"id": "xml_sdj4aidg", "label": "xml-sdJ4AIDG.js", "file_type": "code", "source_file": "dist/public/assets/xml-sdJ4AIDG.js", "source_location": "L1"}], "edges": [{"source": "xml_sdj4aidg", "target": "java_cyls5w8v_js", "relation": "imports_from", "confidence": "EXTRACTED", "source_file": "dist/public/assets/xml-sdJ4AIDG.js", "source_location": "L1", "weight": 1.0}]}
