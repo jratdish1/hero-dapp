@@ -111,7 +111,7 @@ export default function AiAssistant() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)]">
+    <div className="flex flex-col h-[calc(100vh-4rem)] border-2 border-white/30 rounded-2xl mx-2 my-2 overflow-hidden shadow-[0_0_15px_rgba(255,255,255,0.05)]">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border/50 px-6 py-4">
         <div className="flex items-center gap-3">
@@ -239,7 +239,7 @@ export default function AiAssistant() {
               onKeyDown={handleKeyDown}
               placeholder={`Ask about $HERO, $VETS, or anything on ${chain.name}...`}
               rows={1}
-              className="w-full resize-none rounded-xl border border-border/50 bg-card/50 px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-hero-orange/30 focus:border-hero-orange/30"
+              className="w-full resize-none rounded-xl border-2 border-white/40 bg-card/50 px-4 py-3 pr-12 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-white/50 focus:border-white/60"
               style={{ maxHeight: "120px" }}
             />
           </div>

@@ -1,4 +1,13 @@
-import { useState } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import Autoplay from "embla-carousel-autoplay";
+import {
+  Carousel,
+  CarouselContent,
+  CarouselItem,
+  CarouselPrevious,
+  CarouselNext,
+  type CarouselApi,
+} from "@/components/ui/carousel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -128,6 +137,62 @@ function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
   );
 }
 
+function NftCategoryCarousel({ title, icon, badge, badgeColor, items }: {
+  title: string;
+  icon: React.ReactNode;
+  badge: string;
+  badgeColor: string;
+  items: typeof NFT_ARTWORK.military;
+}) {
+  const [selectedNft, setSelectedNft] = useState<typeof items[0] | null>(null);
+  const autoplayPlugin = useRef(
+    Autoplay({ delay: 3000, stopOnInteraction: true, stopOnMouseEnter: true })
+  );
+
+  return (
+    <div>
+      <div className="flex items-center gap-2 mb-4">
+        {icon}
+        <h3 className="text-foreground font-semibold text-lg">{title}</h3>
+        <Badge variant="outline" className={`text-[10px] ${badgeColor}`}>{badge}</Badge>
+      </div>
+      {selectedNft ? (
+        <div className="space-y-4">
+          <button
+            onClick={() => setSelectedNft(null)}
+            className="text-sm text-hero-orange hover:text-hero-orange/80 flex items-center gap-1 transition-colors"
+          >
+            ← Back to carousel
+          </button>
+          <div className="max-w-md mx-auto">
+            <NftArtCard nft={selectedNft} />
+          </div>
+        </div>
+      ) : (
+        <Carousel
+          opts={{ align: "start", loop: true }}
+          plugins={[autoplayPlugin.current]}
+          className="w-full"
+        >
+          <CarouselContent className="-ml-3">
+            {items.map((nft) => (
+              <CarouselItem
+                key={nft.name}
+                className="pl-3 basis-1/2 md:basis-1/4 cursor-pointer"
+                onClick={() => setSelectedNft(nft)}
+              >
+                <NftArtCard nft={nft} />
+              </CarouselItem>
+            ))}
+          </CarouselContent>
+          <CarouselPrevious className="-left-3 bg-card/80 border-border hover:bg-card" />
+          <CarouselNext className="-right-3 bg-card/80 border-border hover:bg-card" />
+        </Carousel>
+      )}
+    </div>
+  );
+}
+
 function AnimatedNftCard({ nft }: { nft: typeof ANIMATED_NFTS[0] }) {
   const [playing, setPlaying] = useState(false);
   return (
@@ -221,14 +286,20 @@ export default function NftCollection() {
 
         {/* GALLERY */}
         <TabsContent value="gallery" className="mt-4 space-y-6">
-          <div>
-            <div className="flex items-center gap-2 mb-4"><Swords className="w-5 h-5 text-orange-400" /><h3 className="text-foreground font-semibold text-lg">Military Rank Collection</h3><Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">Sample Artwork</Badge></div>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{NFT_ARTWORK.military.map((nft) => <NftArtCard key={nft.name} nft={nft} />)}</div>
-          </div>
-          <div>
-            <div className="flex items-center gap-2 mb-4"><Heart className="w-5 h-5 text-red-400" /><h3 className="text-foreground font-semibold text-lg">First Responder Collection</h3><Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">Sample Artwork</Badge></div>
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">{NFT_ARTWORK.firstResponders.map((nft) => <NftArtCard key={nft.name} nft={nft} />)}</div>
-          </div>
+          <NftCategoryCarousel
+            title="Military Rank Collection"
+            icon={<Swords className="w-5 h-5 text-orange-400" />}
+            badge="Sample Artwork"
+            badgeColor="border-orange-500/40 text-orange-400"
+            items={NFT_ARTWORK.military}
+          />
+          <NftCategoryCarousel
+            title="First Responder Collection"
+            icon={<Heart className="w-5 h-5 text-red-400" />}
+            badge="Sample Artwork"
+            badgeColor="border-red-500/40 text-red-400"
+            items={NFT_ARTWORK.firstResponders}
+          />
           <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">

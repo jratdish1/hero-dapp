@@ -234,6 +234,15 @@ export default function MediaHub() {
                 <Hexagon className="w-4 h-4 mr-2" />
                 Share NFT
               </Button>
+              <a
+                href="https://double.trudefi.io/"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 transition-colors text-sm font-medium"
+              >
+                <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/trudefi-logo_99ad2b71.png" alt="TruDeFi" className="w-5 h-5 object-contain" />
+                TruDeFi Double
+              </a>
             </div>
           </div>
         </div>
