@@ -39,8 +39,8 @@ export const PULSECHAIN_CONFIG: ChainConfig = {
   shortName: "PLS",
   nativeCurrency: { name: "Pulse", symbol: "PLS", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.pulsechain.com"] },
-    public: { http: ["https://rpc.pulsechain.com"] },
+    default: { http: ["https://rpc-pulsechain.g4mm4.io"] },
+    public: { http: ["https://rpc-pulsechain.g4mm4.io"] },
   },
   blockExplorers: {
     default: { name: "PulseScan", url: "https://scan.pulsechain.com" },

@@ -458,7 +458,7 @@ export async function fetchFarmPoolData(chain: "pulsechain" | "base" = "pulsecha
 
 // ─── Buy & Burn Tracker ────────────────────────────────────────────────────
 
-const PULSECHAIN_RPC = "https://rpc.pulsechain.com";
+const PULSECHAIN_RPC = "https://rpc-pulsechain.g4mm4.io";
 const HERO_ADDRESS = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
 const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
