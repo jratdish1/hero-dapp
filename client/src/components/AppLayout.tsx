@@ -61,6 +61,7 @@ const NAV_ITEMS = [
   { path: "/community", label: "Community Hub", icon: ImageIcon },
   { path: "/explainer", label: "Explainer", icon: PlayCircle },
   { path: "/ai", label: "AI Assistant", icon: Bot },
+  { path: "/squirrels-pro", label: "Squirrels Pro", icon: Globe, external: "https://squirrels.pro/" },
 ];
 
 const DAO_NAV_ITEMS = [
@@ -124,6 +125,23 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             const isActive = location === item.path;
             const Icon = item.icon;
             const isAi = item.path === "/ai";
+            const isExternal = !!(item as any).external;
+            if (isExternal) {
+              return (
+                <a
+                  key={item.path}
+                  href={(item as any).external}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-secondary"
+                  onClick={() => setSidebarOpen(false)}
+                >
+                  <Icon className="w-4.5 h-4.5" />
+                  {item.label}
+                  <ExternalLink className="w-3 h-3 ml-auto opacity-50" />
+                </a>
+              );
+            }
             return (
               <Link
                 key={item.path}
@@ -238,9 +256,28 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           <WalletButton />
         </header>
 
-        {/* Page content */}
-        <main className="flex-1 p-4 lg:p-6">
-          {children}
+        {/* Page content — MARPAT Woodland camo background between header and footer */}
+        <main
+          className="flex-1 p-4 lg:p-6 relative"
+          style={{
+            backgroundImage: `url('https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/marpat-camo_0cfdf10e.jpg')`,
+            backgroundSize: '600px auto',
+            backgroundRepeat: 'repeat',
+            backgroundAttachment: 'fixed',
+          }}
+        >
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(18, 22, 38, 0.80)',
+              pointerEvents: 'none',
+              zIndex: 0,
+            }}
+          />
+          <div style={{ position: 'relative', zIndex: 1 }}>
+            {children}
+          </div>
         </main>
 
         {/* Blackbeard Footer Banner - shown across all app tabs */}

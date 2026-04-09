@@ -15,12 +15,15 @@ export function useMarketOverview(chain?: "pulsechain" | "base") {
   );
 }
 
-export function usePriceTicker() {
-  return trpc.prices.ticker.useQuery(undefined, {
-    refetchInterval: 30_000,
-    staleTime: 15_000,
-    refetchOnWindowFocus: true,
-  });
+export function usePriceTicker(chain?: "pulsechain" | "base") {
+  return trpc.prices.ticker.useQuery(
+    chain ? { chain } : undefined,
+    {
+      refetchInterval: 30_000,
+      staleTime: 15_000,
+      refetchOnWindowFocus: true,
+    }
+  );
 }
 
 export function useBasePairs() {

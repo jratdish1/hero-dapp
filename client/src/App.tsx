@@ -5,7 +5,6 @@ import { Route, Switch } from "wouter";
 import ErrorBoundary from "./components/ErrorBoundary";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { NetworkProvider } from "./contexts/NetworkContext";
-import BetaDisclaimer from "./components/BetaDisclaimer";
 import Home from "./pages/Home";
 import Swap from "./pages/Swap";
 import Dashboard from "./pages/Dashboard";
@@ -23,9 +22,7 @@ import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
 import { DaoDashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates } from "./pages/dao";
 import Explainer from "./pages/Explainer";
-import HeroStake from "./pages/HeroStake";
-import BaseFarm from "./pages/BaseFarm";
-import Onboarding from "./pages/Onboarding";
+import BetaDisclaimer from "./pages/BetaDisclaimer";
 
 function Router() {
   return (
@@ -38,9 +35,6 @@ function Router() {
       <Route path="/limits" component={() => <AppLayout><LimitOrders /></AppLayout>} />
       <Route path="/approvals" component={() => <AppLayout><Approvals /></AppLayout>} />
       <Route path="/farm" component={() => <AppLayout><Farm /></AppLayout>} />
-      <Route path="/farm/base" component={() => <AppLayout><BaseFarm /></AppLayout>} />
-      <Route path="/stake" component={() => <AppLayout><HeroStake /></AppLayout>} />
-      <Route path="/start" component={() => <AppLayout><Onboarding /></AppLayout>} />
       <Route path="/media" component={() => <AppLayout><Blog /></AppLayout>} />
       <Route path="/ai" component={() => <AppLayout><AiAssistant /></AppLayout>} />
       <Route path="/tokenomics" component={() => <AppLayout><Tokenomics /></AppLayout>} />
@@ -54,6 +48,8 @@ function Router() {
       <Route path="/dao/treasury" component={() => <AppLayout><Treasury /></AppLayout>} />
       <Route path="/dao/delegates" component={() => <AppLayout><Delegates /></AppLayout>} />
       <Route path="/explainer" component={() => <AppLayout><Explainer /></AppLayout>} />
+      <Route path="/beta-disclaimer" component={BetaDisclaimer} />
+      <Route path="/disclaimer" component={BetaDisclaimer} />
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
@@ -66,8 +62,6 @@ function App() {
       <ThemeProvider defaultTheme="dark" switchable>
         <NetworkProvider>
           <TooltipProvider>
-            {/* Beta disclaimer — appears on every new session */}
-            <BetaDisclaimer />
             <Toaster />
             <Router />
           </TooltipProvider>

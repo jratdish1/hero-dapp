@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -34,8 +34,53 @@ import {
 } from "@shared/tokens";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useFarmPools, formatCompact, formatChange } from "@/hooks/usePrices";
-import { useAccount } from "wagmi";
-import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { BASE_CHAIN_ID, PULSECHAIN_ID } from "../../../shared/tokens";
+
+// ─── Partner Farm Logo Carousel ─────────────────────────────────────────
+const FARM_LOGOS = [
+  { name: "EMIT Farm", url: "https://emit.farm/farms", emoji: "🌱", color: "#ec4899" },
+  { name: "TruFarms", url: "https://trufarms.io/farms", emoji: "🌾", color: "#f97316" },
+  { name: "RhinoFi", url: "https://www.rhinofi.win/dapp", emoji: "🦏", color: "#8b5cf6" },
+];
+
+function PartnerLogoCarousel() {
+  const [active, setActive] = useState(0);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const startTimer = () => {
+    if (timerRef.current) clearInterval(timerRef.current);
+    timerRef.current = setInterval(() => setActive((p) => (p + 1) % FARM_LOGOS.length), 2800);
+  };
+
+  useEffect(() => {
+    startTimer();
+    return () => { if (timerRef.current) clearInterval(timerRef.current); };
+  }, []);
+
+  return (
+    <div className="flex items-center gap-2 flex-wrap">
+      {FARM_LOGOS.map((farm, i) => (
+        <a
+          key={farm.name}
+          href={farm.url}
+          target="_blank"
+          rel="noopener noreferrer"
+          onMouseEnter={() => { if (timerRef.current) clearInterval(timerRef.current); setActive(i); }}
+          onMouseLeave={startTimer}
+          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all duration-300 shrink-0 ${
+            active === i
+              ? "border-[var(--hero-orange)]/60 bg-[var(--hero-orange)]/10 scale-105 shadow-lg"
+              : "border-border/30 bg-card/40 hover:border-[var(--hero-orange)]/40"
+          }`}
+        >
+          <span className="text-base">{farm.emoji}</span>
+          <span className="text-sm font-semibold text-foreground whitespace-nowrap">{farm.name}</span>
+          <ExternalLink className="w-3 h-3 text-muted-foreground" />
+        </a>
+      ))}
+    </div>
+  );
+}
 
 // ─── Types ──────────────────────────────────────────────────────────────
 interface FarmPool {
@@ -368,8 +413,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
 // ─── Main Farm Page ─────────────────────────────────────────────────────
 export default function Farm() {
   const [activeTab, setActiveTab] = useState("hero-farm");
-  const { chainId } = useNetwork();
-  const { isConnected } = useAccount();
+  const { chainId, isBase, isPulseChain, switchNetwork } = useNetwork();
   const { data: farmPools } = useFarmPools("pulsechain");
   const { data: basePools } = useFarmPools("base");
 
@@ -402,9 +446,15 @@ export default function Farm() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             HERO Farm
-            <Badge className="bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-xs ml-2">
-              Live on PulseChain
-            </Badge>
+            {isBase ? (
+              <Badge className="bg-[#0052FF]/10 text-[#0052FF] border-[#0052FF]/20 text-xs ml-2">
+                🔵 Live on BASE
+              </Badge>
+            ) : (
+              <Badge className="bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-xs ml-2">
+                ⚡ Live on PulseChain
+              </Badge>
+            )}
           </h1>
           <p className="text-muted-foreground mt-0.5 text-sm">
             Stake LP tokens, earn rewards, support veterans & first responders
@@ -412,6 +462,36 @@ export default function Farm() {
         </div>
       </div>
 
+      {/* Partner Farm Carousel + Mobile Chain Toggle */}
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+        <div className="flex-1">
+          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Partner Farms</p>
+          <PartnerLogoCarousel />
+        </div>
+        {/* Chain toggle — always visible, especially on mobile */}
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            onClick={() => switchNetwork(PULSECHAIN_ID)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
+              isPulseChain
+                ? "border-[#52d98c]/60 bg-[#52d98c]/15 text-[#52d98c]"
+                : "border-border/30 bg-card/40 text-muted-foreground hover:border-[#52d98c]/40"
+            }`}
+          >
+            <span>⚡</span> PLS
+          </button>
+          <button
+            onClick={() => switchNetwork(BASE_CHAIN_ID)}
+            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
+              isBase
+                ? "border-[#0052FF]/60 bg-[#0052FF]/15 text-[#0052FF]"
+                : "border-border/30 bg-card/40 text-muted-foreground hover:border-[#0052FF]/40"
+            }`}
+          >
+            <span>🔵</span> BASE
+          </button>
+        </div>
+      </div>
       {/* Live Farm DApp Banner */}
       <Card className="border-[#e8b84b]/30 bg-gradient-to-r from-[#0d0e14] to-[#161825] overflow-hidden relative">
         <div
@@ -573,56 +653,150 @@ export default function Farm() {
             </p>
           </div>
 
-          {/* Wallet connect prompt for staking actions */}
-          {!isConnected && (
-            <ConnectWalletPrompt
-              message="Connect your wallet to stake LP tokens and earn rewards."
-              subMessage="Stake HERO/PLS or HERO/USDC LP tokens on PulseChain to earn HERO rewards and support veterans."
-              icon="wallet"
-              variant="inline"
-            />
-          )}
-
           <div className="grid gap-4 sm:grid-cols-2">
             {FARM_POOLS_PLS.map((pool) => (
               <HeroPoolCard key={pool.id} pool={pool} liveData={livePoolMap.get(pool.id)} />
             ))}
           </div>
 
-          {/* Base chain coming soon */}
-          <Card className="border-[#0052FF]/20 bg-[#0052FF]/5">
-            <CardContent className="p-5 text-center">
-              <div className="flex items-center justify-center gap-2 mb-2">
-                <span className="text-xl">🔵</span>
-                <h3 className="font-bold text-foreground">Base Chain Farms</h3>
-                <Badge className="bg-[#0052FF]/10 text-[#0052FF] border-[#0052FF]/20 text-[10px]">Coming Soon</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground">
-                HERO is live on Base at{" "}
-                <a
-                  href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#0052FF] hover:underline font-mono text-xs"
-                >
-                  {HERO_TOKEN_BASE.address.slice(0, 10)}...
-                </a>
-                {" "}— farm pools are being deployed.
-              </p>
-              <div className="flex justify-center gap-3 mt-3">
-                <a href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline" className="border-[#0052FF]/30 text-[#0052FF]">
-                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> BaseScan
-                  </Button>
-                </a>
-                <a href={`https://dexscreener.com/base/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline" className="border-[#0052FF]/30 text-[#0052FF]">
-                    <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> DexScreener
-                  </Button>
+          {/* BASE chain farm section — chain-aware */}
+          {isBase ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <span className="text-xl">🔵</span>
+                  <h3 className="font-bold text-foreground text-lg">HERO Farm — BASE Chain</h3>
+                  <Badge className="bg-[#0052FF]/15 text-[#0052FF] border-[#0052FF]/30 text-xs">Live on BASE</Badge>
+                </div>
+                <a href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer"
+                  className="text-xs text-muted-foreground hover:text-[#0052FF] font-mono transition-colors">
+                  {HERO_TOKEN_BASE.address.slice(0, 8)}...{HERO_TOKEN_BASE.address.slice(-6)}
                 </a>
               </div>
-            </CardContent>
-          </Card>
+              {/* HERO/WETH Pool Card — Uniswap V3 BASE */}
+              <Card className="border-[#0052FF]/30 bg-gradient-to-br from-[#0052FF]/10 to-[#0052FF]/5 hover:border-[#0052FF]/50 transition-all">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-4">
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        <img src="https://raw.githubusercontent.com/libertyswap-finance/app-tokens/main/token-logo/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27.png"
+                          alt="HERO" className="w-9 h-9 rounded-full border-2 border-background" />
+                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png"
+                          alt="WETH" className="w-9 h-9 rounded-full border-2 border-background" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground text-base">HERO / WETH</div>
+                        <div className="text-xs text-muted-foreground">Uniswap V3 · BASE</div>
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1">
+                      <Badge className="bg-green-500/15 text-green-400 border-green-500/30 text-xs">Active</Badge>
+                      <Badge className="bg-[#0052FF]/15 text-[#0052FF] border-[#0052FF]/30 text-xs">Uniswap V3</Badge>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">Liquidity</div>
+                      <div className="font-bold text-foreground text-sm">$3.5K</div>
+                    </div>
+                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">24h Volume</div>
+                      <div className="font-bold text-foreground text-sm">$35</div>
+                    </div>
+                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">HERO Price</div>
+                      <div className="font-bold text-[#0052FF] text-sm">$0.047</div>
+                    </div>
+                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
+                      <div className="text-xs text-muted-foreground mb-1">Pair Age</div>
+                      <div className="font-bold text-foreground text-sm">4+ mo</div>
+                    </div>
+                  </div>
+                  <div className="rounded-lg border border-[#0052FF]/20 bg-[#0052FF]/5 p-3 mb-4">
+                    <div className="flex justify-between text-xs mb-1">
+                      <span className="text-muted-foreground">Pooled HERO</span>
+                      <span className="text-foreground font-mono">24,219,121 HERO</span>
+                    </div>
+                    <div className="flex justify-between text-xs">
+                      <span className="text-muted-foreground">Pooled WETH</span>
+                      <span className="text-foreground font-mono">0.8100 WETH</span>
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                    <a href="https://basescan.org/address/0x3bb159de8604ab7e0148edc24f2a568c430476cf" target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
+                        <ExternalLink className="w-3 h-3 mr-1" /> BaseScan
+                      </Button>
+                    </a>
+                    <a href="https://dexscreener.com/base/0x3bb159de8604ab7e0148edc24f2a568c430476cf" target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
+                        <TrendingUp className="w-3 h-3 mr-1" /> DexScreener
+                      </Button>
+                    </a>
+                    <a href={`https://app.uniswap.org/swap?outputCurrency=${HERO_TOKEN_BASE.address}&chain=base`} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
+                        <Zap className="w-3 h-3 mr-1" /> Uniswap
+                      </Button>
+                    </a>
+                    <a href={`https://aerodrome.finance/swap?from=eth&to=${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
+                        <ArrowUpRight className="w-3 h-3 mr-1" /> Aerodrome
+                      </Button>
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+              {/* HERO/USDC Pool — Coming Soon */}
+              <Card className="border-border/30 bg-card/50 opacity-75">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex -space-x-2">
+                        <img src="https://raw.githubusercontent.com/libertyswap-finance/app-tokens/main/token-logo/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27.png"
+                          alt="HERO" className="w-9 h-9 rounded-full border-2 border-background" />
+                        <img src="https://assets.coingecko.com/coins/images/6319/small/usdc.png"
+                          alt="USDC" className="w-9 h-9 rounded-full border-2 border-background" />
+                      </div>
+                      <div>
+                        <div className="font-bold text-foreground text-base">HERO / USDC</div>
+                        <div className="text-xs text-muted-foreground">Aerodrome · BASE</div>
+                      </div>
+                    </div>
+                    <Badge className="bg-yellow-500/15 text-yellow-400 border-yellow-500/30 text-xs">Deploying Soon</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    HERO/USDC pool on Aerodrome deploying soon. Follow{" "}
+                    <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="text-[#0052FF] hover:underline">@HERO501c3</a>
+                    {" "}for launch announcements.
+                  </p>
+                </CardContent>
+              </Card>
+              {/* Buy & Burn BASE */}
+              <Card className="border-[#d94040]/20 bg-[#d94040]/5">
+                <CardContent className="p-4">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Flame className="w-4 h-4 text-[#d94040]" />
+                    <span className="font-semibold text-foreground text-sm">Buy & Burn — BASE</span>
+                    <a href={`https://basescan.org/address/${FARM_CONTRACTS_BASE.buyAndBurn}`} target="_blank" rel="noopener noreferrer"
+                      className="ml-auto text-xs text-muted-foreground hover:text-[#d94040] font-mono transition-colors">
+                      {FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 8)}...
+                    </a>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    HERO's deflationary Buy & Burn mechanism is active on BASE. Swap fees automatically buy and burn HERO tokens, reducing supply over time.
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card className="border-[#52d98c]/20 bg-[#52d98c]/5">
+              <CardContent className="p-4 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Switch to <strong className="text-[#0052FF]">BASE</strong> using the network toggle above to see BASE chain farm options.
+                </p>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Buy & Burn info */}
           <Card className="border-[#d94040]/20 bg-[#d94040]/5">

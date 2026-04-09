@@ -226,6 +226,7 @@ export const FARM_CONTRACTS_PLS = {
   pulseXRouter: "0x165C3410fC91EF562C50559f7d2289fEbed552d9",
   heroTruFarmLP: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5",
   heroPLSLP: "0x34948e125033a697332202964de96af85becd78f",
+  vetsWPLSLP: "0xe2EC4E2033054b778a2a56B7B3EB70f89944F5e6",
   truFarmToken: "0xCA942990EF21446Db490532E66992eD1EF76A82b",
 } as const;
 
@@ -244,6 +245,14 @@ export const FARM_POOLS_PLS = [
     lpToken: FARM_CONTRACTS_PLS.heroPLSLP,
     token0: { symbol: "HERO", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
     token1: { symbol: "PLS", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
+    active: true,
+  },
+  {
+    id: 1,
+    name: "VETS/WPLS",
+    lpToken: FARM_CONTRACTS_PLS.vetsWPLSLP,
+    token0: { symbol: "VETS", address: "0x4013abBf94A745EfA7cc848989Ee83424a770060" },
+    token1: { symbol: "WPLS", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
     active: true,
   },
 ] as const;

@@ -68,6 +68,7 @@ const ADDRESSES = {
     dai: "0xefD766cCb38EaF1dfd701853BFCe31359239F305",
     heroTruFarmLP: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5",
     heroPLSLP: "0x34948e125033a697332202964de96af85becd78f",
+    vetsWPLSLP: "0xe2EC4E2033054b778a2a56B7B3EB70f89944F5e6",
   },
   base: {
     hero: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
@@ -377,6 +378,7 @@ const LP_PAIR_ADDRESSES = {
   pulsechain: [
     { poolId: 67, name: "HERO/PLS", address: "0x34948e125033a697332202964de96af85becd78f" },
     { poolId: 9, name: "HERO/TruFarm", address: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5" },
+    { poolId: 1, name: "VETS/WPLS", address: "0xe2EC4E2033054b778a2a56B7B3EB70f89944F5e6" },
   ],
   base: [
     { poolId: 0, name: "HERO/ETH", address: "0x3bb159de8604ab7e0148edc24f2a568c430476cf" },

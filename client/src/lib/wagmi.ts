@@ -14,7 +14,7 @@ export const pulsechain = {
   name: "PulseChain",
   nativeCurrency: { name: "Pulse", symbol: "PLS", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc.pulsechain.com"] },
+    default: { http: ["https://rpc-pulsechain.g4mm4.io", "https://rpc.pulsechain.com"] },
   },
   blockExplorers: {
     default: { name: "PulseScan", url: "https://scan.pulsechain.com" },
@@ -78,7 +78,7 @@ export const wagmiConfig = createConfig({
   chains: [pulsechain, base],
   connectors: connectorList,
   transports: {
-    [pulsechain.id]: http("https://rpc.pulsechain.com"),
+    [pulsechain.id]: http("https://rpc-pulsechain.g4mm4.io"),
     [base.id]: http("https://mainnet.base.org"),
   },
   // Explicitly disable auto-reconnect on page load

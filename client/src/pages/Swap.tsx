@@ -1,5 +1,4 @@
 import { useState, useMemo } from "react";
-import SquirrelSwapWidget from "@/components/SquirrelSwapWidget";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,7 +13,6 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownUp, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown } from "lucide-react";
-import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { type TokenInfo } from "../../../shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
@@ -104,6 +102,42 @@ function LivePriceBanner() {
   );
 }
 
+// SquirrelSwap Pro embeddable widget
+// Docs: https://app.squirrelswap.pro/#/docs (API & Widget section)
+function SquirrelWidget({ tokenOut }: { tokenOut?: string }) {
+  const widgetSrc = [
+    "https://app.squirrelswap.pro/#/widget",
+    "?modes=swap,limit,dca",
+    "&accentColor=e8b84b",
+    "&bgColor=transparent",
+    "&cardColor=161825",
+    "&borderColor=2a2b3d",
+    "&textColor=e6edf3",
+    tokenOut ? `&tokenOut=${tokenOut}` : "",
+  ].join("");
+
+  // Auto-resize the iframe when SquirrelSwap emits resize events
+  const handleMessage = (e: MessageEvent) => {
+    if (e.data?.type === "squirrelswap:resize") {
+      const iframe = document.getElementById("squirrel-iframe") as HTMLIFrameElement | null;
+      if (iframe) iframe.style.height = (e.data.height + 32) + "px";
+    }
+  };
+
+  return (
+    <iframe
+      id="squirrel-iframe"
+      src={widgetSrc}
+      width="100%"
+      height="620"
+      style={{ border: "none", borderRadius: "16px", display: "block" }}
+      allow="clipboard-write"
+      title="SquirrelSwap Pro — PulseChain DEX Aggregator"
+      onLoad={() => window.addEventListener("message", handleMessage)}
+    />
+  );
+}
+
 export default function Swap() {
   const { tokens, dexSources, chain, chainId } = useNetwork();
   const { address, isConnected } = useAccount();
@@ -137,9 +171,34 @@ export default function Swap() {
       });
       return;
     }
-    toast.info("Swap execution coming soon", {
-      description: `Will swap ${amountIn} ${tokenIn.symbol} → ${tokenOut.symbol} on ${chain.name}`,
-    });
+    if (!amountIn || parseFloat(amountIn) <= 0) {
+      toast.warning("Enter an amount to swap");
+      return;
+    }
+    // Route to best DEX for this chain
+    const isPulse = chainId === 369;
+    const isBase = chainId === 8453;
+    const tokenInAddr = tokenIn.address;
+    const tokenOutAddr = tokenOut.address;
+    if (isPulse) {
+      // PulseX V2 swap URL
+      const pulseXUrl = `https://app.pulsex.com/swap?inputCurrency=${tokenInAddr}&outputCurrency=${tokenOutAddr}`;
+      toast.success(`Opening PulseX — ${amountIn} ${tokenIn.symbol} → ${tokenOut.symbol}`, {
+        description: "Redirecting to PulseX for best execution...",
+        action: { label: "Open", onClick: () => window.open(pulseXUrl, "_blank") },
+      });
+      setTimeout(() => window.open(pulseXUrl, "_blank"), 1200);
+    } else if (isBase) {
+      // Aerodrome swap URL for BASE
+      const aeroUrl = `https://aerodrome.finance/swap?from=${tokenInAddr}&to=${tokenOutAddr}`;
+      toast.success(`Opening Aerodrome — ${amountIn} ${tokenIn.symbol} → ${tokenOut.symbol}`, {
+        description: "Redirecting to Aerodrome for best execution...",
+        action: { label: "Open", onClick: () => window.open(aeroUrl, "_blank") },
+      });
+      setTimeout(() => window.open(aeroUrl, "_blank"), 1200);
+    } else {
+      toast.info("Select a network to swap", { description: "Use the PulseChain or BASE toggle above" });
+    }
   };
 
   const getSwapButtonText = () => {
@@ -149,12 +208,11 @@ export default function Swap() {
   };
 
   return (
-    <div className="max-w-2xl mx-auto">
-      {/* Header */}
+    <div className="max-w-lg mx-auto">
       <div className="flex items-center justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold" style={{ color: '#C8A84B' }}>Swap</h1>
-          <p className="text-sm text-muted-foreground">Best rates across 12 DEXes on {chain.name}</p>
+          <h1 className="text-2xl font-bold text-foreground">Swap</h1>
+          <p className="text-sm text-muted-foreground">Trade tokens on {chain.name}</p>
         </div>
         <div className="flex items-center gap-2">
           <button
@@ -172,22 +230,6 @@ export default function Swap() {
           <LivePriceBanner />
         </CardContent>
       </Card>
-
-      {/* SquirrelSwap Widget — Primary Swap Interface */}
-      <div className="mb-6">
-        <SquirrelSwapWidget
-          defaultChain={chain.id === 8453 ? "base" : "pulsechain"}
-          modes="swap,limit,dca"
-          showChainToggle={true}
-        />
-      </div>
-
-      {/* Legacy UI (advanced / fallback) */}
-      <details className="mb-4">
-        <summary className="cursor-pointer text-xs text-muted-foreground hover:text-foreground py-2 px-3 rounded-lg bg-secondary/50 select-none">
-          Advanced / Custom Swap (legacy UI)
-        </summary>
-        <div className="mt-4">
 
       {/* Quick token row */}
       <div className="flex gap-2 mb-4 overflow-x-auto pb-2">
@@ -419,16 +461,6 @@ export default function Swap() {
             {getSwapButtonText()}
           </Button>
 
-          {/* Inline wallet connect prompt when not connected */}
-          {!isConnected && (
-            <ConnectWalletPrompt
-              message="Connect your wallet to execute swaps."
-              subMessage="Supports MetaMask, Coinbase, Rabby, and WalletConnect (Trust Wallet, Ledger, Rainbow)."
-              icon="wallet"
-              variant="inline"
-            />
-          )}
-
           {/* Connected wallet indicator */}
           {isConnected && address && (
             <div className="text-center text-xs text-muted-foreground">
@@ -447,8 +479,28 @@ export default function Swap() {
           </span>
         ))}
       </div>
+
+      {/* SquirrelSwap Pro Widget — PulseChain DEX Aggregator (12 DEXes) */}
+      {chainId === 369 && (
+        <div className="mt-8">
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-xl">🐿️</span>
+            <h2 className="text-base font-bold text-foreground">SquirrelSwap Pro</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20 font-medium">
+              12 DEXes · Best Rates
+            </span>
+          </div>
+          <p className="text-xs text-muted-foreground mb-3">
+            Advanced aggregator with limit orders, DCA, and batch swaps across PulseX, 9mm, PHUX & more.
+          </p>
+          <div
+            className="rounded-2xl overflow-hidden border border-[var(--hero-orange)]/20"
+            style={{ minHeight: 600 }}
+          >
+            <SquirrelWidget tokenOut={tokenOut.address} />
+          </div>
         </div>
-      </details>
+      )}
     </div>
   );
 }

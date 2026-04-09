@@ -7,9 +7,10 @@ const SKIP_DELAY_MS = 4000; // Skip button appears after 4 seconds
 
 interface ExplainerVideoModalProps {
   videoUrl?: string;
+  isYoutube?: boolean;
 }
 
-export function ExplainerVideoModal({ videoUrl }: ExplainerVideoModalProps) {
+export function ExplainerVideoModal({ videoUrl, isYoutube }: ExplainerVideoModalProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showSkip, setShowSkip] = useState(false);
   const [countdown, setCountdown] = useState(4);
@@ -51,6 +52,7 @@ export function ExplainerVideoModal({ videoUrl }: ExplainerVideoModalProps) {
 
   // Placeholder content when no video URL is provided yet
   const hasVideo = !!videoUrl;
+  const isYT = isYoutube || (videoUrl?.includes('youtube.com') ?? false);
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center">
@@ -96,7 +98,15 @@ export function ExplainerVideoModal({ videoUrl }: ExplainerVideoModalProps) {
 
         {/* Video Area */}
         <div className="aspect-video bg-black relative">
-          {hasVideo ? (
+          {hasVideo && isYT ? (
+            <iframe
+              src={videoUrl}
+              className="w-full h-full"
+              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+              allowFullScreen
+              title="HERO Ecosystem Explainer"
+            />
+          ) : hasVideo ? (
             <video
               src={videoUrl}
               className="w-full h-full object-contain"
