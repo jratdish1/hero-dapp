@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 // CDN Asset URLs
 const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png";
 const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
-const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif";
+const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero_not_a_hero_footer_40622e74.jpg";
 const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -122,7 +122,7 @@ export default function Home() {
         <img
           src={HERO_BANNER_URL}
           alt="HERO United Nations Banner"
-          className="w-full object-cover object-center"
+          className="w-full object-contain"
           style={{height: '140px'}}
         />
         {/* KYC Badge overlay */}
@@ -219,7 +219,7 @@ export default function Home() {
                 />
                 <div className="text-left">
                   <p className="font-bold text-foreground">${token.symbol}</p>
-                  <p className="text-xs text-muted-foreground">{token.name}</p>
+                  <p className="text-xs text-white/70">{token.name}</p>
                 </div>
                 <TrendingUp className="w-4 h-4 text-[var(--hero-green)] ml-2" />
               </div></Link>
@@ -255,7 +255,7 @@ export default function Home() {
                     <h3 className="text-lg font-semibold text-foreground mb-2 group-hover:text-[var(--hero-orange)] transition-colors">
                       {feature.title}
                     </h3>
-                    <p className="text-sm text-muted-foreground leading-relaxed">
+                    <p className="text-sm text-white/90 font-medium leading-relaxed">
                       {feature.description}
                     </p>
                     <div className="mt-4 flex items-center text-xs text-[var(--hero-orange)] font-medium opacity-0 group-hover:opacity-100 transition-opacity">
@@ -281,7 +281,7 @@ export default function Home() {
             ].map((stat) => (
               <div key={stat.label}>
                 <p className="text-3xl md:text-4xl font-bold gradient-text">{stat.value}</p>
-                <p className="text-sm text-muted-foreground mt-1">{stat.label}</p>
+                <p className="text-sm text-white/90 font-medium mt-1">{stat.label}</p>
               </div>
             ))}
           </div>
@@ -384,26 +384,26 @@ export default function Home() {
           <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
         </div>
         {/* Blackbeard footer banner */}
-        <div className="w-full relative overflow-hidden" style={{maxHeight: '90px'}}>
+        <div className="w-full relative overflow-hidden" style={{maxHeight: "350px"}}>
           <img
             src={BLACKBEARD_URL}
             alt="Black Bear Footer"
-            className="w-full object-cover object-top"
-            style={{height: '90px', filter: 'brightness(0.8)'}}
+            className="w-full object-contain"
+            style={{height: "350px", objectFit: "cover"}}
           />
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-white/80 text-xs font-bold tracking-widest uppercase">HERO Dapp — Built by Veterans, for Veterans & First Responders</span>
+            <span className="hidden">HERO Dapp — Built by Veterans, for Veterans & First Responders</span>
           </div>
         </div>
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src={HERO_LOGO_URL} alt="HERO Logo" className="w-8 h-8 rounded-full object-cover border border-[var(--hero-orange)]/30" />
-              <span className="text-sm text-muted-foreground">
+              <span className="text-sm text-white/90 font-medium">
                 HERO Dapp — Built by Veterans, for Veterans & First Responders
               </span>
             </div>
-            <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <div className="flex items-center gap-4 text-xs text-white/70">
               <a
                 href="https://scan.pulsechain.com/token/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
                 target="_blank"

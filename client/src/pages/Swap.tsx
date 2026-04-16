@@ -94,7 +94,7 @@ function LivePriceBanner() {
           <div key={i.symbol} className="flex items-center gap-1.5 whitespace-nowrap">
             <span className="text-xs font-semibold text-foreground">{i.symbol}</span>
             <span className="text-xs font-mono text-foreground">{formatPrice(i.price)}</span>
-            <span className={`text-xs font-mono ${positive ? "text-emerald-400" : "text-amber-400"}`}>{text}</span>
+            <span className={`text-xs font-mono ${positive ? "text-white/90" : "text-white/70"}`}>{text}</span>
           </div>
         );
       })}

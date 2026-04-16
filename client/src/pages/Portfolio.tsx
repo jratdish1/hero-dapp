@@ -350,7 +350,7 @@ export default function Portfolio() {
                           <p className="text-foreground text-sm font-medium">{token.balance}</p>
                           <p className="text-muted-foreground text-xs">{token.valueUsd}</p>
                         </div>
-                        <div className={`flex items-center gap-1 text-xs ${token.change24h >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                        <div className={`flex items-center gap-1 text-xs ${token.change24h >= 0 ? 'text-white/90' : 'text-white/70'}`}>
                           {token.change24h >= 0 ? <ArrowUpRight className="w-3 h-3" /> : <ArrowDownRight className="w-3 h-3" />}
                           {Math.abs(token.change24h).toFixed(2)}%
                         </div>
