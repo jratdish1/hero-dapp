@@ -13,7 +13,7 @@ import {
   Flame,
 } from "lucide-react";
 import { useMarketOverview, formatPrice, formatCompact, formatChange } from "@/hooks/usePrices";
-import { HERO_TOKEN, VETS_TOKEN, FEATURED_TOKENS } from "../../../shared/tokens";
+import { HERO_TOKEN, VETS_TOKEN, FEATURED_TOKENS } from "@shared/tokens";
 
 export default function Dashboard() {
   const { data: market, isLoading, refetch, isRefetching } = useMarketOverview();

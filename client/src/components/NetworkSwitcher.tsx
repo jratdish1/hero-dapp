@@ -1,5 +1,5 @@
 import { useNetwork } from "../contexts/NetworkContext";
-import { PULSECHAIN_ID, BASE_CHAIN_ID, type SupportedChainId } from "../../../shared/tokens";
+import { PULSECHAIN_ID, BASE_CHAIN_ID, type SupportedChainId } from "@shared/tokens";
 import { Loader2 } from "lucide-react";
 
 export function NetworkSwitcher({ compact = false }: { compact?: boolean }) {

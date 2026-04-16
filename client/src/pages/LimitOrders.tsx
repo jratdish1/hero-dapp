@@ -15,7 +15,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, Plus, Trash2, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNetwork } from "../contexts/NetworkContext";
-import { FEATURED_TOKENS, type TokenInfo } from "../../../shared/tokens";
+import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
 
 interface LimitOrderUI {
@@ -192,7 +192,7 @@ export default function LimitOrders() {
       {/* Orders list */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Your Orders</h2>
-        {(isBase ? baseMockOrders : plsMockOrders).map((order) => (
+        {(isBase ? baseMockOrders : mockOrders).map((order: any) => (
           <Card key={order.id} className="bg-card border-border hover:border-[var(--hero-orange)]/20 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

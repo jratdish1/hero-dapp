@@ -28,7 +28,7 @@ import {
   BookOpen,
   Globe,
 } from "lucide-react";
-import { HERO_TOKEN, VETS_TOKEN } from "../../../shared/tokens";
+import { HERO_TOKEN, VETS_TOKEN } from "@shared/tokens";
 import { ThemeToggle } from "../components/ThemeToggle";
 import { ExplainerVideoModal } from "../components/ExplainerVideoModal";
 

@@ -300,7 +300,7 @@ export default function Tokenomics() {
             <Card className="bg-card/60 border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-foreground text-base flex items-center gap-2">
-                  <img src="https://emit.farm/favicon.ico" alt="" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src="https://emit.farm/favicon.ico" alt="Emit Farm" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   Emit Farm Path
                 </CardTitle>
               </CardHeader>
@@ -327,7 +327,7 @@ export default function Tokenomics() {
             <Card className="bg-card/60 border-border">
               <CardHeader className="pb-3">
                 <CardTitle className="text-foreground text-base flex items-center gap-2">
-                  <img src="https://trufarms.io/favicon.ico" alt="" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  <img src="https://trufarms.io/favicon.ico" alt="TruFarms" className="w-5 h-5 rounded" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   TruFarm Path
                 </CardTitle>
               </CardHeader>

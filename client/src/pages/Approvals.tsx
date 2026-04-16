@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Shield, AlertTriangle, Trash2, ExternalLink, RefreshCw, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FEATURED_TOKENS, type TokenInfo } from "../../../shared/tokens";
+import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
 
 interface ApprovalEntry {

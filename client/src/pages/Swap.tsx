@@ -13,7 +13,7 @@ import {
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ArrowDownUp, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
-import { type TokenInfo } from "../../../shared/tokens";
+import { type TokenInfo } from "@shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
 import { useAccount } from "wagmi";

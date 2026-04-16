@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users } from "lucide-react";
+import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users, AlertCircle } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 const statusColors: Record<string, string> = {

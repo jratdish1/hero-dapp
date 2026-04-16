@@ -14,7 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Clock, Plus, Pause, Play, Trash2, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { useNetwork } from "../contexts/NetworkContext";
-import { FEATURED_TOKENS, type TokenInfo } from "../../../shared/tokens";
+import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
 
 interface DcaOrderUI {
@@ -48,7 +48,7 @@ export default function DcaOrders() {
   const [tokenIn, setTokenIn] = useState<string>(FEATURED_TOKENS[5].address);
   const [tokenOut, setTokenOut] = useState<string>(FEATURED_TOKENS[1].address);
   const [amount, setAmount] = useState("");
-  const [interval, setInterval] = useState("daily");
+  const [dcaInterval, setDcaInterval] = useState("daily");
   const [totalOrders, setTotalOrders] = useState("7");
 
   const mockOrders: DcaOrderUI[] = [
@@ -181,7 +181,7 @@ export default function DcaOrders() {
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Frequency</Label>
-                <Select value={interval} onValueChange={setInterval}>
+                <Select value={dcaInterval} onValueChange={setDcaInterval}>
                   <SelectTrigger className="bg-secondary border-border">
                     <SelectValue />
                   </SelectTrigger>
@@ -215,7 +215,7 @@ export default function DcaOrders() {
       {/* Existing orders */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Active Orders</h2>
-        {(isBase ? baseMockOrders : plsMockOrders).map((order) => (
+        {(isBase ? baseMockOrders : mockOrders).map((order: any) => (
           <Card key={order.id} className="bg-card border-border hover:border-[var(--hero-orange)]/20 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

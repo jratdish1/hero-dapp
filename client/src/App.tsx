@@ -23,6 +23,9 @@ import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
 import { DaoDashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates } from "./pages/dao";
 import Explainer from "./pages/Explainer";
+import BaseFarm from "./pages/BaseFarm";
+import HeroStake from "./pages/HeroStake";
+import Onboarding from "./pages/Onboarding";
 import BetaDisclaimer from "./pages/BetaDisclaimer";
 
 function Router() {
@@ -48,6 +51,9 @@ function Router() {
       <Route path="/dao/proposals/:id" component={() => <AppLayout><ProposalDetail /></AppLayout>} />
       <Route path="/dao/treasury" component={() => <AppLayout><Treasury /></AppLayout>} />
       <Route path="/dao/delegates" component={() => <AppLayout><Delegates /></AppLayout>} />
+      <Route path="/farm/base" component={() => <AppLayout><BaseFarm /></AppLayout>} />
+      <Route path="/stake" component={() => <AppLayout><HeroStake /></AppLayout>} />
+      <Route path="/start" component={() => <AppLayout><Onboarding /></AppLayout>} />
       <Route path="/explainer" component={() => <AppLayout><Explainer /></AppLayout>} />
       <Route path="/beta-disclaimer" component={BetaDisclaimer} />
       <Route path="/disclaimer" component={BetaDisclaimer} />

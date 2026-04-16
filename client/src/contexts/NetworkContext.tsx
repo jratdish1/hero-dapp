@@ -10,7 +10,7 @@ import {
   type TokenInfo,
   type DexSource,
   type ChainConfig,
-} from "../../../shared/tokens";
+} from "@shared/tokens";
 import { useAccount, useSwitchChain } from "wagmi";
 
 // ─── DRY: Single source of truth for network state ─────────────────────

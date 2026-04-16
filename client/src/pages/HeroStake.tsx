@@ -161,8 +161,8 @@ export default function HeroStake() {
       {/* Main action card */}
       {!isConnected ? (
         <ConnectWalletPrompt
-          title="Connect to Stake HERO"
-          description="Connect your wallet to stake HERO and earn DAI stablecoin rewards."
+          message="Connect to Stake HERO"
+          subMessage="Connect your wallet to stake HERO and earn DAI stablecoin rewards."
           variant="card"
         />
       ) : (

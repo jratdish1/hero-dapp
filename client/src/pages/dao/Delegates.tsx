@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Users, UserPlus, Vote, Award } from "lucide-react";
+import { Users, UserPlus, Vote, Award, Shield } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 export default function Delegates() {

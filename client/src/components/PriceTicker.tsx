@@ -86,12 +86,6 @@ export default function PriceTicker() {
         </>
       )}
       <TickerItem symbol={nativeToken.symbol} price={nativeToken.price} change24h={nativeToken.change24h} icon={nativeToken.icon} />
-      {isBase && data.usdc && (
-        <>
-          <Divider />
-          <TickerItem symbol="USDC" price={data.usdc?.price} change24h={data.usdc?.change24h} icon="🔵" />
-        </>
-      )}
       <span className="w-12 shrink-0" />
     </div>
   );
