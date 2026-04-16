@@ -33,8 +33,8 @@ import {
   Hexagon,
   X,
   Loader2,
+  Wallet,
 } from "lucide-react";
-import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 // Simple toast replacement
 const useToast = () => ({
   toast: ({ title, description, variant }: { title: string; description?: string; variant?: string }) => {
@@ -238,10 +238,10 @@ export default function MediaHub() {
                 href="https://double.trudefi.io/"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-cyan-500/50 text-cyan-400 hover:bg-cyan-500/10 transition-colors text-sm font-medium"
+                className="flex items-center gap-2 px-4 py-2 rounded-md border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors text-sm font-medium"
               >
-                <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/trudefi-logo_99ad2b71.png" alt="TruDeFi" className="w-5 h-5 object-contain" />
-                TruDeFi Double
+                <img src="https://double.trudefi.io/favicon.ico" className="w-4 h-4" alt="TruDeFi" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                TruDeFi 🔗
               </a>
             </div>
           </div>
@@ -354,20 +354,28 @@ export default function MediaHub() {
       <Dialog open={showWalletPrompt} onOpenChange={setShowWalletPrompt}>
         <DialogContent className="bg-card border-border">
           <DialogHeader>
-            <DialogTitle>Connect Wallet to Continue</DialogTitle>
+            <DialogTitle className="flex items-center gap-2">
+              <Wallet className="w-5 h-5 text-orange-500" />
+              Connect Your Wallet
+            </DialogTitle>
             <DialogDescription>
-              Connect your wallet to upload content or share NFTs. This verifies your identity and links posts to your address.
+              You need to connect your wallet to upload content or share NFTs.
+              This verifies your identity and links your posts to your wallet address.
             </DialogDescription>
           </DialogHeader>
-          <ConnectWalletPrompt
-            message="Wallet required to upload or share NFTs."
-            subMessage="Your wallet address verifies your identity and links your posts on-chain."
-            icon="wallet"
-            variant="card"
-          />
-          <div className="flex justify-end mt-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowWalletPrompt(false)}>
+          <div className="flex justify-end gap-3 mt-4">
+            <Button variant="outline" onClick={() => setShowWalletPrompt(false)}>
               Cancel
+            </Button>
+            <Button
+              className="bg-orange-500 hover:bg-orange-600 text-white"
+              onClick={() => {
+                setShowWalletPrompt(false);
+                toast({ title: "Connect your wallet", description: "Use the wallet button in the header to connect MetaMask, Trust Wallet, or WalletConnect." });
+              }}
+            >
+              <Wallet className="w-4 h-4 mr-2" />
+              Got It
             </Button>
           </div>
         </DialogContent>

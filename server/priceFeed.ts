@@ -69,11 +69,18 @@ const ADDRESSES = {
     heroTruFarmLP: "0x1F7FA931F4D1789c44f4a7Adc4564DE45ed96DF5",
     heroPLSLP: "0x34948e125033a697332202964de96af85becd78f",
     vetsWPLSLP: "0xe2EC4E2033054b778a2a56B7B3EB70f89944F5e6",
+    emit: "0x32fB5663619A657839A80133994E45c5e5cDf427",
+    rhino: "0x6C6D7De6C5f366a1995ed5f1e273C5B3760C6043",
+    truFarm: "0xCA942990EF21446Db490532E66992eD1EF76A82b",
   },
   base: {
     hero: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
     heroEthPair: "0x3bb159de8604ab7e0148edc24f2a568c430476cf",
     usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+    weth: "0x4200000000000000000000000000000000000006",
+    jesse: "0xBE8ae24C5E4D19759f640Fb89617047213be3194",
+    aero: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+    brett: "0x532f27101965dd16442E59d40670FaF5eBB142E4",
   },
 } as const;
 
@@ -233,6 +240,78 @@ export async function fetchBaseTokenPrices(): Promise<DexScreenerPair[]> {
   } catch (err) {
     console.error("[PriceFeed] Error fetching Base token prices:", err);
     return [];
+  }
+}
+
+/**
+ * Fetch additional PulseChain ticker tokens: EMIT, RHINO, TruFarm.
+ */
+export async function fetchPulsechainTickerTokens(): Promise<{
+  emit: DexScreenerPair | null;
+  rhino: DexScreenerPair | null;
+  truFarm: DexScreenerPair | null;
+}> {
+  const cacheKey = "tickerTokens_pulsechain";
+  const cached = getCached<{ emit: DexScreenerPair | null; rhino: DexScreenerPair | null; truFarm: DexScreenerPair | null }>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const data: DexScreenerPair[] = await fetchDexScreener(
+      `/tokens/v1/pulsechain/${ADDRESSES.pulsechain.emit},${ADDRESSES.pulsechain.rhino},${ADDRESSES.pulsechain.truFarm}`
+    );
+
+    const findBest = (addr: string) => {
+      const matches = data.filter(p => p.baseToken.address.toLowerCase() === addr.toLowerCase());
+      if (matches.length === 0) return null;
+      return matches.reduce((best, p) => (p.liquidity?.usd || 0) > (best.liquidity?.usd || 0) ? p : best);
+    };
+
+    const result = {
+      emit: findBest(ADDRESSES.pulsechain.emit),
+      rhino: findBest(ADDRESSES.pulsechain.rhino),
+      truFarm: findBest(ADDRESSES.pulsechain.truFarm),
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error("[PriceFeed] Error fetching PulseChain ticker tokens:", err);
+    return { emit: null, rhino: null, truFarm: null };
+  }
+}
+
+/**
+ * Fetch additional BASE ticker tokens: jesse, AERO, BRETT, WETH.
+ */
+export async function fetchBaseTickerTokens(): Promise<{
+  jesse: DexScreenerPair | null;
+  aero: DexScreenerPair | null;
+  brett: DexScreenerPair | null;
+}> {
+  const cacheKey = "tickerTokens_base";
+  const cached = getCached<{ jesse: DexScreenerPair | null; aero: DexScreenerPair | null; brett: DexScreenerPair | null }>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const data: DexScreenerPair[] = await fetchDexScreener(
+      `/tokens/v1/base/${ADDRESSES.base.jesse},${ADDRESSES.base.aero},${ADDRESSES.base.brett}`
+    );
+
+    const findBest = (addr: string) => {
+      const matches = data.filter(p => p.baseToken.address.toLowerCase() === addr.toLowerCase());
+      if (matches.length === 0) return null;
+      return matches.reduce((best, p) => (p.liquidity?.usd || 0) > (best.liquidity?.usd || 0) ? p : best);
+    };
+
+    const result = {
+      jesse: findBest(ADDRESSES.base.jesse),
+      aero: findBest(ADDRESSES.base.aero),
+      brett: findBest(ADDRESSES.base.brett),
+    };
+    setCache(cacheKey, result);
+    return result;
+  } catch (err) {
+    console.error("[PriceFeed] Error fetching Base ticker tokens:", err);
+    return { jesse: null, aero: null, brett: null };
   }
 }
 

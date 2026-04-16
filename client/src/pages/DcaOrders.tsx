@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Clock, Plus, Pause, Play, Trash2, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNetwork } from "../contexts/NetworkContext";
 import { FEATURED_TOKENS, type TokenInfo } from "../../../shared/tokens";
 import { toast } from "sonner";
 
@@ -28,6 +29,21 @@ interface DcaOrderUI {
 }
 
 export default function DcaOrders() {
+  const { chainId, isPulseChain, isBase } = useNetwork();
+  
+  // Filter tokens based on active chain
+  const BASE_TOKENS = FEATURED_TOKENS.filter((t: any) => 
+    ['HERO', 'WETH', 'USDC', 'BRETT', 'ZORA'].includes(t.symbol) || 
+    t.symbol.toLowerCase().includes('eth')
+  );
+  const PLS_TOKENS = FEATURED_TOKENS;
+  const activeTokens = isBase ? BASE_TOKENS : PLS_TOKENS;
+  
+  // Chain-specific mock orders
+  const baseMockOrders = [
+    { id: 1, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'USDC') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[1], amount: '10', frequency: 'Daily' as const, totalOrders: 30, completedOrders: 12, status: 'active' as const, nextExecution: '2026-04-17 09:00' },
+    { id: 2, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'WETH') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[1], amount: '0.01', frequency: 'Weekly' as const, totalOrders: 12, completedOrders: 4, status: 'active' as const, nextExecution: '2026-04-21 09:00' },
+  ];
   const [showCreate, setShowCreate] = useState(false);
   const [tokenIn, setTokenIn] = useState<string>(FEATURED_TOKENS[5].address);
   const [tokenOut, setTokenOut] = useState<string>(FEATURED_TOKENS[1].address);
@@ -199,7 +215,7 @@ export default function DcaOrders() {
       {/* Existing orders */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Active Orders</h2>
-        {mockOrders.map((order) => (
+        {(isBase ? baseMockOrders : plsMockOrders).map((order) => (
           <Card key={order.id} className="bg-card border-border hover:border-[var(--hero-orange)]/20 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

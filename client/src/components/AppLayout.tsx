@@ -7,7 +7,10 @@ import { NetworkSwitcher } from "./NetworkSwitcher";
 import { WalletButton } from "./WalletButton";
 import { ThemeToggle } from "./ThemeToggle";
 import PriceTicker from "./PriceTicker";
+import IntroOverlay from "./IntroOverlay";
+import LanguageSelector from "./LanguageSelector";
 import { useNetwork } from "../contexts/NetworkContext";
+import { useLanguage } from "../contexts/LanguageContext";
 import {
   ArrowLeftRight,
   BarChart3,
@@ -43,6 +46,9 @@ const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/
 const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
 const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif";
 const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
+const AUDIT_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/audited-by-spywolf_8a337ccc.png";
+const AUDIT_PDF_URL = "https://spywolf.co/audits/HERO_0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27(PULSE).pdf";
+const KYC_PDF_URL = "https://spywolf.co/kyc-verification/KYC_Hero_0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8.pdf";
 
 const NAV_ITEMS = [
   { path: "/start", label: "🇺🇸 Start Here", icon: Star },
@@ -76,6 +82,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
   const { chain } = useNetwork();
+  const { t } = useLanguage();
 
   return (
     <div className="min-h-screen bg-background flex">
@@ -156,7 +163,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 onClick={() => setSidebarOpen(false)}
               >
                 <Icon className="w-4.5 h-4.5" />
-                {item.label}
+                {t(item.label)}
                 {isAi && (
                   <Sparkles className="w-3 h-3 ml-auto text-hero-orange/50" />
                 )}
@@ -165,7 +172,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           })}
           {/* DAO Section Divider */}
           <div className="mt-3 pt-3 border-t border-sidebar-border">
-            <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">Governance</p>
+            <p className="px-3 mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground/60">{t("Governance")}</p>
             {DAO_NAV_ITEMS.map((item) => {
               const isActive = location === item.path || (item.path === "/dao" && location.startsWith("/dao") && location !== "/dao/proposals" && location !== "/dao/delegates" && location !== "/dao/treasury");
               const Icon = item.icon;
@@ -181,7 +188,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   onClick={() => setSidebarOpen(false)}
                 >
                   <Icon className="w-4.5 h-4.5" />
-                  {item.label}
+                  {t(item.label)}
                 </Link>
               );
             })}
@@ -203,7 +210,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               <button
                 onClick={() => logout()}
                 className="text-muted-foreground hover:text-destructive transition-colors"
-                title="Sign out"
+                title={t("Sign Out")}
               >
                 <LogOut className="w-4 h-4" />
               </button>
@@ -211,7 +218,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           ) : (
             <a href={getLoginUrl()}>
               <Button variant="outline" className="w-full border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
-                Sign In
+                {t("Sign In")}
               </Button>
             </a>
           )}
@@ -231,7 +238,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* KYC Badge top-right */}
           <div className="absolute top-2 right-2 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
             <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
-            <span className="text-xs text-green-400 font-bold">KYC</span>
+            <span className="text-xs text-green-400 font-bold">{t("KYC")}</span>
           </div>
         </div>
         {/* Price Ticker */}
@@ -246,12 +253,13 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </button>
           <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
             <ChevronLeft className="w-4 h-4 inline mr-1" />
-            <span className="text-sm">Home</span>
+            <span className="text-sm">{t("Home")}</span>
           </Link>
           <div className="flex-1" />
           <div className="hidden sm:block">
             <NetworkSwitcher compact />
           </div>
+          <LanguageSelector />
           <ThemeToggle />
           <WalletButton />
         </header>
@@ -282,11 +290,17 @@ export default function AppLayout({ children }: { children: ReactNode }) {
 
         {/* Blackbeard Footer Banner - shown across all app tabs */}
         <footer className="w-full mt-auto">
-          {/* KYC Badge row above footer */}
-          <div className="flex items-center justify-center gap-3 bg-black/80 py-2 border-t border-[var(--hero-orange)]/20">
-            <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
-            <span className="text-xs text-green-400 font-semibold tracking-wider">KYC CERTIFIED — VETS IN CRYPTO PROTOCOL</span>
-            <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
+          {/* SpyWolf Audit & KYC Badges */}
+          <div className="flex items-center justify-center gap-6 bg-black/80 py-3 border-t border-[var(--hero-orange)]/20">
+            <a href={AUDIT_PDF_URL} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity">
+              <img src={AUDIT_BADGE_URL} alt="Audited by SpyWolf" className="w-12 h-12" />
+              <span className="text-[10px] text-green-400 font-semibold tracking-wider">{t("AUDITED")}</span>
+            </a>
+            <span className="text-xs text-green-400 font-semibold tracking-wider">{t("VERIFIED BY SPYWOLF")}</span>
+            <a href={KYC_PDF_URL} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity">
+              <img src={KYC_BADGE_URL} alt="KYC Verified by SpyWolf" className="w-12 h-12" />
+              <span className="text-[10px] text-green-400 font-semibold tracking-wider">{t("KYC VERIFIED")}</span>
+            </a>
           </div>
           {/* Blackbeard banner */}
           <div className="w-full relative overflow-hidden" style={{maxHeight: '100px'}}>
@@ -297,11 +311,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               style={{height: '100px', filter: 'brightness(0.85)'}}
             />
             <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-white/80 text-xs font-bold tracking-widest uppercase">HERO Dapp — Built for Veterans, by Veterans</span>
+              <span className="text-white/80 text-xs font-bold tracking-widest uppercase">{t("HERO Dapp — Built for Veterans, by Veterans")}</span>
             </div>
           </div>
         </footer>
       </div>
+      <IntroOverlay />
     </div>
   );
 }

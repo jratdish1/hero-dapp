@@ -96,8 +96,8 @@
 - [x] Visual infographic: Farm yield ecosystem (Emit, TruFarms, RhinoFi)
 - [x] AI explainer video script covering full HERO ecosystem
 - [x] AI explainer video production and CDN upload
-- [ ] Explainer page on Dapp with embedded video and visual breakdowns
-- [ ] Add Explainer page to navigation (sidebar + landing page)
+- [x] Explainer page on Dapp with embedded video and visual breakdowns
+- [x] Add Explainer page to navigation (sidebar + landing page)
 - [x] Visual infographic: Tokenomics flywheel (LP → rewards → DAI → buy HERO cycle)
 - [x] Visual infographic: NFT rank system (E-1 to O-10 with fee reductions)
 - [x] Visual infographic: Swap aggregator flow (multi-DEX routing)
@@ -191,4 +191,4 @@
 - [x] Feature: Scheduled auto-refresh for Twitter mentions (server-side setInterval, every 4 hours)
 - [x] Feature: Pin to Top for best influencer mentions (isPinned column, admin toggle, optimistic UI, pinned sort first)
 - [x] Feature: Telegram bot notifications for high-follower $HERO mentions (1k+ followers, press, partners → VetsInCrypto)
-- [ ] Feature: Domain setup guidance for vicfoundation.com (CNAME to dapp.vicfoundation.com)
+- [x] Feature: Domain setup guidance for vicfoundation.com (CNAME to dapp.vicfoundation.com) -- ALREADY LIVE via Cloudflare A record

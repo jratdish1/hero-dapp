@@ -1,8 +1,8 @@
+import { trpc } from "@/lib/trpc";
 import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
-import { trpc } from "@/lib/trpc";
 import { Streamdown } from "streamdown";
 import {
   Bot,

@@ -14,6 +14,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, Plus, Trash2, ArrowUpRight, ArrowDownRight, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { useNetwork } from "../contexts/NetworkContext";
 import { FEATURED_TOKENS, type TokenInfo } from "../../../shared/tokens";
 import { toast } from "sonner";
 
@@ -29,6 +30,22 @@ interface LimitOrderUI {
 }
 
 export default function LimitOrders() {
+  const { chainId, isPulseChain, isBase } = useNetwork();
+  
+  // Filter tokens based on active chain
+  const BASE_TOKENS = FEATURED_TOKENS.filter((t: any) => 
+    ['HERO', 'WETH', 'USDC', 'BRETT', 'ZORA'].includes(t.symbol) || 
+    t.symbol.toLowerCase().includes('eth')
+  );
+  const PLS_TOKENS = FEATURED_TOKENS;
+  const activeTokens = isBase ? BASE_TOKENS : PLS_TOKENS;
+  
+  // Chain-specific mock orders
+  const baseMockOrders = [
+    { id: 1, type: 'buy' as const, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'USDC') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[1], amount: '100', targetPrice: '0.000085', status: 'pending' as const, created: '2026-04-15' },
+    { id: 2, type: 'sell' as const, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'WETH') || BASE_TOKENS[1], amount: '500000', targetPrice: '0.00012', status: 'pending' as const, created: '2026-04-14' },
+    { id: 3, type: 'buy' as const, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'USDC') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'BRETT') || BASE_TOKENS[1], amount: '50', targetPrice: '0.08', status: 'filled' as const, created: '2026-04-13' },
+  ];
   const [showCreate, setShowCreate] = useState(false);
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy");
   const [tokenIn, setTokenIn] = useState<string>(FEATURED_TOKENS[5].address);
@@ -175,7 +192,7 @@ export default function LimitOrders() {
       {/* Orders list */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Your Orders</h2>
-        {mockOrders.map((order) => (
+        {(isBase ? baseMockOrders : plsMockOrders).map((order) => (
           <Card key={order.id} className="bg-card border-border hover:border-[var(--hero-orange)]/20 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

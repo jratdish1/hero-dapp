@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+import React from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -25,61 +26,90 @@ import {
   FARM_CONTRACTS_PLS,
   FARM_POOLS_PLS,
   FARM_CONTRACTS_BASE,
+  FARM_POOLS_BASE,
   CDN_ASSETS,
   LIVE_DAPP_URLS,
   SERVICE_BRANCHES,
   HERO_TOKEN_PLS,
   VETS_TOKEN_PLS,
   HERO_TOKEN_BASE,
+  BASE_CHAIN_ID,
+  PULSECHAIN_ID,
 } from "@shared/tokens";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { useFarmPools, formatCompact, formatChange } from "@/hooks/usePrices";
-import { BASE_CHAIN_ID, PULSECHAIN_ID } from "../../../shared/tokens";
 
-// ─── Partner Farm Logo Carousel ─────────────────────────────────────────
-const FARM_LOGOS = [
-  { name: "EMIT Farm", url: "https://emit.farm/farms", emoji: "🌱", color: "#ec4899" },
-  { name: "TruFarms", url: "https://trufarms.io/farms", emoji: "🌾", color: "#f97316" },
-  { name: "RhinoFi", url: "https://www.rhinofi.win/dapp", emoji: "🦏", color: "#8b5cf6" },
-];
 
-function PartnerLogoCarousel() {
-  const [active, setActive] = useState(0);
-  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+// ─── DexScreener Live Data Hook ─────────────────────────────────────────
+interface DexPairData {
+  pairAddress: string;
+  priceUsd: string;
+  priceChange: { h24: number; h6: number; h1: number };
+  volume: { h24: number; h6: number; h1: number };
+  liquidity: { usd: number };
+  fdv: number;
+  txns: { h24: { buys: number; sells: number } };
+}
 
-  const startTimer = () => {
-    if (timerRef.current) clearInterval(timerRef.current);
-    timerRef.current = setInterval(() => setActive((p) => (p + 1) % FARM_LOGOS.length), 2800);
-  };
+function useDexScreenerBase(tokenAddress: string) {
+  const [pairs, setPairs] = React.useState<Record<string, DexPairData>>({});
+  const [loading, setLoading] = React.useState(true);
+  const [lastUpdate, setLastUpdate] = React.useState<Date | null>(null);
 
-  useEffect(() => {
-    startTimer();
-    return () => { if (timerRef.current) clearInterval(timerRef.current); };
-  }, []);
+  React.useEffect(() => {
+    let cancelled = false;
+    async function fetchData() {
+      try {
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`
+        );
+        const data = await res.json();
+        if (cancelled) return;
+        const basePairs = (data.pairs || []).filter(
+          (p: any) => p.chainId === "base"
+        );
+        const pairMap: Record<string, DexPairData> = {};
+        for (const p of basePairs) {
+          pairMap[p.pairAddress.toLowerCase()] = {
+            pairAddress: p.pairAddress,
+            priceUsd: p.priceUsd || "0",
+            priceChange: p.priceChange || { h24: 0, h6: 0, h1: 0 },
+            volume: p.volume || { h24: 0, h6: 0, h1: 0 },
+            liquidity: p.liquidity || { usd: 0 },
+            fdv: p.fdv || 0,
+            txns: p.txns || { h24: { buys: 0, sells: 0 } },
+          };
+        }
+        setPairs(pairMap);
+        setLastUpdate(new Date());
+      } catch (err) {
+        console.warn("DexScreener fetch failed:", err);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    fetchData();
+    const interval = setInterval(fetchData, 30000); // refresh every 30s
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [tokenAddress]);
 
-  return (
-    <div className="flex items-center gap-2 flex-wrap">
-      {FARM_LOGOS.map((farm, i) => (
-        <a
-          key={farm.name}
-          href={farm.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          onMouseEnter={() => { if (timerRef.current) clearInterval(timerRef.current); setActive(i); }}
-          onMouseLeave={startTimer}
-          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg border transition-all duration-300 shrink-0 ${
-            active === i
-              ? "border-[var(--hero-orange)]/60 bg-[var(--hero-orange)]/10 scale-105 shadow-lg"
-              : "border-border/30 bg-card/40 hover:border-[var(--hero-orange)]/40"
-          }`}
-        >
-          <span className="text-base">{farm.emoji}</span>
-          <span className="text-sm font-semibold text-foreground whitespace-nowrap">{farm.name}</span>
-          <ExternalLink className="w-3 h-3 text-muted-foreground" />
-        </a>
-      ))}
-    </div>
-  );
+  return { pairs, loading, lastUpdate };
+}
+
+function formatUsd(n: number): string {
+  if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(2)}M`;
+  if (n >= 1_000) return `$${(n / 1_000).toFixed(1)}K`;
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  return `$${n.toFixed(4)}`;
+}
+
+function formatPriceUsd(s: string): string {
+  const n = parseFloat(s);
+  if (isNaN(n)) return "$0.00";
+  if (n >= 1) return `$${n.toFixed(2)}`;
+  if (n >= 0.01) return `$${n.toFixed(4)}`;
+  if (n >= 0.0001) return `$${n.toFixed(6)}`;
+  return `$${n.toFixed(8)}`;
 }
 
 // ─── Types ──────────────────────────────────────────────────────────────
@@ -110,7 +140,7 @@ interface PartnerFarm {
   pools: FarmPool[];
 }
 
-// ─── Partner Farm Data ──────────────────────────────────────────────────
+// ─── Partner Farm Data (PulseChain only) ────────────────────────────────
 const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "emit",
@@ -198,27 +228,23 @@ function ServiceBranchRibbon() {
   );
 }
 
-// ─── HERO Staking Pool Card ─────────────────────────────────────────────
+// ─── HERO Staking Pool Card (PulseChain) ────────────────────────────────
 function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number]; liveData?: { tvlUsd: number; volume24h: number; estimatedApr: number; priceChange24h: number } }) {
   const change = formatChange(liveData?.priceChange24h);
-  const isVets = pool.token0.symbol === "VETS";
-  const dexLink = isVets
-    ? `https://dexscreener.com/pulsechain/${pool.lpToken}`
-    : `https://dexscreener.com/pulsechain/${pool.lpToken}`;
   return (
-    <Card className={isVets ? "border-[#52d98c]/30 bg-gradient-to-br from-[#0d1a12] to-[#0d0e14] hover:border-[#52d98c]/50 transition-all group" : "border-[#e8b84b]/30 bg-gradient-to-br from-[#161825] to-[#0d0e14] hover:border-[#e8b84b]/50 transition-all group"}>
+    <Card className="border-[#e8b84b]/30 bg-gradient-to-br from-[#161825] to-[#0d0e14] hover:border-[#e8b84b]/50 transition-all group">
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className={`w-8 h-8 rounded-lg bg-gradient-to-br flex items-center justify-center ${isVets ? "from-[#52d98c] to-[#2ea86a]" : "from-[#e8b84b] to-[#c08020]"}`}>
-              {isVets ? <Shield className="w-4 h-4 text-black" /> : <Sprout className="w-4 h-4 text-foreground" />}
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#e8b84b] to-[#c08020] flex items-center justify-center">
+              <Sprout className="w-4 h-4 text-foreground" />
             </div>
             <div>
               <h4 className="font-bold text-foreground">{pool.name}</h4>
-              <p className="text-[10px] text-muted-foreground">Pool #{pool.id} {isVets ? "· $VETS" : "· $HERO"}</p>
+              <p className="text-[10px] text-muted-foreground">Pool #{pool.id}</p>
             </div>
           </div>
-          <Badge className={isVets ? "bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]" : "bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]"}>
+          <Badge className="bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-[10px]">
             Active
           </Badge>
         </div>
@@ -279,16 +305,106 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
           </div>
         </div>
 
-        <div className="flex gap-2 mt-4">
-          <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="flex-1">
-            <Button size="sm" className={`w-full font-semibold tracking-wide ${isVets ? "bg-gradient-to-r from-[#52d98c]/20 to-[#2ea86a]/25 border border-[#52d98c]/30 text-[#52d98c] hover:from-[#52d98c]/30 hover:to-[#2ea86a]/38" : "bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38"}`}>
-              <Wallet className="w-3.5 h-3.5 mr-1.5" />
-              {isVets ? "Stake VETS" : "Stake on HERO Farm"}
+        <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="block mt-4">
+          <Button size="sm" className="w-full bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-semibold tracking-wide">
+            <Wallet className="w-3.5 h-3.5 mr-1.5" />
+            Stake on HERO Farm
+          </Button>
+        </a>
+      </CardContent>
+    </Card>
+  );
+}
+
+// ─── BASE Pool Card with Live DexScreener Data ─────────────────────────
+function BasePoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_BASE[number]; liveData?: DexPairData }) {
+  const dexScreenerUrl = `https://dexscreener.com/base/${pool.pairAddress}`;
+  const dex = (pool as any).dex || "DEX";
+  const change24h = liveData?.priceChange?.h24 ?? 0;
+  const isPositive = change24h >= 0;
+  return (
+    <Card className="border-[#0052FF]/30 bg-gradient-to-br from-[#0a1628] to-[#0d0e14] hover:border-[#0052FF]/50 transition-all group">
+      <CardContent className="p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#0052FF] to-[#3b82f6] flex items-center justify-center">
+              <Sprout className="w-4 h-4 text-white" />
+            </div>
+            <div>
+              <h4 className="font-bold text-foreground">{pool.name}</h4>
+              <p className="text-[10px] text-muted-foreground">{dex}</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {liveData && (
+              <span className={`text-xs font-bold ${isPositive ? "text-[#52d98c]" : "text-[#d94040]"}`}>
+                {isPositive ? "+" : ""}{change24h.toFixed(2)}%
+              </span>
+            )}
+            <Badge className="bg-[#0052FF]/10 text-[#0052FF] border-[#0052FF]/20 text-[10px]">
+              {pool.active ? "Active" : "Inactive"}
+            </Badge>
+          </div>
+        </div>
+
+        {/* Live Price & Stats */}
+        {liveData ? (
+          <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="rounded-lg bg-[#0052FF]/5 border border-[#0052FF]/10 p-2 text-center">
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Price</p>
+              <p className="text-sm font-bold text-foreground">{formatPriceUsd(liveData.priceUsd)}</p>
+            </div>
+            <div className="rounded-lg bg-[#0052FF]/5 border border-[#0052FF]/10 p-2 text-center">
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Liquidity</p>
+              <p className="text-sm font-bold text-foreground">{formatUsd(liveData.liquidity.usd)}</p>
+            </div>
+            <div className="rounded-lg bg-[#0052FF]/5 border border-[#0052FF]/10 p-2 text-center">
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Vol 24h</p>
+              <p className="text-sm font-bold text-foreground">{formatUsd(liveData.volume.h24)}</p>
+            </div>
+            <div className="rounded-lg bg-[#0052FF]/5 border border-[#0052FF]/10 p-2 text-center">
+              <p className="text-[9px] text-muted-foreground uppercase tracking-wider">Txns 24h</p>
+              <p className="text-sm font-bold text-foreground">
+                <span className="text-[#52d98c]">{liveData.txns.h24.buys}B</span>
+                {" / "}
+                <span className="text-[#d94040]">{liveData.txns.h24.sells}S</span>
+              </p>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-2 text-sm mb-3">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Pair Address</span>
+              <Tooltip>
+                <TooltipTrigger>
+                  <span className="font-mono text-xs text-foreground">
+                    {pool.pairAddress.slice(0, 8)}...{pool.pairAddress.slice(-6)}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p className="font-mono text-xs">{pool.pairAddress}</p>
+                </TooltipContent>
+              </Tooltip>
+            </div>
+          </div>
+        )}
+
+        <div className="flex justify-between text-[10px] text-muted-foreground mb-3">
+          <span>{pool.token0.symbol} / {pool.token1.symbol}</span>
+          {liveData && <span>FDV: {formatUsd(liveData.fdv)}</span>}
+        </div>
+
+        <div className="flex gap-2">
+          <a href={dexScreenerUrl} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <Button size="sm" className="w-full bg-gradient-to-r from-[#0052FF]/20 to-[#3b82f6]/25 border border-[#0052FF]/30 text-[#3b82f6] hover:from-[#0052FF]/30 hover:to-[#3b82f6]/38 font-semibold tracking-wide">
+              <TrendingUp className="w-3.5 h-3.5 mr-1.5" />
+              DexScreener
             </Button>
           </a>
-          <a href={dexLink} target="_blank" rel="noopener noreferrer">
-            <Button size="sm" variant="outline" className="border-border/40 text-muted-foreground hover:text-foreground px-2.5">
-              <ExternalLink className="w-3.5 h-3.5" />
+          <a href={`https://basescan.org/address/${pool.pairAddress}`} target="_blank" rel="noopener noreferrer" className="flex-1">
+            <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10">
+              <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+              BaseScan
             </Button>
           </a>
         </div>
@@ -308,32 +424,32 @@ function PoolCard({ pool }: { pool: FarmPool }) {
       }`}
     >
       {pool.isHeroVets && (
-        <div className="absolute -top-2.5 left-3">
-          <Badge className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground text-[10px] px-2 py-0.5 border-0">
-            <Star className="w-3 h-3 mr-1" />
+        <div className="absolute -top-2 right-3">
+          <Badge className="bg-[var(--hero-orange)] text-foreground text-[9px] px-1.5 py-0 border-0">
             HERO/VETS
           </Badge>
         </div>
       )}
-      <div className="flex items-center justify-between mt-1">
-        <div>
-          <h4 className="font-semibold text-foreground">{pool.pair}</h4>
-          <div className="flex items-center gap-2 mt-1">
-            <Badge variant="outline" className="text-[10px] py-0">{pool.type}</Badge>
-            {pool.farmId && <span className="text-[10px] text-muted-foreground">ID: {pool.farmId}</span>}
-          </div>
-        </div>
-        <div className="text-right">
-          {pool.apr && (
-            <div className="flex items-center gap-1">
-              <TrendingUp className="w-3.5 h-3.5 text-[var(--hero-green)]" />
-              <span className="font-bold text-[var(--hero-green)]">{pool.apr}</span>
-            </div>
-          )}
-          {pool.tvl && <p className="text-xs text-muted-foreground mt-0.5">TVL: {pool.tvl}</p>}
-        </div>
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="font-bold text-foreground">{pool.pair}</h4>
+        <Badge variant="outline" className="text-[10px] py-0">
+          {pool.type}
+        </Badge>
       </div>
-      {pool.note && <p className="text-xs text-muted-foreground mt-2 italic">{pool.note}</p>}
+      {pool.apr && (
+        <div className="flex items-center gap-1 mb-2">
+          <TrendingUp className="w-4 h-4 text-[var(--hero-green)]" />
+          <span className="font-bold text-[var(--hero-green)]">{pool.apr}</span>
+          <span className="text-xs text-muted-foreground">APR</span>
+        </div>
+      )}
+      <div className="flex gap-4 text-xs text-muted-foreground">
+        {pool.tvl && <span>TVL: {pool.tvl}</span>}
+        {pool.farmId && <span>Farm ID: {pool.farmId}</span>}
+      </div>
+      {pool.note && (
+        <p className="text-xs text-muted-foreground mt-2 italic">{pool.note}</p>
+      )}
     </div>
   );
 }
@@ -345,57 +461,72 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
 
   return (
     <div className="space-y-6">
-      <Card className="border-border/50 bg-card/80 backdrop-blur">
-        <CardContent className="p-5">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-2">
-                <div className={`w-10 h-10 rounded-lg bg-gradient-to-br ${farm.color} flex items-center justify-center`}>
-                  <Sprout className="w-5 h-5 text-foreground" />
-                </div>
-                <div>
-                  <h3 className="font-bold text-lg text-foreground">{farm.name}</h3>
-                  <p className="text-xs text-muted-foreground">{farm.tokenSymbol} Token</p>
-                </div>
+      {/* Farm header */}
+      <Card className={`border-border/30 bg-gradient-to-r ${farm.color} bg-opacity-10 overflow-hidden`}>
+        <CardContent className="p-5 relative">
+          <div className="absolute inset-0 bg-background/90" />
+          <div className="relative z-10">
+            <div className="flex items-center justify-between mb-3">
+              <div>
+                <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
+                  {farm.name}
+                  <Badge
+                    className="text-[10px] border-0"
+                    style={{
+                      backgroundColor: farm.accentColor + "20",
+                      color: farm.accentColor,
+                    }}
+                  >
+                    {farm.tokenSymbol}
+                  </Badge>
+                </h2>
+                <p className="text-sm text-muted-foreground mt-1">
+                  {farm.description}
+                </p>
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{farm.description}</p>
+              <a href={farm.url} target="_blank" rel="noopener noreferrer">
+                <Button
+                  variant="outline"
+                  className="border-border/50 hover:border-[var(--hero-orange)]/30"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open {farm.name}
+                </Button>
+              </a>
             </div>
-            <div className="flex flex-wrap gap-3">
+
+            {/* Token stats */}
+            <div className="grid grid-cols-3 gap-3 mt-4">
               {farm.tokenPrice && (
-                <div className="text-center px-3 py-1.5 rounded-lg bg-secondary/50">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Price</p>
-                  <p className="font-semibold text-sm text-foreground">{farm.tokenPrice}</p>
+                <div className="rounded-lg bg-secondary/30 p-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase">
+                    Price
+                  </p>
+                  <p className="font-bold text-foreground">{farm.tokenPrice}</p>
                 </div>
               )}
               {farm.marketCap && (
-                <div className="text-center px-3 py-1.5 rounded-lg bg-secondary/50">
-                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider">MCap</p>
-                  <p className="font-semibold text-sm text-foreground">{farm.marketCap}</p>
+                <div className="rounded-lg bg-secondary/30 p-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase">
+                    Market Cap
+                  </p>
+                  <p className="font-bold text-foreground">{farm.marketCap}</p>
+                </div>
+              )}
+              {farm.totalSupply && (
+                <div className="rounded-lg bg-secondary/30 p-2.5 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase">
+                    Supply
+                  </p>
+                  <p className="font-bold text-foreground">{farm.totalSupply}</p>
                 </div>
               )}
             </div>
-          </div>
-          <div className="flex items-center gap-3 mt-4">
-            <a href={farm.url} target="_blank" rel="noopener noreferrer">
-              <Button size="sm" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0">
-                <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                Open {farm.name}
-              </Button>
-            </a>
-            <Tooltip>
-              <TooltipTrigger>
-                <Badge variant="outline" className="text-[10px] font-mono">
-                  {farm.contractAddress.slice(0, 10)}...{farm.contractAddress.slice(-6)}
-                </Badge>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p className="font-mono text-xs">{farm.contractAddress}</p>
-              </TooltipContent>
-            </Tooltip>
           </div>
         </CardContent>
       </Card>
 
+      {/* HERO/VETS pools first */}
       {heroVetsPools.length > 0 && (
         <div>
           <div className="flex items-center gap-2 mb-3">
@@ -424,7 +555,8 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
 // ─── Main Farm Page ─────────────────────────────────────────────────────
 export default function Farm() {
   const [activeTab, setActiveTab] = useState("hero-farm");
-  const { chainId, isBase, isPulseChain, switchNetwork } = useNetwork();
+  const { chainId, isPulseChain, isBase } = useNetwork();
+  const { pairs: baseLiveData, loading: dexLoading, lastUpdate: dexLastUpdate } = useDexScreenerBase(HERO_TOKEN_BASE.address);
   const { data: farmPools } = useFarmPools("pulsechain");
   const { data: basePools } = useFarmPools("base");
 
@@ -442,12 +574,19 @@ export default function Farm() {
       .map((p) => ({ ...p, farmName: farm.name, farmUrl: farm.url, farmColor: farm.color }))
   );
 
+  // Chain-aware contracts and labels
+  const contracts = isBase ? FARM_CONTRACTS_BASE : FARM_CONTRACTS_PLS;
+  const chainLabel = isBase ? "Base" : "PulseChain";
+  const chainColor = isBase ? "#0052FF" : "#52d98c";
+  const chainEmoji = isBase ? "🔵" : "⚡";
+  const explorerBase = isBase ? "https://basescan.org" : "https://scan.pulsechain.com";
+
   return (
     <div className="space-y-6 max-w-6xl mx-auto">
       {/* Service Branch Ribbon */}
       <ServiceBranchRibbon />
 
-      {/* Page header with HERO emblem */}
+      {/* Page header with HERO emblem — CHAIN AWARE */}
       <div className="flex items-center gap-4">
         <img
           src={CDN_ASSETS.heroEmblem}
@@ -457,357 +596,184 @@ export default function Farm() {
         <div>
           <h1 className="text-2xl font-bold text-foreground flex items-center gap-2">
             HERO Farm
-            {isBase ? (
-              <Badge className="bg-[#0052FF]/10 text-[#0052FF] border-[#0052FF]/20 text-xs ml-2">
-                🔵 Live on BASE
-              </Badge>
-            ) : (
-              <Badge className="bg-[#52d98c]/10 text-[#52d98c] border-[#52d98c]/20 text-xs ml-2">
-                ⚡ Live on PulseChain
-              </Badge>
-            )}
+            <Badge
+              className="text-xs ml-2"
+              style={{
+                backgroundColor: chainColor + "15",
+                color: chainColor,
+                borderColor: chainColor + "30",
+              }}
+            >
+              {chainEmoji} Live on {chainLabel}
+            </Badge>
           </h1>
           <p className="text-muted-foreground mt-0.5 text-sm">
-            Stake LP tokens, earn rewards, support veterans & first responders
+            {isBase
+              ? "Provide liquidity on Base L1 via Uniswap V3 & Aerodrome"
+              : "Stake LP tokens, earn rewards, support veterans & first responders"}
           </p>
         </div>
       </div>
 
-      {/* Partner Farm Carousel + Mobile Chain Toggle */}
-      <div className="flex flex-col sm:flex-row sm:items-center gap-3">
-        <div className="flex-1">
-          <p className="text-xs text-muted-foreground mb-2 uppercase tracking-wider font-semibold">Partner Farms</p>
-          <PartnerLogoCarousel />
-        </div>
-        {/* Chain toggle — always visible, especially on mobile */}
-        <div className="flex items-center gap-2 shrink-0">
-          <button
-            onClick={() => switchNetwork(PULSECHAIN_ID)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
-              isPulseChain
-                ? "border-[#52d98c]/60 bg-[#52d98c]/15 text-[#52d98c]"
-                : "border-border/30 bg-card/40 text-muted-foreground hover:border-[#52d98c]/40"
-            }`}
-          >
-            <span>⚡</span> PLS
-          </button>
-          <button
-            onClick={() => switchNetwork(BASE_CHAIN_ID)}
-            className={`flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-semibold transition-all ${
-              isBase
-                ? "border-[#0052FF]/60 bg-[#0052FF]/15 text-[#0052FF]"
-                : "border-border/30 bg-card/40 text-muted-foreground hover:border-[#0052FF]/40"
-            }`}
-          >
-            <span>🔵</span> BASE
-          </button>
-        </div>
-      </div>
-      {/* Live Farm DApp Banner */}
-      <Card className="border-[#e8b84b]/30 bg-gradient-to-r from-[#0d0e14] to-[#161825] overflow-hidden relative">
-        <div
-          className="absolute inset-0 opacity-10 bg-cover bg-center"
-          style={{ backgroundImage: `url(${CDN_ASSETS.heroBanner})` }}
-        />
-        <CardContent className="p-6 relative z-10">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-bold" style={{
-                background: "linear-gradient(170deg, #ffffff 0%, #f5e8b0 25%, #e8b84b 55%, #c08020 85%)",
-                WebkitBackgroundClip: "text",
-                WebkitTextFillColor: "transparent",
-                backgroundClip: "text",
-              }}>
-                HERO Farm DApp
-              </h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Full staking interface with Zap, Buy & Burn, Leaderboard, AI Chat, and more
-              </p>
-              <div className="flex flex-wrap gap-2 mt-3">
-                <Badge variant="outline" className="text-[10px] border-[#e8b84b]/20 text-[#e8b84b]">
-                  <Sprout className="w-3 h-3 mr-1" /> 2 Active Pools
-                </Badge>
-                <Badge variant="outline" className="text-[10px] border-[#52d98c]/20 text-[#52d98c]">
-                  <Flame className="w-3 h-3 mr-1" /> Buy & Burn
-                </Badge>
-                <Badge variant="outline" className="text-[10px] border-[#5b8def]/20 text-[#5b8def]">
-                  <Zap className="w-3 h-3 mr-1" /> PLS → LP Zapper
-                </Badge>
-              </div>
-            </div>
-            <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
-              <Button className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-bold tracking-wider text-base px-8 py-3">
-                <ArrowUpRight className="w-5 h-5 mr-2" />
-                Launch Farm DApp
-              </Button>
-            </a>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Smart Contract Quick Reference */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#e8b84b]/30 transition-colors">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MasterChef V2</p>
-              <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.masterChefV2.slice(0, 8)}...</p>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.masterChefV2}</p></TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#d94040]/30 transition-colors">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Buy & Burn</p>
-              <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.buyAndBurn.slice(0, 8)}...</p>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.buyAndBurn}</p></TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#5b8def]/30 transition-colors">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Zapper</p>
-              <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.zapper.slice(0, 8)}...</p>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.zapper}</p></TooltipContent>
-        </Tooltip>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#52d98c]/30 transition-colors">
-              <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">PulseX Router</p>
-              <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.pulseXRouter.slice(0, 8)}...</p>
-            </div>
-          </TooltipTrigger>
-          <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.pulseXRouter}</p></TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* Mission banner */}
-      <Card className="border-[var(--hero-orange)]/20 bg-gradient-to-r from-[var(--hero-orange)]/5 to-[var(--hero-green)]/5">
-        <CardContent className="p-5">
-          <div className="flex items-start gap-4">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shrink-0">
-              <Heart className="w-6 h-6 text-foreground" />
-            </div>
-            <div>
-              <h3 className="font-bold text-foreground mb-1">Supporting Veterans & First Responders</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                Our partner farms are <strong className="text-foreground">benevolent protocols</strong> that
-                support the HERO/VETS community. Through liquidity bonding on PulseChain, they help fund
-                the <strong className="text-foreground">VIC Foundation</strong>, a legitimate{" "}
-                <strong className="text-foreground">501(c)(3) nonprofit organization</strong>{" "}
-                dedicated to military veterans and first responders.
-              </p>
-              <div className="flex flex-wrap items-center gap-2 mt-3">
-                {SERVICE_BRANCHES.map((branch) => (
-                  <Badge
-                    key={branch.name}
-                    variant="outline"
-                    className="text-[10px] py-0.5"
-                    style={{ borderColor: branch.color + "60", color: branch.color }}
-                  >
-                    {branch.name}
-                  </Badge>
-                ))}
-              </div>
-              <div className="flex items-center gap-3 mt-3">
-                <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline" className="border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
-                    <Shield className="w-3.5 h-3.5 mr-1.5" />
-                    @HERO501c3 on X
-                  </Button>
-                </a>
-                <a href={LIVE_DAPP_URLS.dao} target="_blank" rel="noopener noreferrer">
-                  <Button size="sm" variant="outline" className="border-[var(--hero-green)]/30 text-[var(--hero-green)] hover:bg-[var(--hero-green)]/10">
-                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                    HERO DAO
-                  </Button>
-                </a>
-              </div>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="bg-secondary/50 border border-border/50 w-full justify-start overflow-x-auto">
-          <TabsTrigger value="hero-farm" className="data-[state=active]:bg-[#e8b84b]/10 data-[state=active]:text-[#e8b84b]">
-            <Flame className="w-3.5 h-3.5 mr-1.5" />
-            HERO Staking
-          </TabsTrigger>
-          <TabsTrigger value="overview" className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]">
-            <Star className="w-3.5 h-3.5 mr-1.5" />
-            All HERO/VETS Pools
-          </TabsTrigger>
-          {PARTNER_FARMS.map((farm) => (
-            <TabsTrigger
-              key={farm.id}
-              value={farm.id}
-              className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]"
-            >
-              <Sprout className="w-3.5 h-3.5 mr-1.5" />
-              {farm.name}
-            </TabsTrigger>
-          ))}
-        </TabsList>
-
-        {/* HERO Farm Staking Pools */}
-        <TabsContent value="hero-farm" className="mt-6 space-y-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Info className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              Native HERO staking pools on PulseChain via MasterChef V2
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            {FARM_POOLS_PLS.map((pool) => (
-              <HeroPoolCard key={pool.id} pool={pool} liveData={livePoolMap.get(pool.id)} />
-            ))}
-          </div>
-
-          {/* BASE chain farm section — chain-aware */}
-          {isBase ? (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-xl">🔵</span>
-                  <h3 className="font-bold text-foreground text-lg">HERO Farm — BASE Chain</h3>
-                  <Badge className="bg-[#0052FF]/15 text-[#0052FF] border-[#0052FF]/30 text-xs">Live on BASE</Badge>
+      {/* ═══════════════════════════════════════════════════════════════════
+          BASE CHAIN VIEW
+          ═══════════════════════════════════════════════════════════════════ */}
+      {isBase ? (
+        <>
+          {/* BASE Farm DApp Banner */}
+          <Card className="border-[#0052FF]/30 bg-gradient-to-r from-[#0a1628] to-[#161825] overflow-hidden relative">
+            <div
+              className="absolute inset-0 opacity-10 bg-cover bg-center"
+              style={{ backgroundImage: `url(${CDN_ASSETS.heroBanner})` }}
+            />
+            <CardContent className="p-6 relative z-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold" style={{
+                    background: "linear-gradient(170deg, #ffffff 0%, #93c5fd 25%, #0052FF 55%, #1e3a8a 85%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}>
+                    HERO on Base L1
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    {FARM_POOLS_BASE.length} active liquidity pairs on Uniswap V3 & Aerodrome
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Badge variant="outline" className="text-[10px] border-[#0052FF]/20 text-[#0052FF]">
+                      <Sprout className="w-3 h-3 mr-1" /> {FARM_POOLS_BASE.length} Pairs
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] border-[#d94040]/20 text-[#d94040]">
+                      <Flame className="w-3 h-3 mr-1" /> Buy & Burn
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] border-[#52d98c]/20 text-[#52d98c]">
+                      <Zap className="w-3 h-3 mr-1" /> Aerodrome + Uniswap
+                    </Badge>
+                  </div>
                 </div>
-                <a href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer"
-                  className="text-xs text-muted-foreground hover:text-[#0052FF] font-mono transition-colors">
-                  {HERO_TOKEN_BASE.address.slice(0, 8)}...{HERO_TOKEN_BASE.address.slice(-6)}
+                <a href={`https://dexscreener.com/base/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                  <Button className="bg-gradient-to-r from-[#0052FF]/20 to-[#3b82f6]/25 border border-[#0052FF]/30 text-[#3b82f6] hover:from-[#0052FF]/30 hover:to-[#3b82f6]/38 font-bold tracking-wider text-base px-8 py-3">
+                    <ArrowUpRight className="w-5 h-5 mr-2" />
+                    View on DexScreener
+                  </Button>
                 </a>
               </div>
-              {/* HERO/WETH Pool Card — Uniswap V3 BASE */}
-              <Card className="border-[#0052FF]/30 bg-gradient-to-br from-[#0052FF]/10 to-[#0052FF]/5 hover:border-[#0052FF]/50 transition-all">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className="flex -space-x-2">
-                        <img src="https://raw.githubusercontent.com/libertyswap-finance/app-tokens/main/token-logo/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27.png"
-                          alt="HERO" className="w-9 h-9 rounded-full border-2 border-background" />
-                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png"
-                          alt="WETH" className="w-9 h-9 rounded-full border-2 border-background" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-foreground text-base">HERO / WETH</div>
-                        <div className="text-xs text-muted-foreground">Uniswap V3 · BASE</div>
-                      </div>
-                    </div>
-                    <div className="flex flex-col items-end gap-1">
-                      <Badge className="bg-green-500/15 text-green-400 border-green-500/30 text-xs">Active</Badge>
-                      <Badge className="bg-[#0052FF]/15 text-[#0052FF] border-[#0052FF]/30 text-xs">Uniswap V3</Badge>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
-                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
-                      <div className="text-xs text-muted-foreground mb-1">Liquidity</div>
-                      <div className="font-bold text-foreground text-sm">$3.5K</div>
-                    </div>
-                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
-                      <div className="text-xs text-muted-foreground mb-1">24h Volume</div>
-                      <div className="font-bold text-foreground text-sm">$35</div>
-                    </div>
-                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
-                      <div className="text-xs text-muted-foreground mb-1">HERO Price</div>
-                      <div className="font-bold text-[#0052FF] text-sm">$0.047</div>
-                    </div>
-                    <div className="rounded-lg bg-background/40 border border-border/50 p-3 text-center">
-                      <div className="text-xs text-muted-foreground mb-1">Pair Age</div>
-                      <div className="font-bold text-foreground text-sm">4+ mo</div>
-                    </div>
-                  </div>
-                  <div className="rounded-lg border border-[#0052FF]/20 bg-[#0052FF]/5 p-3 mb-4">
-                    <div className="flex justify-between text-xs mb-1">
-                      <span className="text-muted-foreground">Pooled HERO</span>
-                      <span className="text-foreground font-mono">24,219,121 HERO</span>
-                    </div>
-                    <div className="flex justify-between text-xs">
-                      <span className="text-muted-foreground">Pooled WETH</span>
-                      <span className="text-foreground font-mono">0.8100 WETH</span>
-                    </div>
-                  </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                    <a href="https://basescan.org/address/0x3bb159de8604ab7e0148edc24f2a568c430476cf" target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
-                        <ExternalLink className="w-3 h-3 mr-1" /> BaseScan
-                      </Button>
-                    </a>
-                    <a href="https://dexscreener.com/base/0x3bb159de8604ab7e0148edc24f2a568c430476cf" target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
-                        <TrendingUp className="w-3 h-3 mr-1" /> DexScreener
-                      </Button>
-                    </a>
-                    <a href={`https://app.uniswap.org/swap?outputCurrency=${HERO_TOKEN_BASE.address}&chain=base`} target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
-                        <Zap className="w-3 h-3 mr-1" /> Uniswap
-                      </Button>
-                    </a>
-                    <a href={`https://aerodrome.finance/swap?from=eth&to=${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
-                      <Button size="sm" variant="outline" className="w-full border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10 text-xs">
-                        <ArrowUpRight className="w-3 h-3 mr-1" /> Aerodrome
-                      </Button>
-                    </a>
-                  </div>
-                </CardContent>
-              </Card>
-              {/* HERO/USDC Pool — Coming Soon */}
-              <Card className="border-border/30 bg-card/50 opacity-75">
-                <CardContent className="p-5">
-                  <div className="flex items-start justify-between mb-3">
-                    <div className="flex items-center gap-3">
-                      <div className="flex -space-x-2">
-                        <img src="https://raw.githubusercontent.com/libertyswap-finance/app-tokens/main/token-logo/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27.png"
-                          alt="HERO" className="w-9 h-9 rounded-full border-2 border-background" />
-                        <img src="https://assets.coingecko.com/coins/images/6319/small/usdc.png"
-                          alt="USDC" className="w-9 h-9 rounded-full border-2 border-background" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-foreground text-base">HERO / USDC</div>
-                        <div className="text-xs text-muted-foreground">Aerodrome · BASE</div>
-                      </div>
-                    </div>
-                    <Badge className="bg-yellow-500/15 text-yellow-400 border-yellow-500/30 text-xs">Deploying Soon</Badge>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    HERO/USDC pool on Aerodrome deploying soon. Follow{" "}
-                    <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="text-[#0052FF] hover:underline">@HERO501c3</a>
-                    {" "}for launch announcements.
+            </CardContent>
+          </Card>
+
+          {/* BASE Smart Contract Quick Reference */}
+          <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-[#0052FF]/20 bg-card/50 p-3 text-center cursor-pointer hover:border-[#0052FF]/40 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">HERO Token</p>
+                  <p className="font-mono text-xs text-foreground">{HERO_TOKEN_BASE.address.slice(0, 10)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{HERO_TOKEN_BASE.address}</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-[#d94040]/20 bg-card/50 p-3 text-center cursor-pointer hover:border-[#d94040]/40 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Buy & Burn</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 10)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_BASE.buyAndBurn}</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-[#0052FF]/20 bg-card/50 p-3 text-center cursor-pointer hover:border-[#0052FF]/40 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Aerodrome Router</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_BASE.aerodromeRouter.slice(0, 10)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_BASE.aerodromeRouter}</p></TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Mission banner */}
+          <Card className="border-[var(--hero-orange)]/20 bg-gradient-to-r from-[var(--hero-orange)]/5 to-[var(--hero-green)]/5">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shrink-0">
+                  <Heart className="w-6 h-6 text-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground mb-1">Supporting Veterans & First Responders</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    HERO is now <strong className="text-foreground">multi-chain</strong> — live on both PulseChain and Base L1.
+                    Liquidity on Base helps expand the reach of the <strong className="text-foreground">VIC Foundation</strong>,
+                    a <strong className="text-foreground">501(c)(3) nonprofit</strong> supporting military veterans and first responders.
                   </p>
-                </CardContent>
-              </Card>
-              {/* Buy & Burn BASE */}
-              <Card className="border-[#d94040]/20 bg-[#d94040]/5">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <Flame className="w-4 h-4 text-[#d94040]" />
-                    <span className="font-semibold text-foreground text-sm">Buy & Burn — BASE</span>
-                    <a href={`https://basescan.org/address/${FARM_CONTRACTS_BASE.buyAndBurn}`} target="_blank" rel="noopener noreferrer"
-                      className="ml-auto text-xs text-muted-foreground hover:text-[#d94040] font-mono transition-colors">
-                      {FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 8)}...
-                    </a>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    {SERVICE_BRANCHES.map((branch) => (
+                      <Badge
+                        key={branch.name}
+                        variant="outline"
+                        className="text-[10px] py-0.5"
+                        style={{ borderColor: branch.color + "60", color: branch.color }}
+                      >
+                        {branch.name}
+                      </Badge>
+                    ))}
                   </div>
-                  <p className="text-xs text-muted-foreground">
-                    HERO's deflationary Buy & Burn mechanism is active on BASE. Swap fees automatically buy and burn HERO tokens, reducing supply over time.
-                  </p>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BASE Liquidity Pairs */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Info className="w-4 h-4 text-[#0052FF]" />
+              <p className="text-sm text-muted-foreground">
+                HERO liquidity pairs on Base L1 — Uniswap V3 & Aerodrome
+              </p>
+              {dexLastUpdate && (
+                <span className="ml-auto text-[10px] text-[#52d98c] flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#52d98c] animate-pulse" />
+                  LIVE — {dexLastUpdate.toLocaleTimeString()}
+                </span>
+              )}
+              {dexLoading && (
+                <span className="ml-auto text-[10px] text-muted-foreground animate-pulse">
+                  Fetching live data...
+                </span>
+              )}
             </div>
-          ) : (
-            <Card className="border-[#52d98c]/20 bg-[#52d98c]/5">
-              <CardContent className="p-4 text-center">
-                <p className="text-sm text-muted-foreground">
-                  Switch to <strong className="text-[#0052FF]">BASE</strong> using the network toggle above to see BASE chain farm options.
-                </p>
-              </CardContent>
-            </Card>
-          )}
+            {/* Aggregate Stats */}
+            {Object.keys(baseLiveData).length > 0 && (
+              <div className="grid grid-cols-3 gap-3 mb-2">
+                <div className="rounded-lg border border-[#0052FF]/20 bg-gradient-to-br from-[#0052FF]/5 to-transparent p-3 text-center">
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Total Liquidity</p>
+                  <p className="text-lg font-bold text-[#0052FF]">
+                    {formatUsd(Object.values(baseLiveData).reduce((sum, p) => sum + (p.liquidity?.usd || 0), 0))}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-[#0052FF]/20 bg-gradient-to-br from-[#0052FF]/5 to-transparent p-3 text-center">
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Total Vol 24h</p>
+                  <p className="text-lg font-bold text-[#0052FF]">
+                    {formatUsd(Object.values(baseLiveData).reduce((sum, p) => sum + (p.volume?.h24 || 0), 0))}
+                  </p>
+                </div>
+                <div className="rounded-lg border border-[#0052FF]/20 bg-gradient-to-br from-[#0052FF]/5 to-transparent p-3 text-center">
+                  <p className="text-[9px] text-muted-foreground uppercase tracking-wider mb-1">Active Pairs</p>
+                  <p className="text-lg font-bold text-[#0052FF]">{Object.keys(baseLiveData).length}</p>
+                </div>
+              </div>
+            )}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {FARM_POOLS_BASE.map((pool) => (
+                <BasePoolCard
+                  key={pool.id}
+                  pool={pool}
+                  liveData={baseLiveData[pool.pairAddress.toLowerCase()]}
+                />
+              ))}
+            </div>
+          </div>
 
           {/* Buy & Burn info */}
           <Card className="border-[#d94040]/20 bg-[#d94040]/5">
@@ -817,7 +783,7 @@ export default function Farm() {
                 <h3 className="font-bold text-foreground">Buy & Burn Mechanism</h3>
               </div>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                HERO uses a deflationary Buy & Burn mechanism. When the burn period elapses, anyone can trigger the
+                HERO uses a deflationary Buy & Burn mechanism on both chains. When the burn period elapses, anyone can trigger the
                 <code className="mx-1 px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">buyAndBurn()</code>
                 function to buy HERO from the market and burn it permanently, reducing supply.
               </p>
@@ -832,7 +798,7 @@ export default function Farm() {
                 </Tooltip>
                 <Tooltip>
                   <TooltipTrigger>
-                    <Badge variant="outline" className="text-[10px] font-mono border-[#0052FF]/20">
+                    <Badge variant="outline" className="text-[10px] font-mono border-[#0052FF]/20 bg-[#0052FF]/10 text-[#0052FF]">
                       BASE: {FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 10)}...
                     </Badge>
                   </TooltipTrigger>
@@ -841,84 +807,358 @@ export default function Farm() {
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
 
-        {/* Overview - All HERO/VETS pools across partners */}
-        <TabsContent value="overview" className="mt-6 space-y-6">
-          <div className="flex items-center gap-2 mb-2">
-            <Info className="w-4 h-4 text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">
-              All $HERO and $VETS farming pairs across partner protocols
-            </p>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {allHeroVetsPools.map((pool) => (
-              <div
-                key={`${pool.farmName}-${pool.pair}`}
-                className="relative rounded-xl border border-[var(--hero-orange)]/30 bg-[var(--hero-orange)]/5 p-4 hover:border-[var(--hero-orange)]/50 transition-all"
-              >
-                <div className="absolute -top-2.5 left-3">
-                  <Badge className={`bg-gradient-to-r ${pool.farmColor} text-foreground text-[10px] px-2 py-0.5 border-0`}>
-                    {pool.farmName}
-                  </Badge>
-                </div>
-                <div className="mt-2">
-                  <h4 className="font-bold text-foreground text-lg">{pool.pair}</h4>
-                  <div className="flex items-center gap-2 mt-1">
-                    <Badge variant="outline" className="text-[10px] py-0">{pool.type}</Badge>
-                    {pool.farmId && <span className="text-[10px] text-muted-foreground">ID: {pool.farmId}</span>}
-                  </div>
-                  {pool.apr && (
-                    <div className="flex items-center gap-1 mt-2">
-                      <TrendingUp className="w-4 h-4 text-[var(--hero-green)]" />
-                      <span className="font-bold text-[var(--hero-green)] text-lg">{pool.apr}</span>
-                      <span className="text-xs text-muted-foreground">APR</span>
-                    </div>
-                  )}
-                  {pool.tvl && <p className="text-xs text-muted-foreground mt-1">TVL: {pool.tvl}</p>}
-                  {pool.note && <p className="text-xs text-muted-foreground mt-2 italic">{pool.note}</p>}
-                </div>
-                <a href={pool.farmUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block">
-                  <Button size="sm" variant="outline" className="w-full border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
-                    <Zap className="w-3.5 h-3.5 mr-1.5" />
-                    Farm on {pool.farmName}
-                  </Button>
-                </a>
-              </div>
-            ))}
-          </div>
-
+          {/* Quick links */}
           <Card className="border-border/50 bg-card/50">
             <CardHeader className="pb-3">
-              <CardTitle className="text-sm text-muted-foreground">Quick Links to Partner Farms</CardTitle>
+              <CardTitle className="text-sm text-muted-foreground">Base L1 Quick Links</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-3">
-              {PARTNER_FARMS.map((farm) => (
-                <a key={farm.id} href={farm.url} target="_blank" rel="noopener noreferrer">
-                  <Button variant="outline" size="sm" className="border-border/50 hover:border-[var(--hero-orange)]/30">
-                    <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
-                    {farm.name}
-                  </Button>
-                </a>
-              ))}
-              <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
-                <Button size="sm" className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c]">
-                  <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-                  HERO Farm DApp
+              <a href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10">
+                  <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> BaseScan
+                </Button>
+              </a>
+              <a href={`https://dexscreener.com/base/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10">
+                  <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> DexScreener
+                </Button>
+              </a>
+              <a href="https://app.uniswap.org/swap" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10">
+                  <Zap className="w-3.5 h-3.5 mr-1.5" /> Uniswap V3
+                </Button>
+              </a>
+              <a href="https://aerodrome.finance/swap" target="_blank" rel="noopener noreferrer">
+                <Button variant="outline" size="sm" className="border-[#0052FF]/30 text-[#0052FF] hover:bg-[#0052FF]/10">
+                  <Zap className="w-3.5 h-3.5 mr-1.5" /> Aerodrome
                 </Button>
               </a>
             </CardContent>
           </Card>
-        </TabsContent>
+        </>
+      ) : (
+        <>
+          {/* ═══════════════════════════════════════════════════════════════
+              PULSECHAIN VIEW (original)
+              ═══════════════════════════════════════════════════════════════ */}
 
-        {/* Individual partner farm tabs */}
-        {PARTNER_FARMS.map((farm) => (
-          <TabsContent key={farm.id} value={farm.id} className="mt-6">
-            <FarmTab farm={farm} />
-          </TabsContent>
-        ))}
-      </Tabs>
+          {/* Live Farm DApp Banner */}
+          <Card className="border-[#e8b84b]/30 bg-gradient-to-r from-[#0d0e14] to-[#161825] overflow-hidden relative">
+            <div
+              className="absolute inset-0 opacity-10 bg-cover bg-center"
+              style={{ backgroundImage: `url(${CDN_ASSETS.heroBanner})` }}
+            />
+            <CardContent className="p-6 relative z-10">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-xl font-bold" style={{
+                    background: "linear-gradient(170deg, #ffffff 0%, #f5e8b0 25%, #e8b84b 55%, #c08020 85%)",
+                    WebkitBackgroundClip: "text",
+                    WebkitTextFillColor: "transparent",
+                    backgroundClip: "text",
+                  }}>
+                    HERO Farm DApp
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Full staking interface with Zap, Buy & Burn, Leaderboard, AI Chat, and more
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-3">
+                    <Badge variant="outline" className="text-[10px] border-[#e8b84b]/20 text-[#e8b84b]">
+                      <Sprout className="w-3 h-3 mr-1" /> 2 Active Pools
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] border-[#52d98c]/20 text-[#52d98c]">
+                      <Flame className="w-3 h-3 mr-1" /> Buy & Burn
+                    </Badge>
+                    <Badge variant="outline" className="text-[10px] border-[#5b8def]/20 text-[#5b8def]">
+                      <Zap className="w-3 h-3 mr-1" /> PLS → LP Zapper
+                    </Badge>
+                  </div>
+                </div>
+                <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
+                  <Button className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-bold tracking-wider text-base px-8 py-3">
+                    <ArrowUpRight className="w-5 h-5 mr-2" />
+                    Launch Farm DApp
+                  </Button>
+                </a>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Smart Contract Quick Reference */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#e8b84b]/30 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">MasterChef V2</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.masterChefV2.slice(0, 8)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.masterChefV2}</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#d94040]/30 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Buy & Burn</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.buyAndBurn.slice(0, 8)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.buyAndBurn}</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#5b8def]/30 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">Zapper</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.zapper.slice(0, 8)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.zapper}</p></TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="rounded-lg border border-border/30 bg-card/50 p-3 text-center cursor-pointer hover:border-[#52d98c]/30 transition-colors">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-1">PulseX Router</p>
+                  <p className="font-mono text-xs text-foreground">{FARM_CONTRACTS_PLS.pulseXRouter.slice(0, 8)}...</p>
+                </div>
+              </TooltipTrigger>
+              <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.pulseXRouter}</p></TooltipContent>
+            </Tooltip>
+          </div>
+
+          {/* Mission banner */}
+          <Card className="border-[var(--hero-orange)]/20 bg-gradient-to-r from-[var(--hero-orange)]/5 to-[var(--hero-green)]/5">
+            <CardContent className="p-5">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shrink-0">
+                  <Heart className="w-6 h-6 text-foreground" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-foreground mb-1">Supporting Veterans & First Responders</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    Our partner farms are <strong className="text-foreground">benevolent protocols</strong> that
+                    support the HERO/VETS community. Through liquidity bonding on PulseChain, they help fund
+                    the <strong className="text-foreground">VIC Foundation</strong>, a legitimate{" "}
+                    <strong className="text-foreground">501(c)(3) nonprofit organization</strong>{" "}
+                    dedicated to military veterans and first responders.
+                  </p>
+                  <div className="flex flex-wrap items-center gap-2 mt-3">
+                    {SERVICE_BRANCHES.map((branch) => (
+                      <Badge
+                        key={branch.name}
+                        variant="outline"
+                        className="text-[10px] py-0.5"
+                        style={{ borderColor: branch.color + "60", color: branch.color }}
+                      >
+                        {branch.name}
+                      </Badge>
+                    ))}
+                  </div>
+                  <div className="flex items-center gap-3 mt-3">
+                    <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
+                        <Shield className="w-3.5 h-3.5 mr-1.5" />
+                        @HERO501c3 on X
+                      </Button>
+                    </a>
+                    <a href={LIVE_DAPP_URLS.dao} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="border-[var(--hero-green)]/30 text-[var(--hero-green)] hover:bg-[var(--hero-green)]/10">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                        HERO DAO
+                      </Button>
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <TabsList className="bg-secondary/50 border border-border/50 w-full justify-start overflow-x-auto">
+              <TabsTrigger value="hero-farm" className="data-[state=active]:bg-[#e8b84b]/10 data-[state=active]:text-[#e8b84b]">
+                <Flame className="w-3.5 h-3.5 mr-1.5" />
+                HERO Staking
+              </TabsTrigger>
+              <TabsTrigger value="overview" className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]">
+                <Star className="w-3.5 h-3.5 mr-1.5" />
+                All HERO/VETS Pools
+              </TabsTrigger>
+              {PARTNER_FARMS.map((farm) => (
+                <TabsTrigger
+                  key={farm.id}
+                  value={farm.id}
+                  className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]"
+                >
+                  <Sprout className="w-3.5 h-3.5 mr-1.5" />
+                  {farm.name}
+                </TabsTrigger>
+              ))}
+            </TabsList>
+
+            {/* HERO Farm Staking Pools */}
+            <TabsContent value="hero-farm" className="mt-6 space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  Native HERO staking pools on PulseChain via MasterChef V2
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                {FARM_POOLS_PLS.map((pool) => (
+                  <HeroPoolCard key={pool.id} pool={pool} liveData={livePoolMap.get(pool.id)} />
+                ))}
+              </div>
+
+              {/* Base chain coming soon */}
+              <Card className="border-[#0052FF]/20 bg-[#0052FF]/5">
+                <CardContent className="p-5 text-center">
+                  <div className="flex items-center justify-center gap-2 mb-2">
+                    <span className="text-xl">🔵</span>
+                    <h3 className="font-bold text-foreground">Base Chain Farms</h3>
+                    <Badge className="bg-[#0052FF]/10 text-[#0052FF] border-[#0052FF]/20 text-[10px]">
+                      {FARM_POOLS_BASE.length} Active Pairs
+                    </Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    HERO is live on Base at{" "}
+                    <a
+                      href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[#0052FF] hover:underline font-mono text-xs"
+                    >
+                      {HERO_TOKEN_BASE.address.slice(0, 10)}...
+                    </a>
+                    {" "}— switch to BASE to view all pairs.
+                  </p>
+                  <div className="flex justify-center gap-3 mt-3">
+                    <a href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="border-[#0052FF]/30 text-[#0052FF]">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> BaseScan
+                      </Button>
+                    </a>
+                    <a href={`https://dexscreener.com/base/${HERO_TOKEN_BASE.address}`} target="_blank" rel="noopener noreferrer">
+                      <Button size="sm" variant="outline" className="border-[#0052FF]/30 text-[#0052FF]">
+                        <TrendingUp className="w-3.5 h-3.5 mr-1.5" /> DexScreener
+                      </Button>
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Buy & Burn info */}
+              <Card className="border-[#d94040]/20 bg-[#d94040]/5">
+                <CardContent className="p-5">
+                  <div className="flex items-center gap-3 mb-2">
+                    <Flame className="w-5 h-5 text-[#d94040]" />
+                    <h3 className="font-bold text-foreground">Buy & Burn Mechanism</h3>
+                  </div>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    HERO uses a deflationary Buy & Burn mechanism. When the burn period elapses, anyone can trigger the
+                    <code className="mx-1 px-1.5 py-0.5 rounded bg-secondary text-xs font-mono">buyAndBurn()</code>
+                    function to buy HERO from the market and burn it permanently, reducing supply.
+                  </p>
+                  <div className="flex gap-3 mt-3">
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Badge variant="outline" className="text-[10px] font-mono border-[#d94040]/20">
+                          PLS: {FARM_CONTRACTS_PLS.buyAndBurn.slice(0, 10)}...
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_PLS.buyAndBurn}</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger>
+                        <Badge variant="outline" className="text-[10px] font-mono border-[#0052FF]/20">
+                          BASE: {FARM_CONTRACTS_BASE.buyAndBurn.slice(0, 10)}...
+                        </Badge>
+                      </TooltipTrigger>
+                      <TooltipContent><p className="font-mono text-xs">{FARM_CONTRACTS_BASE.buyAndBurn}</p></TooltipContent>
+                    </Tooltip>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Overview - All HERO/VETS pools across partners */}
+            <TabsContent value="overview" className="mt-6 space-y-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Info className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm text-muted-foreground">
+                  All $HERO and $VETS farming pairs across partner protocols
+                </p>
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                {allHeroVetsPools.map((pool) => (
+                  <div
+                    key={`${pool.farmName}-${pool.pair}`}
+                    className="relative rounded-xl border border-[var(--hero-orange)]/30 bg-[var(--hero-orange)]/5 p-4 hover:border-[var(--hero-orange)]/50 transition-all"
+                  >
+                    <div className="absolute -top-2.5 left-3">
+                      <Badge className={`bg-gradient-to-r ${pool.farmColor} text-foreground text-[10px] px-2 py-0.5 border-0`}>
+                        {pool.farmName}
+                      </Badge>
+                    </div>
+                    <div className="mt-2">
+                      <h4 className="font-bold text-foreground text-lg">{pool.pair}</h4>
+                      <div className="flex items-center gap-2 mt-1">
+                        <Badge variant="outline" className="text-[10px] py-0">{pool.type}</Badge>
+                        {pool.farmId && <span className="text-[10px] text-muted-foreground">ID: {pool.farmId}</span>}
+                      </div>
+                      {pool.apr && (
+                        <div className="flex items-center gap-1 mt-2">
+                          <TrendingUp className="w-4 h-4 text-[var(--hero-green)]" />
+                          <span className="font-bold text-[var(--hero-green)] text-lg">{pool.apr}</span>
+                          <span className="text-xs text-muted-foreground">APR</span>
+                        </div>
+                      )}
+                      {pool.tvl && <p className="text-xs text-muted-foreground mt-1">TVL: {pool.tvl}</p>}
+                      {pool.note && <p className="text-xs text-muted-foreground mt-2 italic">{pool.note}</p>}
+                    </div>
+                    <a href={pool.farmUrl} target="_blank" rel="noopener noreferrer" className="mt-3 block">
+                      <Button size="sm" variant="outline" className="w-full border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
+                        <Zap className="w-3.5 h-3.5 mr-1.5" />
+                        Farm on {pool.farmName}
+                      </Button>
+                    </a>
+                  </div>
+                ))}
+              </div>
+
+              <Card className="border-border/50 bg-card/50">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm text-muted-foreground">Quick Links to Partner Farms</CardTitle>
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-3">
+                  {PARTNER_FARMS.map((farm) => (
+                    <a key={farm.id} href={farm.url} target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="border-border/50 hover:border-[var(--hero-orange)]/30">
+                        <ExternalLink className="w-3.5 h-3.5 mr-1.5" />
+                        {farm.name}
+                      </Button>
+                    </a>
+                  ))}
+                  <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
+                    <Button size="sm" className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c]">
+                      <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
+                      HERO Farm DApp
+                    </Button>
+                  </a>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            {/* Individual partner farm tabs */}
+            {PARTNER_FARMS.map((farm) => (
+              <TabsContent key={farm.id} value={farm.id} className="mt-6">
+                <FarmTab farm={farm} />
+              </TabsContent>
+            ))}
+          </Tabs>
+        </>
+      )}
     </div>
   );
 }

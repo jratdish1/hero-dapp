@@ -75,7 +75,7 @@ import { invokeLLM } from "./_core/llm";
 import { getHeroRestId, fetchHeroTweets, toDbRecord } from "./twitterFetcher";
 import { alertNewMention } from "./telegramBot";
 import { getSchedulerStatus } from "./mentionScheduler";
-import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData } from "./priceFeed";
+import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData, fetchPulsechainTickerTokens, fetchBaseTickerTokens } from "./priceFeed";
 
 export const appRouter = router({
   system: systemRouter,
@@ -448,22 +448,50 @@ export const appRouter = router({
       .query(async ({ input }) => {
         return getMarketOverview(input?.chain || "pulsechain");
       }),
-    ticker: publicProcedure.query(async () => {
-      const [tokenData, plsPrice, ethPrice] = await Promise.all([
-        fetchTokenPrices(),
-        fetchPlsPrice(),
-        fetchEthPrice(),
-      ]);
-      const heroPair = tokenData.heroPairs[0];
-      const vetsPair = tokenData.vetsPairs[0];
-      return {
-        hero: heroPair ? { price: heroPair.priceUsd || "0", change24h: heroPair.priceChange?.h24 || 0 } : null,
-        vets: vetsPair ? { price: vetsPair.priceUsd || "0", change24h: vetsPair.priceChange?.h24 || 0 } : null,
-        pls: plsPrice ? { price: plsPrice.priceUsd, change24h: plsPrice.priceChange24h } : null,
-        eth: ethPrice ? { price: ethPrice.priceUsd, change24h: ethPrice.priceChange24h } : null,
-        updatedAt: Date.now(),
-      };
-    }),
+    ticker: publicProcedure
+      .input(z.object({ chain: z.enum(["pulsechain", "base"]).optional() }).optional())
+      .query(async ({ input }) => {
+        const chain = input?.chain || "pulsechain";
+
+        if (chain === "base") {
+          const [basePairs, ethPrice, extraTokens] = await Promise.all([
+            fetchBaseTokenPrices(),
+            fetchEthPrice(),
+            fetchBaseTickerTokens(),
+          ]);
+          const heroPair = basePairs[0];
+          const fmt = (p: any) => p ? { price: p.priceUsd || "0", change24h: p.priceChange?.h24 || 0 } : null;
+          return {
+            hero: heroPair ? { price: heroPair.priceUsd || "0", change24h: heroPair.priceChange?.h24 || 0 } : null,
+            eth: ethPrice ? { price: ethPrice.priceUsd, change24h: ethPrice.priceChange24h } : null,
+            jesse: fmt(extraTokens.jesse),
+            aero: fmt(extraTokens.aero),
+            brett: fmt(extraTokens.brett),
+            updatedAt: Date.now(),
+          };
+        }
+
+        // PulseChain
+        const [tokenData, plsPrice, ethPrice, extraTokens] = await Promise.all([
+          fetchTokenPrices(),
+          fetchPlsPrice(),
+          fetchEthPrice(),
+          fetchPulsechainTickerTokens(),
+        ]);
+        const heroPair = tokenData.heroPairs[0];
+        const vetsPair = tokenData.vetsPairs[0];
+        const fmt = (p: any) => p ? { price: p.priceUsd || "0", change24h: p.priceChange?.h24 || 0 } : null;
+        return {
+          hero: heroPair ? { price: heroPair.priceUsd || "0", change24h: heroPair.priceChange?.h24 || 0 } : null,
+          vets: vetsPair ? { price: vetsPair.priceUsd || "0", change24h: vetsPair.priceChange?.h24 || 0 } : null,
+          pls: plsPrice ? { price: plsPrice.priceUsd, change24h: plsPrice.priceChange24h } : null,
+          eth: ethPrice ? { price: ethPrice.priceUsd, change24h: ethPrice.priceChange24h } : null,
+          emit: fmt(extraTokens.emit),
+          rhino: fmt(extraTokens.rhino),
+          truFarm: fmt(extraTokens.truFarm),
+          updatedAt: Date.now(),
+        };
+      }),
     basePairs: publicProcedure.query(async () => {
       const pairs = await fetchBaseTokenPrices();
       return pairs.map(p => ({

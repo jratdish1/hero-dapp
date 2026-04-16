@@ -481,6 +481,15 @@ export default function Blog() {
               Generate Article
             </Button>
           )}
+          <a
+            href="https://double.trudefi.io/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors text-sm font-medium"
+          >
+            <img src="https://double.trudefi.io/favicon.ico" className="w-4 h-4" alt="TruDeFi" onError={(e: React.SyntheticEvent<HTMLImageElement>) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+            TruDeFi
+          </a>
         </div>
       </div>
 

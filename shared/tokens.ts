@@ -193,11 +193,70 @@ export const DAI_TOKEN_BASE: TokenInfo = {
   logoURI: "https://assets.coingecko.com/coins/images/9956/small/Badge_Dai.png",
 };
 
+// ─── PulseChain Ecosystem Tokens ────────────────────────────────────────
+export const EMIT_TOKEN_PLS: TokenInfo = {
+  chainId: PULSECHAIN_ID,
+  address: "0x32fB5663619A657839A80133994E45c5e5cDf427",
+  symbol: "EMIT",
+  name: "Emit Token",
+  decimals: 18,
+  logoURI: "https://emit.farm/favicon.ico",
+};
+
+export const RHINO_TOKEN_PLS: TokenInfo = {
+  chainId: PULSECHAIN_ID,
+  address: "0x6C6D7De6C5f366a1995ed5f1e273C5B3760C6043",
+  symbol: "RHINO",
+  name: "Rhino Token",
+  decimals: 18,
+  logoURI: "https://ui-avatars.com/api/?name=RHINO&background=4B5320&color=fff&size=64",
+};
+
+export const TRUFARM_TOKEN_PLS: TokenInfo = {
+  chainId: PULSECHAIN_ID,
+  address: "0xCA942990EF21446Db490532E66992eD1EF76A82b",
+  symbol: "TruFarm",
+  name: "TruFarm",
+  decimals: 18,
+  logoURI: "https://ui-avatars.com/api/?name=TF&background=f97316&color=fff&size=64&bold=true",
+};
+
+// ─── BASE Ecosystem Tokens ──────────────────────────────────────────────
+export const JESSE_TOKEN_BASE: TokenInfo = {
+  chainId: BASE_CHAIN_ID,
+  address: "0xBE8ae24C5E4D19759f640Fb89617047213be3194",
+  symbol: "jesse",
+  name: "jesse",
+  decimals: 18,
+  logoURI: "https://ui-avatars.com/api/?name=jesse&background=0052FF&color=fff&size=64",
+};
+
+export const AERO_TOKEN_BASE: TokenInfo = {
+  chainId: BASE_CHAIN_ID,
+  address: "0x940181a94A35A4569E4529A3CDfB74e38FD98631",
+  symbol: "AERO",
+  name: "Aerodrome Finance",
+  decimals: 18,
+  logoURI: "https://assets.coingecko.com/coins/images/31745/small/token.png",
+};
+
+export const BRETT_TOKEN_BASE: TokenInfo = {
+  chainId: BASE_CHAIN_ID,
+  address: "0x532f27101965dd16442E59d40670FaF5eBB142E4",
+  symbol: "BRETT",
+  name: "Brett",
+  decimals: 18,
+  logoURI: "https://assets.coingecko.com/coins/images/35529/small/1000050750.png",
+};
+
 // ─── Token Lists by Chain ───────────────────────────────────────────────
 export const PULSECHAIN_TOKENS: TokenInfo[] = [
   PLS_TOKEN,
   HERO_TOKEN_PLS,
   VETS_TOKEN_PLS,
+  EMIT_TOKEN_PLS,
+  RHINO_TOKEN_PLS,
+  TRUFARM_TOKEN_PLS,
   PLSX_TOKEN,
   HEX_TOKEN,
   USDC_TOKEN_PLS,
@@ -208,9 +267,12 @@ export const PULSECHAIN_TOKENS: TokenInfo[] = [
 export const BASE_TOKENS: TokenInfo[] = [
   ETH_TOKEN_BASE,
   HERO_TOKEN_BASE,
+  WETH_TOKEN_BASE,
+  JESSE_TOKEN_BASE,
+  AERO_TOKEN_BASE,
+  BRETT_TOKEN_BASE,
   USDC_TOKEN_BASE,
   DAI_TOKEN_BASE,
-  WETH_TOKEN_BASE,
 ];
 
 export const TOKEN_MAP: Record<SupportedChainId, TokenInfo[]> = {
@@ -261,7 +323,76 @@ export const FARM_POOLS_PLS = [
 export const FARM_CONTRACTS_BASE = {
   buyAndBurn: "0x67bEF0A8Be3ef576bF4ab2D904FCbe82E9846670",
   heroEthPair: "0x3bb159de8604ab7e0148edc24f2a568c430476cf",
+  heroEthAerodrome: "0xb813599dd596C179C8888C8A4Bd3FEC8308D1E20",
+  heroUsdcAerodrome: "0xa3F80BFea263c22f921a2C5d7A28b74338957098",
+  heroBrettAerodrome: "0x26Eb84fbE7EA1a9E65C3473DEe73D0E96dd033F6",
+  uniswapV3Router: "0x2626664c2603336E57B271c5C0b26F421741e481",
+  aerodromeRouter: "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43",
 } as const;
+// ─── Farm Pools - Base (Live on Uniswap V3 & Aerodrome) ────────────────
+export const FARM_POOLS_BASE = [
+  {
+    id: 1,
+    name: "HERO/WETH",
+    lpToken: "0xb813599dd596C179C8888C8A4Bd3FEC8308D1E20",
+    token0: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    token1: { symbol: "WETH", address: "0x4200000000000000000000000000000000000006" },
+    active: true,
+    dex: "Aerodrome",
+    pairAddress: "0xb813599dd596C179C8888C8A4Bd3FEC8308D1E20",
+  },
+  {
+    id: 2,
+    name: "HERO/WETH",
+    lpToken: "0x3Bb159de8604ab7E0148EDC24F2A568c430476CF",
+    token0: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    token1: { symbol: "WETH", address: "0x4200000000000000000000000000000000000006" },
+    active: true,
+    dex: "Uniswap V3",
+    pairAddress: "0x3Bb159de8604ab7E0148EDC24F2A568c430476CF",
+  },
+  {
+    id: 3,
+    name: "HERO/USDC",
+    lpToken: "0xa3F80BFea263c22f921a2C5d7A28b74338957098",
+    token0: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    token1: { symbol: "USDC", address: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913" },
+    active: true,
+    dex: "Aerodrome",
+    pairAddress: "0xa3F80BFea263c22f921a2C5d7A28b74338957098",
+  },
+  {
+    id: 4,
+    name: "HERO/BRETT",
+    lpToken: "0x26Eb84fbE7EA1a9E65C3473DEe73D0E96dd033F6",
+    token0: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    token1: { symbol: "BRETT", address: "0x532f27101965dd16442E59d40670FaF5eBB142E4" },
+    active: true,
+    dex: "Aerodrome",
+    pairAddress: "0x26Eb84fbE7EA1a9E65C3473DEe73D0E96dd033F6",
+  },
+  {
+    id: 5,
+    name: "ZORA/HERO",
+    lpToken: "0x40529F54CfF8bad0AA6d19EC8983d16e9E27B1b7",
+    token0: { symbol: "ZORA", address: "0x1111111111166b7FE7bd91427724B487980aFc69" },
+    token1: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    active: true,
+    dex: "Aerodrome",
+    pairAddress: "0x40529F54CfF8bad0AA6d19EC8983d16e9E27B1b7",
+  },
+  {
+    id: 6,
+    name: "jesse/HERO",
+    lpToken: "0xbAd80210fa3119324243279CB0212b1CE3218569",
+    token0: { symbol: "jesse", address: "0x50F88fe97f72CD3E75b9Eb4f747F59BcEBA80d59" },
+    token1: { symbol: "HERO", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    active: true,
+    dex: "Aerodrome",
+    pairAddress: "0xbAd80210fa3119324243279CB0212b1CE3218569",
+  },
+] as const;
+
 
 // ─── CDN Assets ─────────────────────────────────────────────────────────
 export const CDN_ASSETS = {

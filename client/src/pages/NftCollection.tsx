@@ -1,22 +1,14 @@
-import { useState, useEffect, useCallback, useRef } from "react";
-import Autoplay from "embla-carousel-autoplay";
-import {
-  Carousel,
-  CarouselContent,
-  CarouselItem,
-  CarouselPrevious,
-  CarouselNext,
-  type CarouselApi,
-} from "@/components/ui/carousel";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Shield, Star, Award, Crown, Gem, Flame, Clock, Wallet,
   ExternalLink, ChevronRight, Zap, Lock, TrendingUp, Users,
-  Swords, Heart, Target, ImageIcon, Play, Globe, Sparkles
+  Swords, Heart, Target, ImageIcon, Play, Globe, Sparkles, ShoppingCart
 } from "lucide-react";
 import { SERVICE_BRANCHES } from "@shared/tokens";
+import { useLanguage } from "../contexts/LanguageContext";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/n6wZKBCrhC57u7dtf5EHg8";
 const HERO_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png";
@@ -27,7 +19,7 @@ const COLLECTION_STATS = [
   { label: "Categories", value: "10", color: "text-blue-400", icon: Shield },
   { label: "Nations", value: "50+", color: "text-green-400", icon: Globe },
   { label: "Animated NFTs", value: "4", color: "text-purple-400", icon: Play },
-  { label: "Charity Split", value: "25%", color: "text-red-400", icon: Heart },
+  { label: "Treasury Split", value: "85%", color: "text-red-400", icon: Heart },
 ];
 
 const CATEGORIES = [
@@ -121,8 +113,136 @@ const UTILITY_FEATURES = [
   { title: "Rank Promotion", description: "As your wallet accumulates more HERO, your NFT rank can be upgraded — reflecting your true commitment.", icon: Award, status: "Phase 3" },
 ];
 
+
+// ---- CAROUSEL COMPONENTS ----
+function NftCarousel({ items }: { items: typeof NFT_ARTWORK.military }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || isPaused) return;
+    let animId: number;
+    let pos = 0;
+    const speed = 0.5;
+    const totalWidth = el.scrollWidth / 2;
+    
+    const animate = () => {
+      pos += speed;
+      if (pos >= totalWidth) pos = 0;
+      el.scrollLeft = pos;
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, [isPaused, items]);
+  
+  // Duplicate items for infinite scroll
+  const doubled = [...items, ...items, ...items];
+  
+  return (
+    <div
+      ref={scrollRef}
+      className="flex gap-4 overflow-hidden py-2"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      style={{ scrollBehavior: 'auto' }}
+    >
+      {doubled.map((nft, i) => (
+        <div key={`${nft.name}-${i}`} className="flex-shrink-0 w-48 md:w-56">
+          <NftArtCard nft={nft} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function AnimatedNftCarousel({ items }: { items: typeof ANIMATED_NFTS }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || isPaused) return;
+    let animId: number;
+    let pos = 0;
+    const speed = 0.4;
+    const totalWidth = el.scrollWidth / 2;
+    
+    const animate = () => {
+      pos += speed;
+      if (pos >= totalWidth) pos = 0;
+      el.scrollLeft = pos;
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, [isPaused, items]);
+  
+  const doubled = [...items, ...items, ...items];
+  
+  return (
+    <div
+      ref={scrollRef}
+      className="flex gap-4 overflow-hidden py-2"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      style={{ scrollBehavior: 'auto' }}
+    >
+      {doubled.map((nft, i) => (
+        <div key={`${nft.name}-${i}`} className="flex-shrink-0 w-48 md:w-56">
+          <AnimatedNftCard nft={nft} />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function KeyframeCarousel({ items }: { items: typeof KEYFRAMES }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [isPaused, setIsPaused] = useState(false);
+  
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el || isPaused) return;
+    let animId: number;
+    let pos = 0;
+    const speed = 0.3;
+    const totalWidth = el.scrollWidth / 2;
+    
+    const animate = () => {
+      pos += speed;
+      if (pos >= totalWidth) pos = 0;
+      el.scrollLeft = pos;
+      animId = requestAnimationFrame(animate);
+    };
+    animId = requestAnimationFrame(animate);
+    return () => cancelAnimationFrame(animId);
+  }, [isPaused, items]);
+  
+  const doubled = [...items, ...items, ...items];
+  
+  return (
+    <div
+      ref={scrollRef}
+      className="flex gap-2 overflow-hidden py-1"
+      onMouseEnter={() => setIsPaused(true)}
+      onMouseLeave={() => setIsPaused(false)}
+      style={{ scrollBehavior: 'auto' }}
+    >
+      {doubled.map((kf, i) => (
+        <div key={`${kf.name}-${i}`} className="flex-shrink-0 w-16 md:w-20 group relative">
+          <img src={kf.url} alt={kf.name} className="w-full aspect-[9/16] object-cover rounded-md border border-border group-hover:border-purple-500/50 transition-all" />
+          <p className="text-[8px] text-muted-foreground text-center mt-1 truncate">{kf.name}</p>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
   const [loaded, setLoaded] = useState(false);
+  const { t } = useLanguage();
   return (
     <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl transition-all duration-300 hover:scale-[1.02]`}>
       <div className="aspect-square relative overflow-hidden">
@@ -131,70 +251,15 @@ function NftArtCard({ nft }: { nft: typeof NFT_ARTWORK.military[0] }) {
       </div>
       <div className="p-2">
         <p className="text-foreground font-semibold text-xs truncate">{nft.name}</p>
-        <Badge variant="outline" className="text-[9px] mt-0.5 border-current opacity-70">{nft.tier}</Badge>
+        <Badge variant="outline" className="text-[9px] mt-0.5 border-current opacity-70">{t(nft.tier)}</Badge>
       </div>
-    </div>
-  );
-}
-
-function NftCategoryCarousel({ title, icon, badge, badgeColor, items }: {
-  title: string;
-  icon: React.ReactNode;
-  badge: string;
-  badgeColor: string;
-  items: typeof NFT_ARTWORK.military;
-}) {
-  const [selectedNft, setSelectedNft] = useState<typeof items[0] | null>(null);
-  const autoplayPlugin = useRef(
-    Autoplay({ delay: 3000, stopOnInteraction: true, stopOnMouseEnter: true })
-  );
-
-  return (
-    <div>
-      <div className="flex items-center gap-2 mb-4">
-        {icon}
-        <h3 className="text-foreground font-semibold text-lg">{title}</h3>
-        <Badge variant="outline" className={`text-[10px] ${badgeColor}`}>{badge}</Badge>
-      </div>
-      {selectedNft ? (
-        <div className="space-y-4">
-          <button
-            onClick={() => setSelectedNft(null)}
-            className="text-sm text-hero-orange hover:text-hero-orange/80 flex items-center gap-1 transition-colors"
-          >
-            ← Back to carousel
-          </button>
-          <div className="max-w-md mx-auto">
-            <NftArtCard nft={selectedNft} />
-          </div>
-        </div>
-      ) : (
-        <Carousel
-          opts={{ align: "start", loop: true }}
-          plugins={[autoplayPlugin.current]}
-          className="w-full"
-        >
-          <CarouselContent className="-ml-3">
-            {items.map((nft) => (
-              <CarouselItem
-                key={nft.name}
-                className="pl-3 basis-1/2 md:basis-1/4 cursor-pointer"
-                onClick={() => setSelectedNft(nft)}
-              >
-                <NftArtCard nft={nft} />
-              </CarouselItem>
-            ))}
-          </CarouselContent>
-          <CarouselPrevious className="-left-3 bg-card/80 border-border hover:bg-card" />
-          <CarouselNext className="-right-3 bg-card/80 border-border hover:bg-card" />
-        </Carousel>
-      )}
     </div>
   );
 }
 
 function AnimatedNftCard({ nft }: { nft: typeof ANIMATED_NFTS[0] }) {
   const [playing, setPlaying] = useState(false);
+  const { t } = useLanguage();
   return (
     <div className={`group relative rounded-xl overflow-hidden border-2 ${nft.color} bg-card/80 hover:shadow-xl transition-all duration-300`}>
       <div className="aspect-[9/16] relative overflow-hidden bg-black">
@@ -216,7 +281,7 @@ function AnimatedNftCard({ nft }: { nft: typeof ANIMATED_NFTS[0] }) {
         <p className="text-foreground font-semibold text-sm">{nft.name}</p>
         <p className="text-muted-foreground text-xs">{nft.country}</p>
         <div className="flex items-center gap-1 mt-1">
-          <Badge variant="outline" className="text-[9px] border-orange-500/40 text-orange-400">{nft.rarity}</Badge>
+          <Badge variant="outline" className="text-[9px] border-orange-500/40 text-orange-400">{t(nft.rarity)}</Badge>
           <Badge variant="outline" className="text-[9px] border-blue-500/40 text-blue-400">{nft.category}</Badge>
         </div>
       </div>
@@ -226,6 +291,7 @@ function AnimatedNftCard({ nft }: { nft: typeof ANIMATED_NFTS[0] }) {
 
 export default function NftCollection() {
   const [activeTab, setActiveTab] = useState("gallery");
+  const { t } = useLanguage();
 
   return (
     <div className="space-y-6 pb-8">
@@ -233,8 +299,8 @@ export default function NftCollection() {
       <div className="flex items-center gap-3">
         <img src={HERO_LOGO} alt="HERO" className="w-10 h-10 rounded-full object-cover border-2 border-orange-500/40" />
         <div>
-          <h1 className="text-foreground font-bold text-2xl">$HERO NFT Collection</h1>
-          <p className="text-muted-foreground text-sm">555 unique cards honoring military, first responders &amp; historical warriors worldwide</p>
+          <h1 className="text-foreground font-bold text-2xl">{t("$HERO NFT Collection")}</h1>
+          <p className="text-muted-foreground text-sm">{t("555 unique cards honoring military, first responders & historical warriors worldwide")}</p>
         </div>
       </div>
 
@@ -246,7 +312,7 @@ export default function NftCollection() {
             <Card key={stat.label} className="bg-card/60 border-border text-center p-3">
               <Icon className={`w-5 h-5 mx-auto mb-1 ${stat.color}`} />
               <p className={`font-bold text-lg ${stat.color}`}>{stat.value}</p>
-              <p className="text-muted-foreground/70 text-[10px]">{stat.label}</p>
+              <p className="text-muted-foreground/70 text-[10px]">{t(stat.label)}</p>
             </Card>
           );
         })}
@@ -259,13 +325,13 @@ export default function NftCollection() {
             <div>
               <h3 className="text-foreground font-semibold text-sm flex items-center gap-2">
                 <Sparkles className="w-4 h-4 text-orange-400" />
-                Dual-Chain Deployment
+                {t("Dual-Chain Deployment")}
               </h3>
-              <p className="text-muted-foreground text-xs mt-0.5">555 cards split across PulseChain (~185), BASE (~185), and Shared (~185)</p>
+              <p className="text-muted-foreground text-xs mt-0.5">{t("555 cards split across PulseChain (~185), BASE (~185), and Shared (~185)")}</p>
             </div>
             <div className="flex gap-2">
-              <Badge variant="outline" className="border-orange-500/40 text-orange-400 text-xs">PulseChain Primary</Badge>
-              <Badge variant="outline" className="border-blue-500/40 text-blue-400 text-xs">BASE Secondary</Badge>
+              <Badge variant="outline" className="border-orange-500/40 text-orange-400 text-xs">{t("PulseChain Primary")}</Badge>
+              <Badge variant="outline" className="border-blue-500/40 text-blue-400 text-xs">{t("BASE Secondary")}</Badge>
             </div>
           </div>
         </CardContent>
@@ -274,39 +340,34 @@ export default function NftCollection() {
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="bg-card border border-border w-full justify-start flex-wrap h-auto gap-1 p-1">
-          <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><ImageIcon className="w-4 h-4 mr-1" />Gallery</TabsTrigger>
-          <TabsTrigger value="animated" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400"><Play className="w-4 h-4 mr-1" />Animated NFTs</TabsTrigger>
-          <TabsTrigger value="grails" className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400"><Crown className="w-4 h-4 mr-1" />Grail Cards</TabsTrigger>
-          <TabsTrigger value="categories" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"><Globe className="w-4 h-4 mr-1" />Categories</TabsTrigger>
-          <TabsTrigger value="ranks" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Award className="w-4 h-4 mr-1" />Rank System</TabsTrigger>
-          <TabsTrigger value="utility" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Zap className="w-4 h-4 mr-1" />Utility</TabsTrigger>
-          <TabsTrigger value="branches" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Shield className="w-4 h-4 mr-1" />Service Branches</TabsTrigger>
-          <TabsTrigger value="roadmap" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Target className="w-4 h-4 mr-1" />Roadmap</TabsTrigger>
+          <TabsTrigger value="gallery" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><ImageIcon className="w-4 h-4 mr-1" />{t("Gallery")}</TabsTrigger>
+          <TabsTrigger value="animated" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400"><Play className="w-4 h-4 mr-1" />{t("Animated NFTs")}</TabsTrigger>
+          <TabsTrigger value="grails" className="data-[state=active]:bg-yellow-500/20 data-[state=active]:text-yellow-400"><Crown className="w-4 h-4 mr-1" />{t("Grail Cards")}</TabsTrigger>
+          <TabsTrigger value="categories" className="data-[state=active]:bg-blue-500/20 data-[state=active]:text-blue-400"><Globe className="w-4 h-4 mr-1" />{t("Categories")}</TabsTrigger>
+          <TabsTrigger value="ranks" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Award className="w-4 h-4 mr-1" />{t("Rank System")}</TabsTrigger>
+          <TabsTrigger value="utility" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Zap className="w-4 h-4 mr-1" />{t("Utility")}</TabsTrigger>
+          <TabsTrigger value="branches" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Shield className="w-4 h-4 mr-1" />{t("Service Branches")}</TabsTrigger>
+          <TabsTrigger value="roadmap" className="data-[state=active]:bg-orange-500/20 data-[state=active]:text-orange-400"><Target className="w-4 h-4 mr-1" />{t("Roadmap")}</TabsTrigger>
+          <TabsTrigger value="marketplace" className="data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400"><ShoppingCart className="w-4 h-4 mr-1" />{t("Marketplace")}</TabsTrigger>
         </TabsList>
 
         {/* GALLERY */}
         <TabsContent value="gallery" className="mt-4 space-y-6">
-          <NftCategoryCarousel
-            title="Military Rank Collection"
-            icon={<Swords className="w-5 h-5 text-orange-400" />}
-            badge="Sample Artwork"
-            badgeColor="border-orange-500/40 text-orange-400"
-            items={NFT_ARTWORK.military}
-          />
-          <NftCategoryCarousel
-            title="First Responder Collection"
-            icon={<Heart className="w-5 h-5 text-red-400" />}
-            badge="Sample Artwork"
-            badgeColor="border-red-500/40 text-red-400"
-            items={NFT_ARTWORK.firstResponders}
-          />
+          <div>
+            <div className="flex items-center gap-2 mb-4"><Swords className="w-5 h-5 text-orange-400" /><h3 className="text-foreground font-semibold text-lg">{t("Military Rank Collection")}</h3><Badge variant="outline" className="text-[10px] border-orange-500/40 text-orange-400">{t("Sample Artwork")}</Badge></div>
+            <NftCarousel items={NFT_ARTWORK.military} />
+          </div>
+          <div>
+            <div className="flex items-center gap-2 mb-4"><Heart className="w-5 h-5 text-red-400" /><h3 className="text-foreground font-semibold text-lg">{t("First Responder Collection")}</h3><Badge variant="outline" className="text-[10px] border-red-500/40 text-red-400">{t("Sample Artwork")}</Badge></div>
+            <NftCarousel items={NFT_ARTWORK.firstResponders} />
+          </div>
           <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
                 <Wallet className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
                   <h4 className="text-orange-400 font-semibold text-sm">555-Card Collection — Minting Coming Soon</h4>
-                  <p className="text-muted-foreground text-sm mt-1">555 unique steampunk-military trading cards across 10 categories and 5 rarity tiers. ERC-721 smart contract blueprint ready for dual-chain deployment on PulseChain + BASE. 25% of all mint revenue goes directly to veteran support through the VIC Foundation.</p>
+                  <p className="text-muted-foreground text-sm mt-1">{t("85% of NFT earnings go straight into the treasury wallet for charity donations. The remaining 15% is allocated towards operations, overhead, and future development of the HERO protocol.")}</p>
                   <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">Follow @HERO501c3 for mint updates <ExternalLink className="w-3 h-3" /></a>
                 </div>
               </div>
@@ -316,138 +377,130 @@ export default function NftCollection() {
 
         {/* ANIMATED */}
         <TabsContent value="animated" className="mt-4 space-y-6">
-          <div className="flex items-center gap-2"><Play className="w-5 h-5 text-purple-400" /><h3 className="text-foreground font-semibold text-lg">Animated NFT Collection</h3><Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-400">ERC-721 Video NFTs</Badge></div>
+          <div className="flex items-center gap-2"><Play className="w-5 h-5 text-purple-400" /><h3 className="text-foreground font-semibold text-lg">{t("Animated NFTs")}</h3><Badge variant="outline" className="text-[10px] border-purple-500/40 text-purple-400">ERC-721 Video NFTs</Badge></div>
           <p className="text-muted-foreground text-sm">Bold cartoon/comic book style. 8-second loops with patriotic orchestral music. 1080x1920 portrait format optimized for mobile and NFT display.</p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">{ANIMATED_NFTS.map((nft) => <AnimatedNftCard key={nft.name} nft={nft} />)}</div>
-          <div>
-            <div className="flex items-center gap-2 mb-3"><ImageIcon className="w-5 h-5 text-blue-400" /><h3 className="text-foreground font-semibold">Keyframe Gallery</h3><Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">10 Ready for Animation</Badge></div>
-            <div className="grid grid-cols-3 md:grid-cols-5 gap-3">
-              {KEYFRAMES.map((kf) => (
-                <div key={kf.name} className="group relative rounded-lg overflow-hidden border border-border bg-card/60 hover:border-blue-500/40 transition-all">
-                  <div className="aspect-[9/16] relative overflow-hidden">
-                    <img src={kf.url} alt={kf.name} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300" onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }} />
-                  </div>
-                  <p className="text-[10px] text-muted-foreground p-1.5 truncate">{kf.name}</p>
-                </div>
-              ))}
-            </div>
-          </div>
+          <AnimatedNftCarousel items={ANIMATED_NFTS} />
+          <Card className="bg-card/40 border-border">
+            <CardContent className="p-5">
+              <h4 className="text-foreground font-semibold text-sm mb-3 flex items-center gap-2"><ImageIcon className="w-4 h-4 text-purple-400" />Animation Keyframes</h4>
+              <KeyframeCarousel items={KEYFRAMES} />
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* GRAILS */}
         <TabsContent value="grails" className="mt-4 space-y-4">
-          <div className="flex items-center gap-2 mb-2"><Crown className="w-5 h-5 text-yellow-400" /><h3 className="text-foreground font-semibold text-lg">Grail Cards — Top 15 Legendaries</h3></div>
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {GRAIL_CARDS.map((card) => (
-              <Card key={card.num} className="bg-card/60 border-border hover:border-yellow-500/40 transition-all">
-                <CardContent className="p-4">
-                  <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center shrink-0"><span className="text-yellow-400 font-bold text-xs">#{card.num}</span></div>
-                    <div className="min-w-0">
-                      <p className="text-foreground font-semibold text-sm truncate">{card.codename}</p>
-                      <p className="text-muted-foreground text-xs">"{card.name}"</p>
-                      <div className="flex flex-wrap gap-1 mt-1.5">
-                        <Badge variant="outline" className={`text-[9px] ${card.rarity === "Legendary" ? "border-yellow-500/40 text-yellow-400" : card.rarity === "Ultra Rare" ? "border-purple-500/40 text-purple-400" : "border-border text-muted-foreground"}`}>{card.rarity}</Badge>
-                        <Badge variant="outline" className="text-[9px] border-border text-muted-foreground">{card.category}</Badge>
-                        <Badge variant="outline" className="text-[9px] border-blue-500/30 text-blue-400">{card.chain}</Badge>
-                      </div>
+          <Card className="bg-card/40 border-border">
+            <CardHeader>
+              <CardTitle className="text-foreground flex items-center gap-2"><Crown className="w-5 h-5 text-yellow-400" />{t("The 15 Grail Cards")}</CardTitle>
+              <p className="text-muted-foreground text-sm">{t("The rarest and most iconic cards in the collection. Each tells a story.")}</p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {GRAIL_CARDS.map((card) => (
+                  <div key={card.num} className="flex items-center gap-3 p-3 rounded-lg bg-secondary/30 border border-border hover:border-yellow-500/30 transition-all">
+                    <div className="w-10 h-10 rounded-lg bg-yellow-500/10 flex items-center justify-center"><span className="text-yellow-400 font-bold text-sm">#{card.num}</span></div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2"><p className="text-foreground font-semibold text-sm">{card.name}</p><Badge variant="outline" className={`text-[9px] ${card.rarity === "Legendary" ? "border-orange-500/40 text-orange-400" : card.rarity === "Ultra Rare" ? "border-purple-500/40 text-purple-400" : "border-zinc-500/40 text-zinc-400"}`}>{t(card.rarity)}</Badge></div>
+                      <p className="text-muted-foreground text-xs">{card.codename} • {card.category}</p>
                     </div>
+                    <Badge variant="outline" className="text-[9px] border-blue-500/30 text-blue-400">{card.chain}</Badge>
                   </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* CATEGORIES */}
         <TabsContent value="categories" className="mt-4 space-y-4">
-          <div className="flex items-center gap-2 mb-2"><Globe className="w-5 h-5 text-blue-400" /><h3 className="text-foreground font-semibold text-lg">Collection Categories</h3><Badge variant="outline" className="text-[10px] border-blue-500/40 text-blue-400">555 Total Cards</Badge></div>
-          <div className="grid md:grid-cols-2 gap-3">
-            {CATEGORIES.map((cat) => (
-              <Card key={cat.name} className={`bg-card/60 ${cat.border} hover:shadow-lg transition-all`}>
-                <CardContent className="p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-lg ${cat.bg} flex items-center justify-center`}><span className={`font-bold text-sm ${cat.color}`}>{cat.count}</span></div>
-                      <div><p className={`font-semibold text-sm ${cat.color}`}>{cat.name}</p><p className="text-muted-foreground text-xs">{cat.desc}</p></div>
-                    </div>
-                    <p className="text-muted-foreground text-xs">{Math.round(cat.count / 555 * 100)}%</p>
+          <Card className="bg-card/40 border-border">
+            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Globe className="w-5 h-5 text-blue-400" />{t("Categories")}</CardTitle></CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {CATEGORIES.map((cat) => (
+                  <div key={cat.name} className={`flex items-center gap-3 p-3 rounded-lg ${cat.bg} border ${cat.border}`}>
+                    <div className="flex-1"><p className={`font-semibold text-sm ${cat.color}`}>{cat.name}</p><p className="text-muted-foreground text-xs">{cat.desc}</p></div>
+                    <Badge variant="outline" className={`${cat.border} ${cat.color} text-xs`}>{cat.count}</Badge>
                   </div>
-                  <div className="mt-2 h-1.5 bg-secondary rounded-full overflow-hidden"><div className={`h-full rounded-full bg-current ${cat.color}`} style={{ width: `${Math.round(cat.count / 555 * 100)}%` }} /></div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="mt-4">
-            <h3 className="text-foreground font-semibold mb-3 flex items-center gap-2"><Sparkles className="w-4 h-4 text-yellow-400" />Rarity Distribution</h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-              {RARITY_TIERS.map((r) => (
-                <Card key={r.name} className={`bg-card/60 ${r.border} text-center`}>
-                  <CardContent className="p-3">
-                    <p className={`font-bold text-sm ${r.color}`}>{r.name}</p>
-                    <p className="text-muted-foreground text-xs mt-0.5">{r.frame}</p>
-                    <p className={`font-semibold text-lg mt-1 ${r.color}`}>{r.count}</p>
-                    <p className="text-muted-foreground text-xs">{r.pct}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+          <Card className="bg-card/40 border-border">
+            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Star className="w-5 h-5 text-yellow-400" />{t("Rarity Tiers")}</CardTitle></CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {RARITY_TIERS.map((tier) => (
+                  <div key={tier.name} className={`flex items-center gap-3 p-3 rounded-lg bg-secondary/30 border ${tier.border}`}>
+                    <div className="flex-1"><p className={`font-semibold text-sm ${tier.color}`}>{t(tier.name)}</p><p className="text-muted-foreground text-xs">{tier.frame} • {tier.count} cards ({tier.pct})</p></div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* RANKS */}
         <TabsContent value="ranks" className="mt-4 space-y-4">
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {RANK_TIERS.map((rank) => {
-              const Icon = rank.icon;
-              return (
-                <Card key={rank.rank} className={`bg-card/60 ${rank.border} hover:shadow-lg transition-all`}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className={`w-10 h-10 rounded-lg ${rank.bg} flex items-center justify-center`}><Icon className={`w-5 h-5 ${rank.color}`} /></div>
-                        <div><CardTitle className={`text-sm ${rank.color}`}>{rank.rank}</CardTitle><Badge variant="outline" className={`text-[9px] ${rank.border} ${rank.color} mt-0.5`}>{rank.tier}</Badge></div>
+          <Card className="bg-card/40 border-border">
+            <CardHeader>
+              <CardTitle className="text-foreground flex items-center gap-2"><Award className="w-5 h-5 text-orange-400" />{t("NFT Rank & Utility System")}</CardTitle>
+              <p className="text-muted-foreground text-sm">{t("Your rank is determined by your HERO token holdings. Higher rank = more utility.")}</p>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {RANK_TIERS.map((rank) => {
+                const Icon = rank.icon;
+                return (
+                  <div key={rank.rank} className={`p-4 rounded-xl ${rank.bg} border ${rank.border}`}>
+                    <div className="flex items-center gap-3 mb-2">
+                      <Icon className={`w-6 h-6 ${rank.color}`} />
+                      <div>
+                        <p className={`font-bold text-sm ${rank.color}`}>{rank.rank}</p>
+                        <Badge variant="outline" className={`text-[9px] ${rank.border} ${rank.color}`}>{t(rank.tier)}</Badge>
                       </div>
-                      <div className="text-right"><p className="text-muted-foreground text-xs">{rank.rarity}</p><p className="text-muted-foreground/60 text-[10px]">{rank.count} cards</p></div>
+                      <div className="ml-auto text-right">
+                        <p className="text-foreground font-semibold text-sm">{rank.holdingReq}</p>
+                        <p className="text-muted-foreground text-[10px]">{t("Holding Requirement")}</p>
+                      </div>
                     </div>
-                  </CardHeader>
-                  <CardContent className="pt-0 space-y-2">
                     <p className="text-muted-foreground text-xs">{rank.description}</p>
-                    <div className="flex justify-between text-xs pt-1 border-t border-border"><span className="text-muted-foreground">Requires</span><span className={`font-semibold ${rank.color}`}>{rank.holdingReq}</span></div>
-                    <div className="flex justify-between text-xs"><span className="text-muted-foreground">Fee Reduction</span><span className="text-green-400 font-semibold">{rank.feeReduction}</span></div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                    <div className="flex gap-4 mt-2 text-xs">
+                      <span className="text-muted-foreground">{t("Fee Reduction")}: <span className={rank.color}>{rank.feeReduction}</span></span>
+                      <span className="text-muted-foreground">{t("Rarity Tiers")}: <span className={rank.color}>{rank.rarity}</span></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         {/* UTILITY */}
         <TabsContent value="utility" className="mt-4 space-y-4">
-          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {UTILITY_FEATURES.map((feature) => {
-              const Icon = feature.icon;
-              return (
-                <Card key={feature.title} className="bg-card/60 border-border hover:border-orange-500/30 transition-all">
-                  <CardContent className="p-5">
-                    <div className="flex items-start gap-3">
-                      <div className="w-10 h-10 rounded-lg bg-orange-500/10 flex items-center justify-center shrink-0"><Icon className="w-5 h-5 text-orange-400" /></div>
-                      <div>
-                        <div className="flex items-center gap-2 mb-1"><h4 className="text-foreground font-semibold text-sm">{feature.title}</h4><Badge variant="outline" className="text-[9px] border-orange-500/30 text-orange-400">{feature.status}</Badge></div>
-                        <p className="text-muted-foreground text-xs">{feature.description}</p>
-                      </div>
+          <Card className="bg-card/40 border-border">
+            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Zap className="w-5 h-5 text-orange-400" />{t("NFT Utility Features")}</CardTitle></CardHeader>
+            <CardContent className="space-y-4">
+              {UTILITY_FEATURES.map((feat) => {
+                const Icon = feat.icon;
+                return (
+                  <div key={feat.title} className="flex items-start gap-3 p-3 rounded-lg bg-secondary/30 border border-border">
+                    <Icon className="w-5 h-5 text-orange-400 shrink-0 mt-0.5" />
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2"><p className="text-foreground font-semibold text-sm">{t(feat.title)}</p><Badge variant="outline" className="text-[9px] border-orange-500/40 text-orange-400">{t(feat.status)}</Badge></div>
+                      <p className="text-muted-foreground text-xs mt-1">{feat.description}</p>
                     </div>
-                  </CardContent>
-                </Card>
-              );
-            })}
-          </div>
+                  </div>
+                );
+              })}
+            </CardContent>
+          </Card>
           <Card className="bg-gradient-to-r from-orange-500/5 to-yellow-500/5 border-orange-500/20">
             <CardContent className="p-5">
               <div className="flex items-start gap-3">
                 <Lock className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-orange-400 font-semibold text-sm">Utility Unlocks With Your Rank</h4>
+                  <h4 className="text-foreground font-semibold text-sm">Core + Enhanced + Premium Utility</h4>
                   <p className="text-muted-foreground text-sm mt-1">Every NFT holder gets Core Utility (Phase 1). Rare+ holders unlock Enhanced Utility. Legendary holders get Premium Utility including a custom animated NFT of their own military branch/unit.</p>
                 </div>
               </div>
@@ -479,8 +532,8 @@ export default function NftCollection() {
               <div className="flex items-start gap-3">
                 <Shield className="w-6 h-6 text-red-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-foreground font-semibold text-sm">Supporting Veterans &amp; First Responders</h4>
-                  <p className="text-muted-foreground text-sm mt-1">HERO is a 501(c)(3) nonprofit supporting military veterans and first responders through the VIC Foundation. 25% of all NFT mint revenue goes directly to veteran support programs.</p>
+                  <h4 className="text-foreground font-semibold text-sm">{t("Supporting Veterans & First Responders")}</h4>
+                  <p className="text-muted-foreground text-sm mt-1">{t("HERO is a 501(c)(3) nonprofit supporting military veterans and first responders through the VIC Foundation. 85% of NFT earnings go straight into the treasury wallet for charity donations. The remaining 15% is allocated towards operations, overhead, and future development of the HERO protocol.")}</p>
                   <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">Follow @HERO501c3 on X <ExternalLink className="w-3 h-3" /></a>
                 </div>
               </div>
@@ -491,12 +544,12 @@ export default function NftCollection() {
         {/* ROADMAP */}
         <TabsContent value="roadmap" className="mt-4 space-y-4">
           <Card className="bg-card/40 border-border">
-            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Target className="w-5 h-5 text-orange-400" />NFT Development Roadmap</CardTitle></CardHeader>
+            <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Target className="w-5 h-5 text-orange-400" />{t("NFT Development Roadmap")}</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {[
-                { phase: "Phase 1", title: "Artwork & Minting", status: "In Progress", statusColor: "text-yellow-400 border-yellow-500/40", items: ["555 unique steampunk-military trading cards complete", "4 animated video NFTs complete (UK, South Korea, US Marine, Mexico)", "ERC-721 smart contract blueprint ready", "Dual-chain deployment: PulseChain + BASE", "Mint event with 25% proceeds to VIC Foundation"] },
-                { phase: "Phase 2", title: "Utility Activation", status: "Planned", statusColor: "text-blue-400 border-blue-500/40", items: ["Automatic fee reduction for NFT holders", "Diamond hands time-weighted staking multiplier", "Governance voting power boost", "Exclusive airdrop eligibility for holders"] },
-                { phase: "Phase 3", title: "Advanced Features", status: "Future", statusColor: "text-muted-foreground border-muted-foreground/40", items: ["Rank promotion system (upgrade NFT as holdings grow)", "Staking APY boost based on NFT rank", "Cross-chain NFT bridging (PulseChain to BASE)", "Community marketplace for trading", "Custom animated NFT for Legendary holders"] },
+                { phase: t("Phase 1"), title: t("Artwork & Minting"), status: t("In Progress"), statusColor: "text-yellow-400 border-yellow-500/40", items: ["555 unique steampunk-military trading cards complete", "4 animated video NFTs complete (UK, South Korea, US Marine, Mexico)", "ERC-721 smart contract blueprint ready", "Dual-chain deployment: PulseChain + BASE", "Mint event: 85% to treasury for charity, 15% to operations"] },
+                { phase: t("Phase 2"), title: t("Utility Activation"), status: t("Planned"), statusColor: "text-blue-400 border-blue-500/40", items: ["Automatic fee reduction for NFT holders", "Diamond hands time-weighted staking multiplier", "Governance voting power boost", "Exclusive airdrop eligibility for holders"] },
+                { phase: t("Phase 3"), title: t("Advanced Features"), status: t("Future"), statusColor: "text-muted-foreground border-muted-foreground/40", items: ["Rank promotion system (upgrade NFT as holdings grow)", "Staking APY boost based on NFT rank", "Cross-chain NFT bridging (PulseChain to BASE)", "Community marketplace for trading", "Custom animated NFT for Legendary holders"] },
               ].map((phase) => (
                 <div key={phase.phase} className="relative pl-8 border-l-2 border-border">
                   <div className="absolute left-0 top-0 w-4 h-4 rounded-full bg-orange-500 -translate-x-[9px]" />
@@ -504,6 +557,45 @@ export default function NftCollection() {
                   <ul className="space-y-1.5">{phase.items.map((item, i) => (<li key={i} className="flex items-start gap-2 text-muted-foreground text-sm"><ChevronRight className="w-3 h-3 text-orange-400 shrink-0 mt-1" />{item}</li>))}</ul>
                 </div>
               ))}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* MARKETPLACE - NFT Nutters via SquirrelSwap */}
+        <TabsContent value="marketplace" className="mt-4 space-y-4">
+          <Card className="bg-card/40 border-border">
+            <CardHeader>
+              <CardTitle className="text-foreground flex items-center gap-2">
+                <ShoppingCart className="w-5 h-5 text-green-400" />
+                {t("NFT Nutters Marketplace")}
+              </CardTitle>
+              <p className="text-muted-foreground text-sm">
+                {t("Browse, buy, and trade HERO NFTs on the NFT Nutters marketplace powered by SquirrelSwap. 85% of all NFT earnings go straight into the treasury wallet for charity donations. The remaining 15% is allocated towards operations, overhead, and future development of the HERO protocol.")}
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="w-full rounded-xl overflow-hidden border border-border" style={{ minHeight: '800px' }}>
+                <iframe
+                  src="https://app.squirrelswap.pro/#/nutters?tab=marketplace"
+                  width="100%"
+                  height="800"
+                  style={{ border: 'none', borderRadius: '12px' }}
+                  allow="clipboard-write"
+                  title="NFT Nutters Marketplace"
+                />
+              </div>
+              <div className="mt-4 flex flex-wrap gap-3">
+                <a
+                  href="https://app.squirrelswap.pro/#/nutters?tab=marketplace"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-green-500/20 text-green-400 border border-green-500/30 rounded-lg hover:bg-green-500/30 transition-colors text-sm font-medium"
+                >
+                  <ShoppingCart className="w-4 h-4" />
+                  {t("Open Full Marketplace")}
+                  <ExternalLink className="w-3 h-3" />
+                </a>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>

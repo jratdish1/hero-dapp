@@ -167,6 +167,25 @@ export default function Tokenomics() {
 
         {/* ── FLYWHEEL TAB ──────────────────────────────────────────── */}
         <TabsContent value="flywheel" className="mt-4 space-y-6">
+          {/* Tokenomics Animated Video Loop */}
+          <Card className="bg-card/60 border-border overflow-hidden">
+            <CardContent className="p-0">
+              <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
+                <video
+                  src="/tokenomics_video.mp4"
+                  autoPlay
+                  loop
+                  muted
+                  playsInline
+                  className="w-full h-full object-contain"
+                  style={{ animation: 'none' }}
+                />
+                <div className="absolute bottom-2 right-2">
+                  <Badge className="bg-black/70 text-orange-400 border-orange-500/30 text-[10px]">HERO Tokenomics Flywheel</Badge>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
           {/* Flywheel Diagram */}
           <Card className="bg-card/40 border-border overflow-hidden">
             <div className="absolute inset-0 bg-gradient-to-br from-orange-500/5 via-transparent to-green-500/5" />
