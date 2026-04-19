@@ -1,3 +1,4 @@
+import TradingViewChart from "@/components/TradingViewChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart3,
@@ -216,6 +217,29 @@ export default function Dashboard() {
         </CardContent>
       </Card>
 
+      {/* TradingView-Style Price Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <TradingViewChart
+              pairAddress="0x34948e125033a697332202964de96af85becd78f"
+              chain="pulsechain"
+              title="HERO/PLS (PulseChain)"
+              height={350}
+            />
+          </CardContent>
+        </Card>
+        <Card className="bg-card border-border">
+          <CardContent className="p-4">
+            <TradingViewChart
+              pairAddress="0x3bb159de8604ab7e0148edc24f2a568c430476cf"
+              chain="base"
+              title="HERO/ETH (BASE)"
+              height={350}
+            />
+          </CardContent>
+        </Card>
+      </div>
       {/* LP Pairs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="bg-card border-border">

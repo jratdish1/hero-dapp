@@ -28,9 +28,8 @@ import {
   BookOpen,
   Globe,
 } from "lucide-react";
-import { HERO_TOKEN, VETS_TOKEN } from "@shared/tokens";
+import { HERO_TOKEN, VETS_TOKEN, CDN_ASSETS } from "@shared/tokens";
 import { ThemeToggle } from "../components/ThemeToggle";
-import { ExplainerVideoModal } from "../components/ExplainerVideoModal";
 
 const FEATURES = [
   {
@@ -77,8 +76,8 @@ const FEATURES = [
   },
   {
     icon: Sprout,
-    title: "HERO Farm",
-    description: "Yield farming across Emit Farm, RhinoFi, and TruFarms. All HERO/VETS pairs in one place.",
+    title: "HERO Stake",
+    description: "Staking across Emit Farm, RhinoFi, and TruFarms. All HERO/VETS pairs in one place.",
     href: "/farm",
     color: "var(--hero-green)",
   },
@@ -116,19 +115,38 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-background">
       {/* Explainer video pop-up on first visit */}
-      <ExplainerVideoModal />
-      {/* HERO UN Banner Header */}
-      <div className="w-full relative overflow-hidden" style={{maxHeight: '140px'}}>
+      {/* Midgard.wtf Banner */}
+      <div className="w-full bg-black py-2.5 border-b border-[var(--hero-orange)]/30">
+        <div className="max-w-7xl mx-auto px-4 text-center">
+          <a
+            href="https://midgard.wtf/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-[var(--hero-orange)] hover:text-white font-bold text-sm tracking-wider uppercase transition-colors inline-flex items-center gap-2"
+          >
+            ⚡ MIDGARD.WTF — Blockchain Explorer for PulseChain ⚡
+          </a>
+        </div>
+      </div>
+      {/* Veterans Tagline Banner */}
+      <div className="w-full bg-gradient-to-r from-black via-[rgb(15,12,8)] to-black py-2 border-b border-[var(--hero-orange)]/20">
+        <p className="text-center text-sm font-bold tracking-[0.25em] uppercase" style={{color: "var(--hero-orange)"}}>
+          HERO Dapp — Built for Veterans, by Veterans
+        </p>
+      </div>
+      {/* HERO UN Banner — Full Size Hero Header */}
+      <div className="w-full relative" style={{height: '60vh', minHeight: '400px', maxHeight: '700px'}}>
         <img
           src={HERO_BANNER_URL}
           alt="HERO United Nations Banner"
-          className="w-full object-contain"
-          style={{height: '140px'}}
+          className="w-full h-full object-cover object-center"
         />
+        {/* Bottom gradient fade for clean break */}
+        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
         {/* KYC Badge overlay */}
-        <div className="absolute top-2 right-3 flex items-center gap-1 bg-black/60 rounded-full px-2 py-1">
+        <div className="absolute top-4 right-4 flex items-center gap-1.5 bg-black/70 backdrop-blur-sm rounded-full px-3 py-1.5 border border-green-500/30">
           <img src={KYC_BADGE_URL} alt="KYC Certified" className="w-8 h-8" />
-          <span className="text-xs text-green-400 font-bold">KYC</span>
+          <span className="text-xs text-green-400 font-bold tracking-wide">KYC</span>
         </div>
       </div>
 
@@ -150,7 +168,7 @@ export default function Home() {
             <Link href="/swap" className="px-3 py-1 rounded-md bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/30 text-[var(--hero-orange)] font-semibold hover:bg-[var(--hero-orange)]/20 transition-colors">dApp</Link>
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
             <Link href="/limits" className="text-muted-foreground hover:text-foreground transition-colors">Limits</Link>
-            <Link href="/farm" className="text-muted-foreground hover:text-foreground transition-colors">Farm</Link>
+            <Link href="/stake" className="text-muted-foreground hover:text-foreground transition-colors">Stake</Link>
             <Link href="/tokenomics" className="text-muted-foreground hover:text-foreground transition-colors">Tokenomics</Link>
             <Link href="/nft" className="text-muted-foreground hover:text-foreground transition-colors">NFTs</Link>
             <a href="https://docs.vicfoundation.com" target="_blank" rel="noopener noreferrer" className="text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">Whitepaper <ExternalLink className="w-3 h-3" /></a>
@@ -166,11 +184,19 @@ export default function Home() {
         </div>
       </nav>
 
-      {/* Hero section */}
+      {/* Hero section with background video */}
       <section className="relative overflow-hidden">
+        {/* Background Video */}
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
+          src={CDN_ASSETS.tokenomicsVideo}
+        />
+        <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/40 to-background" />
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--hero-orange)]/5 to-transparent" />
-        <div className="absolute top-20 left-1/4 w-96 h-96 bg-[var(--hero-orange)]/5 rounded-full blur-3xl" />
-        <div className="absolute top-40 right-1/4 w-96 h-96 bg-[var(--hero-green)]/5 rounded-full blur-3xl" />
         
         <div className="relative max-w-7xl mx-auto px-4 pt-20 pb-24 text-center">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/20 text-sm text-[var(--hero-orange)] mb-6">
@@ -361,7 +387,7 @@ export default function Home() {
       </section>
 
       {/* Footer */}
-      <footer className="border-t border-border bg-card/30">
+      <footer className="border-t border-border" style={{background: "rgb(10, 14, 28)"}}>
         {/* YouTube Channel Section */}
         <div className="border-t border-border bg-black/40 py-4">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-4">
@@ -391,16 +417,14 @@ export default function Home() {
             className="w-full object-contain"
             style={{height: "350px", objectFit: "cover"}}
           />
-          <div className="absolute inset-0 flex items-center justify-center">
-            <span className="hidden">HERO Dapp — Built by Veterans, for Veterans & First Responders</span>
-          </div>
+
         </div>
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-3">
               <img src={HERO_LOGO_URL} alt="HERO Logo" className="w-8 h-8 rounded-full object-cover border border-[var(--hero-orange)]/30" />
-              <span className="text-sm text-white/90 font-medium">
-                HERO Dapp — Built by Veterans, for Veterans & First Responders
+              <span className="text-sm font-bold tracking-wide text-muted-foreground">
+                HERO Dapp
               </span>
             </div>
             <div className="flex items-center gap-4 text-xs text-white/70">

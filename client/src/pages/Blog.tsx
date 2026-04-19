@@ -436,6 +436,53 @@ export default function Blog() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto">
+      {/* Featured: VETS Music Video */}
+      <Card className="bg-card/60 border-green-500/20 overflow-hidden">
+        <CardContent className="p-0">
+          <div className="p-4 border-b border-green-500/20 bg-gradient-to-r from-green-500/10 to-transparent">
+            <h2 className="text-lg font-bold text-green-400 flex items-center gap-2">
+              <Mic className="w-5 h-5" />
+              Featured: Vets2Hero Music Video
+            </h2>
+            <p className="text-muted-foreground text-sm mt-1">Official VETS anthem — Supporting Veterans and First Responders</p>
+          </div>
+          <div className="aspect-video">
+            <video
+              className="w-full h-full object-contain bg-black"
+              controls
+              playsInline
+              preload="metadata"
+            >
+              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/TpBuoUpQVyJrFzak.mp4" type="video/mp4" />
+            </video>
+          </div>
+          <div className="p-4 border-t border-border">
+{/* HERO Global Veterans Music Video */}      <div className="mt-6">        <h3 className="text-lg font-bold text-center mb-2 text-green-400">🌍 HERO Global Veterans Music Video</h3>        <div className="aspect-video rounded-lg overflow-hidden border border-green-500/20">          <video controls preload="metadata" className="w-full h-full object-cover">            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/huWiGvNsWyNdFTxB.mp4" type="video/mp4" />          </video>        </div>      </div>      {/* HERO USA Veterans Music Video */}      <div className="mt-6">        <h3 className="text-lg font-bold text-center mb-2 text-blue-400">🇺🇸 HERO USA Veterans Music Video</h3>        <div className="aspect-video rounded-lg overflow-hidden border border-blue-500/20">          <video controls preload="metadata" className="w-full h-full object-cover">            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/ksLvgZRExNUgirMD.mp4" type="video/mp4" />          </video>        </div>      </div>
+            <h3 className="text-foreground font-semibold text-sm mb-3">VETS Soundtrack</h3>
+            <div className="grid md:grid-cols-3 gap-3">
+              <div className="bg-secondary/30 rounded-lg p-3">
+                <p className="text-foreground text-xs font-medium mb-2">Corey Meme Song</p>
+                <audio controls className="w-full h-8" preload="metadata">
+                  <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/OHfJfJwCmEStjnum.mp3" type="audio/mpeg" />
+                </audio>
+              </div>
+              <div className="bg-secondary/30 rounded-lg p-3">
+                <p className="text-foreground text-xs font-medium mb-2">Salute to VETS</p>
+                <audio controls className="w-full h-8" preload="metadata">
+                  <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/tltFDkLmQuGvHOQY.mp3" type="audio/mpeg" />
+                </audio>
+              </div>
+              <div className="bg-secondary/30 rounded-lg p-3">
+                <p className="text-foreground text-xs font-medium mb-2">VETS Song #1</p>
+                <audio controls className="w-full h-8" preload="metadata">
+                  <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/yuhFIYUTLJbVpCLj.WAV" type="audio/wav" />
+                </audio>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Page header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>

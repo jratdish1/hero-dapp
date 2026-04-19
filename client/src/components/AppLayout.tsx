@@ -57,9 +57,10 @@ const NAV_ITEMS = [
   { path: "/portfolio", label: "Portfolio", icon: Wallet },
   { path: "/dca", label: "DCA Orders", icon: Clock },
   { path: "/limits", label: "Limit Orders", icon: Target },
-  { path: "/farm", label: "Farm (PulseChain)", icon: Sprout },
-  { path: "/farm/base", label: "Farm (BASE)", icon: Layers },
-  { path: "/stake", label: "Stake HERO → DAI", icon: Coins },
+  { path: "/stake", label: "Stake (PulseChain)", icon: Sprout },
+  { path: "/stake/base", label: "Stake (BASE)", icon: Layers },
+  { path: "/stake/dai", label: "Stake HERO → DAI", icon: Coins },
+  { path: "/bots", label: "ABLE Bots", icon: Bot },
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
   { path: "/nft", label: "NFT Collection", icon: Gem },
@@ -67,7 +68,7 @@ const NAV_ITEMS = [
   { path: "/community", label: "Community Hub", icon: ImageIcon },
   { path: "/explainer", label: "Explainer", icon: PlayCircle },
   { path: "/ai", label: "AI Assistant", icon: Bot },
-  { path: "/squirrels-pro", label: "Squirrels Pro", icon: Globe, external: "https://squirrels.pro/" },
+  { path: "/liberty-swap", label: "Liberty Swap", icon: Globe, external: "https://libertyswap.finance/" },
 ];
 
 const DAO_NAV_ITEMS = [
@@ -241,6 +242,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <span className="text-xs text-green-400 font-bold">{t("KYC")}</span>
           </div>
         </div>
+        {/* Veterans Tagline Banner */}
+        <div className="w-full bg-gradient-to-r from-black via-[rgb(15,12,8)] to-black py-1.5 border-b border-[var(--hero-orange)]/20">
+          <p className="text-center text-xs font-bold tracking-[0.25em] uppercase" style={{color: "var(--hero-orange)"}}>
+            {t("HERO Dapp — Built for Veterans, by Veterans")}
+          </p>
+        </div>
         {/* Price Ticker */}
         <PriceTicker />
         {/* Top bar */}
@@ -289,7 +296,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </main>
 
         {/* Blackbeard Footer Banner - shown across all app tabs */}
-        <footer className="w-full mt-auto">
+        <footer className="w-full mt-auto" style={{background: "rgb(10, 14, 28)"}}>
           {/* SpyWolf Audit & KYC Badges */}
           <div className="flex items-center justify-center gap-6 bg-black/80 py-3 border-t border-[var(--hero-orange)]/20">
             <a href={AUDIT_PDF_URL} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center gap-1 hover:opacity-80 transition-opacity">
@@ -310,9 +317,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               className="w-full object-cover object-top"
               style={{height: '100px', filter: 'brightness(0.85)'}}
             />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="text-white/80 text-xs font-bold tracking-widest uppercase">{t("HERO Dapp — Built for Veterans, by Veterans")}</span>
-            </div>
+
           </div>
         </footer>
       </div>

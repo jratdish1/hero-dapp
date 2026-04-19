@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Wallet, ExternalLink, TrendingUp, TrendingDown, Copy, Check,
   Search, Star, Edit2, Save, RefreshCw, Coins, Droplets, Clock,
-  ArrowUpRight, ArrowDownRight, Flame
+  ArrowUpRight, ArrowDownRight, Flame, Globe
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount, useBalance } from "wagmi";
@@ -329,6 +329,9 @@ export default function Portfolio() {
                   <Flame className="w-4 h-4 mr-1" /> HEX Stakes
                 </TabsTrigger>
               )}
+              <TabsTrigger value="midgard" className="data-[state=active]:bg-purple-500/20 data-[state=active]:text-purple-400">
+                <Globe className="w-4 h-4 mr-1" /> Midgard
+              </TabsTrigger>
               <TabsTrigger value="history" className="data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400">
                 <Clock className="w-4 h-4 mr-1" /> Transactions
               </TabsTrigger>
@@ -428,6 +431,38 @@ export default function Portfolio() {
               </TabsContent>
             )}
             
+            {/* Midgard.wtf DeFi Dashboard */}
+            <TabsContent value="midgard" className="mt-4">
+              <Card className="bg-card/40 border-border overflow-hidden">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-foreground flex items-center gap-2 text-base">
+                    <Globe className="w-5 h-5 text-purple-400" />
+                    Midgard DeFi Dashboard
+                    <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs ml-2">PulseChain</Badge>
+                  </CardTitle>
+                  <p className="text-muted-foreground text-sm">Full DeFi portfolio tracking, analytics, and yield monitoring powered by Midgard</p>
+                </CardHeader>
+                <CardContent className="p-0">
+                  <div style={{ height: '600px' }} className="w-full">
+                    <iframe
+                      src="https://midgard.wtf"
+                      className="w-full h-full border-0"
+                      title="Midgard DeFi Dashboard"
+                      allow="clipboard-write; clipboard-read"
+                    />
+                  </div>
+                  <div className="p-3 border-t border-border flex items-center justify-between">
+                    <p className="text-muted-foreground text-xs">Powered by Midgard.wtf — PulseChain DeFi Analytics</p>
+                    <a href="https://midgard.wtf" target="_blank" rel="noopener noreferrer">
+                      <Button variant="outline" size="sm" className="gap-1 text-xs h-7">
+                        Open Full Site <ExternalLink className="w-3 h-3" />
+                      </Button>
+                    </a>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
             {/* Transactions */}
             <TabsContent value="history" className="mt-4">
               <Card className="bg-card/40 border-border">
@@ -466,6 +501,44 @@ export default function Portfolio() {
           </CardContent>
         </Card>
       )}
+
+      {/* Midgard DeFi Dashboard - Always Visible */}
+      <Card className="bg-card/40 border-border overflow-hidden">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-foreground flex items-center gap-2 text-lg">
+            <Globe className="w-6 h-6 text-purple-400" />
+            Midgard DeFi Dashboard
+            <Badge className="bg-purple-500/20 text-purple-300 border-purple-500/40 text-xs ml-2">PulseChain</Badge>
+          </CardTitle>
+          <p className="text-muted-foreground text-sm">Full DeFi portfolio tracking, analytics, and yield monitoring powered by Midgard</p>
+        </CardHeader>
+        <CardContent className="p-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 text-center">
+              <div className="text-purple-400 text-2xl mb-1">📊</div>
+              <p className="text-foreground font-semibold text-sm">Portfolio Analytics</p>
+              <p className="text-muted-foreground text-xs">Track all PulseChain tokens, LP positions, and yield</p>
+            </div>
+            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 text-center">
+              <div className="text-purple-400 text-2xl mb-1">💰</div>
+              <p className="text-foreground font-semibold text-sm">DeFi Yield Monitor</p>
+              <p className="text-muted-foreground text-xs">Real-time yield tracking across PulseChain protocols</p>
+            </div>
+            <div className="bg-purple-500/10 border border-purple-500/20 rounded-lg p-4 text-center">
+              <div className="text-purple-400 text-2xl mb-1">🔍</div>
+              <p className="text-foreground font-semibold text-sm">Token Explorer</p>
+              <p className="text-muted-foreground text-xs">Deep analytics for any PulseChain token or pair</p>
+            </div>
+          </div>
+          <a href="https://midgard.wtf" target="_blank" rel="noopener noreferrer" className="block">
+            <Button className="w-full bg-purple-600 hover:bg-purple-700 text-white font-semibold py-3 text-base gap-2">
+              <Globe className="w-5 h-5" /> Open Midgard DeFi Dashboard <ExternalLink className="w-4 h-4" />
+            </Button>
+          </a>
+          <p className="text-muted-foreground text-xs text-center mt-3">Powered by Midgard.wtf — PulseChain DeFi Analytics</p>
+        </CardContent>
+      </Card>
+
     </div>
   );
 }

@@ -405,11 +405,12 @@ export const CDN_ASSETS = {
   vicInfoChart: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/Vetsincryptoinfochartforvets,hero_c1479748.jpg",
   heroBanner: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/445vqAqzbQinaz2K7dFjjJ/hero-banner-QpyKdvivL5TcgqnXxrRZh5.webp",
   heroEmblem: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/445vqAqzbQinaz2K7dFjjJ/hero-emblem-aHVuQc59ySp2SrqEGw29rZ.webp",
+  tokenomicsVideo: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/unfIxrIvyPBCHqez.mp4",
 } as const;
 
 // ─── Live DApp URLs ─────────────────────────────────────────────────────
 export const LIVE_DAPP_URLS = {
-  farm: "https://herofarm-445vqaqz.manus.space",
+  stake: "https://herofarm-445vqaqz.manus.space",
   dao: "https://herodapp-parejpux.manus.space",
 } as const;
 

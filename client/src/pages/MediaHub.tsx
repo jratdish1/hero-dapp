@@ -206,6 +206,79 @@ export default function MediaHub() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
+      {/* HERO Explainer Video */}
+      <div className="bg-black border-b border-[var(--hero-orange)]/30">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <h2 className="text-center text-lg font-bold text-[var(--hero-orange)] tracking-wider uppercase mb-4">
+            HERO Ecosystem Explainer
+          </h2>
+          <div className="aspect-video rounded-lg overflow-hidden border border-[var(--hero-orange)]/20 shadow-2xl">
+            <video
+              className="w-full h-full object-contain"
+              controls
+              playsInline
+              preload="metadata"
+            >
+              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4" type="video/mp4" />
+            </video>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-3">
+            Quick overview of the HERO ecosystem — Built for Veterans, by Veterans
+          </p>
+        </div>
+      </div>
+
+      {/* Featured: VETS Music Video */}
+      <div className="bg-gradient-to-b from-black to-background border-b border-orange-500/20">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <h2 className="text-center text-lg font-bold text-green-400 tracking-wider uppercase mb-4">
+            🎵 Featured: Vets2Hero Music Video
+          </h2>
+          <div className="aspect-video rounded-lg overflow-hidden border border-green-500/20 shadow-2xl">
+            <video
+              className="w-full h-full object-contain bg-black"
+              controls
+              playsInline
+              preload="metadata"
+            >
+              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/TpBuoUpQVyJrFzak.mp4" type="video/mp4" />
+            </video>
+          </div>
+          <p className="text-center text-xs text-muted-foreground mt-3">
+            Official VETS music video — Supporting Veterans and First Responders
+          </p>
+{/* HERO Global Veterans Music Video */}      <div className="mt-8">        <h3 className="text-xl font-bold text-center mb-2">          <span className="text-green-400">🌍 HERO Global Veterans Music Video</span>        </h3>        <p className="text-muted-foreground text-sm text-center mb-4">Honoring military veterans and first responders worldwide</p>        <div className="aspect-video rounded-lg overflow-hidden border border-green-500/20 shadow-2xl">          <video            controls            preload="metadata"            className="w-full h-full object-cover"            poster=""          >            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/huWiGvNsWyNdFTxB.mp4" type="video/mp4" />          </video>        </div>      </div>      {/* HERO USA Veterans Music Video */}      <div className="mt-8">        <h3 className="text-xl font-bold text-center mb-2">          <span className="text-blue-400">🇺🇸 HERO USA Veterans Music Video</span>        </h3>        <p className="text-muted-foreground text-sm text-center mb-4">Salute to American military veterans and first responders</p>        <div className="aspect-video rounded-lg overflow-hidden border border-blue-500/20 shadow-2xl">          <video            controls            preload="metadata"            className="w-full h-full object-cover"            poster=""          >            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/ksLvgZRExNUgirMD.mp4" type="video/mp4" />          </video>        </div>      </div>
+        </div>
+      </div>
+
+      {/* Music Tracks */}
+      <div className="bg-card/30 border-b border-border">
+        <div className="max-w-4xl mx-auto px-4 py-6">
+          <h2 className="text-center text-lg font-bold text-orange-400 tracking-wider uppercase mb-4">
+            🎶 VETS Soundtrack
+          </h2>
+          <div className="grid md:grid-cols-3 gap-4">
+            <div className="bg-card/60 border border-orange-500/20 rounded-lg p-4">
+              <p className="text-foreground font-semibold text-sm mb-2">Corey Meme Song</p>
+              <audio controls className="w-full" preload="metadata">
+                <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/OHfJfJwCmEStjnum.mp3" type="audio/mpeg" />
+              </audio>
+            </div>
+            <div className="bg-card/60 border border-green-500/20 rounded-lg p-4">
+              <p className="text-foreground font-semibold text-sm mb-2">Salute to VETS</p>
+              <audio controls className="w-full" preload="metadata">
+                <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/tltFDkLmQuGvHOQY.mp3" type="audio/mpeg" />
+              </audio>
+            </div>
+            <div className="bg-card/60 border border-blue-500/20 rounded-lg p-4">
+              <p className="text-foreground font-semibold text-sm mb-2">VETS Song #1</p>
+              <audio controls className="w-full" preload="metadata">
+                <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/yuhFIYUTLJbVpCLj.WAV" type="audio/wav" />
+              </audio>
+            </div>
+          </div>
+        </div>
+      </div>
       {/* Header */}
       <div className="border-b border-border bg-card/50 backdrop-blur-sm">
         <div className="max-w-7xl mx-auto px-4 py-6">

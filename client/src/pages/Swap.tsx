@@ -12,7 +12,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { ArrowDownUp, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown, ExternalLink } from "lucide-react";
+import { ArrowDownUp, ArrowLeftRight, Zap, Info, Settings2, Loader2, TrendingUp, TrendingDown, ExternalLink, Shield, Clock } from "lucide-react";
 import { type TokenInfo } from "@shared/tokens";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
@@ -247,11 +247,11 @@ export default function Swap() {
           <Card className="bg-card border-border overflow-hidden">
             <div className="w-full" style={{ height: "680px" }}>
               <iframe
-                src="https://app.squirrelswap.pro/"
+                src="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&accentColor=e8b84b&bgColor=0d1a0d&cardColor=161825&borderColor=2a2b3d&textColor=e6edf3&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
                 className="w-full h-full border-0"
                 title="SquirrelSwap Pro — PulseChain DEX Aggregator"
                 allow="clipboard-write; clipboard-read"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-popups-to-escape-sandbox"
+  
                 loading="lazy"
               />
             </div>
@@ -544,27 +544,98 @@ export default function Swap() {
         </div>
       </div>
 
-      {/* SquirrelSwap Pro Widget — PulseChain DEX Aggregator (12 DEXes) */}
-      {chainId === 369 && (
-        <div className="mt-8">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xl">🐿️</span>
-            <h2 className="text-base font-bold text-foreground">SquirrelSwap Pro</h2>
-            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20 font-medium">
-              12 DEXes · Best Rates
+      {/* ═══ DIVIDER ═══ */}
+      <div className="flex items-center gap-3 mt-8">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Cross-Chain Bridge</span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
+      {/* LibertySwap — Cross-Chain USDC Bridge (PulseChain ↔ BASE) */}
+      <div className="mt-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <span className="text-xl">🗽</span>
+            <h2 className="text-lg font-bold text-foreground">Liberty Swap</h2>
+            <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--hero-green)]/10 text-[var(--hero-green)] border border-[var(--hero-green)]/20 font-medium">
+              Cross-Chain · USDC Bridge
             </span>
           </div>
-          <p className="text-xs text-muted-foreground mb-3">
-            Advanced aggregator with limit orders, DCA, and batch swaps across PulseX, 9mm, PHUX & more.
-          </p>
-          <div
-            className="rounded-2xl overflow-hidden border border-[var(--hero-orange)]/20"
-            style={{ minHeight: 600 }}
+          <a
+            href="https://libertyswap.finance/"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
-            <SquirrelWidget tokenOut={tokenOut.address} />
-          </div>
+            Open Full App <ExternalLink className="w-3 h-3" />
+          </a>
         </div>
-      )}
+        <p className="text-xs text-muted-foreground mb-3">
+          Bridge USDC between PulseChain and BASE — 1:1 rate, 0.3% fee, gasless mode available. Powered by Railgun privacy protocol.
+        </p>
+        <Card className="bg-card border-border overflow-hidden">
+          <div className="p-6 space-y-6">
+            {/* Bridge Visual */}
+            <div className="flex items-center justify-center gap-4 py-6">
+              <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-secondary/50 border border-border min-w-[120px]">
+                <div className="w-12 h-12 rounded-full bg-blue-500/20 flex items-center justify-center">
+                  <span className="text-2xl">🔵</span>
+                </div>
+                <span className="text-sm font-semibold text-foreground">BASE</span>
+                <span className="text-xs text-muted-foreground">USDC</span>
+              </div>
+              <div className="flex flex-col items-center gap-1">
+                <div className="flex items-center gap-1 text-[var(--hero-green)]">
+                  <ArrowLeftRight className="w-6 h-6" />
+                </div>
+                <span className="text-xs text-muted-foreground font-medium">1:1 Rate</span>
+              </div>
+              <div className="flex flex-col items-center gap-2 p-4 rounded-xl bg-secondary/50 border border-border min-w-[120px]">
+                <div className="w-12 h-12 rounded-full bg-purple-500/20 flex items-center justify-center">
+                  <span className="text-2xl">⚡</span>
+                </div>
+                <span className="text-sm font-semibold text-foreground">PulseChain</span>
+                <span className="text-xs text-muted-foreground">USDC</span>
+              </div>
+            </div>
+            {/* Features */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-secondary/30 border border-border/50">
+                <Zap className="w-5 h-5 text-[var(--hero-green)]" />
+                <span className="text-xs font-medium text-foreground">Gasless</span>
+                <span className="text-[10px] text-muted-foreground text-center">No gas required</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-secondary/30 border border-border/50">
+                <Shield className="w-5 h-5 text-[var(--hero-orange)]" />
+                <span className="text-xs font-medium text-foreground">Private</span>
+                <span className="text-[10px] text-muted-foreground text-center">Railgun protocol</span>
+              </div>
+              <div className="flex flex-col items-center gap-1.5 p-3 rounded-lg bg-secondary/30 border border-border/50">
+                <Clock className="w-5 h-5 text-blue-400" />
+                <span className="text-xs font-medium text-foreground">2-3 min</span>
+                <span className="text-[10px] text-muted-foreground text-center">Bridge time</span>
+              </div>
+            </div>
+            {/* Fee info */}
+            <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-secondary/20 border border-border/50">
+              <span className="text-sm text-muted-foreground">Protocol Fee</span>
+              <span className="text-sm font-semibold text-foreground">0.3%</span>
+            </div>
+            {/* CTA Button */}
+            <a
+              href="https://libertyswap.finance/"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity"
+            >
+              <span>🗽</span> Open Liberty Swap <ExternalLink className="w-4 h-4" />
+            </a>
+          </div>
+        </Card>
+        <p className="text-xs text-muted-foreground text-center mt-2">
+          Powered by Liberty Finance — Intent-based cross-chain swaps with Railgun privacy
+        </p>
+      </div>
     </div>
   );
 }

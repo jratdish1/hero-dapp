@@ -109,7 +109,7 @@ const UTILITY_FEATURES = [
   { title: "Diamond Hands Rewards", description: "The longer you hold your NFT + tokens, the more you earn. Time-weighted staking multiplier.", icon: Clock, status: "Phase 1" },
   { title: "Governance Power", description: "NFT holders get boosted voting power in DAO proposals. Officers get 2x, Generals get 5x.", icon: Users, status: "Phase 2" },
   { title: "Exclusive Airdrops", description: "Periodic airdrops of HERO, VETS, and partner tokens exclusively to NFT holders.", icon: Zap, status: "Phase 2" },
-  { title: "Staking Boost", description: "NFT holders receive boosted APY on all farm staking pools. Rank determines boost percentage.", icon: Flame, status: "Phase 3" },
+  { title: "Staking Boost", description: "NFT holders receive boosted APY on all staking pools. Rank determines boost percentage.", icon: Flame, status: "Phase 3" },
   { title: "Rank Promotion", description: "As your wallet accumulates more HERO, your NFT rank can be upgraded — reflecting your true commitment.", icon: Award, status: "Phase 3" },
 ];
 

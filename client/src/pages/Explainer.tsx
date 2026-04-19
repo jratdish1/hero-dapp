@@ -150,52 +150,28 @@ export default function Explainer() {
         </div>
       </div>
 
-      {/* Video Section */}
+      {/* Video Section — HERO Explainer */}
       <Card className="bg-card/60 border-border overflow-hidden">
         <CardHeader className="pb-3">
           <CardTitle className="text-foreground flex items-center gap-2">
             <Play className="w-5 h-5 text-orange-400" />
-            HERO Ecosystem Overview
+            HERO Ecosystem Explainer
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           <div className="aspect-video bg-black relative">
-            {videoPlaying ? (
-              <iframe
-                src="https://www.youtube.com/embed/zpwKPiA1r20?autoplay=1&rel=0"
-                className="w-full h-full"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                allowFullScreen
-                title="HERO Ecosystem Video"
-              />
-            ) : (
-              <div
-                className="w-full h-full relative cursor-pointer group"
-                onClick={() => setVideoPlaying(true)}
-              >
-                <img src={HERO_SUNSET} alt="Video Thumbnail" className="w-full h-full object-cover" />
-                <div className="absolute inset-0 bg-black/50 group-hover:bg-black/40 transition-colors flex items-center justify-center">
-                  <div className="w-20 h-20 rounded-full bg-orange-500/90 hover:bg-orange-400 flex items-center justify-center transition-all group-hover:scale-110 shadow-xl shadow-orange-500/30">
-                    <Play className="w-10 h-10 text-white ml-1" />
-                  </div>
-                </div>
-                <div className="absolute bottom-4 left-4 right-4 flex items-center justify-between">
-                  <Badge className="bg-black/70 text-white border-0">Watch on YouTube</Badge>
-                  <a
-                    href={YOUTUBE_URL}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-orange-400 text-xs flex items-center gap-1 hover:text-orange-300"
-                    onClick={(e) => e.stopPropagation()}
-                  >
-                    @LIFEWAVEPATCH1 <ExternalLink className="w-3 h-3" />
-                  </a>
-                </div>
-              </div>
-            )}
+            <video
+              className="w-full h-full object-contain"
+              controls
+              playsInline
+              preload="metadata"
+              poster={HERO_SUNSET}
+            >
+              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/dEZmxFOiNqyoGcmG.mp4" type="video/mp4" />
+            </video>
           </div>
           <div className="p-4 flex items-center justify-between border-t border-border">
-            <p className="text-muted-foreground text-sm">Full ecosystem explainer, tutorials, and community updates</p>
+            <p className="text-muted-foreground text-sm">Full ecosystem explainer — Built for Veterans by Veterans</p>
             <a href={YOUTUBE_URL} target="_blank" rel="noopener noreferrer">
               <Button variant="outline" size="sm" className="gap-2">
                 <Play className="w-4 h-4 text-red-500" />

@@ -236,7 +236,7 @@ export default function Treasury() {
               <TrendingUp className="w-4 h-4 text-green-400" />
               <p className="text-foreground font-semibold text-sm">Revenue Sources</p>
             </div>
-            <p className="text-muted-foreground text-xs">NFT sales (85% to treasury), swap fees, farm rewards, and protocol revenue all flow into the DAO treasury.</p>
+            <p className="text-muted-foreground text-xs">NFT sales (85% to treasury), swap fees, staking rewards, and protocol revenue all flow into the DAO treasury.</p>
           </CardContent>
         </Card>
         <Card className="bg-card/60 border-border">

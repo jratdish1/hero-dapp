@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   FARM_CONTRACTS_PLS, FARM_CONTRACTS_BASE, FARM_POOLS_PLS,
-  HERO_TOKEN_PLS, VETS_TOKEN_PLS, SERVICE_BRANCHES,
+  HERO_TOKEN_PLS, VETS_TOKEN_PLS, SERVICE_BRANCHES, CDN_ASSETS,
 } from "@shared/tokens";
 
 // ─── Flywheel Step Component ─────────────────────────────────────────────
@@ -172,7 +172,7 @@ export default function Tokenomics() {
             <CardContent className="p-0">
               <div className="relative aspect-video bg-black rounded-xl overflow-hidden">
                 <video
-                  src="/tokenomics_video.mp4"
+                  src={CDN_ASSETS.tokenomicsVideo}
                   autoPlay
                   loop
                   muted
