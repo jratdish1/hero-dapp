@@ -1,9 +1,3 @@
-/*
- * HEROBASE.IO — Live Price Ticker
- * Fetches real-time prices from DEX Screener API
- * Supports PulseChain and BASE chain tokens
- * Auto-refreshes every 30 seconds
- */
 import { useState, useEffect, useCallback } from 'react';
 
 interface PairConfig {
@@ -12,14 +6,12 @@ interface PairConfig {
   tokenAddress?: string;
   chain: string;
 }
-
 interface PriceData {
   price: number;
   change24h: number;
   volume24h: number;
   fdv: number;
 }
-
 const PULSECHAIN_PAIRS: PairConfig[] = [
   { symbol: 'EMIT', pairAddress: '0x1d05cc449b643633b013cbfb939e70cc0d37f2a3', chain: 'pulsechain' },
   { symbol: 'RHINO', pairAddress: '0x8e030e42fb8d7e1f21e827cea2fb91325f3f6b00', chain: 'pulsechain' },
@@ -32,7 +24,6 @@ const BASE_PAIRS: PairConfig[] = [
   { symbol: 'jesse', tokenAddress: '0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59', chain: 'base' },
 ];
 const REFRESH_INTERVAL = 30000;
-
 async function fetchPairPrice(chain: string, pairAddress: string): Promise<PriceData | null> {
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/pairs/${chain}/${pairAddress}`);
@@ -50,7 +41,6 @@ async function fetchPairPrice(chain: string, pairAddress: string): Promise<Price
   }
   return null;
 }
-
 async function fetchTokenPrice(chain: string, tokenAddress: string): Promise<PriceData | null> {
   try {
     const res = await fetch(`https://api.dexscreener.com/latest/dex/tokens/${tokenAddress}`);
@@ -72,7 +62,6 @@ async function fetchTokenPrice(chain: string, tokenAddress: string): Promise<Pri
   }
   return null;
 }
-
 function formatPrice(price: number): string {
   if (price === 0) return '$0.00';
   if (price < 0.001) return '$' + price.toFixed(8);
@@ -80,17 +69,14 @@ function formatPrice(price: number): string {
   if (price < 1000) return '$' + price.toFixed(2);
   return '$' + price.toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
-
 function formatVolume(vol: number): string {
   if (vol >= 1e6) return '$' + (vol / 1e6).toFixed(1) + 'M';
   if (vol >= 1e3) return '$' + (vol / 1e3).toFixed(1) + 'K';
   return '$' + vol.toFixed(0);
 }
-
 interface LiveTickerProps {
   activeChain?: string;
 }
-
 export default function LiveTicker({ activeChain = 'pulsechain' }: LiveTickerProps) {
   const [prices, setPrices] = useState<Record<string, PriceData>>({});
   const [loading, setLoading] = useState(true);
@@ -124,19 +110,22 @@ export default function LiveTicker({ activeChain = 'pulsechain' }: LiveTickerPro
     );
   }
   return (
-    <div className="flex items-center gap-6 overflow-x-auto py-2 px-4 bg-black/20 scrollbar-hide">
+    <div
+      className="flex items-center gap-4 sm:gap-6 overflow-x-auto py-2 px-3 sm:px-4 bg-black/20 scrollbar-hide"
+      style={{ WebkitOverflowScrolling: 'touch', msOverflowStyle: 'none', scrollbarWidth: 'none' }}
+    >
       {pairs.map(({ symbol }) => {
         const data = prices[symbol];
         if (!data) return null;
         const isUp = data.change24h >= 0;
         return (
-          <div key={symbol} className="flex items-center gap-2 shrink-0">
-            <span className="text-white font-bold text-xs">{symbol}</span>
-            <span className="text-white text-xs">{formatPrice(data.price)}</span>
-            <span className={`text-xs font-medium ${isUp ? 'text-green-400' : 'text-red-400'}`}>
+          <div key={symbol} className="flex items-center gap-1.5 sm:gap-2 shrink-0 min-w-0">
+            <span className="text-white font-bold text-[10px] sm:text-xs whitespace-nowrap">{symbol}</span>
+            <span className="text-white text-[10px] sm:text-xs whitespace-nowrap">{formatPrice(data.price)}</span>
+            <span className={`text-[10px] sm:text-xs font-medium whitespace-nowrap ${isUp ? 'text-green-400' : 'text-red-400'}`}>
               {isUp ? '+' : ''}{data.change24h.toFixed(1)}%
             </span>
-            <span className="text-white/40 text-xs">Vol: {formatVolume(data.volume24h)}</span>
+            <span className="text-white/40 text-[10px] sm:text-xs whitespace-nowrap hidden xs:inline">Vol: {formatVolume(data.volume24h)}</span>
           </div>
         );
       })}

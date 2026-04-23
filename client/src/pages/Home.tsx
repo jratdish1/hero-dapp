@@ -165,7 +165,7 @@ export default function Home() {
             <Link href="/swap" className="text-muted-foreground hover:text-foreground transition-colors">Swap</Link>
             <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link href="/portfolio" className="text-muted-foreground hover:text-foreground transition-colors">Portfolio</Link>
-            <Link href="/swap" className="px-3 py-1 rounded-md bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/30 text-[var(--hero-orange)] font-semibold hover:bg-[var(--hero-orange)]/20 transition-colors">dApp</Link>
+            <Link href="/bootcamp" className="px-3 py-1 rounded-md bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/30 text-[var(--hero-orange)] font-semibold hover:bg-[var(--hero-orange)]/20 transition-colors">Boot Camp</Link>
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
             <Link href="/limits" className="text-muted-foreground hover:text-foreground transition-colors">Limits</Link>
             <Link href="/stake" className="text-muted-foreground hover:text-foreground transition-colors">Stake</Link>

@@ -262,11 +262,7 @@
 ::-webkit-scrollbar-thumb:hover { background: oklch(0.45 0.015 260); }
 
 /* Hide platform preview mode banner */
-[data-manus-banner],
-[class*="preview-mode"],
-iframe[src*="manus"] {
-  display: none !important;
-}
+/* Manus references removed */
 
 /* OpenTang-inspired animations */
 @keyframes orangePulse {

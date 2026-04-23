@@ -410,8 +410,8 @@ export const CDN_ASSETS = {
 
 // ─── Live DApp URLs ─────────────────────────────────────────────────────
 export const LIVE_DAPP_URLS = {
-  stake: "https://herofarm-445vqaqz.manus.space",
-  dao: "https://herodapp-parejpux.manus.space",
+  stake: "https://herobase.io/bootcamp",
+  dao: "https://herobase.io/dao",
 } as const;
 
 // ─── Service Branch Ribbons ─────────────────────────────────────────────

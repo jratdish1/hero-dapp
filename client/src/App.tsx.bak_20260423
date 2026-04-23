@@ -15,7 +15,7 @@ import Dashboard from "./pages/Dashboard";
 import Portfolio from "./pages/Portfolio";
 import DcaOrders from "./pages/DcaOrders";
 import LimitOrders from "./pages/LimitOrders";
-import Approvals from "./pages/ApprovalsEnhanced";
+import Approvals from "./pages/Approvals";
 import Stake from "./pages/Stake";
 import Blog from "./pages/Blog";
 import AiAssistant from "./pages/AiAssistant";
@@ -33,9 +33,6 @@ import ExplainerVideoModal from "./components/ExplainerVideoModal";
 import BetaDisclaimer from "./pages/BetaDisclaimer";
 import AbleBots from "./pages/AbleBots";
 import FloatingSocial from "./components/FloatingSocial";
-import EcosystemDirectory from "./pages/EcosystemDirectory";
-import DexAnalytics from "./pages/DexAnalytics";
-import BuyAndBurn from "./pages/BuyAndBurn";
 function Router() {
   usePageSEO();
   return (
@@ -67,9 +64,6 @@ function Router() {
       <Route path="/bots" component={() => <AppLayout><AbleBots /></AppLayout>} />
       <Route path="/start" component={() => <AppLayout><Onboarding /></AppLayout>} />
       <Route path="/explainer" component={() => <AppLayout><Explainer /></AppLayout>} />
-      <Route path="/directory" component={() => <AppLayout><EcosystemDirectory /></AppLayout>} />
-      <Route path="/dex-analytics" component={() => <AppLayout><DexAnalytics /></AppLayout>} />
-      <Route path="/burn" component={() => <AppLayout><BuyAndBurn /></AppLayout>} />
       <Route path="/beta-disclaimer" component={BetaDisclaimer} />
       <Route path="/disclaimer" component={BetaDisclaimer} />
       {/* Redirect aliases for common URL variants */}
@@ -81,8 +75,6 @@ function Router() {
       <Route path="/ai-assistant">{() => <Redirect to="/ai" />}</Route>
       <Route path="/able-bots">{() => <Redirect to="/bots" />}</Route>
       <Route path="/liberty-swap">{() => <Redirect to="/swap" />}</Route>
-      <Route path="/buy-and-burn">{() => <Redirect to="/burn" />}</Route>
-      <Route path="/pools">{() => <Redirect to="/dex-analytics" />}</Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

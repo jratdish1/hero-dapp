@@ -81,7 +81,7 @@ function buildCspDirectives() {
     "https://*.walletconnect.com", "https://*.walletconnect.org",
     "https://*.reown.com",
     "https://*.manus.computer", "https://*.manus.space",
-    "https://api.manus.im",
+    "https://api.manus.im", "https://switch.win", "https://*.switch.win",
     ...(isDev ? ["ws:", "wss:"] : []),
   ];
 
@@ -92,7 +92,7 @@ function buildCspDirectives() {
     fontSrc: ["'self'", "https://fonts.gstatic.com"],
     imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
     connectSrc,
-    frameSrc: ["'self'", "https://*.walletconnect.com", "https://*.walletconnect.org", "https://app.safe.global", "https://app.squirrelswap.pro", "https://*.squirrelswap.pro", "https://transferto.xyz", "https://*.transferto.xyz", "https://www.youtube.com", "https://youtube.com", "https://libertyswap.finance"],
+    frameSrc: ["'self'", "https://*.walletconnect.com", "https://*.walletconnect.org", "https://app.safe.global", "https://app.squirrelswap.pro", "https://*.squirrelswap.pro", "https://transferto.xyz", "https://*.transferto.xyz", "https://www.youtube.com", "https://youtube.com", "https://libertyswap.finance", "https://switch.win", "https://*.switch.win"],
     mediaSrc: ["'self'", "https:", "blob:"],
     objectSrc: ["'none'"],
     baseUri: ["'self'"],

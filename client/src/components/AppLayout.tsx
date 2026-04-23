@@ -39,6 +39,10 @@ import {
   Star,
   Coins,
   Layers,
+  Flame,
+  Droplets,
+  Search,
+  Fuel,
 } from "lucide-react";
 
 // CDN asset URLs
@@ -60,6 +64,7 @@ const NAV_ITEMS = [
   { path: "/stake", label: "Stake (PulseChain)", icon: Sprout },
   { path: "/stake/base", label: "Stake (BASE)", icon: Layers },
   { path: "/stake/dai", label: "Stake HERO → DAI", icon: Coins },
+  { path: "/bootcamp", label: "Boot Camp", icon: Sprout },
   { path: "/bots", label: "ABLE Bots", icon: Bot },
   { path: "/approvals", label: "Approvals", icon: Shield },
   { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
@@ -68,6 +73,9 @@ const NAV_ITEMS = [
   { path: "/community", label: "Community Hub", icon: ImageIcon },
   { path: "/explainer", label: "Explainer", icon: PlayCircle },
   { path: "/ai", label: "AI Assistant", icon: Bot },
+  { path: "/directory", label: "Ecosystem Directory", icon: Search },
+  { path: "/dex-analytics", label: "DEX Analytics", icon: Droplets },
+  { path: "/burn", label: "Buy & Burn", icon: Flame },
   { path: "/liberty-swap", label: "Liberty Swap", icon: Globe, external: "https://libertyswap.finance/" },
 ];
 

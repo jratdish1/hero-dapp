@@ -127,6 +127,7 @@ interface FarmPool {
 interface PartnerFarm {
   id: string;
   name: string;
+  logoUrl?: string;
   url: string;
   description: string;
   tokenSymbol: string;
@@ -144,6 +145,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "emit",
     name: "Emit Farm",
+    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/DBvpcPnqKXjgslhY.png",
     url: "https://emit.farm/farms",
     description:
       "Decentralized yield farming on PulseChain with DAO governance, NFT identity, and community-driven farm proposals.",
@@ -163,9 +165,26 @@ const PARTNER_FARMS: PartnerFarm[] = [
       { pair: "EMIT / pHEX", token0: "EMIT", token1: "pHEX", apr: "149.72%", type: "LP V2", isHeroVets: false },
     ],
   },
+    {
+    id: "emit-factory",
+    name: "EMIT Factory",
+    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/DBvpcPnqKXjgslhY.png",
+    url: "https://emit.farm/factory",
+    description:
+      "EMIT Factory — Create and manage custom yield farms on PulseChain. Community-driven farm creation with DAO governance.",
+    tokenSymbol: "EMIT",
+    tokenPrice: "$1.06",
+    marketCap: "$270,199",
+    totalSupply: "254,108",
+    contractAddress: "0x0000000000000000000000000000000000000000",
+    color: "from-emerald-500 to-green-600",
+    accentColor: "#10b981",
+    pools: [],
+  },
   {
     id: "rhinofi",
     name: "RhinoFi",
+    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/OUdtSGFHDzmjjlNT.jpg",
     url: "https://www.rhinofi.win/dapp",
     description:
       "Track rewards, manage LPs, and monitor Charging Cycles. Holder earnings and LP reflections paid in WPLS.",
@@ -185,6 +204,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "trufarms",
     name: "TruFarms",
+    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/eTSpAlzgEbCDiqkL.png",
     url: "https://trufarms.io/farms",
     description:
       "Smarter staking powered by Tru2X. Single-sided staking earns eDAI from volume. Tru2X drives continuous system volume.",
@@ -202,6 +222,25 @@ const PARTNER_FARMS: PartnerFarm[] = [
       { pair: "TruFarm / DAI", token0: "TruFarm", token1: "DAI", apr: "121.04%", type: "LP V2", isHeroVets: false },
       { pair: "TruFarm / EMIT", token0: "TruFarm", token1: "EMIT", type: "LP V2", isHeroVets: false },
       { pair: "TruFarm / RHINO", token0: "TruFarm", token1: "RHINO", type: "LP V2", isHeroVets: false },
+    ],
+  },
+  {
+    id: "trudefi",
+    name: "TruDeFi",
+    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/eTSpAlzgEbCDiqkL.png",
+    url: "https://double.trudefi.io/",
+    description:
+      "TruDeFi Double — Double your staking rewards on PulseChain via TruDeFi 2X auto-compounding.",
+    tokenSymbol: "TRU",
+    tokenPrice: "$0.50",
+    marketCap: "TBD",
+    totalSupply: "TBD",
+    contractAddress: "0x0000000000000000000000000000000000000000",
+    color: "from-blue-500 to-cyan-600",
+    accentColor: "#3b82f6",
+    pools: [
+      { pair: "TRU Double Staking", token0: "TRU", token1: "eDAI", type: "Staking", isHeroVets: false, note: "Double yield via TruDeFi" },
+      { pair: "HERO / TRU", token0: "HERO", token1: "TRU", type: "LP V2", isHeroVets: true, note: "Earn TRU rewards" },
     ],
   },
 ];
@@ -235,9 +274,11 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-[#e8b84b] to-[#c08020] flex items-center justify-center">
-              <Sprout className="w-4 h-4 text-foreground" />
-            </div>
+            <img
+              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png"
+              alt="HERO"
+              className="w-8 h-8 rounded-lg object-contain"
+            />
             <div>
               <h4 className="font-bold text-foreground">{pool.name}</h4>
               <p className="text-[10px] text-muted-foreground">Pool #{pool.id}</p>
@@ -466,7 +507,16 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
           <div className="absolute inset-0 bg-background/90" />
           <div className="relative z-10">
             <div className="flex items-center justify-between mb-3">
-              <div>
+              <div className="flex items-center gap-3">
+                {farm.logoUrl && (
+                  <img
+                    src={farm.logoUrl}
+                    alt={`${farm.name} logo`}
+                    className="w-10 h-10 rounded-full object-contain border border-border/30"
+                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                  />
+                )}
+                <div>
                 <h2 className="text-xl font-bold text-foreground flex items-center gap-2">
                   {farm.name}
                   <Badge
@@ -482,6 +532,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
                 <p className="text-sm text-muted-foreground mt-1">
                   {farm.description}
                 </p>
+                </div>
               </div>
               <a href={farm.url} target="_blank" rel="noopener noreferrer">
                 <Button
@@ -619,7 +670,7 @@ export default function Farm() {
           ═══════════════════════════════════════════════════════════════════ */}
       {isBase ? (
         <>
-          {/* BASE Farm DApp Banner */}
+          {/* BASE Boot Camp Banner */}
           <Card className="border-[#0052FF]/30 bg-gradient-to-r from-[#0a1628] to-[#161825] overflow-hidden relative">
             <div
               className="absolute inset-0 opacity-10 bg-cover bg-center"
@@ -842,7 +893,7 @@ export default function Farm() {
               PULSECHAIN VIEW (original)
               ═══════════════════════════════════════════════════════════════ */}
 
-          {/* Live Farm DApp Banner */}
+          {/* Live Boot Camp Banner */}
           <Card className="border-[#e8b84b]/30 bg-gradient-to-r from-[#0d0e14] to-[#161825] overflow-hidden relative">
             <div
               className="absolute inset-0 opacity-10 bg-cover bg-center"
@@ -857,7 +908,7 @@ export default function Farm() {
                     WebkitTextFillColor: "transparent",
                     backgroundClip: "text",
                   }}>
-                    HERO Farm DApp
+                    HERO Boot Camp
                   </h2>
                   <p className="text-sm text-muted-foreground mt-1">
                     Full staking interface with Zap, Buy & Burn, Leaderboard, AI Chat, and more
@@ -877,7 +928,7 @@ export default function Farm() {
                 <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
                   <Button className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-bold tracking-wider text-base px-8 py-3">
                     <ArrowUpRight className="w-5 h-5 mr-2" />
-                    Launch Farm DApp
+                    Launch Boot Camp
                   </Button>
                 </a>
               </div>
@@ -988,7 +1039,11 @@ export default function Farm() {
                   value={farm.id}
                   className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]"
                 >
-                  <Sprout className="w-3.5 h-3.5 mr-1.5" />
+                  {farm.logoUrl ? (
+                    <img src={farm.logoUrl} alt="" className="w-4 h-4 rounded-full object-contain mr-1.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                  ) : (
+                    <Sprout className="w-3.5 h-3.5 mr-1.5" />
+                  )}
                   {farm.name}
                 </TabsTrigger>
               ))}
@@ -1095,7 +1150,7 @@ export default function Farm() {
                     key={`${pool.farmName}-${pool.pair}`}
                     className="relative rounded-xl border border-[var(--hero-orange)]/30 bg-[var(--hero-orange)]/5 p-4 hover:border-[var(--hero-orange)]/50 transition-all"
                   >
-                    <div className="absolute -top-2.5 left-3">
+                    <div className="absolute -top-2.5 left-3 flex items-center gap-1">
                       <Badge className={`bg-gradient-to-r ${pool.farmColor} text-foreground text-[10px] px-2 py-0.5 border-0`}>
                         {pool.farmName}
                       </Badge>
@@ -1142,7 +1197,7 @@ export default function Farm() {
                   <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
                     <Button size="sm" className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c]">
                       <ArrowUpRight className="w-3.5 h-3.5 mr-1.5" />
-                      HERO Farm DApp
+                      HERO Boot Camp
                     </Button>
                   </a>
                 </CardContent>
@@ -1156,6 +1211,29 @@ export default function Farm() {
               </TabsContent>
             ))}
           </Tabs>
+
+          {/* DeFi Yield Strategies — Closed Loop Ecosystem */}
+          <Card className="mt-8 border-[#e8b84b]/20 bg-card/50 overflow-hidden">
+            <CardContent className="p-0">
+              <div className="p-5 pb-3">
+                <div className="flex items-center gap-2 mb-1">
+                  <TrendingUp className="w-5 h-5" style={{ color: "#e8b84b" }} />
+                  <h3 className="text-lg font-bold text-foreground">Closed-Loop DeFi Ecosystem</h3>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  Put your tokens to work — provide LP, earn rewards, compound earnings. Every action feeds back into the HERO ecosystem.
+                </p>
+              </div>
+              <div className="px-5 pb-5">
+                <img
+                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/lvDhqDUcVwjudSTG.jpeg"
+                  alt="DeFi Yield Strategies — Closed Loop Ecosystem showing TruFarms, EMIT, SSS Pools, and compound earnings flow"
+                  className="w-full rounded-xl border border-border/30"
+                  loading="lazy"
+                />
+              </div>
+            </CardContent>
+          </Card>
         </>
       )}
     </div>
