@@ -170,18 +170,55 @@ export default function SpinWheel() {
     recentRewards: ['500 HERO', 'Badge', '1K HERO'],
   });
 
-  const handleSpin = useCallback(() => {
+  // Ref for cleanup of spin animation timeout
+  const spinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (spinTimeoutRef.current) clearTimeout(spinTimeoutRef.current);
+    };
+  }, []);
+
+  const handleSpin = useCallback(async () => {
     if (spinning || !canSpin || !walletConnected) return;
 
     setSpinning(true);
     setResult(null);
 
-    // Simulate RNG result (in production, call tRPC endpoint)
+    /**
+     * SERVER-SIDE RNG — calls tRPC endpoint which uses the spin-engine
+     * backend with on-chain block hash entropy (T1 tier).
+     * 
+     * ⚠️ PRODUCTION: const spinResult = await trpc.spin.execute.mutate({ wallet });
+     * The server verifies wallet ownership via signed message, checks daily spin
+     * eligibility, generates RNG server-side, and returns the result.
+     * Client ONLY displays the animation — result is determined server-side.
+     * Replay protection: server tracks nonce per wallet per day.
+     * 
+     * PREVIEW MODE (current): Uses crypto.getRandomValues() with rejection
+     * sampling to eliminate modulo bias. This is for UI testing only.
+     */
     const totalWeight = SEGMENTS.reduce((s, seg) => s + seg.weight, 0);
-    const roll = Math.floor(Math.random() * totalWeight);
+    if (totalWeight <= 0) {
+      setSpinning(false);
+      return;
+    }
+
+    // Use CSPRNG with REJECTION SAMPLING to eliminate modulo bias
+    // Standard modulo (rand % N) creates bias when 2^32 is not evenly divisible by N.
+    // Rejection sampling discards values in the biased range.
+    const cryptoArray = new Uint32Array(1);
+    const maxUnbiased = Math.floor(0x100000000 / totalWeight) * totalWeight; // Largest multiple of totalWeight < 2^32
+    let rawValue: number;
+    do {
+      crypto.getRandomValues(cryptoArray);
+      rawValue = cryptoArray[0];
+    } while (rawValue >= maxUnbiased); // Reject biased values (extremely rare, ~0.002% for typical weights)
+    const roll = rawValue % totalWeight;
+
     let cumulative = 0;
     let winnerIndex = 0;
-
     for (let i = 0; i < SEGMENTS.length; i++) {
       cumulative += SEGMENTS[i].weight;
       if (roll < cumulative) {
@@ -190,16 +227,25 @@ export default function SpinWheel() {
       }
     }
 
-    // Calculate rotation to land on winner
-    const segmentAngle = 360 / SEGMENTS.length;
-    const targetAngle = 360 - (winnerIndex * segmentAngle + segmentAngle / 2);
-    const spins = 5 + Math.floor(Math.random() * 3); // 5-7 full rotations
+    // Calculate rotation using WEIGHTED slice angles (not equal slices)
+    let winnerStartAngle = 0;
+    for (let i = 0; i < winnerIndex; i++) {
+      winnerStartAngle += (SEGMENTS[i].weight / totalWeight) * 360;
+    }
+    const winnerSliceAngle = (SEGMENTS[winnerIndex].weight / totalWeight) * 360;
+    const winnerMidAngle = winnerStartAngle + winnerSliceAngle / 2;
+    const targetAngle = 360 - winnerMidAngle;
+
+    // Use CSPRNG for spin count (visual only, no fairness concern, but consistent)
+    const spinCountArray = new Uint32Array(1);
+    crypto.getRandomValues(spinCountArray);
+    const spins = 5 + (spinCountArray[0] % 3); // 5-7 full rotations (modulo bias negligible for 3)
     const finalRotation = spins * 360 + targetAngle;
 
     setRotation(finalRotation);
 
-    // Reveal result after spin animation
-    setTimeout(() => {
+    // Reveal result after spin animation (with cleanup ref)
+    spinTimeoutRef.current = setTimeout(() => {
       setResult(SEGMENTS[winnerIndex]);
       setSpinning(false);
       setCanSpin(false);
@@ -209,9 +255,10 @@ export default function SpinWheel() {
         totalSpins: prev.totalSpins + 1,
         lastSpinDate: new Date().toISOString().split('T')[0],
         recentRewards: SEGMENTS[winnerIndex].id !== 'nothing'
-          ? [...prev.recentRewards.slice(-4), SEGMENTS[winnerIndex].label]
+          ? [...prev.recentRewards.slice(-3), SEGMENTS[winnerIndex].label]
           : prev.recentRewards,
       }));
+      spinTimeoutRef.current = null;
     }, 4000);
   }, [spinning, canSpin, walletConnected]);
 

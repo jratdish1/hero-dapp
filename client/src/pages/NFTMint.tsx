@@ -11,14 +11,18 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 
-// ─── Types ───────────────────────────────────────────────────────
+// Import shared trait data from engine (DRY — single source of truth)
+import { HERO_TRAIT_CATEGORIES, RARITY_WEIGHTS as ENGINE_RARITY_WEIGHTS } from '../lib/nft-trait-constants';
+import type { RarityTier, TraitCategory } from '../lib/nft-trait-constants';
 
-type RarityTier = 'Common' | 'Uncommon' | 'Rare' | 'Epic' | 'Legendary';
+// ─── Types ───────────────────────────────────────────────────────
+// RarityTier and TraitCategory imported from nft-trait-engine (single source of truth)
 
 interface PreviewTrait {
   category: string;
   trait: string;
   rarity: RarityTier;
+  isPreview: boolean; // Always true for preview — actual mint uses on-chain RNG
 }
 
 interface MintedNFT {
@@ -40,13 +44,8 @@ const RARITY_COLORS: Record<RarityTier, { bg: string; text: string; border: stri
   Legendary: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-500', glow: 'shadow-yellow-500/40' },
 };
 
-const RARITY_WEIGHTS: Record<RarityTier, number> = {
-  Common: 50,
-  Uncommon: 25,
-  Rare: 15,
-  Epic: 7,
-  Legendary: 3,
-};
+// Use shared RARITY_WEIGHTS from engine (DRY)
+const RARITY_WEIGHTS = ENGINE_RARITY_WEIGHTS;
 
 const CATEGORY_ICONS: Record<string, string> = {
   Background: '🌄',
@@ -69,111 +68,31 @@ function simpleHash(str: string): number {
   return Math.abs(hash);
 }
 
+/**
+ * Generate preview traits using CLIENT-SIDE deterministic hash.
+ * ⚠️ PREVIEW ONLY — NOT the actual mint result.
+ * Uses HERO_TRAIT_CATEGORIES from shared engine (single source of truth).
+ */
 function getPreviewTraits(tokenId: number): PreviewTrait[] {
-  const categories = [
-    {
-      name: 'Background',
-      options: [
-        { name: 'Desert Storm', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Urban Camo', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Forest Green', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Ocean Blue', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Sunset Gold', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Arctic White', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Neon Pulse', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Holographic', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Blockchain Matrix', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'American Flag Animated', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-    {
-      name: 'Outfit',
-      options: [
-        { name: 'BDU Woodland', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'BDU Desert', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'PT Gear', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Dress Blues', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Flight Suit', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Ghillie Suit', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Tactical Black Ops', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Space Force Suit', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Gold Plated Armor', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Mjolnir Power Armor', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-    {
-      name: 'Weapon',
-      options: [
-        { name: 'M16A4', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'M4 Carbine', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Ka-Bar Knife', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'M249 SAW', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'M40 Sniper', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Tomahawk', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Minigun', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Plasma Rifle', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Crayon Launcher', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Infinity Gauntlet', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-    {
-      name: 'Rank',
-      options: [
-        { name: 'Private (E-1)', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Lance Corporal (E-3)', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Corporal (E-4)', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Sergeant (E-5)', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Staff Sergeant (E-6)', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Gunnery Sergeant (E-7)', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Master Sergeant (E-8)', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Sergeant Major (E-9)', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Lieutenant (O-1)', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'General (O-10)', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-    {
-      name: 'Badge',
-      options: [
-        { name: 'Marksman', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Sharpshooter', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Expert Rifleman', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Combat Action Ribbon', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Bronze Star', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Silver Star', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Navy Cross', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Purple Heart', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Medal of Honor', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-    {
-      name: 'Special',
-      options: [
-        { name: 'None', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Dog Tags', rarity: 'Common' as RarityTier, weight: 50 },
-        { name: 'Cigar', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'Aviator Sunglasses', rarity: 'Uncommon' as RarityTier, weight: 25 },
-        { name: 'War Paint', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Crypto Tattoo', rarity: 'Rare' as RarityTier, weight: 15 },
-        { name: 'Holographic Shield', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'Eagle Companion', rarity: 'Epic' as RarityTier, weight: 7 },
-        { name: 'PulseChain Aura', rarity: 'Legendary' as RarityTier, weight: 3 },
-      ],
-    },
-  ];
-
-  return categories.map(cat => {
+  return HERO_TRAIT_CATEGORIES.map(cat => {
+    if (!cat.options || cat.options.length === 0) {
+      throw new Error(`Category "${cat.name}" has no options`);
+    }
     const totalWeight = cat.options.reduce((sum, opt) => sum + opt.weight, 0);
+    if (totalWeight <= 0) {
+      throw new Error(`Category "${cat.name}" has zero total weight — cannot generate preview`);
+    }
     const roll = simpleHash(`preview-${tokenId}-${cat.name}`) % totalWeight;
 
     let cumulative = 0;
     for (const option of cat.options) {
       cumulative += option.weight;
       if (roll < cumulative) {
-        return { category: cat.name, trait: option.name, rarity: option.rarity };
+        return { category: cat.name, trait: option.name, rarity: option.rarity as RarityTier, isPreview: true };
       }
     }
-    const last = cat.options[cat.options.length - 1];
-    return { category: cat.name, trait: last.name, rarity: last.rarity };
+    // Throw instead of silently returning last item
+    throw new Error(`Preview selection failed for category ${cat.name}`);
   });
 }
 
@@ -267,7 +186,10 @@ export default function NFTMint() {
   }, [previewId]);
 
   const handleRandomize = useCallback(() => {
-    setPreviewId(Math.floor(Math.random() * 10000) + 1);
+    // Use CSPRNG instead of Math.random() for preview ID generation
+    const arr = new Uint32Array(1);
+    crypto.getRandomValues(arr);
+    setPreviewId((arr[0] % 10000) + 1);
   }, []);
 
   const handleMint = useCallback(async () => {
@@ -294,8 +216,9 @@ export default function NFTMint() {
         <h1 className="text-2xl font-bold text-white flex items-center gap-2">
           <span>🎨</span> HERO NFT Mint
         </h1>
-        <p className="text-gray-400 mt-1">
-          Provably fair trait generation — every trait is determined by on-chain randomness
+          <p className="text-gray-400 mt-1">
+          Provably fair trait generation — every trait is determined by on-chain randomness.
+          <span className="text-yellow-500 text-xs ml-1">(Preview uses client-side simulation. Actual mint uses on-chain block hash.)</span>
         </p>
       </div>
 
@@ -304,7 +227,9 @@ export default function NFTMint() {
         {/* NFT Preview */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Preview #{previewId}</h2>
+            <h2 className="text-lg font-bold text-white">Preview #{previewId}
+              <span className="ml-2 text-xs bg-yellow-900/50 text-yellow-400 border border-yellow-700 px-2 py-0.5 rounded-full">PREVIEW ONLY</span>
+            </h2>
             <button
               onClick={handleRandomize}
               className="text-sm px-3 py-1 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
