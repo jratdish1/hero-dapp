@@ -39,7 +39,7 @@ import {
   Star,
   Coins,
   Layers,
-  Flame,
+  Flame, Palette, Vote, Gift, Award, Dices,
   Droplets,
   Search,
   Fuel,
@@ -76,6 +76,11 @@ const NAV_ITEMS = [
   { path: "/directory", label: "Ecosystem Directory", icon: Search },
   { path: "/dex-analytics", label: "DEX Analytics", icon: Droplets },
   { path: "/burn", label: "Buy & Burn", icon: Flame },
+  { path: "/nft-mint", label: "NFT Mint", icon: Palette },
+  { path: "/dao-proposals", label: "DAO Proposals", icon: Vote },
+  { path: "/giveaways", label: "Giveaways", icon: Gift },
+  { path: "/holder-rewards", label: "Holder Rewards", icon: Award },
+  { path: "/spin", label: "Spin Wheel", icon: Dices },
   { path: "/liberty-swap", label: "Liberty Swap", icon: Globe, external: "https://libertyswap.finance/" },
 ];
 

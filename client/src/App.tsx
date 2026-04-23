@@ -36,6 +36,11 @@ import FloatingSocial from "./components/FloatingSocial";
 import EcosystemDirectory from "./pages/EcosystemDirectory";
 import DexAnalytics from "./pages/DexAnalytics";
 import BuyAndBurn from "./pages/BuyAndBurn";
+import NFTMint from "./pages/NFTMint";
+import DAOProposals from "./pages/DAOProposals";
+import Giveaways from "./pages/Giveaways";
+import HolderRewards from "./pages/HolderRewards";
+import SpinWheel from "./pages/SpinWheel";
 function Router() {
   usePageSEO();
   return (
@@ -70,6 +75,11 @@ function Router() {
       <Route path="/directory" component={() => <AppLayout><EcosystemDirectory /></AppLayout>} />
       <Route path="/dex-analytics" component={() => <AppLayout><DexAnalytics /></AppLayout>} />
       <Route path="/burn" component={() => <AppLayout><BuyAndBurn /></AppLayout>} />
+      <Route path="/nft-mint" component={() => <AppLayout><NFTMint /></AppLayout>} />
+      <Route path="/dao-proposals" component={() => <AppLayout><DAOProposals /></AppLayout>} />
+      <Route path="/giveaways" component={() => <AppLayout><Giveaways /></AppLayout>} />
+      <Route path="/holder-rewards" component={() => <AppLayout><HolderRewards /></AppLayout>} />
+      <Route path="/spin" component={() => <AppLayout><SpinWheel /></AppLayout>} />
       <Route path="/beta-disclaimer" component={BetaDisclaimer} />
       <Route path="/disclaimer" component={BetaDisclaimer} />
       {/* Redirect aliases for common URL variants */}
