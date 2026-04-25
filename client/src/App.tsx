@@ -91,6 +91,7 @@ function Router() {
       <Route path="/ai-assistant">{() => <Redirect to="/ai" />}</Route>
       <Route path="/able-bots">{() => <Redirect to="/bots" />}</Route>
       <Route path="/liberty-swap">{() => <Redirect to="/swap" />}</Route>
+      <Route path="/whitepaper">{() => { window.location.href = "https://docs.vicfoundation.com"; return null; }}</Route>
       <Route path="/buy-and-burn">{() => <Redirect to="/burn" />}</Route>
       <Route path="/pools">{() => <Redirect to="/dex-analytics" />}</Route>
       <Route path="/404" component={NotFound} />

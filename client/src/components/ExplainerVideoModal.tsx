@@ -3,7 +3,7 @@ import { X, Play, Volume2, VolumeX, Shield, AlertTriangle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "hero-dapp-intro-completed";
-const VIDEO_URL = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4";
+const VIDEO_URL = "/hero-explainer-edited.mp4";
 const POSTER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-explainer-poster-CzrKcJsSYT6UbY94V4mnyE.png";
 const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg";
 
