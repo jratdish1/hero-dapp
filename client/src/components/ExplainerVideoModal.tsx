@@ -25,9 +25,33 @@ export default function ExplainerVideoModal() {
     }
   }, []);
 
+  // Auto-play video when modal opens (Edge/Chrome/Safari compatible)
+  // Must be muted for autoplay to work across all browsers
+  useEffect(() => {
+    if (isOpen && step === "video" && videoRef.current) {
+      const video = videoRef.current;
+      // Workaround for React muted prop bug — set via DOM directly
+      video.muted = true;
+      video.defaultMuted = true;
+      // Small delay to ensure DOM is ready
+      const playTimer = setTimeout(() => {
+        video.play().then(() => {
+          setIsPlaying(true);
+          setShowPlayButton(false);
+        }).catch(() => {
+          // Autoplay still blocked — keep play button visible for manual click
+          setShowPlayButton(true);
+        });
+      }, 300);
+      return () => clearTimeout(playTimer);
+    }
+  }, [isOpen, step]);
+
   const handlePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
+    // Ensure muted for autoplay compatibility
+    video.muted = true;
     video.play().then(() => {
       setIsPlaying(true);
       setShowPlayButton(false);
@@ -108,7 +132,8 @@ export default function ExplainerVideoModal() {
                   ref={videoRef}
                   src={VIDEO_URL}
                   className="w-full h-full object-contain"
-                  muted={isMuted}
+                  autoPlay
+                  muted
                   playsInline
                   preload="auto"
                   poster={POSTER_URL}
