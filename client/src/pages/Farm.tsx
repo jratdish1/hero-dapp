@@ -345,10 +345,10 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
           </div>
         </div>
 
-        <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="block mt-4">
+        <a href={(pool as any).farmUrl || LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer" className="block mt-4">
           <Button size="sm" className="w-full bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-semibold tracking-wide">
             <Wallet className="w-3.5 h-3.5 mr-1.5" />
-            Stake on HERO Farm
+            Stake on {(pool as any).farmName || "HERO Farm"}
           </Button>
         </a>
       </CardContent>

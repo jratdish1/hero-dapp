@@ -300,6 +300,8 @@ export const FARM_POOLS_PLS = [
     token0: { symbol: "HERO", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
     token1: { symbol: "TruFarm", address: FARM_CONTRACTS_PLS.truFarmToken },
     active: true,
+    farmUrl: "https://trufarms.io/farms",
+    farmName: "TruFarms",
   },
   {
     id: 67,
@@ -308,6 +310,8 @@ export const FARM_POOLS_PLS = [
     token0: { symbol: "HERO", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
     token1: { symbol: "PLS", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
     active: true,
+    farmUrl: "https://emit.farm/farms",
+    farmName: "Emit Farm",
   },
   {
     id: 1,
@@ -316,6 +320,8 @@ export const FARM_POOLS_PLS = [
     token0: { symbol: "VETS", address: "0x4013abBf94A745EfA7cc848989Ee83424a770060" },
     token1: { symbol: "WPLS", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
     active: true,
+    farmUrl: "https://www.rhinofi.win/dapp",
+    farmName: "RhinoFi",
   },
 ] as const;
 
@@ -410,6 +416,7 @@ export const CDN_ASSETS = {
 
 // ─── Live DApp URLs ─────────────────────────────────────────────────────
 export const LIVE_DAPP_URLS = {
+  farm: "https://trufarms.io/farms",
   stake: "https://herobase.io/bootcamp",
   dao: "https://herobase.io/dao",
 } as const;
