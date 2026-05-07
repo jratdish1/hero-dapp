@@ -273,7 +273,7 @@ export default function HeroWallet() {
 
   if (!isConnected) {
     return (
-      <div className="container mx-auto px-4 py-12">
+      <div className="container mx-auto px-4 py-8 space-y-8">
         <Card className="max-w-md mx-auto bg-gray-900/80 border-yellow-500/30">
           <CardContent className="p-8 text-center">
             <Wallet className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
@@ -284,10 +284,16 @@ export default function HeroWallet() {
             </p>
           </CardContent>
         </Card>
+        <div>
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Compass className="w-5 h-5 text-yellow-400" />
+            Discover DApps
+          </h2>
+          <DiscoverTab />
+        </div>
       </div>
     );
   }
-
   return (
     <div className="container mx-auto px-4 py-8 space-y-6">
       {/* Header */}
