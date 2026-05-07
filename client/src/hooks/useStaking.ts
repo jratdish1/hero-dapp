@@ -3,8 +3,19 @@ import { erc20Abi, type Address, parseUnits, formatUnits } from "viem";
 import { HERO_STAKING_ABI } from "@/lib/staking-abi";
 import { useMemo, useState, useEffect, useCallback } from "react";
 
-// ─── Contract Address (same on Base + PulseChain via CREATE2) ────────
-export const HERO_STAKING_ADDRESS = "0x1F326410fBd31B65e3A53e91ED5D65fa47C565b5" as Address;
+// ─── Contract Addresses (chain-specific after redeployment) ────────
+const STAKING_ADDRESSES = {
+  8453: "0x54063f7dbc9e70061d6E4ac052B5bf41bF3303ba" as Address,  // BASE
+  369: "0x10315dC9a381AF756aA9ca7c46d55ee4f679a0B4" as Address,   // PulseChain
+} as const;
+
+export function getStakingAddress(chainId: number | undefined): Address {
+  if (chainId === 8453 || chainId === 369) return STAKING_ADDRESSES[chainId];
+  return STAKING_ADDRESSES[8453]; // default to Base
+}
+
+// Legacy export for backward compatibility
+export const HERO_STAKING_ADDRESS = STAKING_ADDRESSES[8453];
 
 // ─── Token Addresses ─────────────────────────────────────────────────
 const TOKENS = {
@@ -28,7 +39,7 @@ function getTokens(chainId: number | undefined) {
 // ─── Global Stats Hook ───────────────────────────────────────────────
 export function useStakingStats(chainId: SupportedChainId) {
   const baseArgs = {
-    address: HERO_STAKING_ADDRESS,
+    address: getStakingAddress(chainId),
     abi: HERO_STAKING_ABI,
     chainId,
   } as const;
@@ -59,7 +70,7 @@ export function useUserStake(chainId: SupportedChainId) {
   const { address, isConnected } = useAccount();
 
   const baseArgs = {
-    address: HERO_STAKING_ADDRESS,
+    address: getStakingAddress(chainId),
     abi: HERO_STAKING_ABI,
     chainId,
     query: { enabled: isConnected && !!address },
@@ -104,7 +115,7 @@ export function useUserStake(chainId: SupportedChainId) {
     address: getTokens(chainId).hero,
     abi: erc20Abi,
     functionName: "allowance",
-    args: address ? [address, HERO_STAKING_ADDRESS] : undefined,
+    args: address ? [address, getStakingAddress(chainId)] : undefined,
     chainId,
     query: { enabled: isConnected && !!address },
   });
@@ -153,7 +164,7 @@ export function useStakingActions(chainId: SupportedChainId) {
       address: tokens.hero,
       abi: erc20Abi,
       functionName: "approve",
-      args: [HERO_STAKING_ADDRESS, amount],
+      args: [getStakingAddress(chainId), amount],
       chainId,
     });
     setPendingTxHash(hash);
@@ -162,7 +173,7 @@ export function useStakingActions(chainId: SupportedChainId) {
 
   const stake = useCallback(async (amount: bigint) => {
     const hash = await writeStake({
-      address: HERO_STAKING_ADDRESS,
+      address: getStakingAddress(chainId),
       abi: HERO_STAKING_ABI,
       functionName: "stake",
       args: [amount],
@@ -174,7 +185,7 @@ export function useStakingActions(chainId: SupportedChainId) {
 
   const unstake = useCallback(async (amount: bigint) => {
     const hash = await writeUnstake({
-      address: HERO_STAKING_ADDRESS,
+      address: getStakingAddress(chainId),
       abi: HERO_STAKING_ABI,
       functionName: "unstake",
       args: [amount],
@@ -186,7 +197,7 @@ export function useStakingActions(chainId: SupportedChainId) {
 
   const claimRewards = useCallback(async () => {
     const hash = await writeClaim({
-      address: HERO_STAKING_ADDRESS,
+      address: getStakingAddress(chainId),
       abi: HERO_STAKING_ABI,
       functionName: "claimRewards",
       chainId,
@@ -197,7 +208,7 @@ export function useStakingActions(chainId: SupportedChainId) {
 
   const emergencyWithdraw = useCallback(async () => {
     const hash = await writeEmergency({
-      address: HERO_STAKING_ADDRESS,
+      address: getStakingAddress(chainId),
       abi: HERO_STAKING_ABI,
       functionName: "emergencyWithdraw",
       chainId,

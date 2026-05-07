@@ -32,6 +32,7 @@ import {
   formatLockPeriod,
   useCountdown,
   HERO_STAKING_ADDRESS,
+  getStakingAddress,
 } from "@/hooks/useStaking";
 
 // ─── Chain Config ────────────────────────────────────────────────────
@@ -662,13 +663,13 @@ export default function HeroStake() {
           <span>
             Staking Contract:{" "}
             <a
-              href={`${chainConfig.explorer}/address/${HERO_STAKING_ADDRESS}`}
+              href={`${chainConfig.explorer}/address/${getStakingAddress(chainId)}`}
               target="_blank"
               rel="noopener noreferrer"
               className="hover:underline"
               style={{ color: "#C8A84B", fontFamily: "monospace" }}
             >
-              {HERO_STAKING_ADDRESS.slice(0, 10)}...{HERO_STAKING_ADDRESS.slice(-6)}
+              {getStakingAddress(chainId).slice(0, 10)}...{getStakingAddress(chainId).slice(-6)}
             </a>
           </span>
           <ExternalLink className="w-3 h-3" />
