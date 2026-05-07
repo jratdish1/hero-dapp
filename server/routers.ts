@@ -3,6 +3,33 @@ import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { z } from "zod";
+import { createPublicClient, http, erc20Abi } from "viem";
+import { pulsechain } from "viem/chains";
+
+// ─── On-Chain Verification Clients ──────────────────────────────────────
+const pulsechainClient = createPublicClient({ chain: pulsechain, transport: http("https://rpc.pulsechain.com") });
+const baseClient = createPublicClient({ chain: { id: 8453, name: "Base", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: ["https://mainnet.base.org"] } } } as any, transport: http("https://mainnet.base.org") });
+
+const HERO_TOKENS: Record<string, `0x${string}`> = {
+  pulsechain: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
+  base: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
+};
+
+async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
+  const client = chain === "pulsechain" ? pulsechainClient : baseClient;
+  const tokenAddress = HERO_TOKENS[chain];
+  try {
+    const balance = await client.readContract({
+      address: tokenAddress,
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [voterAddress as `0x${string}`],
+    });
+    return Math.floor(Number(balance) / 1e18);
+  } catch {
+    return 0;
+  }
+}
 
 // ─── Reusable Validation Schemas ────────────────────────────────────────
 // Ethereum/PulseChain hex address: exactly 42 chars, 0x prefix + 40 hex chars
@@ -615,21 +642,26 @@ export const appRouter = router({
         .mutation(async ({ ctx, input }) => {
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) throw new Error("Already voted on this proposal");
+          // AUDIT FIX: Server-side on-chain verification of voting power
+          const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
+          if (verifiedPower <= 0) throw new Error("No HERO tokens found — cannot vote");
+          // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
+          const trustedPower = Math.min(input.votingPower, verifiedPower);
           await castVote({
             proposalId: input.proposalDbId,
             voterId: ctx.user.id,
             voterAddress: input.voterAddress,
             choice: input.choice,
-            votingPower: input.votingPower,
+            votingPower: trustedPower,
             chain: input.chain,
             txHash: input.txHash || null,
           });
           // Update proposal vote tallies
           const proposal = await getProposalById(input.proposalId);
           if (proposal) {
-            const newFor = input.choice === "for" ? proposal.votesFor + input.votingPower : proposal.votesFor;
-            const newAgainst = input.choice === "against" ? proposal.votesAgainst + input.votingPower : proposal.votesAgainst;
-            const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + input.votingPower : proposal.votesAbstain;
+            const newFor = input.choice === "for" ? proposal.votesFor + trustedPower : proposal.votesFor;
+            const newAgainst = input.choice === "against" ? proposal.votesAgainst + trustedPower : proposal.votesAgainst;
+            const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + trustedPower : proposal.votesAbstain;
             await updateProposalVotes(input.proposalId, newFor, newAgainst, newAbstain);
           }
           return { success: true };

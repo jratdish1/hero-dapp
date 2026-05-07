@@ -3,7 +3,7 @@ import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useAccount, useChainId, useReadContract } from "wagmi";
-import { erc20Abi } from "viem";
+import { erc20Abi, formatUnits } from "viem";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -44,9 +44,16 @@ export default function ProposalDetail() {
     query: { enabled: isConnected && !!address },
   });
 
-  // Convert balance to whole tokens (18 decimals)
-  const votingPower = heroBalance ? Number(heroBalance / BigInt(10 ** 18)) : 0;
+  // Convert balance to whole tokens (18 decimals) — use formatUnits for precision
+  const votingPower = heroBalance ? Math.floor(Number(formatUnits(heroBalance, 18))) : 0;
   const connectedChain = chainId === 369 ? "pulsechain" : "base";
+
+  // Check if user already voted (audit fix: disable UI if already voted)
+  const { data: myVote } = trpc.dao.votes.myVote.useQuery(
+    { proposalDbId: proposal?.id ?? 0 },
+    { enabled: !!proposal?.id && !!user }
+  );
+  const hasVoted = !!myVote;
 
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
     { proposalId },
@@ -98,7 +105,7 @@ export default function ProposalDetail() {
   const quorumPct = Math.min((totalVotes / quorum) * 100, 100);
 
   const handleVote = (choice: "for" | "against" | "abstain") => {
-    if (!isConnected || !address || !user) return;
+    if (!isConnected || !address || !user || hasVoted) return;
     if (votingPower <= 0) return; // Must hold HERO to vote
     castVote.mutate({
       proposalDbId: proposal.id,
@@ -263,8 +270,19 @@ export default function ProposalDetail() {
                   <p className="text-sm text-muted-foreground text-center py-2">
                     Sign in to vote
                   </p>
+                ) : hasVoted ? (
+                  <div className="text-center py-4">
+                    <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-400" />
+                    <p className="text-sm font-medium">You have already voted on this proposal</p>
+                    <p className="text-xs text-muted-foreground mt-1">Your vote: {myVote?.choice}</p>
+                  </div>
+                ) : votingPower <= 0 ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    You need HERO tokens to vote. 1 HERO = 1 vote.
+                  </p>
                 ) : (
                   <>
+                    <p className="text-xs text-muted-foreground mb-2">Your voting power: {votingPower.toLocaleString()} HERO</p>
                     <Button
                       variant={votingChoice === "for" ? "default" : "outline"}
                       className="w-full gap-2"
