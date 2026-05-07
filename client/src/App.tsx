@@ -41,6 +41,7 @@ import DAOProposals from "./pages/DAOProposals";
 import Giveaways from "./pages/Giveaways";
 import HolderRewards from "./pages/HolderRewards";
 import SpinWheel from "./pages/SpinWheel";
+import HeroWallet from "./pages/HeroWallet";
 function Router() {
   usePageSEO();
   return (
@@ -48,6 +49,7 @@ function Router() {
       <Route path="/login" component={LoginPage} />
       <Route path="/" component={Home} />
       <Route path="/swap" component={() => <AppLayout><Swap /></AppLayout>} />
+      <Route path="/wallet" component={() => <AppLayout><HeroWallet /></AppLayout>} />
       <Route path="/dashboard" component={() => <AppLayout><Dashboard /></AppLayout>} />
       <Route path="/portfolio" component={() => <AppLayout><Portfolio /></AppLayout>} />
       <Route path="/dca" component={() => <AppLayout><DcaOrders /></AppLayout>} />
