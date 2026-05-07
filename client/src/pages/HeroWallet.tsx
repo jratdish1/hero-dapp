@@ -13,6 +13,8 @@ import {
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
+import DiscoverTab from "@/components/DiscoverTab";
+import { Compass } from "lucide-react";
 
 // Wallet API base URL (VDS S)
 const WALLET_API = import.meta.env.VITE_WALLET_API_URL || "https://wallet-api.herobase.io";
@@ -330,6 +332,7 @@ export default function HeroWallet() {
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
           <TabsTrigger value="bridge">Bridge</TabsTrigger>
           <TabsTrigger value="approvals">Approvals</TabsTrigger>
+          <TabsTrigger value="discover">🧭 Discover</TabsTrigger>
         </TabsList>
 
         {/* OVERVIEW TAB */}
@@ -650,6 +653,10 @@ export default function HeroWallet() {
               </p>
             </CardContent>
           </Card>
+        </TabsContent>
+        {/* DISCOVER TAB */}
+        <TabsContent value="discover" className="space-y-4">
+          <DiscoverTab />
         </TabsContent>
       </Tabs>
     </div>
