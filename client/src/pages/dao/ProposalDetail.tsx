@@ -2,7 +2,8 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAccount } from "wagmi";
+import { useAccount, useChainId, useReadContract } from "wagmi";
+import { erc20Abi } from "viem";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +26,27 @@ export default function ProposalDetail() {
   const proposalId = params?.id || "";
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
+
+  // HERO token addresses per chain
+  const heroTokenAddress = chainId === 369
+    ? "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" // PulseChain
+    : "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"; // BASE
+
+  // Read user's HERO balance for voting power (1 HERO = 1 vote)
+  const { data: heroBalance } = useReadContract({
+    address: heroTokenAddress as `0x${string}`,
+    abi: erc20Abi,
+    functionName: "balanceOf",
+    args: address ? [address] : undefined,
+    chainId: chainId as 369 | 8453,
+    query: { enabled: isConnected && !!address },
+  });
+
+  // Convert balance to whole tokens (18 decimals)
+  const votingPower = heroBalance ? Number(heroBalance / BigInt(10 ** 18)) : 0;
+  const connectedChain = chainId === 369 ? "pulsechain" : "base";
 
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
     { proposalId },
@@ -78,13 +99,14 @@ export default function ProposalDetail() {
 
   const handleVote = (choice: "for" | "against" | "abstain") => {
     if (!isConnected || !address || !user) return;
+    if (votingPower <= 0) return; // Must hold HERO to vote
     castVote.mutate({
       proposalDbId: proposal.id,
       proposalId: proposal.proposalId,
       voterAddress: address,
       choice,
-      votingPower: 1, // In production, this would be the user's HERO balance
-      chain: "pulsechain",
+      votingPower,
+      chain: connectedChain,
     });
   };
 
