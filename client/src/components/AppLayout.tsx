@@ -139,7 +139,7 @@ const NAV_GROUPS: NavGroup[] = [
       { path: "/explainer", label: "Explainer", icon: PlayCircle },
       { path: "/tokenomics", label: "Tokenomics", icon: Infinity },
       { path: "/media", label: "Media", icon: Newspaper },
-      { path: "/community", label: "Community Hub", icon: ImageIcon },
+      { path: "/community-hub", label: "Community Hub", icon: ImageIcon },
     ],
   },
   {

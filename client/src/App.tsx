@@ -24,6 +24,7 @@ import NftCollection from "./pages/NftCollection";
 import Ecosystem from "./pages/Subdomains";
 import MediaHub from "./pages/MediaHub";
 import AppLayout from "./components/AppLayout";
+import CommunityHub from "./pages/CommunityHub";
 import { DaoDashboard, Proposals, ProposalDetail, CreateProposal, Treasury, Delegates } from "./pages/dao";
 import Explainer from "./pages/Explainer";
 import BaseStake from "./pages/BaseStake";
@@ -63,6 +64,7 @@ function Router() {
       <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
       <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
       <Route path="/community" component={() => <AppLayout><Blog /></AppLayout>} />
+      <Route path="/community-hub" component={() => <AppLayout><CommunityHub /></AppLayout>} />
       <Route path="/dao" component={() => <AppLayout><DaoDashboard /></AppLayout>} />
       <Route path="/dao/proposals" component={() => <AppLayout><Proposals /></AppLayout>} />
       <Route path="/dao/proposals/create" component={() => <AppLayout><CreateProposal /></AppLayout>} />
