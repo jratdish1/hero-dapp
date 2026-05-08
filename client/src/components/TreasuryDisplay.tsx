@@ -66,7 +66,7 @@ export default function TreasuryDisplay() {
     } catch (err) {
       setBalances((prev) => ({ ...prev, loading: false, error: "Failed to fetch" }));
     }
-    setRefreshing(false);
+    if (mountedRef.current) setRefreshing(false);
   }, []);
 
   useEffect(() => {

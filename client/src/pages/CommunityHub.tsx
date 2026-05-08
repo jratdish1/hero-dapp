@@ -4,6 +4,18 @@ import CommunityStats from "@/components/CommunityStats";
 import { useNetwork } from "@/contexts/NetworkContext";
 import { Newspaper, Twitter, Video, ExternalLink, Flame } from "lucide-react";
 
+// URL validation to prevent XSS via javascript: or data: URLs
+function isSafeUrl(url: string): boolean {
+  if (!url) return false;
+  try {
+    const parsed = new URL(url, window.location.origin);
+    return ['http:', 'https:'].includes(parsed.protocol);
+  } catch {
+    return url.startsWith('/'); // Allow relative paths
+  }
+}
+
+
 const EXPLAINER_VIDEO = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4";
 const HERO_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png";
 
@@ -121,7 +133,7 @@ export default function CommunityHub() {
           {MONSTER_THREADS.map((thread) => (
             <a
               key={thread.id}
-              href={thread.url}
+              href={isSafeUrl(thread.url) ? thread.url : "#"}
               target="_blank"
               rel="noopener noreferrer"
               className="block p-3 rounded-lg border border-border/50 hover:border-blue-500/50 transition-colors bg-background/40"
@@ -161,7 +173,7 @@ export default function CommunityHub() {
           {WEEKLY_BLOGS.map((post) => (
             <a
               key={post.id}
-              href={post.url}
+              href={isSafeUrl(post.url) ? post.url : "#"}
               className="block p-3 rounded-lg border border-border/50 hover:border-green-500/50 transition-colors bg-background/40"
             >
               <h3 className="font-semibold text-sm text-foreground mb-1">{post.title}</h3>
