@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -86,11 +86,18 @@ export default function QuickVote() {
   const [votedOn, setVotedOn] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const voteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (voteTimerRef.current) clearTimeout(voteTimerRef.current);
+    };
+  }, []);
+
   const handleVote = (proposalId: string, choice: "for" | "against" | "abstain") => {
     if (!isConnected) return;
     setIsSubmitting(true);
-    // Simulate vote submission
-    setTimeout(() => {
+    voteTimerRef.current = setTimeout(() => {
       setVotedOn(prev => new Set([...prev, proposalId]));
       setVotingOn(null);
       setIsSubmitting(false);
