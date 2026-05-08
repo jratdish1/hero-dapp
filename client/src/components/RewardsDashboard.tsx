@@ -163,11 +163,11 @@ export default function RewardsDashboard() {
   }, [isPulseChain, sortBy]);
 
   const totalPendingUsd = useMemo(() => {
-    return rewards.reduce((sum, r) => sum + parseFloat(r.pendingUsd.replace("$", "")), 0).toFixed(2);
+    return rewards.reduce((sum, r) => sum + (parseFloat(r.pendingUsd.replace("$", "")) || 0), 0).toFixed(2);
   }, [rewards]);
 
   const totalStakedUsd = useMemo(() => {
-    return rewards.reduce((sum, r) => sum + parseFloat(r.stakedUsd.replace("$", "").replace(",", "")), 0).toFixed(2);
+    return rewards.reduce((sum, r) => sum + (parseFloat(r.stakedUsd.replace("$", "").replace(",", "")) || 0), 0).toFixed(2);
   }, [rewards]);
 
   const handleRefresh = () => {
@@ -217,6 +217,7 @@ export default function RewardsDashboard() {
           {(["usd", "apr", "protocol"] as const).map((s) => (
             <button
               key={s}
+              type="button"
               onClick={() => setSortBy(s)}
               aria-pressed={sortBy === s}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${

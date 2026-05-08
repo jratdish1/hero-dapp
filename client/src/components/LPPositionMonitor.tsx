@@ -160,7 +160,7 @@ export default function LPPositionMonitor() {
   }, [positions, totalValue]);
 
   const totalFees24h = useMemo(() => {
-    return positions.reduce((sum, p) => sum + parseFloat(p.fee24h.replace("$", "")), 0);
+    return positions.reduce((sum, p) => sum + (parseFloat(p.fee24h.replace("$", "")) || 0), 0);
   }, [positions]);
 
   const handleRefresh = () => {
@@ -247,7 +247,7 @@ export default function LPPositionMonitor() {
                 min="-90"
                 max="500"
                 value={ilPriceChange}
-                onChange={(e) => setIlPriceChange(Number(e.target.value))}
+                onChange={(e) => setIlPriceChange(Number(e.target.value) || 0)}
                 className="flex-1 h-1.5 rounded-full appearance-none bg-border cursor-pointer"
                 aria-label="Price change percentage"
               />
