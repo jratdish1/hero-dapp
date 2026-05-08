@@ -10,6 +10,8 @@ import {
   ArrowUpRight, ArrowDownRight, Flame, Globe
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
+import PortfolioPnL from "../components/PortfolioPnL";
+import TransactionHistory from "../components/TransactionHistory";
 import { useAccount, useBalance } from "wagmi";
 import { toast } from "sonner";
 
@@ -335,6 +337,7 @@ export default function Portfolio() {
               <TabsTrigger value="history" className="data-[state=active]:bg-green-500/20 data-[state=active]:text-green-400">
                 <Clock className="w-4 h-4 mr-1" /> Transactions
               </TabsTrigger>
+              <TabsTrigger value="pnl" className="gap-1.5 text-xs"><TrendingUp className="w-3.5 h-3.5" />P&L</TabsTrigger>
             </TabsList>
             
             {/* Holdings */}
@@ -466,15 +469,16 @@ export default function Portfolio() {
             {/* Transactions */}
             <TabsContent value="history" className="mt-4">
               <Card className="bg-card/40 border-border">
-                <CardContent className="p-6 text-center">
-                  <Clock className="w-8 h-8 text-muted-foreground mx-auto mb-3" />
-                  <p className="text-foreground font-semibold mb-1">Transaction History</p>
-                  <p className="text-muted-foreground text-sm mb-4">View your full transaction history on the block explorer</p>
-                  <a href={explorerUrl} target="_blank" rel="noopener noreferrer">
-                    <Button variant="outline" className="gap-2">
-                      View on {isBase ? 'BaseScan' : 'PulseScan'} <ExternalLink className="w-4 h-4" />
-                    </Button>
-                  </a>
+                <CardContent className="p-4">
+                  <TransactionHistory />
+                </CardContent>
+              </Card>
+            </TabsContent>
+          
+            <TabsContent value="pnl" className="mt-4">
+              <Card className="bg-card/40 border-border">
+                <CardContent className="p-4">
+                  <PortfolioPnL />
                 </CardContent>
               </Card>
             </TabsContent>
