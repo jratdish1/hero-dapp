@@ -3,25 +3,44 @@ import { AlertTriangle, TrendingDown, BarChart3, Info, X } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useMarketOverview, formatCompact } from "../hooks/usePrices";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PLS_PRICE_FALLBACK = 0.00000749;
+
+// ─── Helpers (outside component) ──────────────────────────────────────────────
+const getImpactLevel = (pct: number) => {
+  if (pct < 1) return { level: "low", color: "text-green-400", bg: "bg-green-400/10", border: "border-green-400/30", label: "Low Impact" };
+  if (pct < 3) return { level: "moderate", color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/30", label: "Moderate Impact" };
+  if (pct < 5) return { level: "high", color: "text-orange-400", bg: "bg-orange-400/10", border: "border-orange-400/30", label: "High Impact" };
+  return { level: "severe", color: "text-red-400", bg: "bg-red-400/10", border: "border-red-400/30", label: "Severe Impact" };
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface PriceImpactWarningProps {
   fromToken?: string;
   toToken?: string;
   amount?: string;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO", amount = "1000000" }: PriceImpactWarningProps) {
   const { isPulseChain } = useNetwork();
   const { data: market } = useMarketOverview();
   const [showModal, setShowModal] = useState(false);
 
-  // Calculate estimated price impact based on liquidity
+  // Calculate estimated price impact with division-by-zero guards
   const impactData = useMemo(() => {
     if (!market?.heroPrice) return null;
 
     const heroLiquidity = market.heroPrice.liquidity?.usd || 150000;
-    const inputUsd = parseFloat(amount) * (market.plsPrice ? parseFloat(market.plsPrice.priceUsd) : 0.00000749);
-    
-    // Price impact formula: impact = tradeSize / (2 * liquidity)
+    if (heroLiquidity <= 0) return null; // Guard
+
+    const parsedAmount = parseFloat(amount ?? "0");
+    if (isNaN(parsedAmount) || parsedAmount <= 0) return null; // Guard
+
+    const plsPrice = market.plsPrice?.priceUsd ? parseFloat(market.plsPrice.priceUsd) : PLS_PRICE_FALLBACK;
+    const inputUsd = parsedAmount * plsPrice;
+
+    // Price impact formula: impact = tradeSize / (2 * liquidity) * 100
     const impact = (inputUsd / (2 * heroLiquidity)) * 100;
     const clampedImpact = Math.min(impact, 99);
 
@@ -30,22 +49,13 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
       inputUsd,
       liquidity: heroLiquidity,
       volume24h: market.heroPrice.volume24h || 25000,
-      tradeToLiquidityRatio: (inputUsd / heroLiquidity) * 100,
+      tradeToLiquidityRatio: heroLiquidity > 0 ? (inputUsd / heroLiquidity) * 100 : 0,
     };
-  }, [market, amount]);
+  }, [market?.heroPrice, market?.plsPrice, amount]);
 
   if (!impactData) return null;
 
   const { impact, liquidity, volume24h, tradeToLiquidityRatio } = impactData;
-
-  // Color coding
-  const getImpactLevel = (pct: number) => {
-    if (pct < 1) return { level: "low", color: "text-green-400", bg: "bg-green-400/10", border: "border-green-400/30", label: "Low Impact" };
-    if (pct < 3) return { level: "moderate", color: "text-yellow-400", bg: "bg-yellow-400/10", border: "border-yellow-400/30", label: "Moderate Impact" };
-    if (pct < 5) return { level: "high", color: "text-orange-400", bg: "bg-orange-400/10", border: "border-orange-400/30", label: "High Impact" };
-    return { level: "severe", color: "text-red-400", bg: "bg-red-400/10", border: "border-red-400/30", label: "Severe Impact" };
-  };
-
   const impactInfo = getImpactLevel(impact);
 
   return (
@@ -68,6 +78,7 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
           </div>
           <button
             onClick={() => setShowModal(true)}
+            aria-label="View price impact details"
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
             <Info className="w-3 h-3" /> Details
@@ -84,14 +95,12 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
             <span>10%+</span>
           </div>
           <div className="relative h-2 rounded-full bg-secondary overflow-hidden">
-            {/* Gradient background */}
             <div className="absolute inset-0 flex">
               <div className="flex-1 bg-green-500/30" />
               <div className="flex-1 bg-yellow-500/30" />
               <div className="flex-1 bg-orange-500/30" />
               <div className="flex-1 bg-red-500/30" />
             </div>
-            {/* Indicator */}
             <div
               className={`absolute top-0 h-full w-1 rounded-full ${impactInfo.color.replace("text-", "bg-")}`}
               style={{ left: `${Math.min(impact * 10, 100)}%` }}
@@ -133,26 +142,35 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
           <div className="flex items-start gap-2 px-3 py-2 rounded-lg bg-orange-500/10 border border-orange-500/20">
             <BarChart3 className="w-4 h-4 text-orange-400 mt-0.5 flex-shrink-0" />
             <p className="text-xs text-orange-400">
-              Tip: Try splitting into 2-3 smaller swaps or use SquirrelSwap's DCA feature for better average price.
+              Tip: Try splitting into 2-3 smaller swaps or use SquirrelSwap&apos;s DCA feature for better average price.
             </p>
           </div>
         )}
       </div>
 
-      {/* Detail modal */}
+      {/* Detail modal with ARIA */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="price-impact-title"
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+        >
           <div className="w-full max-w-md rounded-xl border border-border bg-card p-6 space-y-4 shadow-2xl">
             <div className="flex items-center justify-between">
-              <h3 className="text-lg font-bold text-foreground">Price Impact Explained</h3>
-              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
+              <h3 id="price-impact-title" className="text-lg font-bold text-foreground">Price Impact Explained</h3>
+              <button
+                onClick={() => setShowModal(false)}
+                aria-label="Close price impact details"
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="w-5 h-5" />
               </button>
             </div>
             
             <div className="space-y-3 text-sm text-muted-foreground">
               <p>
-                <strong className="text-foreground">Price impact</strong> is the difference between the current market price and the price you'll actually receive due to your trade size relative to available liquidity.
+                <strong className="text-foreground">Price impact</strong> is the difference between the current market price and the price you&apos;ll actually receive due to your trade size relative to available liquidity.
               </p>
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
@@ -174,7 +192,7 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
               </div>
               <p className="text-xs border-t border-border pt-3">
                 Your trade of <strong className="text-foreground">{formatCompact(impactData.inputUsd)}</strong> represents{" "}
-                <strong className={impactInfo.color}>{tradeToLiquidityRatio.toFixed(1)}%</strong> of the pool's total liquidity ({formatCompact(liquidity)}).
+                <strong className={impactInfo.color}>{tradeToLiquidityRatio.toFixed(1)}%</strong> of the pool&apos;s total liquidity ({formatCompact(liquidity)}).
               </p>
             </div>
 

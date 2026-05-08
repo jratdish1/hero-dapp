@@ -1,36 +1,60 @@
 import { useState, useEffect, useMemo } from "react";
-import { TrendingUp, Zap, AlertTriangle, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
+import { TrendingUp, Zap, CheckCircle2, ArrowRight, RefreshCw } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
-import { useMarketOverview, formatPrice } from "../hooks/usePrices";
+import { useMarketOverview } from "../hooks/usePrices";
+import type { DexSource } from "@shared/tokens";
 
+// ─── Constants ────────────────────────────────────────────────────────────────
+const PLS_PRICE_FALLBACK = 0.00000749; // from shared/tokens.ts
+
+// ─── Helpers (outside component to avoid re-creation) ─────────────────────────
+const priceImpactColor = (impact: number): string => {
+  if (impact < 1) return "text-green-400";
+  if (impact < 3) return "text-yellow-400";
+  if (impact < 5) return "text-orange-400";
+  return "text-red-400";
+};
+
+// ─── Types ────────────────────────────────────────────────────────────────────
 interface RouteQuote {
   dex: string;
   estimatedOutput: number;
   priceImpact: number;
   gasEstimate: number;
   isBest: boolean;
-  savings: number; // vs worst route in %
+  savings: number;
 }
 
+// ─── Component ────────────────────────────────────────────────────────────────
 export default function RouteComparison() {
   const { dexSources, isPulseChain } = useNetwork();
   const { data: market } = useMarketOverview();
-  const [fromToken, setFromToken] = useState("PLS");
-  const [toToken, setToToken] = useState("HERO");
-  const [amount, setAmount] = useState("1000000");
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [lastRefresh, setLastRefresh] = useState(new Date());
 
-  // Simulated route quotes based on real DEX data patterns
-  // In production this would call each DEX router contract
-  const routes: RouteQuote[] = useMemo(() => {
-    if (!market?.heroPrice?.priceUsd) return [];
-    const heroPrice = parseFloat(market.heroPrice.priceUsd);
-    const plsPrice = market.plsPrice ? parseFloat(market.plsPrice.priceUsd) : 0.00000749;
-    const inputValue = parseFloat(amount) * plsPrice;
-    const baseOutput = inputValue / heroPrice;
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    let timeout: ReturnType<typeof setTimeout>;
+    if (isRefreshing) {
+      timeout = setTimeout(() => setIsRefreshing(false), 1000);
+    }
+    return () => clearTimeout(timeout);
+  }, [isRefreshing]);
 
-    // Simulate different DEX rates with realistic variance
+  const fromToken = "PLS";
+  const toToken = "HERO";
+  const amount = 1000000;
+
+  // Route calculation with division-by-zero guards
+  const routes: RouteQuote[] = useMemo(() => {
+    const heroPrice = market?.heroPrice?.priceUsd ? parseFloat(market.heroPrice.priceUsd) : 0;
+    if (heroPrice <= 0) return []; // Guard: no division by zero
+
+    const plsPrice = market?.plsPrice?.priceUsd ? parseFloat(market.plsPrice.priceUsd) : PLS_PRICE_FALLBACK;
+    const inputValue = amount * plsPrice;
+    const baseOutput = inputValue / heroPrice; // Safe: heroPrice > 0 checked above
+
+    // Realistic DEX variance simulation (production would call router contracts)
     const dexVariance: Record<string, number> = {
       "PulseX V1": 0.997,
       "PulseX V2": 1.002,
@@ -41,48 +65,44 @@ export default function RouteComparison() {
       "BaseSwap": 0.995,
     };
 
-    const quotes = dexSources.map((dex: { id: string; name: string }) => {
-      const variance = dexVariance[dex.name] || (0.99 + Math.random() * 0.02);
+    const quotes = (dexSources as DexSource[]).map((dex) => {
+      const variance = dexVariance[dex.name] ?? 0.995;
       const output = baseOutput * variance;
-      const impact = (1 - variance) * 100;
-      const gas = isPulseChain ? 0.02 + Math.random() * 0.03 : 0.15 + Math.random() * 0.1;
+      const impact = Math.abs((1 - variance) * 100);
+      const gas = isPulseChain ? 0.02 + (dex.name.length % 3) * 0.01 : 0.15 + (dex.name.length % 3) * 0.05;
       return {
         dex: dex.name,
         estimatedOutput: output,
-        priceImpact: Math.abs(impact),
+        priceImpact: impact,
         gasEstimate: gas,
         isBest: false,
         savings: 0,
       };
     });
 
-    // Mark best route
-    if (quotes.length > 0) {
-      const sorted = [...quotes].sort((a, b) => b.estimatedOutput - a.estimatedOutput);
-      const bestIdx = quotes.findIndex(q => q.dex === sorted[0].dex);
-      const worstOutput = sorted[sorted.length - 1].estimatedOutput;
-      quotes[bestIdx].isBest = true;
-      quotes.forEach(q => {
-        q.savings = ((q.estimatedOutput - worstOutput) / worstOutput) * 100;
-      });
-    }
+    if (quotes.length === 0) return [];
 
-    return quotes;
-  }, [market, dexSources, amount, isPulseChain]);
+    // Sort and mark best — immutable approach (no mutation)
+    const sorted = [...quotes].sort((a, b) => b.estimatedOutput - a.estimatedOutput);
+    const bestDex = sorted[0].dex;
+    const worstOutput = sorted[sorted.length - 1].estimatedOutput;
+
+    // Guard: avoid division by zero on worstOutput
+    const updatedQuotes = sorted.map((q) => ({
+      ...q,
+      isBest: q.dex === bestDex,
+      savings: worstOutput > 0 ? ((q.estimatedOutput - worstOutput) / worstOutput) * 100 : 0,
+    }));
+
+    return updatedQuotes;
+  }, [market?.heroPrice?.priceUsd, market?.plsPrice?.priceUsd, dexSources, isPulseChain, amount]);
 
   const handleRefresh = () => {
     setIsRefreshing(true);
     setLastRefresh(new Date());
-    setTimeout(() => setIsRefreshing(false), 1000);
   };
 
-  const bestRoute = routes.find(r => r.isBest);
-  const priceImpactColor = (impact: number) => {
-    if (impact < 1) return "text-green-400";
-    if (impact < 3) return "text-yellow-400";
-    if (impact < 5) return "text-orange-400";
-    return "text-red-400";
-  };
+  const bestRoute = routes.find((r) => r.isBest);
 
   if (routes.length === 0) return null;
 
@@ -99,6 +119,7 @@ export default function RouteComparison() {
         </div>
         <button
           onClick={handleRefresh}
+          aria-label="Refresh route comparison"
           className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
         >
           <RefreshCw className={`w-3 h-3 ${isRefreshing ? "animate-spin" : ""}`} />
@@ -109,7 +130,7 @@ export default function RouteComparison() {
       {/* Input summary */}
       <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-secondary/50 border border-border/50">
         <span className="text-xs text-muted-foreground">Routing</span>
-        <span className="text-xs font-semibold text-foreground">{parseFloat(amount).toLocaleString()} {fromToken}</span>
+        <span className="text-xs font-semibold text-foreground">{amount.toLocaleString()} {fromToken}</span>
         <ArrowRight className="w-3 h-3 text-muted-foreground" />
         <span className="text-xs font-semibold text-foreground">{toToken}</span>
         <span className="text-xs text-muted-foreground ml-auto">
@@ -119,7 +140,7 @@ export default function RouteComparison() {
 
       {/* Route cards */}
       <div className="space-y-2">
-        {routes.sort((a, b) => b.estimatedOutput - a.estimatedOutput).map((route, i) => (
+        {routes.map((route) => (
           <div
             key={route.dex}
             className={`flex items-center justify-between px-3 py-2.5 rounded-lg border transition-all ${
@@ -143,7 +164,6 @@ export default function RouteComparison() {
             </div>
 
             <div className="flex items-center gap-4">
-              {/* Estimated output */}
               <div className="text-right">
                 <div className={`text-sm font-mono tabular-nums ${route.isBest ? "text-[var(--hero-green)]" : "text-foreground"}`}>
                   {route.estimatedOutput.toLocaleString(undefined, { maximumFractionDigits: 0 })} {toToken}
@@ -155,7 +175,6 @@ export default function RouteComparison() {
                 )}
               </div>
 
-              {/* Price impact */}
               <div className="text-right min-w-[60px]">
                 <div className={`text-xs font-mono ${priceImpactColor(route.priceImpact)}`}>
                   {route.priceImpact.toFixed(2)}%
@@ -163,7 +182,6 @@ export default function RouteComparison() {
                 <div className="text-[10px] text-muted-foreground">impact</div>
               </div>
 
-              {/* Gas */}
               <div className="text-right min-w-[50px]">
                 <div className="text-xs font-mono text-muted-foreground">
                   ${route.gasEstimate.toFixed(3)}
