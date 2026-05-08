@@ -36,6 +36,8 @@ import {
   PULSECHAIN_ID,
 } from "@shared/tokens";
 import { useNetwork } from "@/contexts/NetworkContext";
+import RewardsDashboard from "@/components/RewardsDashboard";
+import LPPositionMonitor from "@/components/LPPositionMonitor";
 import { useFarmPools, formatCompact, formatChange } from "@/hooks/usePrices";
 
 
@@ -1003,6 +1005,12 @@ export default function Stake() {
                 <Star className="w-3.5 h-3.5 mr-1.5" />
                 All HERO/VETS Pools
               </TabsTrigger>
+              <TabsTrigger value="rewards" className="data-[state=active]:bg-[var(--hero-green)]/10 data-[state=active]:text-[var(--hero-green)]">
+                <Award className="w-3.5 h-3.5 mr-1.5" />Rewards
+              </TabsTrigger>
+              <TabsTrigger value="lp-monitor" className="data-[state=active]:bg-blue-500/10 data-[state=active]:text-blue-400">
+                <Droplets className="w-3.5 h-3.5 mr-1.5" />LP Monitor
+              </TabsTrigger>
               {PARTNER_FARMS.map((farm) => (
                 <TabsTrigger
                   key={farm.id}
@@ -1174,6 +1182,17 @@ export default function Stake() {
                   </a>
                 </CardContent>
               </Card>
+            </TabsContent>
+
+            
+            {/* Rewards Dashboard */}
+            <TabsContent value="rewards" className="mt-6 space-y-4">
+              <RewardsDashboard />
+            </TabsContent>
+
+            {/* LP Position Monitor */}
+            <TabsContent value="lp-monitor" className="mt-6 space-y-4">
+              <LPPositionMonitor />
             </TabsContent>
 
             {/* Individual partner staking tabs */}
