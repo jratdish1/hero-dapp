@@ -99,8 +99,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Earn",
     icon: Coins,
     items: [
-      { path: "/stake", label: "Stake (PulseChain)", icon: Sprout },
-      { path: "/stake/base", label: "Stake (BASE)", icon: Layers },
+      { path: "/stake", label: "Stake", icon: Sprout, dynamic: true },
       { path: "/stake/dai", label: "Stake HERO → DAI", icon: Coins },
       { path: "/bots", label: "ABLE Bots", icon: Bot },
       { path: "/holder-rewards", label: "Holder Rewards", icon: Award },
@@ -159,7 +158,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(() => new Set());
   const [location] = useLocation();
   const { user, isAuthenticated, logout } = useAuth();
-  const { chain } = useNetwork();
+  const { chain, isPulseChain } = useNetwork();
   const { t } = useLanguage();
 
   // Auto-expand group that contains the active route
@@ -279,7 +278,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     {isExpanded && (
                       <div className="ml-3 pl-3 border-l border-sidebar-border/30 space-y-0.5 mt-0.5 mb-1">
                         {group.items.map((item) => {
-                          const isActive = location === item.path;
+                          const resolvedPath = (item as any).dynamic && !isPulseChain ? "/stake/base" : item.path;
+                          const isActive = location === resolvedPath;
                           const Icon = item.icon;
                           const isExternal = !!item.external;
 
@@ -303,7 +303,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                           return (
                             <Link
                               key={item.path}
-                              href={item.path}
+                              href={resolvedPath}
                               className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                                 isActive
                                   ? "bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20"
