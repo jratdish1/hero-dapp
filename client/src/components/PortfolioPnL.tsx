@@ -188,6 +188,7 @@ export default function PortfolioPnL() {
               <button
                 key={tf}
                 onClick={() => setTimeframe(tf)}
+                aria-pressed={timeframe === tf}
                 className={`px-3 py-1 text-xs font-medium transition-colors ${
                   timeframe === tf
                     ? "bg-[var(--hero-green)]/20 text-[var(--hero-green)]"
@@ -233,6 +234,7 @@ export default function PortfolioPnL() {
           <button
             key={s}
             onClick={() => setSortBy(s)}
+            aria-pressed={sortBy === s}
             className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
               sortBy === s
                 ? "bg-[var(--hero-green)]/20 text-[var(--hero-green)]"

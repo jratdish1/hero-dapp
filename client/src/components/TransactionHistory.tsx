@@ -76,10 +76,15 @@ function getTypeLabel(type: Transaction["type"]): { label: string; color: string
 }
 
 function escapeCsv(str: string): string {
-  if (str.includes(",") || str.includes('"') || str.includes("\n")) {
-    return `"${str.replace(/"/g, '""')}"`;
+  // Prevent CSV injection by prefixing formula characters
+  let safe = str;
+  if (safe.startsWith("=") || safe.startsWith("+") || safe.startsWith("-") || safe.startsWith("@")) {
+    safe = "'" + safe;
   }
-  return str;
+  if (safe.includes(",") || safe.includes('"') || safe.includes("\n")) {
+    return `"${safe.replace(/"/g, '""')}"`;
+  }
+  return safe;
 }
 
 // ─── Demo Data ────────────────────────────────────────────────────────────────
@@ -301,6 +306,7 @@ export default function TransactionHistory() {
             <button
               key={f.value}
               onClick={() => setFilter(f.value)}
+              aria-pressed={filter === f.value}
               className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
                 filter === f.value
                   ? "bg-[var(--hero-green)]/20 text-[var(--hero-green)]"
