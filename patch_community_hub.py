@@ -1,4 +1,14 @@
-import CommunityFeed from "@/components/CommunityFeed";
+#!/usr/bin/env python3
+"""
+Patch CommunityHub.tsx to:
+1. Make it the home for Weekly HERO Blog
+2. Incorporate Weekly Monster Threads (@CrypMvs)
+3. Add video explainer section
+"""
+
+path = "/root/hero-dapp/client/src/pages/CommunityHub.tsx"
+
+new_content = '''import CommunityFeed from "@/components/CommunityFeed";
 import QuickVote from "@/components/QuickVote";
 import CommunityStats from "@/components/CommunityStats";
 import { useNetwork } from "@/contexts/NetworkContext";
@@ -188,3 +198,8 @@ export default function CommunityHub() {
     </div>
   );
 }
+'''
+
+with open(path, "w") as f:
+    f.write(new_content)
+print("CommunityHub.tsx rewritten with Weekly Blog + Monster Threads + Video")
