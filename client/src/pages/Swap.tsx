@@ -5,6 +5,10 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useMarketOverview, formatPrice, formatChange } from "../hooks/usePrices";
+import RouteComparison from "../components/RouteComparison";
+import SlippageSettings from "../components/SlippageSettings";
+import PriceImpactWarning from "../components/PriceImpactWarning";
+import SwapHistory from "../components/SwapHistory";
 
 /* ─── Live Price Banner ─── */
 function LivePriceBanner() {
@@ -158,6 +162,21 @@ export default function Swap() {
         <p className="text-xs text-muted-foreground text-center mt-2">
           Powered by Switch — Aggregates PulseX V1 & V2, 9inch, Liberty Swap & more for best execution
         </p>
+      </div>
+
+      {/* ═══ SWAP INTELLIGENCE PANEL ═══ */}
+      <div className="space-y-3">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 h-px bg-border" />
+          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+            Swap Intelligence
+          </span>
+          <div className="flex-1 h-px bg-border" />
+        </div>
+        <RouteComparison />
+        <PriceImpactWarning />
+        <SlippageSettings />
+        <SwapHistory />
       </div>
 
       {/* ═══ DIVIDER ═══ */}
