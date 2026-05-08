@@ -1,3 +1,4 @@
+import TreasuryDisplay from "@/components/TreasuryDisplay";
 import TradingViewChart from "@/components/TradingViewChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -218,6 +219,8 @@ export default function Dashboard() {
       </Card>
 
       {/* TradingView-Style Price Charts */}
+      {/* Community Treasury */}
+      <TreasuryDisplay />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <Card className="bg-card border-border">
           <CardContent className="p-4">

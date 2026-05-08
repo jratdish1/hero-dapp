@@ -79,9 +79,12 @@ export default function PriceTicker() {
       <Divider />
       <TickerItem symbol="HERO" price={data.hero?.price} change24h={data.hero?.change24h} icon="🦸" />
       <Divider />
-      {!isBase && (
+      {/* Show VETS on all chains */}
+      {(
         <>
           <TickerItem symbol="VETS" price={data.vets?.price} change24h={data.vets?.change24h} icon="🎖️" />
+      <Divider />
+      <TickerItem symbol={isBase ? "USDC" : "DAI"} price={isBase ? data.usdc?.price : data.dai?.price} change24h={isBase ? data.usdc?.change24h : data.dai?.change24h} icon="💵" />
           <Divider />
         </>
       )}

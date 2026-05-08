@@ -8,7 +8,7 @@ interface PageSEO {
 
 const PAGE_SEO_MAP: Record<string, PageSEO> = {
   "/": {
-    title: "HERO Dapp — PulseChain & BASE DEX Aggregator | Trade $HERO & $VETS",
+    title: "HERO Dapp — PulseChain & BASE DApp | Trade $HERO & $VETS",
     description: "Trade $HERO and $VETS on PulseChain and BASE. DEX aggregator with gasless swaps, DCA orders, limit orders, portfolio tracking, and LP staking. Built for veterans, by veterans.",
   },
   "/swap": {

@@ -207,8 +207,8 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 className="w-12 h-12 rounded-full object-cover shadow-lg shadow-[var(--hero-orange)]/30 border-2 border-[var(--hero-orange)]/40"
               />
               <div>
-                <h1 className="font-bold text-lg text-sidebar-foreground">HERO</h1>
-                <p className="text-xs text-muted-foreground">{chain.name} DEX</p>
+                <h1 className="font-bold text-2xl tracking-wide text-sidebar-foreground">HERO</h1>
+                <p className="text-xs text-muted-foreground">{chain.name} DApp</p>
               </div>
             </Link>
             <button
@@ -367,7 +367,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         </aside>
 
         {/* Main content */}
-        <main className="flex-1 flex flex-col min-h-screen">
+        <main className="flex-1 flex flex-col min-h-screen marpat-body">
           {/* Top bar */}
           <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border/50">
             <div className="flex items-center justify-between px-4 py-3">
@@ -385,6 +385,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="flex items-center gap-2">
                 <PriceTicker />
+                <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg" alt="HERO Banner" className="h-8 rounded object-cover hidden md:block" style={{maxWidth: "200px"}} />
                 <LanguageSelector />
                 <ThemeToggle />
                 <WalletButton />
