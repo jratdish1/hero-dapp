@@ -28,6 +28,7 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
+import { sanitizeString } from "../lib/validation";
 import { Streamdown } from "streamdown";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
@@ -285,7 +286,7 @@ function ArticleCard({
         )}
         {expanded && postQuery.data && (
           <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/30 prose prose-sm prose-invert max-w-none">
-            <Streamdown>{postQuery.data.content}</Streamdown>
+            <Streamdown>{sanitizeString(postQuery.data.content)}</Streamdown>
           </div>
         )}
         <Button

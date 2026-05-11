@@ -161,7 +161,8 @@ export default function SpinWheel() {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<Segment | null>(null);
   const [canSpin, setCanSpin] = useState(true);
-  const [walletConnected, setWalletConnected] = useState(false);
+  // Wallet connection via wagmi (real)
+  const { address: walletAddress, isConnected: walletConnected } = useAccount();
   const [record, setRecord] = useState<SpinRecord>({
     streak: 3,
     longestStreak: 12,
@@ -171,6 +172,26 @@ export default function SpinWheel() {
   });
 
   // Ref for cleanup of spin animation timeout
+  // ─── Daily Spin Reset ─────────────────────────────────────────
+  useEffect(() => {
+    const today = new Date().toDateString();
+    const lastSpin = localStorage.getItem('heroSpinLastDate');
+    if (lastSpin !== today) {
+      setCanSpin(true);
+      // Reset streak if they missed a day
+      const lastDate = lastSpin ? new Date(lastSpin) : null;
+      if (lastDate) {
+        const diffDays = Math.floor((Date.now() - lastDate.getTime()) / 86400000);
+        if (diffDays > 1) {
+          localStorage.setItem('heroSpinLastDate', new Date().toDateString());
+      setRecord(prev => ({ ...prev, streak: 0 }));
+        }
+      }
+    } else {
+      setCanSpin(false);
+    }
+  }, []);
+
   const spinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup timeout on unmount to prevent memory leaks
@@ -253,6 +274,7 @@ export default function SpinWheel() {
       setResult(SEGMENTS[winnerIndex]);
       setSpinning(false);
       setCanSpin(false);
+      localStorage.setItem('heroSpinLastDate', new Date().toDateString());
       setRecord(prev => ({
         ...prev,
         streak: prev.streak + 1,
@@ -321,7 +343,7 @@ export default function SpinWheel() {
           {!walletConnected ? (
             <>
             <button
-              onClick={() => setWalletConnected(true)}
+              onClick={() => { const btn = document.querySelector("[data-wallet-button]") as HTMLElement; if (btn) btn.click(); else toast.error("Use the wallet button in the header to connect"); }}
               className="w-full mt-4 py-3 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
             >
               Connect Wallet to Spin

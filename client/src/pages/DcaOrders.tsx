@@ -16,6 +16,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useNetwork } from "../contexts/NetworkContext";
 import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
+import { isValidChainId } from "../lib/validation";
+import { useAccount } from "wagmi";
 import { CommaInput } from "@/components/CommaInput";
 
 interface DcaOrderUI {
@@ -31,6 +33,7 @@ interface DcaOrderUI {
 
 export default function DcaOrders() {
   const { chainId, isPulseChain, isBase } = useNetwork();
+  const { address, isConnected } = useAccount();
   
   // Filter tokens based on active chain
   const BASE_TOKENS = FEATURED_TOKENS.filter((t: any) => 
@@ -120,7 +123,8 @@ export default function DcaOrders() {
       </Card>
 
       {/* Create form */}
-      {showCreate && (
+      {showCreate && (<>
+            {!isConnected && <div className="mb-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/30"><p className="text-sm text-orange-300">⚠️ Connect your wallet to create DCA orders</p></div>}
         <Card className="bg-card border-border hero-glow">
           <CardHeader>
             <CardTitle className="text-lg flex items-center gap-2">
@@ -204,7 +208,7 @@ export default function DcaOrders() {
             </Button>
           </CardContent>
         </Card>
-      )}
+      </>)}
 
       {/* Existing orders */}
       <div className="space-y-3">
