@@ -177,6 +177,7 @@ export function useStakingActions(overrideChainId?: number) {
 
   const approve = (amount: string) => {
     if (!stakingToken || !stakingAddress) return;
+    if (!isValidAmount(amount)) { console.error("Invalid amount:", amount); return; }
     writeContract({
       address: stakingToken as `0x${string}`,
       abi: ERC20_ABI,
@@ -187,6 +188,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const stake = (amount: string) => {
+    if (!isValidAmount(amount)) { console.error("Invalid stake amount:", amount); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,
@@ -197,6 +199,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const withdraw = (amount: string) => {
+    if (!isValidAmount(amount)) { console.error("Invalid withdraw amount:", amount); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,

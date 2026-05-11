@@ -661,7 +661,7 @@ export default function HeroWallet() {
                         <Coins className="w-4 h-4 text-yellow-400" aria-hidden="true" />
                       </div>
                       <div>
-                        <p className="font-semibold text-white">{token.symbol}</p>
+                        <p className="font-semibold text-white">{sanitizeString(token.symbol)}</p>
                         <p className="text-xs text-gray-500">{token.chain}</p>
                       </div>
                     </div>

@@ -255,7 +255,7 @@ export default function HeroStake() {
               <AlertTriangle className="w-3 h-3 mr-1" /> Paused
             </Badge>
           )}
-          {!isSupportedChain(chainId) && isConnected && (
+          {!isValidChainId(chainId)(chainId) && isConnected && (
             <Badge
               className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 cursor-pointer"
               onClick={() => switchChain?.({ chainId: 8453 })}

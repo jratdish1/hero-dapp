@@ -90,6 +90,7 @@ export function WalletButton() {
     chainId: chainId as 369 | 8453,
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
+    if (chainId && !isValidChainId(chainId)) { console.warn('Unsupported chain:', chainId); }
   const { disconnect } = useDisconnect();
 
   // Deduplicate and sort connectors
