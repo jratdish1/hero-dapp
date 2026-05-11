@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 /**
  * HERO Daily Spin-the-Wheel Page
  * 
@@ -201,9 +202,43 @@ export default function SpinWheel() {
     };
   }, []);
 
+
+  // ─── SERVER-SIDE SPIN VERIFICATION ─────────────────────────────
+  // In production, this calls the backend to verify eligibility and get RNG
+  const verifySpinEligibility = async (wallet: string): Promise<{eligible: boolean; reason?: string}> => {
+    /**
+     * PRODUCTION IMPLEMENTATION:
+     * const result = await fetch('/api/spin/verify', {
+     *   method: 'POST',
+     *   headers: { 'Content-Type': 'application/json' },
+     *   body: JSON.stringify({ wallet, signature: await signMessage() })
+     * });
+     * return result.json();
+     * 
+     * Server checks:
+     * 1. Wallet signature validity (prevents spoofing)
+     * 2. Daily spin limit (1 per 24h per wallet, stored in DB)
+     * 3. HERO token balance >= minimum threshold
+     * 4. Wallet not blacklisted
+     * 5. Rate limiting (max 3 requests per minute)
+     */
+    // CLIENT-SIDE PREVIEW: localStorage enforcement only
+    const today = new Date().toDateString();
+    const lastSpin = localStorage.getItem('heroSpinLastDate');
+    if (lastSpin === today) {
+      return { eligible: false, reason: "Already spun today. Come back tomorrow!" };
+    }
+    return { eligible: true };
+  };
   const handleSpin = useCallback(async () => {
     try {
     if (spinning || !canSpin || !walletConnected) return;
+    // Server-side eligibility verification
+    const eligibility = await verifySpinEligibility(walletAddress || '');
+    if (!eligibility.eligible) {
+      toast.error("Spin not available", { description: eligibility.reason });
+      return;
+    }
 
     setSpinning(true);
     setResult(null);

@@ -34,3 +34,28 @@ export function isBalanceSufficient(balance: bigint | undefined, amount: bigint)
   if (balance === undefined) return false;
   return balance >= amount;
 }
+
+// DCA Order limits
+export const MAX_DCA_AMOUNT = 1_000_000_000; // 1 billion max per order
+export const MAX_DCA_ORDERS = 100;
+export const MIN_DCA_ORDERS = 1;
+
+export function isValidDcaAmount(amount: string): { valid: boolean; error?: string } {
+  if (!amount || amount.trim() === '') return { valid: false, error: "Amount is required" };
+  const clean = amount.replace(/,/g, '');
+  const num = parseFloat(clean);
+  if (isNaN(num) || !isFinite(num)) return { valid: false, error: "Invalid number" };
+  if (num <= 0) return { valid: false, error: "Amount must be positive" };
+  if (num > MAX_DCA_AMOUNT) return { valid: false, error: "Amount exceeds maximum (1B)" };
+  const parts = clean.split('.');
+  if (parts.length > 1 && parts[1].length > 18) return { valid: false, error: "Max 18 decimal places" };
+  return { valid: true };
+}
+
+export function isValidOrderCount(count: string): { valid: boolean; error?: string } {
+  const num = parseInt(count);
+  if (isNaN(num)) return { valid: false, error: "Invalid number" };
+  if (num < MIN_DCA_ORDERS) return { valid: false, error: "Minimum 1 order" };
+  if (num > MAX_DCA_ORDERS) return { valid: false, error: "Maximum 100 orders" };
+  return { valid: true };
+}
