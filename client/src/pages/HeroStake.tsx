@@ -130,7 +130,7 @@ export default function HeroStake() {
 
   // ─── Handlers ────────────────────────────────────────────────────
   const handleStake = async () => {
-    if (!stakeAmount || parseFloat(stakeAmount) <= 0) {
+    if (!isValidAmount(stakeAmount)) {
       toast.error("Enter an amount to stake");
       return;
     }
@@ -159,7 +159,7 @@ export default function HeroStake() {
   };
 
   const handleUnstake = async () => {
-    if (!unstakeAmount || parseFloat(unstakeAmount) <= 0) {
+    if (!isValidAmount(unstakeAmount)) {
       toast.error("Enter an amount to unstake");
       return;
     }
@@ -255,7 +255,7 @@ export default function HeroStake() {
               <AlertTriangle className="w-3 h-3 mr-1" /> Paused
             </Badge>
           )}
-          {!isValidChainId(chainId)(chainId) && isConnected && (
+          {!isValidChainId(chainId) && isConnected && (
             <Badge
               className="text-xs bg-yellow-500/20 text-yellow-400 border border-yellow-500/40 cursor-pointer"
               onClick={() => switchChain?.({ chainId: 8453 })}
