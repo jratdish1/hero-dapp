@@ -116,7 +116,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => (() => { const v = e.target.value; if (validCategories.includes(v as any)) setCategory(v as typeof category); })()}
+                    onChange={(e) => { const v = e.target.value; if ((validCategories as readonly string[]).includes(v)) setCategory(v as typeof category); }}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="protocol">Protocol</option>
@@ -130,7 +130,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Chain</label>
                   <select
                     value={chain}
-                    onChange={(e) => (() => { const v = e.target.value; if (validChains.includes(v as any)) setChain(v as typeof chain); })()}
+                    onChange={(e) => { const v = e.target.value; if ((validChains as readonly string[]).includes(v)) setChain(v as typeof chain); }}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="both">Both Chains</option>
