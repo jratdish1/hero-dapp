@@ -62,6 +62,7 @@ function shortenAddress(addr: string) {
 export default function Portfolio() {
   const { chainId, isPulseChain, isBase } = useNetwork();
   const { address: connectedAddress, isConnected } = useAccount();
+  const wagmiChainId = useChainId();
   const { data: nativeBalance } = useBalance({ address: connectedAddress });
   
   const [searchAddress, setSearchAddress] = useState('');
@@ -93,7 +94,7 @@ export default function Portfolio() {
     if (isConnected && connectedAddress && !activeAddress) {
       loadPortfolio(connectedAddress);
     }
-  }, [isConnected, connectedAddress]);
+  }, [isConnected, connectedAddress, wagmiChainId]);
   
   const saveNickname = () => {
     if (!activeAddress) return;

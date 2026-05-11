@@ -28,9 +28,10 @@ export default function Dashboard() {
 
   // Wallet integration — show user balances when connected
   const { address, isConnected } = useAccount();
+  const currentChainId = useChainId();
   const { data: plsBalance } = useBalance({ address });
   const { data: tokenBalances } = useReadContracts({
-    contracts: address ? [
+    contracts: address && currentChainId === 369 ? [
       {
         address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" as `0x${string}`, // HERO on PulseChain
         abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
@@ -44,7 +45,7 @@ export default function Dashboard() {
         args: [address],
       },
     ] : undefined,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: isConnected && !!address && currentChainId === 369 },
   });
 
   const heroBalance = tokenBalances?.[0]?.result ? Number(formatUnits(tokenBalances[0].result as bigint, 18)) : 0;
