@@ -115,9 +115,15 @@ export function WalletButton() {
       });
   }, [connectors]);
 
-  const handleConnect = (connector: (typeof connectors)[number]) => {
+  const handleConnect = async (connector: (typeof connectors)[number]) => {
     setConnectingId(connector.uid);
     try {
+      // Fix: If already connected, disconnect first to prevent "Connector already connected" error
+      if (isConnected) {
+        disconnect();
+        // Small delay to let wagmi clean up connector state
+        await new Promise(resolve => setTimeout(resolve, 200));
+      }
       connect(
         { connector, chainId: chainId as 369 | 8453 },
         {
@@ -135,6 +141,12 @@ export function WalletButton() {
               toast.info("Connection cancelled");
             } else if (msg.includes("Already processing")) {
               toast.info("Check your wallet — a connection request is pending");
+            } else if (msg.includes("already connected") || msg.includes("Connector already connected")) {
+              // Stale connector state - disconnect and retry
+              disconnect();
+              toast.info("Reconnecting wallet...");
+              setTimeout(() => connect({ connector, chainId: chainId as 369 | 8453 }), 300);
+              return;
             } else {
               toast.error("Connection failed", {
                 description: msg.length > 100 ? msg.slice(0, 100) + "..." : msg,

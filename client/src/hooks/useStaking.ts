@@ -1,291 +1,299 @@
-import { useAccount, useReadContract, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { erc20Abi, type Address, parseUnits, formatUnits } from "viem";
-import { HERO_STAKING_ABI } from "@/lib/staking-abi";
-import { useMemo, useState, useEffect, useCallback } from "react";
+import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from "wagmi";
+import { parseUnits, formatUnits } from "viem";
+import { STAKING_ABI } from "../lib/staking-abi";
+import { useNetwork } from "../contexts/NetworkContext";
+import { useState, useMemo } from "react";
 
-// ─── Contract Addresses (chain-specific after redeployment) ────────
-const STAKING_ADDRESSES = {
-  8453: "0x54063f7dbc9e70061d6E4ac052B5bf41bF3303ba" as Address,  // BASE
-  369: "0x10315dC9a381AF756aA9ca7c46d55ee4f679a0B4" as Address,   // PulseChain
-} as const;
+// V2 SSS Contract Addresses (Synthetix-style)
+const STAKING_ADDRESSES: Record<number, `0x${string}`> = {
+  8453: "0xAD7991a61e5d5C242839445EAAFE244500EEC722",   // Base
+  369: "0xD5F173973eC653E6CD1A6B31d742501A1004297E",    // PulseChain
+};
 
-export function getStakingAddress(chainId: number | undefined): Address {
-  if (chainId === 8453 || chainId === 369) return STAKING_ADDRESSES[chainId];
-  return STAKING_ADDRESSES[8453]; // default to Base
-}
-
-// Legacy export for backward compatibility
-export const HERO_STAKING_ADDRESS = STAKING_ADDRESSES[8453];
-
-// ─── Token Addresses ─────────────────────────────────────────────────
-const TOKENS = {
-  8453: {
-    hero: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" as Address,
-    dai: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb" as Address,
+// ERC20 approve ABI
+const ERC20_ABI = [
+  {
+    type: "function",
+    name: "approve",
+    inputs: [
+      { name: "spender", type: "address" },
+      { name: "amount", type: "uint256" },
+    ],
+    outputs: [{ name: "", type: "bool" }],
+    stateMutability: "nonpayable",
   },
-  369: {
-    hero: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" as Address,
-    dai: "0xefD766cCb38EaF1dfd701853BFCe31359239F305" as Address,
+  {
+    type: "function",
+    name: "allowance",
+    inputs: [
+      { name: "owner", type: "address" },
+      { name: "spender", type: "address" },
+    ],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
   },
-} as const;
+  {
+    type: "function",
+    name: "balanceOf",
+    inputs: [{ name: "account", type: "address" }],
+    outputs: [{ name: "", type: "uint256" }],
+    stateMutability: "view",
+  },
+] as const;
 
-type SupportedChainId = 369 | 8453;
+export function useStakingStats(overrideChainId?: number) {
+  const { chainId: networkChainId } = useNetwork();
+  const chainId = overrideChainId ?? networkChainId;
+  const stakingAddress = STAKING_ADDRESSES[chainId];
 
-function getTokens(chainId: number | undefined) {
-  if (chainId === 8453 || chainId === 369) return TOKENS[chainId];
-  return TOKENS[8453]; // default to Base
-}
-
-// ─── Global Stats Hook ───────────────────────────────────────────────
-export function useStakingStats(chainId: SupportedChainId) {
   const baseArgs = {
-    address: getStakingAddress(chainId),
-    abi: HERO_STAKING_ABI,
+    address: stakingAddress,
+    abi: STAKING_ABI,
     chainId,
-  } as const;
+  };
 
-  const { data: totalStaked } = useReadContract({ ...baseArgs, functionName: "totalStaked" });
-  const { data: currentAPY } = useReadContract({ ...baseArgs, functionName: "currentAPY" });
-  const { data: rewardPoolBalance } = useReadContract({ ...baseArgs, functionName: "rewardPoolBalance" });
-  const { data: lockPeriod } = useReadContract({ ...baseArgs, functionName: "lockPeriod" });
-  const { data: penaltyBps } = useReadContract({ ...baseArgs, functionName: "earlyExitPenaltyBps" });
+  // V2 Synthetix-style reads
+  const { data: totalSupply } = useReadContract({ ...baseArgs, functionName: "totalSupply" });
+  const { data: rewardRateRaw } = useReadContract({ ...baseArgs, functionName: "rewardRate" });
+  const { data: rewardsDuration } = useReadContract({ ...baseArgs, functionName: "rewardsDuration" });
+  const { data: periodFinish } = useReadContract({ ...baseArgs, functionName: "periodFinish" });
   const { data: isPaused } = useReadContract({ ...baseArgs, functionName: "paused" });
-  const { data: totalRewardsPaid } = useReadContract({ ...baseArgs, functionName: "totalRewardsPaid" });
-  const { data: rewardRate } = useReadContract({ ...baseArgs, functionName: "rewardRatePerSecond" });
+  const { data: stakingToken } = useReadContract({ ...baseArgs, functionName: "stakingToken" });
+  const { data: rewardsToken } = useReadContract({ ...baseArgs, functionName: "rewardsToken" });
 
-  return useMemo(() => ({
-    totalStaked: totalStaked as bigint | undefined,
-    currentAPY: currentAPY as bigint | undefined,
-    rewardPoolBalance: rewardPoolBalance as bigint | undefined,
-    lockPeriodSeconds: lockPeriod as bigint | undefined,
-    penaltyBps: penaltyBps as bigint | undefined,
+  // Compute APY from rewardRate and totalSupply
+  const computedAPY = useMemo(() => {
+    if (!totalSupply || !rewardRateRaw) return BigInt(0);
+    const ts = totalSupply as bigint;
+    const rr = rewardRateRaw as bigint;
+    if (ts === BigInt(0)) return BigInt(100000); // 1000% if no stakers (max display)
+    // APY in basis points = (rewardRate * 365 * 86400 * 10000) / totalSupply
+    const annualRewards = rr * BigInt(365) * BigInt(86400);
+    const apyBps = (annualRewards * BigInt(10000)) / ts;
+    return apyBps;
+  }, [totalSupply, rewardRateRaw]);
+
+  // Compute reward pool balance (remaining rewards in current period)
+  const rewardPoolBalance = useMemo(() => {
+    if (!rewardRateRaw || !periodFinish) return BigInt(0);
+    const rr = rewardRateRaw as bigint;
+    const pf = periodFinish as bigint;
+    const now = BigInt(Math.floor(Date.now() / 1000));
+    if (pf <= now) return BigInt(0);
+    return rr * (pf - now);
+  }, [rewardRateRaw, periodFinish]);
+
+  return {
+    totalStaked: totalSupply as bigint | undefined,
+    currentAPY: computedAPY,
+    rewardPoolBalance,
+    lockPeriod: rewardsDuration as bigint | undefined,
+    lockPeriodSeconds: rewardsDuration as bigint | undefined,
+    penaltyBps: BigInt(0), // V2 has no penalty
     isPaused: isPaused as boolean | undefined,
-    totalRewardsPaid: totalRewardsPaid as bigint | undefined,
-    rewardRate: rewardRate as bigint | undefined,
-  }), [totalStaked, currentAPY, rewardPoolBalance, lockPeriod, penaltyBps, isPaused, totalRewardsPaid, rewardRate]);
+    totalRewardsPaid: BigInt(0), // Not tracked in V2
+    rewardRate: rewardRateRaw as bigint | undefined,
+    stakingToken: stakingToken as `0x${string}` | undefined,
+    rewardsToken: rewardsToken as `0x${string}` | undefined,
+    stakingAddress,
+  };
 }
 
-// ─── User Stake Hook ─────────────────────────────────────────────────
-export function useUserStake(chainId: SupportedChainId) {
-  const { address, isConnected } = useAccount();
+export function useUserStaking(overrideChainId?: number) {
+  const { chainId: networkChainId } = useNetwork();
+  const chainId = overrideChainId ?? networkChainId;
+  const { address } = useAccount();
+  const stakingAddress = STAKING_ADDRESSES[chainId];
 
   const baseArgs = {
-    address: getStakingAddress(chainId),
-    abi: HERO_STAKING_ABI,
+    address: stakingAddress,
+    abi: STAKING_ABI,
     chainId,
-    query: { enabled: isConnected && !!address },
-  } as const;
+  };
 
-  const { data: stakeData, refetch: refetchStake } = useReadContract({
+  // User-specific reads
+  const { data: userStaked } = useReadContract({
     ...baseArgs,
-    functionName: "stakes",
+    functionName: "balanceOf",
     args: address ? [address] : undefined,
+    query: { enabled: !!address },
   });
 
-  const { data: pendingRewards, refetch: refetchRewards } = useReadContract({
+  const { data: pendingRewards } = useReadContract({
     ...baseArgs,
-    functionName: "pendingRewards",
+    functionName: "earned",
     args: address ? [address] : undefined,
+    query: { enabled: !!address },
   });
 
-  const { data: isUnlocked } = useReadContract({
+  // Token balance (for staking)
+  const { data: stakingToken } = useReadContract({
     ...baseArgs,
-    functionName: "isUnlocked",
-    args: address ? [address] : undefined,
+    functionName: "stakingToken",
   });
 
-  const { data: unlockTime } = useReadContract({
-    ...baseArgs,
-    functionName: "unlockTime",
-    args: address ? [address] : undefined,
-  });
-
-  // HERO token balance
-  const { data: heroBalance, refetch: refetchHeroBalance } = useReadContract({
-    address: getTokens(chainId).hero,
-    abi: erc20Abi,
+  const { data: tokenBalance } = useReadContract({
+    address: stakingToken as `0x${string}` | undefined,
+    abi: ERC20_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
     chainId,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: !!address && !!stakingToken },
   });
 
-  // HERO allowance for staking contract
-  const { data: heroAllowance, refetch: refetchAllowance } = useReadContract({
-    address: getTokens(chainId).hero,
-    abi: erc20Abi,
+  const { data: allowance } = useReadContract({
+    address: stakingToken as `0x${string}` | undefined,
+    abi: ERC20_ABI,
     functionName: "allowance",
-    args: address ? [address, getStakingAddress(chainId)] : undefined,
+    args: address && stakingAddress ? [address, stakingAddress] : undefined,
     chainId,
-    query: { enabled: isConnected && !!address },
+    query: { enabled: !!address && !!stakingToken },
   });
 
-  const refetchAll = useCallback(() => {
-    refetchStake();
-    refetchRewards();
-    refetchHeroBalance();
-    refetchAllowance();
-  }, [refetchStake, refetchRewards, refetchHeroBalance, refetchAllowance]);
-
-  return useMemo(() => {
-    const stakeArr = stakeData as [bigint, bigint, bigint, bigint] | undefined;
-    return {
-      stakedAmount: stakeArr?.[0],
-      rewardDebt: stakeArr?.[1],
-      stakeTime: stakeArr?.[2],
-      lastClaim: stakeArr?.[3],
-      pendingRewards: pendingRewards as bigint | undefined,
-      isUnlocked: isUnlocked as boolean | undefined,
-      unlockTime: unlockTime as bigint | undefined,
-      heroBalance: heroBalance as bigint | undefined,
-      heroAllowance: heroAllowance as bigint | undefined,
-      refetchAll,
-    };
-  }, [stakeData, pendingRewards, isUnlocked, unlockTime, heroBalance, heroAllowance, refetchAll]);
+  return {
+    userStaked: userStaked as bigint | undefined,
+    pendingRewards: pendingRewards as bigint | undefined,
+    tokenBalance: tokenBalance as bigint | undefined,
+    allowance: allowance as bigint | undefined,
+    isUnlocked: true, // V2 has no lock period for withdrawals
+    unlockTime: BigInt(0),
+  };
 }
 
-// ─── Staking Actions Hook ────────────────────────────────────────────
-export function useStakingActions(chainId: SupportedChainId) {
-  const tokens = getTokens(chainId);
-  const [pendingTxHash, setPendingTxHash] = useState<`0x${string}` | undefined>();
+export function useStakingActions(overrideChainId?: number) {
+  const { chainId: networkChainId } = useNetwork();
+  const chainId = overrideChainId ?? networkChainId;
+  const stakingAddress = STAKING_ADDRESSES[chainId];
+  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const { writeContractAsync: writeApprove, isPending: isApproving } = useWriteContract();
-  const { writeContractAsync: writeStake, isPending: isStaking } = useWriteContract();
-  const { writeContractAsync: writeUnstake, isPending: isUnstaking } = useWriteContract();
-  const { writeContractAsync: writeClaim, isPending: isClaiming } = useWriteContract();
-  const { writeContractAsync: writeEmergency, isPending: isEmergencyWithdrawing } = useWriteContract();
-
-  const { isLoading: isConfirming, isSuccess: isConfirmed } = useWaitForTransactionReceipt({
-    hash: pendingTxHash,
+  const { data: stakingToken } = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "stakingToken",
+    chainId,
   });
 
-  const approve = useCallback(async (amount: bigint) => {
-    const hash = await writeApprove({
-      address: tokens.hero,
-      abi: erc20Abi,
+  const approve = (amount: string) => {
+    if (!stakingToken || !stakingAddress) return;
+    writeContract({
+      address: stakingToken as `0x${string}`,
+      abi: ERC20_ABI,
       functionName: "approve",
-      args: [getStakingAddress(chainId), amount],
+      args: [stakingAddress, parseUnits(amount, 18)],
       chainId,
     });
-    setPendingTxHash(hash);
-    return hash;
-  }, [writeApprove, tokens.hero, chainId]);
+  };
 
-  const stake = useCallback(async (amount: bigint) => {
-    const hash = await writeStake({
-      address: getStakingAddress(chainId),
-      abi: HERO_STAKING_ABI,
+  const stake = (amount: string) => {
+    writeContract({
+      address: stakingAddress,
+      abi: STAKING_ABI,
       functionName: "stake",
-      args: [amount],
+      args: [parseUnits(amount, 18)],
       chainId,
     });
-    setPendingTxHash(hash);
-    return hash;
-  }, [writeStake, chainId]);
+  };
 
-  const unstake = useCallback(async (amount: bigint) => {
-    const hash = await writeUnstake({
-      address: getStakingAddress(chainId),
-      abi: HERO_STAKING_ABI,
-      functionName: "unstake",
-      args: [amount],
+  const withdraw = (amount: string) => {
+    writeContract({
+      address: stakingAddress,
+      abi: STAKING_ABI,
+      functionName: "withdraw",
+      args: [parseUnits(amount, 18)],
       chainId,
     });
-    setPendingTxHash(hash);
-    return hash;
-  }, [writeUnstake, chainId]);
+  };
 
-  const claimRewards = useCallback(async () => {
-    const hash = await writeClaim({
-      address: getStakingAddress(chainId),
-      abi: HERO_STAKING_ABI,
-      functionName: "claimRewards",
+  const claimRewards = () => {
+    writeContract({
+      address: stakingAddress,
+      abi: STAKING_ABI,
+      functionName: "getReward",
       chainId,
     });
-    setPendingTxHash(hash);
-    return hash;
-  }, [writeClaim, chainId]);
+  };
 
-  const emergencyWithdraw = useCallback(async () => {
-    const hash = await writeEmergency({
-      address: getStakingAddress(chainId),
-      abi: HERO_STAKING_ABI,
-      functionName: "emergencyWithdraw",
+  const exitAll = () => {
+    writeContract({
+      address: stakingAddress,
+      abi: STAKING_ABI,
+      functionName: "exit",
       chainId,
     });
-    setPendingTxHash(hash);
-    return hash;
-  }, [writeEmergency, chainId]);
+  };
 
   return {
     approve,
     stake,
-    unstake,
+    unstake: withdraw,
     claimRewards,
-    emergencyWithdraw,
-    isApproving,
-    isStaking,
-    isUnstaking,
-    isClaiming,
-    isEmergencyWithdrawing,
+    emergencyWithdraw: exitAll,
+    isPending,
     isConfirming,
-    isConfirmed,
-    pendingTxHash,
+    isSuccess,
+    hash,
   };
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────
-export function formatHero(value: bigint | undefined, decimals = 2): string {
-  if (!value || value === 0n) return "0.00";
-  return Number(formatUnits(value, 18)).toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+
+// --- Compatibility Aliases & Utilities ---
+// These maintain backward compatibility with HeroStake.tsx
+
+// Address exports
+export const HERO_STAKING_ADDRESS = STAKING_ADDRESSES;
+export function getStakingAddress(chainId: number): `0x${string}` | undefined {
+  return STAKING_ADDRESSES[chainId];
 }
 
-export function formatDai(value: bigint | undefined, decimals = 4): string {
-  if (!value || value === 0n) return "0.0000";
-  return Number(formatUnits(value, 18)).toLocaleString("en-US", {
-    minimumFractionDigits: decimals,
-    maximumFractionDigits: decimals,
-  });
+// Alias for useUserStaking (HeroStake.tsx imports useUserStake)
+export const useUserStake = useUserStaking;
+
+// Format utilities
+export function formatHero(value: bigint | undefined | null): string {
+  if (!value) return "0";
+  return Number(formatUnits(value, 18)).toLocaleString(undefined, { maximumFractionDigits: 2 });
 }
 
-export function formatAPY(bps: bigint | undefined): string {
-  if (!bps) return "0.00";
-  return (Number(bps) / 100).toFixed(2);
+export function formatDai(value: bigint | undefined | null): string {
+  if (!value) return "0";
+  return Number(formatUnits(value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 });
 }
 
-export function formatLockPeriod(seconds: bigint | undefined): string {
-  if (!seconds) return "—";
-  const days = Number(seconds) / 86400;
-  if (days >= 1) return `${days.toFixed(0)} day${days > 1 ? "s" : ""}`;
-  const hours = Number(seconds) / 3600;
-  return `${hours.toFixed(0)} hour${hours > 1 ? "s" : ""}`;
+export function formatAPY(value: bigint | undefined | null): string {
+  if (!value) return "0";
+  // Value is in basis points (10000 = 100%)
+  const pct = Number(value) / 100;
+  return pct.toLocaleString(undefined, { maximumFractionDigits: 1 });
 }
 
-export function useCountdown(targetTimestamp: bigint | undefined) {
-  const [remaining, setRemaining] = useState<number>(0);
+export function formatLockPeriod(seconds: bigint | undefined | null): string {
+  if (!seconds || seconds === BigInt(0)) return "No lock";
+  const s = Number(seconds);
+  if (s < 3600) return `${Math.floor(s / 60)}m`;
+  if (s < 86400) return `${Math.floor(s / 3600)}h`;
+  return `${Math.floor(s / 86400)}d`;
+}
 
-  useEffect(() => {
-    if (!targetTimestamp || targetTimestamp === 0n) {
-      setRemaining(0);
-      return;
-    }
-    const target = Number(targetTimestamp);
-    const update = () => {
-      const now = Math.floor(Date.now() / 1000);
-      setRemaining(Math.max(0, target - now));
-    };
-    update();
-    const interval = setInterval(update, 1000);
+// Countdown hook for lock period display
+export function useCountdown(targetTimestamp: bigint | undefined): string {
+  const [now, setNow] = useState(Math.floor(Date.now() / 1000));
+
+  // Update every second
+  useState(() => {
+    const interval = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(interval);
-  }, [targetTimestamp]);
+  });
+
+  if (!targetTimestamp || targetTimestamp === BigInt(0)) return "";
+  const remaining = Number(targetTimestamp) - now;
+  if (remaining <= 0) return "Unlocked";
 
   const days = Math.floor(remaining / 86400);
   const hours = Math.floor((remaining % 86400) / 3600);
-  const minutes = Math.floor((remaining % 3600) / 60);
-  const seconds = remaining % 60;
+  const mins = Math.floor((remaining % 3600) / 60);
 
-  return { remaining, days, hours, minutes, seconds, isExpired: remaining === 0 };
+  if (days > 0) return `${days}d ${hours}h`;
+  if (hours > 0) return `${hours}h ${mins}m`;
+  return `${mins}m`;
 }
