@@ -13,10 +13,15 @@ const TREASURY_ADDRESS = "0x94e52915b99ffdd298939f9e0b4a7af80e6789f7";
 // RPC endpoints
 const PLS_RPC = "https://rpc.pulsechain.com";
 const BASE_RPC = "https://mainnet.base.org";
+// Stablecoin addresses
+const DAI_PLS = "0xefD766cCb38EaF1dfd701853BFCe31359239F305"; // DAI on PulseChain
+const USDC_BASE = "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"; // USDC on Base
 
 interface TreasuryBalance {
   pls: string;
   eth: string;
+  daiPls: string;
+  usdcBase: string;
   loading: boolean;
   error: string | null;
 }
@@ -46,10 +51,39 @@ async function getBalance(rpc: string, address: string): Promise<string> {
   }
 }
 
+async function getErc20Balance(rpc: string, tokenAddress: string, walletAddress: string, decimals: number): Promise<string> {
+  try {
+    const data = "0x70a08231" + walletAddress.slice(2).padStart(64, "0");
+    const res = await fetch(rpc, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        jsonrpc: "2.0",
+        method: "eth_call",
+        params: [{ to: tokenAddress, data }, "latest"],
+        id: 1,
+      }),
+    });
+    const result = await res.json();
+    if (result.result && result.result !== "0x") {
+      const wei = BigInt(result.result);
+      const divisor = BigInt(10 ** decimals);
+      const whole = wei / divisor;
+      const fraction = (wei % divisor).toString().padStart(decimals, "0").slice(0, 2);
+      return whole.toLocaleString() + "." + fraction;
+    }
+    return "0.00";
+  } catch {
+    return "Error";
+  }
+}
+
 export default function TreasuryDisplay() {
   const [balances, setBalances] = useState<TreasuryBalance>({
     pls: "...",
     eth: "...",
+    daiPls: "...",
+    usdcBase: "...",
     loading: true,
     error: null,
   });
@@ -58,11 +92,13 @@ export default function TreasuryDisplay() {
   const fetchBalances = useCallback(async () => {
     setRefreshing(true);
     try {
-      const [plsBal, ethBal] = await Promise.all([
+      const [plsBal, ethBal, daiPls, usdcBase] = await Promise.all([
         getBalance(PLS_RPC, TREASURY_ADDRESS),
         getBalance(BASE_RPC, TREASURY_ADDRESS),
+        getErc20Balance(PLS_RPC, DAI_PLS, TREASURY_ADDRESS, 18),
+        getErc20Balance(BASE_RPC, USDC_BASE, TREASURY_ADDRESS, 6),
       ]);
-      setBalances({ pls: plsBal, eth: ethBal, loading: false, error: null });
+      setBalances({ pls: plsBal, eth: ethBal, daiPls, usdcBase, loading: false, error: null });
     } catch (err) {
       setBalances((prev) => ({ ...prev, loading: false, error: "Failed to fetch" }));
     }

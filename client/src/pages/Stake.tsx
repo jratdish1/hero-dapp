@@ -15,6 +15,8 @@ import {
   Flame,
   Wallet,
   ArrowUpRight,
+  Award,
+  Droplets,
 } from "lucide-react";
 import {
   Tooltip,

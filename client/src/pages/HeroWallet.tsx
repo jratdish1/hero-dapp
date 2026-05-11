@@ -12,12 +12,13 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount } from "wagmi";
+import { createPublicClient, http, erc20Abi, formatUnits } from "viem";
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
 
-// Wallet API base URL (VDS S)
-const WALLET_API = import.meta.env.VITE_WALLET_API_URL || "https://wallet-api.herobase.io";
+// Wallet API base URL (not yet deployed - balance reads use on-chain)
+const WALLET_API = "";
 
 interface TokenBalance {
   symbol: string;
@@ -80,18 +81,71 @@ export default function HeroWallet() {
   const [bridgeToken, setBridgeToken] = useState("HERO");
 
   const fetchBalances = useCallback(async () => {
-    if (!address) return;
     setLoading(true);
     try {
-      const res = await fetch(`${WALLET_API}/api/wallet/balance`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, chains: ['base', 'pulsechain', 'ethereum', 'arbitrum'] })
-      });
-      if (res.ok) {
-        const data = await res.json();
-        setBalances(data.balances || []);
+      const BALANCE_CHAINS = {
+        pulsechain: {
+          rpc: "https://rpc.pulsechain.com",
+          nativeSymbol: "PLS",
+          nativeName: "Pulse",
+          tokens: [
+            { address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27", symbol: "HERO", name: "HERO Token", decimals: 18 },
+            { address: "0x4013abBf94A745EfA7cc848989Ee83424A770060", symbol: "VETS", name: "VETERANS", decimals: 18 },
+          ],
+        },
+        base: {
+          rpc: "https://mainnet.base.org",
+          nativeSymbol: "ETH",
+          nativeName: "Ether",
+          tokens: [
+            { address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", symbol: "HERO", name: "HERO Token", decimals: 18 },
+          ],
+        },
+      };
+      const allBalances: TokenBalance[] = [];
+      for (const [chainKey, chain] of Object.entries(BALANCE_CHAINS)) {
+        const client = createPublicClient({ transport: http(chain.rpc) });
+        // Native balance
+        try {
+          const nativeBal = await client.getBalance({ address: address as `0x${string}` });
+          if (nativeBal > 0n) {
+            allBalances.push({
+              symbol: chain.nativeSymbol,
+              name: chain.nativeName,
+              balance: formatUnits(nativeBal, 18),
+              valueUsd: "0",
+              address: "0x0000000000000000000000000000000000000000",
+              decimals: 18,
+              chain: chainKey,
+            });
+          }
+        } catch (e) { console.warn(`Native balance error on ${chainKey}:`, e); }
+        // ERC20 balances
+        try {
+          const calls = chain.tokens.map((t: any) => ({
+            address: t.address as `0x${string}`,
+            abi: erc20Abi,
+            functionName: "balanceOf" as const,
+            args: [address as `0x${string}`],
+          }));
+          const results = await client.multicall({ contracts: calls });
+          results.forEach((result: any, i: number) => {
+            const token = chain.tokens[i];
+            if (result.status === "success" && result.result > 0n) {
+              allBalances.push({
+                symbol: token.symbol,
+                name: token.name,
+                balance: formatUnits(result.result as bigint, token.decimals),
+                valueUsd: "0",
+                address: token.address,
+                decimals: token.decimals,
+                chain: chainKey,
+              });
+            }
+          });
+        } catch (e) { console.warn(`Token balance error on ${chainKey}:`, e); }
       }
+      setBalances(allBalances);
     } catch (e) {
       console.error("Failed to fetch balances:", e);
     }
@@ -274,7 +328,7 @@ export default function HeroWallet() {
   if (!isConnected) {
     return (
       <div className="container mx-auto px-4 py-8 space-y-8">
-        <Card className="max-w-md mx-auto bg-gray-900/80 border-yellow-500/30">
+        <Card className="max-w-md mx-auto bg-black/95 border-yellow-500/30">
           <CardContent className="p-8 text-center">
             <Wallet className="w-16 h-16 mx-auto mb-4 text-yellow-400" />
             <h2 className="text-2xl font-bold text-white mb-2">HERO Wallet</h2>
@@ -332,7 +386,7 @@ export default function HeroWallet() {
 
       {/* Main Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="bg-gray-900/80 border border-gray-700 w-full justify-start overflow-x-auto">
+        <TabsList className="bg-black/95 border border-gray-700 w-full justify-start overflow-x-auto">
           <TabsTrigger value="overview">Overview</TabsTrigger>
           <TabsTrigger value="send">Send</TabsTrigger>
           <TabsTrigger value="privacy">Privacy</TabsTrigger>
@@ -352,7 +406,7 @@ export default function HeroWallet() {
           </div>
           
           {balances.length === 0 ? (
-            <Card className="bg-gray-900/60 border-gray-700">
+            <Card className="bg-black/95 border-gray-700">
               <CardContent className="p-8 text-center text-gray-400">
                 <Coins className="w-12 h-12 mx-auto mb-3 opacity-50" />
                 <p>No balances found. Connect wallet and refresh.</p>
@@ -361,7 +415,7 @@ export default function HeroWallet() {
           ) : (
             <div className="grid gap-2">
               {balances.map((token, i) => (
-                <Card key={i} className="bg-gray-900/60 border-gray-700 hover:border-yellow-500/30 transition-colors">
+                <Card key={i} className="bg-black/95 border-gray-700 hover:border-yellow-500/30 transition-colors">
                   <CardContent className="p-4 flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
@@ -385,7 +439,7 @@ export default function HeroWallet() {
 
         {/* SEND TAB */}
         <TabsContent value="send" className="space-y-4">
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <Send className="w-5 h-5 text-yellow-400" />
@@ -443,7 +497,7 @@ export default function HeroWallet() {
           </Card>
 
           {/* Receive */}
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <ArrowDownToLine className="w-5 h-5 text-green-400" />
@@ -465,7 +519,7 @@ export default function HeroWallet() {
 
         {/* PRIVACY TAB (Railgun) */}
         <TabsContent value="privacy" className="space-y-4">
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <Shield className="w-5 h-5 text-purple-400" />
@@ -505,7 +559,7 @@ export default function HeroWallet() {
           </Card>
 
           {/* Private Balances */}
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center justify-between">
                 <span className="flex items-center gap-2">
@@ -552,7 +606,7 @@ export default function HeroWallet() {
 
         {/* BRIDGE TAB */}
         <TabsContent value="bridge" className="space-y-4">
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <ArrowLeftRight className="w-5 h-5 text-blue-400" />
@@ -619,7 +673,7 @@ export default function HeroWallet() {
 
         {/* APPROVALS TAB */}
         <TabsContent value="approvals" className="space-y-4">
-          <Card className="bg-gray-900/60 border-gray-700">
+          <Card className="bg-black/95 border-gray-700">
             <CardHeader>
               <CardTitle className="text-white flex items-center gap-2">
                 <FileWarning className="w-5 h-5 text-orange-400" />

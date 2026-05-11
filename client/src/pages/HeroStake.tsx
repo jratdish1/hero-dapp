@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
-import { useAccount, useChainId, useSwitchChain } from "wagmi";
+import { useAccount, useSwitchChain } from "wagmi";
+import { useNetwork } from "@/contexts/NetworkContext";
 import { parseUnits } from "viem";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -100,7 +101,7 @@ function StatCard({
 // ─── Main Component ──────────────────────────────────────────────────
 export default function HeroStake() {
   const { isConnected, address } = useAccount();
-  const chainId = useChainId();
+  const { chainId } = useNetwork();
   const { switchChain } = useSwitchChain();
 
   const activeChainId: SupportedChainId = isSupportedChain(chainId) ? chainId : 8453;
@@ -425,7 +426,7 @@ export default function HeroStake() {
                       placeholder="0.00"
                       value={stakeAmount}
                       onChange={(e) => setStakeAmount(e.target.value)}
-                      className="bg-black/30 border-[#3D5A3D] text-white"
+                      className="bg-black/90 border-[#3D5A3D] text-white"
                       disabled={isAnyTxPending || stats.isPaused}
                     />
                     <button
@@ -497,7 +498,7 @@ export default function HeroStake() {
                       placeholder="0.00"
                       value={unstakeAmount}
                       onChange={(e) => setUnstakeAmount(e.target.value)}
-                      className="bg-black/30 border-[#3D5A3D] text-white"
+                      className="bg-black/90 border-[#3D5A3D] text-white"
                       disabled={isAnyTxPending || !hasStake}
                     />
                     <button

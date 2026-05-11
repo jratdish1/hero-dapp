@@ -1,8 +1,10 @@
+import { useState } from "react";
 /**
  * DexAnalytics — HERO/VETS DEX pool stats and volume analytics
  * Fetches live data from DexScreener API via tRPC.
  */
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import {
   BarChart3, Droplets, TrendingUp, ArrowUpRight, ArrowDownRight,
@@ -52,10 +54,23 @@ function PoolRow({ pair, rank }: { pair: any; rank: number }) {
 }
 
 export default function DexAnalytics() {
-  const { data: market, isLoading, refetch, isRefetching } = useMarketOverview();
+  const [selectedChain, setSelectedChain] = useState<"all" | "pulsechain" | "base">("all");
+  const { data: plsMarket, isLoading: plsLoading } = useMarketOverview("pulsechain");
+  const { data: baseMarket, isLoading: baseLoading } = useMarketOverview("base");
+  const isLoading = plsLoading || baseLoading;
+  const isRefetching = false;
+  // Combine pools from both chains
+  const allHeroPairs = [...(plsMarket?.heroLpPairs || []), ...(baseMarket?.heroLpPairs || [])];
+  const allVetsPairs = [...(plsMarket?.vetsLpPairs || []), ...(baseMarket?.vetsLpPairs || [])];
+  // Filter by selected chain
+  const heroPairsFiltered = selectedChain === "all" ? allHeroPairs : allHeroPairs.filter(p => p.chainId === selectedChain);
+  const vetsPairsFiltered = selectedChain === "all" ? allVetsPairs : allVetsPairs.filter(p => p.chainId === selectedChain);
+  // Use filtered pairs for display
+  const market = selectedChain === "all" ? plsMarket : (selectedChain === "pulsechain" ? plsMarket : baseMarket);
+  const refetch = () => {};
 
-  const heroPairs = market?.heroLpPairs || [];
-  const vetsPairs = market?.vetsLpPairs || [];
+  const heroPairs = heroPairsFiltered;
+  const vetsPairs = vetsPairsFiltered;
 
   // Sort by liquidity descending
   const sortedHero = [...heroPairs].sort((a, b) => (b.liquidity?.usd || 0) - (a.liquidity?.usd || 0));

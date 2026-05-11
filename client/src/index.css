@@ -167,11 +167,11 @@
   }
   /* MARPAT section backgrounds — semi-transparent over camo */
   .marpat-section {
-    background: rgba(26, 32, 53, 0.82);
+    background: rgba(10, 12, 20, 0.95);
     backdrop-filter: blur(2px);
   }
   .marpat-card {
-    background: rgba(26, 32, 53, 0.88);
+    background: rgba(10, 12, 20, 0.95);
     border: 1px solid rgba(139, 105, 20, 0.3);  /* coyote brown border */
     backdrop-filter: blur(4px);
   }
