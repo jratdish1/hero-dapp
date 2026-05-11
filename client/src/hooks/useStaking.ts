@@ -1,3 +1,4 @@
+import { isValidChainId, isValidAmount } from "../lib/validation";
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { STAKING_ABI } from "../lib/staking-abi";
