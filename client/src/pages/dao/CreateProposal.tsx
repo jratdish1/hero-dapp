@@ -1,3 +1,4 @@
+import { sanitizeString } from "../../lib/validation";
 import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
@@ -37,14 +38,14 @@ export default function CreateProposal() {
     e.preventDefault();
     setError("");
 
-    if (!title.trim()) { setError("Title is required"); return; }
-    if (!description.trim()) { setError("Description is required"); return; }
+    if (!sanitizeString(sanitizeString(title.trim()))) { setError("Title is required"); return; }
+    if (!sanitizeString(sanitizeString(description.trim()))) { setError("Description is required"); return; }
     if (!isConnected || !address) { setError("Connect your wallet to create a proposal"); return; }
     if (!user) { setError("Sign in to create a proposal"); return; }
 
     createProposal.mutate({
-      title: title.trim(),
-      description: description.trim(),
+      title: sanitizeString(sanitizeString(title.trim())),
+      description: sanitizeString(sanitizeString(description.trim())),
       walletAddress: address,
       category,
       chain,
@@ -115,7 +116,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value as string)}
+                    onChange={(e) => (() => { const v = e.target.value; if (validCategories.includes(v as any)) setCategory(v as typeof category); })()}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="protocol">Protocol</option>
@@ -129,7 +130,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Chain</label>
                   <select
                     value={chain}
-                    onChange={(e) => setChain(e.target.value as string)}
+                    onChange={(e) => (() => { const v = e.target.value; if (validChains.includes(v as any)) setChain(v as typeof chain); })()}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="both">Both Chains</option>

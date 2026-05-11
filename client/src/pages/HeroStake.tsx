@@ -107,7 +107,7 @@ export default function HeroStake() {
   const { chainId } = useNetwork();
   const { switchChain } = useSwitchChain();
 
-  const activeChainId: SupportedChainId = isSupportedChain(chainId) ? chainId : 8453;
+  const activeChainId: SupportedChainId = isValidChainId(chainId) ? chainId : 8453;
   const chainConfig = CHAIN_CONFIG[activeChainId];
 
   // ─── Contract State ──────────────────────────────────────────────
@@ -498,7 +498,7 @@ export default function HeroStake() {
                     <CommaInput
                       placeholder="0.00"
                       value={unstakeAmount}
-                      onChange={(e) => setUnstakeAmount(e.target.value)}
+                      onChange={setUnstakeAmount}
                       className="bg-black/90 border-[#3D5A3D] text-white"
                       disabled={isAnyTxPending || !hasStake}
                     />

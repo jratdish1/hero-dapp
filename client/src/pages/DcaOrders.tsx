@@ -171,14 +171,7 @@ export default function DcaOrders() {
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label className="text-foreground">Amount Per Order</Label>
-                <Input
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="0.0"
-                  value={amount}
-                  onChange={(e) => { if (/^[0-9]*\.?[0-9]*$/.test(e.target.value)) setAmount(e.target.value); }}
-                  className="bg-secondary border-border"
-                />
+                <CommaInput value={amount} onChange={setAmount} placeholder="0.00" className="text-lg" />
               </div>
               <div className="space-y-2">
                 <Label className="text-foreground">Frequency</Label>
@@ -200,7 +193,7 @@ export default function DcaOrders() {
                   
                   placeholder="7"
                   value={totalOrders}
-                  onChange={(e) => setTotalOrders(e.target.value)}
+                  onChange={(e) => { const v = e.target.value; if (v === "" || (/^[0-9]+$/.test(v) && parseInt(v) >= 1 && parseInt(v) <= 100)) setTotalOrders(v); }}
                   className="bg-secondary border-border"
                 />
               </div>

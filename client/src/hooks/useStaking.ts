@@ -185,37 +185,52 @@ export function useStakingActions(overrideChainId?: number) {
     if (!stakingToken || !stakingAddress) return;
     if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
     if (!validateDecimalInput(amount, 18)) { console.error("Invalid amount format:", amount); return; }
-    writeContract({
-      address: stakingToken as `0x${string}`,
-      abi: ERC20_ABI,
-      functionName: "approve",
-      args: [stakingAddress, parseUnits(amount, 18)],
-      chainId,
-    });
+    try {
+      const parsedAmount = parseUnits(amount, 18);
+      writeContract({
+        address: stakingToken as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "approve",
+        args: [stakingAddress, parsedAmount],
+        chainId,
+      });
+    } catch (e) {
+      console.error("Error in approve:", e);
+    }
   };
 
   const stake = (amount: string) => {
     if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
     if (!validateDecimalInput(amount, 18)) { console.error("Invalid stake amount:", amount); return; }
-    writeContract({
-      address: stakingAddress,
-      abi: STAKING_ABI,
-      functionName: "stake",
-      args: [parseUnits(amount, 18)],
-      chainId,
-    });
+    try {
+      const parsedAmount = parseUnits(amount, 18);
+      writeContract({
+        address: stakingAddress,
+        abi: STAKING_ABI,
+        functionName: "stake",
+        args: [parsedAmount],
+        chainId,
+      });
+    } catch (e) {
+      console.error("Error in stake:", e);
+    }
   };
 
   const withdraw = (amount: string) => {
     if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
     if (!validateDecimalInput(amount, 18)) { console.error("Invalid withdraw amount:", amount); return; }
-    writeContract({
-      address: stakingAddress,
-      abi: STAKING_ABI,
-      functionName: "withdraw",
-      args: [parseUnits(amount, 18)],
-      chainId,
-    });
+    try {
+      const parsedAmount = parseUnits(amount, 18);
+      writeContract({
+        address: stakingAddress,
+        abi: STAKING_ABI,
+        functionName: "withdraw",
+        args: [parsedAmount],
+        chainId,
+      });
+    } catch (e) {
+      console.error("Error in withdraw:", e);
+    }
   };
 
   const claimRewards = () => {

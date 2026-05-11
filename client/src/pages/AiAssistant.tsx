@@ -45,6 +45,8 @@ const QUICK_PROMPTS = [
   },
 ];
 
+const MAX_INPUT_LENGTH = 2000;
+
 export default function AiAssistant() {
   const { chain } = useNetwork();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -60,7 +62,7 @@ export default function AiAssistant() {
   }, [messages]);
 
   const sendMessage = async (content: string) => {
-    if (!content.trim() || isLoading) return;
+    if (!content.trim() || content.length > MAX_INPUT_LENGTH || isLoading) return;
 
     const userMsg: ChatMessage = {
       role: "user",
@@ -234,7 +236,7 @@ export default function AiAssistant() {
         <div className="flex items-end gap-3 max-w-3xl mx-auto">
           <div className="flex-1 relative">
             <textarea
-              ref={inputRef}
+              maxLength={MAX_INPUT_LENGTH} ref={inputRef}
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleKeyDown}
