@@ -1,4 +1,6 @@
 import TreasuryDisplay from "@/components/TreasuryDisplay";
+import { useAccount, useBalance, useReadContracts } from "wagmi";
+import { formatUnits } from "viem";
 import TradingViewChart from "@/components/TradingViewChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -24,6 +26,31 @@ export default function Dashboard() {
   const vetsPrice = market?.vetsPrice;
   const plsPrice = market?.plsPrice;
 
+  // Wallet integration — show user balances when connected
+  const { address, isConnected } = useAccount();
+  const { data: plsBalance } = useBalance({ address });
+  const { data: tokenBalances } = useReadContracts({
+    contracts: address ? [
+      {
+        address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" as `0x${string}`, // HERO on PulseChain
+        abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
+        functionName: "balanceOf",
+        args: [address],
+      },
+      {
+        address: "0x4013abBf94A745EfA7cc848989Ee83424A770060" as `0x${string}`, // VETS on PulseChain
+        abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
+        functionName: "balanceOf",
+        args: [address],
+      },
+    ] : undefined,
+    query: { enabled: isConnected && !!address },
+  });
+
+  const heroBalance = tokenBalances?.[0]?.result ? Number(formatUnits(tokenBalances[0].result as bigint, 18)) : 0;
+  const vetsBalance = tokenBalances?.[1]?.result ? Number(formatUnits(tokenBalances[1].result as bigint, 18)) : 0;
+  const plsBalanceNum = plsBalance ? Number(formatUnits(plsBalance.value, 18)) : 0;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -46,6 +73,58 @@ export default function Dashboard() {
           <RefreshCw className={`w-4 h-4 ${isRefetching ? "animate-spin" : ""}`} />
         </button>
       </div>
+
+      {/* Wallet Summary — shows when connected */}
+      {isConnected && address && (
+        <Card className="border-hero-orange/30 bg-gradient-to-r from-hero-orange/5 to-transparent">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm font-medium flex items-center gap-2">
+              <Zap className="h-4 w-4 text-hero-orange" />
+              Your Wallet
+              <span className="text-xs text-muted-foreground font-mono">
+                {address.slice(0, 6)}...{address.slice(-4)}
+              </span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <p className="text-xs text-muted-foreground">HERO Balance</p>
+                <p className="text-lg font-bold text-foreground">
+                  {heroBalance > 0 ? heroBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                </p>
+                {heroBalance > 0 && heroPrice?.price && (
+                  <p className="text-xs text-muted-foreground">
+                    ≈ ${(heroBalance * heroPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">VETS Balance</p>
+                <p className="text-lg font-bold text-foreground">
+                  {vetsBalance > 0 ? vetsBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                </p>
+                {vetsBalance > 0 && vetsPrice?.price && (
+                  <p className="text-xs text-muted-foreground">
+                    ≈ ${(vetsBalance * vetsPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">PLS Balance</p>
+                <p className="text-lg font-bold text-foreground">
+                  {plsBalanceNum > 0 ? plsBalanceNum.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                </p>
+                {plsBalanceNum > 0 && plsPrice?.price && (
+                  <p className="text-xs text-muted-foreground">
+                    ≈ ${(plsBalanceNum * plsPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                  </p>
+                )}
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
