@@ -1,4 +1,5 @@
 import { isValidAmount, isValidChainId, sanitizeString } from "../lib/validation";
+import { SlippageSelector } from "@/components/SlippageSelector";
 import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -103,6 +104,7 @@ function handleRpcError(error: unknown) {
 // Hook to fetch balances with abort support and error handling
 function useFetchBalances(address: string | undefined) {
   const [balances, setBalances] = useState<TokenBalance[]>([]);
+  const [slippage, setSlippage] = useState(0.5);
   const [loading, setLoading] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 

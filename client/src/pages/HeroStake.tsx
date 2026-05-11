@@ -134,6 +134,11 @@ export default function HeroStake() {
     }
     try {
       const amountBigInt = parseUnits(stakeAmount, 18);
+      // Balance check before transaction
+      if (user.heroBalance && amountBigInt > user.heroBalance) {
+        toast.error("Insufficient HERO balance", { description: `You have ${formatHero(user.heroBalance)} HERO but tried to stake ${stakeAmount}` });
+        return;
+      }
 
       // Check allowance
       if (!user.heroAllowance || user.heroAllowance < amountBigInt) {
@@ -163,6 +168,11 @@ export default function HeroStake() {
     }
     try {
       const amountBigInt = parseUnits(unstakeAmount, 18);
+      // Balance check before unstake
+      if (user.stakedAmount && amountBigInt > user.stakedAmount) {
+        toast.error("Insufficient staked balance", { description: `You have ${formatHero(user.stakedAmount)} HERO staked but tried to unstake ${unstakeAmount}` });
+        return;
+      }
       const willPenalize = !user.isUnlocked;
 
       if (willPenalize) {

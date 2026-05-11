@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { sanitizeString } from "@/lib/validation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -349,11 +350,11 @@ export default function Portfolio() {
                 <CardContent className="p-0">
                   <div className="divide-y divide-border">
                     {holdings.map((token) => (
-                      <div key={token.symbol} className="flex items-center gap-3 p-4 hover:bg-secondary/20 transition-colors">
-                        <img src={token.logoURI} alt={token.symbol} className="w-8 h-8 rounded-full" />
+                      <div key={sanitizeString(token.symbol)} className="flex items-center gap-3 p-4 hover:bg-secondary/20 transition-colors">
+                        <img src={token.logoURI} alt={sanitizeString(token.symbol)} className="w-8 h-8 rounded-full" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-foreground font-semibold text-sm">{token.symbol}</p>
-                          <p className="text-muted-foreground text-xs">{token.name}</p>
+                          <p className="text-foreground font-semibold text-sm">{sanitizeString(token.symbol)}</p>
+                          <p className="text-muted-foreground text-xs">{sanitizeString(token.name)}</p>
                         </div>
                         <div className="text-right">
                           <p className="text-foreground text-sm font-medium">{token.balance}</p>

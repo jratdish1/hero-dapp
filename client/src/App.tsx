@@ -1,4 +1,4 @@
-import { usePageSEO } from "./hooks/usePageSEO";
+import { memo, usePageSEO } from "./hooks/usePageSEO";
 import LoginPage from "./pages/LoginPage";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -93,17 +93,17 @@ function Router() {
       <Route path="/beta-disclaimer" component={BetaDisclaimer} />
       <Route path="/disclaimer" component={BetaDisclaimer} />
       {/* Redirect aliases for common URL variants */}
-      <Route path="/stake-base">{() => <Redirect to="/stake/base" />}</Route>
-      <Route path="/stake-dai">{() => <Redirect to="/stake/dai" />}</Route>
-      <Route path="/nfts">{() => <Redirect to="/nft" />}</Route>
-      <Route path="/farm">{() => <Redirect to="/bootcamp" />}</Route>
-      <Route path="/dapp-farm">{() => <Redirect to="/bootcamp" />}</Route>
-      <Route path="/ai-assistant">{() => <Redirect to="/ai" />}</Route>
-      <Route path="/able-bots">{() => <Redirect to="/bots" />}</Route>
-      <Route path="/liberty-swap">{() => <Redirect to="/swap" />}</Route>
-      <Route path="/whitepaper">{() => <ExternalRedirect url="https://docs.vicfoundation.com" />}</Route>
-      <Route path="/buy-and-burn">{() => <Redirect to="/burn" />}</Route>
-      <Route path="/pools">{() => <Redirect to="/dex-analytics" />}</Route>
+      <Route path="/stake-base"><Redirect to="/stake/base" /></Route>
+      <Route path="/stake-dai"><Redirect to="/stake/dai" /></Route>
+      <Route path="/nfts"><Redirect to="/nft" /></Route>
+      <Route path="/farm"><Redirect to="/bootcamp" /></Route>
+      <Route path="/dapp-farm"><Redirect to="/bootcamp" /></Route>
+      <Route path="/ai-assistant"><Redirect to="/ai" /></Route>
+      <Route path="/able-bots"><Redirect to="/bots" /></Route>
+      <Route path="/liberty-swap"><Redirect to="/swap" /></Route>
+      <Route path="/whitepaper"><ExternalRedirect url="https://docs.vicfoundation.com" /></Route>
+      <Route path="/buy-and-burn"><Redirect to="/burn" /></Route>
+      <Route path="/pools"><Redirect to="/dex-analytics" /></Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>
