@@ -187,6 +187,8 @@ export default function Portfolio() {
       
     } catch (err) {
       toast.error('Failed to load portfolio data');
+      setHoldings([]);
+      setTotalValue('$0.00');
     } finally {
       setIsLoading(false);
     }

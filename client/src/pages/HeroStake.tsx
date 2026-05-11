@@ -56,10 +56,6 @@ const CHAIN_CONFIG = {
 
 type SupportedChainId = 369 | 8453;
 
-// Removed: local isSupportedChain — now uses isValidChainId from validation.ts
-function isSupportedChain(id: number | undefined): id is SupportedChainId {
-  return isValidChainId(id as number);
-}
 
 // ─── Stat Card Component ─────────────────────────────────────────────
 function StatCard({
