@@ -49,15 +49,23 @@ export default function LimitOrders() {
 
   // Listen for auto-resize messages from widget
   useEffect(() => {
+    const ALLOWED_ORIGIN = "https://app.squirrelswap.pro";
     const handleMessage = (e: MessageEvent) => {
+      // Security: Only accept messages from SquirrelSwap origin
+      if (e.origin !== ALLOWED_ORIGIN) {
+        console.warn("[Security] Rejected postMessage from unauthorized origin:", e.origin);
+        return;
+      }
       if (e.data?.type === "squirrelswap:resize") {
-        setIframeHeight(e.data.height);
+        const height = Number(e.data.height);
+        if (height > 0 && height < 2000) { // Sanity check height value
+          setIframeHeight(height);
+        }
       }
       if (e.data?.type === "squirrelswap:ready") {
         setIsLoaded(true);
       }
       if (e.data?.type === "squirrelswap:swap") {
-        // Could log successful swaps or show toast
         console.log("[SquirrelSwap] Swap completed:", e.data);
       }
     };
@@ -150,6 +158,8 @@ export default function LimitOrders() {
           height={iframeHeight}
           style={{ border: "none", borderRadius: "12px", minHeight: "650px" }}
           allow="clipboard-write"
+          // SECURITY: allow-same-origin required for Web3 wallet connection (localStorage, provider).
+          // Mitigated by: CSP frame-src whitelist (server), postMessage origin check, no allow-popups/allow-top-navigation
           sandbox="allow-scripts allow-same-origin allow-forms"
           referrerPolicy="strict-origin-when-cross-origin"
           onLoad={() => setIsLoaded(true)}
