@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount } from "wagmi";
-import { createPublicClient, http, erc20Abi, formatUnits } from "viem";
+import { createPublicClient, http, fallback, erc20Abi, formatUnits, isAddress } from "viem";
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
@@ -85,7 +85,7 @@ export default function HeroWallet() {
     try {
       const BALANCE_CHAINS = {
         pulsechain: {
-          rpc: "https://rpc.pulsechain.com",
+          rpcs: ["https://rpc-pulsechain.g4mm4.io", "https://rpc.pulsechain.com", "https://pulsechain-rpc.publicnode.com"],
           nativeSymbol: "PLS",
           nativeName: "Pulse",
           tokens: [
@@ -94,7 +94,7 @@ export default function HeroWallet() {
           ],
         },
         base: {
-          rpc: "https://mainnet.base.org",
+          rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://1rpc.io/base"],
           nativeSymbol: "ETH",
           nativeName: "Ether",
           tokens: [
@@ -104,7 +104,7 @@ export default function HeroWallet() {
       };
       const allBalances: TokenBalance[] = [];
       for (const [chainKey, chain] of Object.entries(BALANCE_CHAINS)) {
-        const client = createPublicClient({ transport: http(chain.rpc) });
+        const client = createPublicClient({ transport: fallback((chain as any).rpcs.map((r: string) => http(r, { timeout: 10000, retryCount: 1 }))) });
         // Native balance
         try {
           const nativeBal = await client.getBalance({ address: address as `0x${string}` });
@@ -194,6 +194,14 @@ export default function HeroWallet() {
   }, [isConnected, address, fetchBalances, fetchGas, fetchApprovals, fetchPrivacyBalance]);
 
   const handleSend = async () => {
+    if (!sendTo || !isAddress(sendTo)) {
+      toast.error("Invalid recipient address");
+      return;
+    }
+    if (!sendAmount || parseFloat(sendAmount) <= 0) {
+      toast.error("Invalid amount");
+      return;
+    }
     if (!sendTo || !sendAmount) {
       toast.error("Please fill in recipient and amount");
       return;

@@ -1,4 +1,4 @@
-import { http, createConfig } from "wagmi";
+import { http, fallback, createConfig } from "wagmi";
 import type { Chain } from "viem";
 import { injected } from "wagmi";
 import {
@@ -14,7 +14,13 @@ export const pulsechain = {
   name: "PulseChain",
   nativeCurrency: { name: "Pulse", symbol: "PLS", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://rpc-pulsechain.g4mm4.io", "https://rpc.pulsechain.com"] },
+    default: {
+      http: [
+        "https://rpc-pulsechain.g4mm4.io",
+        "https://rpc.pulsechain.com",
+        "https://pulsechain-rpc.publicnode.com",
+      ],
+    },
   },
   blockExplorers: {
     default: { name: "PulseScan", url: "https://scan.pulsechain.com" },
@@ -27,7 +33,13 @@ export const base = {
   name: "Base",
   nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
   rpcUrls: {
-    default: { http: ["https://mainnet.base.org"] },
+    default: {
+      http: [
+        "https://mainnet.base.org",
+        "https://base-rpc.publicnode.com",
+        "https://1rpc.io/base",
+      ],
+    },
   },
   blockExplorers: {
     default: { name: "BaseScan", url: "https://basescan.org" },
@@ -70,6 +82,48 @@ if (wcProjectId) {
   );
 }
 
+// ─── RPC Failsafe Configuration ────────────────────────────────────────
+// Using viem's `fallback` transport: if primary RPC fails or times out,
+// automatically falls through to the next RPC in the list.
+// Each http() transport has a 10s timeout. If it fails, next one is tried.
+// This ensures the dapp stays functional even if one RPC provider goes down.
+
+const pulseChainTransport = fallback([
+  http("https://rpc-pulsechain.g4mm4.io", {
+    timeout: 10_000,
+    retryCount: 1,
+    retryDelay: 500,
+  }),
+  http("https://rpc.pulsechain.com", {
+    timeout: 10_000,
+    retryCount: 1,
+    retryDelay: 500,
+  }),
+  http("https://pulsechain-rpc.publicnode.com", {
+    timeout: 12_000,
+    retryCount: 1,
+    retryDelay: 1000,
+  }),
+]);
+
+const baseTransport = fallback([
+  http("https://mainnet.base.org", {
+    timeout: 10_000,
+    retryCount: 1,
+    retryDelay: 500,
+  }),
+  http("https://base-rpc.publicnode.com", {
+    timeout: 10_000,
+    retryCount: 1,
+    retryDelay: 500,
+  }),
+  http("https://1rpc.io/base", {
+    timeout: 12_000,
+    retryCount: 1,
+    retryDelay: 1000,
+  }),
+]);
+
 // ─── Wagmi Config ───────────────────────────────────────────────────────
 // SECURITY: reconnectOnMount disabled — users must explicitly click
 // "Connect Wallet" each session. This prevents auto-connecting to
@@ -78,8 +132,8 @@ export const wagmiConfig = createConfig({
   chains: [pulsechain, base],
   connectors: connectorList,
   transports: {
-    [pulsechain.id]: http("https://rpc-pulsechain.g4mm4.io"),
-    [base.id]: http("https://mainnet.base.org"),
+    [pulsechain.id]: pulseChainTransport,
+    [base.id]: baseTransport,
   },
   // Explicitly disable auto-reconnect on page load
   // Users must manually connect their wallet each session

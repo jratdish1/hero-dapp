@@ -118,7 +118,7 @@ export default function LimitOrders() {
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-[var(--hero-green)] flex items-center gap-1 transition-colors"
           >
-            Open Full App <ExternalLink className="h-3 w-3" />
+            Open Full App <ExternalLink aria-hidden="true" className="h-3 w-3" />
           </a>
         </div>
       </div>
@@ -148,7 +148,7 @@ export default function LimitOrders() {
           width="100%"
           height={iframeHeight}
           style={{ border: "none", borderRadius: "12px", minHeight: "650px" }}
-          allow="clipboard-write"
+          allow="clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerPolicy="strict-origin-when-cross-origin"
           onLoad={() => setIsLoaded(true)}
           title="SquirrelSwap Limit Orders"
         />
