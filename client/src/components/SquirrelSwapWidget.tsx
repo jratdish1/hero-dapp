@@ -96,7 +96,7 @@ export default function SquirrelSwapWidget({
         }}
       >
         {activeChain === "pulsechain" ? (
-          <iframe
+          <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
             src={squirrelUrl}
             width="100%"
             height={height}
