@@ -27,23 +27,23 @@ export default function LimitOrders() {
   const buildWidgetUrl = () => {
     const baseUrl = "https://app.squirrelswap.pro/#/widget";
     const params = new URLSearchParams();
-    
+
     // Enable swap + limit + DCA modes
     params.set("modes", "swap,limit,dca");
-    
+
     // Theme params
     params.set("accentColor", widgetTheme.accentColor);
     params.set("bgColor", widgetTheme.bgColor);
     params.set("cardColor", widgetTheme.cardColor);
     params.set("borderColor", widgetTheme.borderColor);
     params.set("textColor", widgetTheme.textColor);
-    
+
     // Pre-select HERO as output token (user likely wants to buy HERO)
     if (isPulseChain) {
       params.set("tokenOut", HERO_PLS);
     }
     // Note: SquirrelSwap widget is PulseChain only
-    
+
     return `${baseUrl}?${params.toString()}`;
   };
 
@@ -61,7 +61,7 @@ export default function LimitOrders() {
         console.log("[SquirrelSwap] Swap completed:", e.data);
       }
     };
-    
+
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
   }, []);
@@ -71,16 +71,16 @@ export default function LimitOrders() {
     return (
       <div className="space-y-6 p-6">
         <div className="flex items-center gap-3">
-          <Target className="h-8 w-8 text-[var(--hero-green)]" />
+          <Target className="h-8 w-8 text-[var(--hero-green)]" aria-hidden="true" />
           <div>
             <h1 className="text-2xl font-bold">Limit Orders</h1>
             <p className="text-muted-foreground">On-chain limit orders powered by SquirrelSwap</p>
           </div>
         </div>
-        
+
         <Card className="bg-[rgba(10,12,20,0.95)] border-[var(--hero-green)]/20">
           <CardContent className="p-8 text-center">
-            <Info className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
+            <Info className="h-12 w-12 text-yellow-500 mx-auto mb-4" aria-hidden="true" />
             <h2 className="text-xl font-semibold mb-2">BASE Chain Limit Orders</h2>
             <p className="text-muted-foreground mb-4">
               SquirrelSwap limit orders are currently available on PulseChain only.
@@ -100,7 +100,7 @@ export default function LimitOrders() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Target className="h-8 w-8 text-[var(--hero-green)]" />
+          <Target className="h-8 w-8 text-[var(--hero-green)]" aria-hidden="true" />
           <div>
             <h1 className="text-2xl font-bold">Limit Orders</h1>
             <p className="text-muted-foreground text-sm">
@@ -117,6 +117,7 @@ export default function LimitOrders() {
             target="_blank"
             rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-[var(--hero-green)] flex items-center gap-1 transition-colors"
+            aria-label="Open SquirrelSwap full app in new tab"
           >
             Open Full App <ExternalLink aria-hidden="true" className="h-3 w-3" />
           </a>
@@ -124,8 +125,8 @@ export default function LimitOrders() {
       </div>
 
       {/* Info Banner */}
-      <div className="bg-[rgba(10,12,20,0.95)] border border-[var(--hero-green)]/10 rounded-lg p-3 flex items-start gap-2">
-        <Info className="h-4 w-4 text-[var(--hero-green)] mt-0.5 shrink-0" />
+      <div className="bg-[rgba(10,12,20,0.95)] border border-[var(--hero-green)]/10 rounded-lg p-3 flex items-start gap-2" role="region" aria-live="polite">
+        <Info className="h-4 w-4 text-[var(--hero-green)] mt-0.5 shrink-0" aria-hidden="true" />
         <p className="text-xs text-muted-foreground">
           Set your target price and the SquirrelSwap keeper network will execute your order when the market hits your price.
           Supports all PulseChain tokens. Connect your wallet to get started.
@@ -135,7 +136,7 @@ export default function LimitOrders() {
       {/* SquirrelSwap Widget Iframe */}
       <div className="relative rounded-xl overflow-hidden border border-[var(--hero-green)]/10 bg-[rgba(10,12,20,0.95)]">
         {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[rgba(10,12,20,0.95)] z-10">
+          <div className="absolute inset-0 flex items-center justify-center bg-[rgba(10,12,20,0.95)] z-10" role="status" aria-live="polite" aria-label="Loading SquirrelSwap widget">
             <div className="flex flex-col items-center gap-3">
               <div className="animate-spin h-8 w-8 border-2 border-[var(--hero-green)] border-t-transparent rounded-full" />
               <p className="text-sm text-muted-foreground">Loading SquirrelSwap...</p>
@@ -148,9 +149,14 @@ export default function LimitOrders() {
           width="100%"
           height={iframeHeight}
           style={{ border: "none", borderRadius: "12px", minHeight: "650px" }}
-          allow="clipboard-write" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerPolicy="strict-origin-when-cross-origin" sandbox="allow-scripts allow-same-origin allow-forms allow-popups" referrerPolicy="strict-origin-when-cross-origin"
+          allow="clipboard-write"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          referrerPolicy="strict-origin-when-cross-origin"
           onLoad={() => setIsLoaded(true)}
           title="SquirrelSwap Limit Orders"
+          aria-label="SquirrelSwap limit orders widget"
+          // Content Security Policy for iframe source is recommended to be set on server side or via HTTP headers.
+          // If needed, add meta tag in parent document head or configure server to send CSP headers restricting iframe source.
         />
       </div>
 
@@ -162,6 +168,7 @@ export default function LimitOrders() {
           target="_blank"
           rel="noopener noreferrer"
           className="hover:text-[var(--hero-green)] transition-colors"
+          aria-label="Open SquirrelSwap documentation in new tab"
         >
           SquirrelSwap Docs
         </a>
