@@ -519,7 +519,8 @@ export default function HeroWallet() {
           fromChain: bridgeFrom,
           toChain: bridgeTo,
           amount: bridgeAmount,
-          token: sanitizedToken
+          token: sanitizedToken,
+          slippage
         })
       });
       if (res.ok) {
@@ -922,6 +923,7 @@ export default function HeroWallet() {
                   aria-label="Amount to bridge"
                 />
               </div>
+              <SlippageSelector value={slippage} onChange={setSlippage} />
               <Button onClick={handleBridge} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold" aria-label="Bridge tokens">
                 <Globe className="w-4 h-4 mr-2" aria-hidden="true" />
                 Bridge Tokens
