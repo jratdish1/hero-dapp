@@ -15,6 +15,8 @@ export default function CreateProposal() {
   const { address, isConnected } = useAccount();
   const [, navigate] = useLocation();
 
+  const validCategories = ["protocol", "treasury", "community", "emergency"] as const;
+  const validChains = ["base", "pulsechain", "both"] as const;
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState<"protocol" | "treasury" | "community" | "emergency">("protocol");
@@ -113,7 +115,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => setCategory(e.target.value as any)}
+                    onChange={(e) => setCategory(e.target.value as string)}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="protocol">Protocol</option>
@@ -127,7 +129,7 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Chain</label>
                   <select
                     value={chain}
-                    onChange={(e) => setChain(e.target.value as any)}
+                    onChange={(e) => setChain(e.target.value as string)}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
                     <option value="both">Both Chains</option>

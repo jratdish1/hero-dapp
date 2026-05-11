@@ -58,8 +58,12 @@ export default function LimitOrders() {
       }
       if (e.data?.type === "squirrelswap:resize") {
         const height = Number(e.data.height);
-        if (height > 0 && height < 2000) { // Sanity check height value
-          setIframeHeight(height);
+        if (height > 0 && height < 2000) {
+          // Debounce iframe height changes to prevent layout thrashing
+          clearTimeout((window as any).__iframeResizeTimer);
+          (window as any).__iframeResizeTimer = setTimeout(() => {
+            setIframeHeight(height);
+          }, 150);
         }
       }
       if (e.data?.type === "squirrelswap:ready") {

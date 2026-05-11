@@ -3,6 +3,7 @@ import { useState, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
+import { sanitizeString } from "../lib/validation";
 import { Streamdown } from "streamdown";
 import {
   Bot,
@@ -199,7 +200,7 @@ export default function AiAssistant() {
                 >
                   {msg.role === "assistant" ? (
                     <div className="prose prose-invert prose-sm max-w-none">
-                      <Streamdown>{msg.content}</Streamdown>
+                      <Streamdown>{sanitizeString(msg.content)}</Streamdown>
                     </div>
                   ) : (
                     <p className="text-sm">{msg.content}</p>

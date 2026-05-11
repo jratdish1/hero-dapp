@@ -43,47 +43,53 @@ import Giveaways from "./pages/Giveaways";
 import HolderRewards from "./pages/HolderRewards";
 import SpinWheel from "./pages/SpinWheel";
 import HeroWallet from "./pages/HeroWallet";
+// Route wrapper to avoid inline arrow functions (prevents unnecessary remounts)
+function withLayout(Page: React.ComponentType) {
+  return function LayoutWrapped() {
+    return <AppLayout><Page /></AppLayout>;
+  };
+}
 function Router() {
   usePageSEO();
   return (
     <Switch>
       <Route path="/login" component={LoginPage} />
       <Route path="/" component={Home} />
-      <Route path="/swap" component={() => <AppLayout><Swap /></AppLayout>} />
-      <Route path="/wallet" component={() => <AppLayout><HeroWallet /></AppLayout>} />
-      <Route path="/dashboard" component={() => <AppLayout><Dashboard /></AppLayout>} />
-      <Route path="/portfolio" component={() => <AppLayout><Portfolio /></AppLayout>} />
-      <Route path="/dca" component={() => <AppLayout><DcaOrders /></AppLayout>} />
-      <Route path="/limits" component={() => <AppLayout><LimitOrders /></AppLayout>} />
-      <Route path="/approvals" component={() => <AppLayout><Approvals /></AppLayout>} />
-      <Route path="/bootcamp" component={() => <AppLayout><Farm /></AppLayout>} />
-      <Route path="/stake" component={() => <AppLayout><Stake /></AppLayout>} />
-      <Route path="/media" component={() => <AppLayout><MediaHub /></AppLayout>} />
-      <Route path="/ai" component={() => <AppLayout><AiAssistant /></AppLayout>} />
-      <Route path="/tokenomics" component={() => <AppLayout><Tokenomics /></AppLayout>} />
-      <Route path="/nft" component={() => <AppLayout><NftCollection /></AppLayout>} />
-      <Route path="/ecosystem" component={() => <AppLayout><Ecosystem /></AppLayout>} />
-      <Route path="/community" component={() => <AppLayout><Blog /></AppLayout>} />
-      <Route path="/community-hub" component={() => <AppLayout><CommunityHub /></AppLayout>} />
-      <Route path="/dao" component={() => <AppLayout><DaoDashboard /></AppLayout>} />
-      <Route path="/dao/proposals" component={() => <AppLayout><Proposals /></AppLayout>} />
-      <Route path="/dao/proposals/create" component={() => <AppLayout><CreateProposal /></AppLayout>} />
-      <Route path="/dao/proposals/:id" component={() => <AppLayout><ProposalDetail /></AppLayout>} />
-      <Route path="/dao/treasury" component={() => <AppLayout><Treasury /></AppLayout>} />
-      <Route path="/dao/delegates" component={() => <AppLayout><Delegates /></AppLayout>} />
-      <Route path="/stake/base" component={() => <AppLayout><BaseStake /></AppLayout>} />
-      <Route path="/stake/dai" component={() => <AppLayout><HeroStake /></AppLayout>} />
-      <Route path="/bots" component={() => <AppLayout><AbleBots /></AppLayout>} />
-      <Route path="/start" component={() => <AppLayout><Onboarding /></AppLayout>} />
-      <Route path="/explainer" component={() => <AppLayout><Explainer /></AppLayout>} />
-      <Route path="/directory" component={() => <AppLayout><EcosystemDirectory /></AppLayout>} />
-      <Route path="/dex-analytics" component={() => <AppLayout><DexAnalytics /></AppLayout>} />
-      <Route path="/burn" component={() => <AppLayout><BuyAndBurn /></AppLayout>} />
-      <Route path="/nft-mint" component={() => <AppLayout><NFTMint /></AppLayout>} />
-      <Route path="/dao-proposals" component={() => <AppLayout><DAOProposals /></AppLayout>} />
-      <Route path="/giveaways" component={() => <AppLayout><Giveaways /></AppLayout>} />
-      <Route path="/holder-rewards" component={() => <AppLayout><HolderRewards /></AppLayout>} />
-      <Route path="/spin" component={() => <AppLayout><SpinWheel /></AppLayout>} />
+      <Route path="/swap" component={withLayout(Swap)} />
+      <Route path="/wallet" component={withLayout(HeroWallet)} />
+      <Route path="/dashboard" component={withLayout(Dashboard)} />
+      <Route path="/portfolio" component={withLayout(Portfolio)} />
+      <Route path="/dca" component={withLayout(DcaOrders)} />
+      <Route path="/limits" component={withLayout(LimitOrders)} />
+      <Route path="/approvals" component={withLayout(Approvals)} />
+      <Route path="/bootcamp" component={withLayout(Farm)} />
+      <Route path="/stake" component={withLayout(Stake)} />
+      <Route path="/media" component={withLayout(MediaHub)} />
+      <Route path="/ai" component={withLayout(AiAssistant)} />
+      <Route path="/tokenomics" component={withLayout(Tokenomics)} />
+      <Route path="/nft" component={withLayout(NftCollection)} />
+      <Route path="/ecosystem" component={withLayout(Ecosystem)} />
+      <Route path="/community" component={withLayout(Blog)} />
+      <Route path="/community-hub" component={withLayout(CommunityHub)} />
+      <Route path="/dao" component={withLayout(DaoDashboard)} />
+      <Route path="/dao/proposals" component={withLayout(Proposals)} />
+      <Route path="/dao/proposals/create" component={withLayout(CreateProposal)} />
+      <Route path="/dao/proposals/:id" component={withLayout(ProposalDetail)} />
+      <Route path="/dao/treasury" component={withLayout(Treasury)} />
+      <Route path="/dao/delegates" component={withLayout(Delegates)} />
+      <Route path="/stake/base" component={withLayout(BaseStake)} />
+      <Route path="/stake/dai" component={withLayout(HeroStake)} />
+      <Route path="/bots" component={withLayout(AbleBots)} />
+      <Route path="/start" component={withLayout(Onboarding)} />
+      <Route path="/explainer" component={withLayout(Explainer)} />
+      <Route path="/directory" component={withLayout(EcosystemDirectory)} />
+      <Route path="/dex-analytics" component={withLayout(DexAnalytics)} />
+      <Route path="/burn" component={withLayout(BuyAndBurn)} />
+      <Route path="/nft-mint" component={withLayout(NFTMint)} />
+      <Route path="/dao-proposals" component={withLayout(DAOProposals)} />
+      <Route path="/giveaways" component={withLayout(Giveaways)} />
+      <Route path="/holder-rewards" component={withLayout(HolderRewards)} />
+      <Route path="/spin" component={withLayout(SpinWheel)} />
       <Route path="/beta-disclaimer" component={BetaDisclaimer} />
       <Route path="/disclaimer" component={BetaDisclaimer} />
       {/* Redirect aliases for common URL variants */}
@@ -95,7 +101,7 @@ function Router() {
       <Route path="/ai-assistant">{() => <Redirect to="/ai" />}</Route>
       <Route path="/able-bots">{() => <Redirect to="/bots" />}</Route>
       <Route path="/liberty-swap">{() => <Redirect to="/swap" />}</Route>
-      <Route path="/whitepaper">{() => { window.location.href = "https://docs.vicfoundation.com"; return null; }}</Route>
+      <Route path="/whitepaper">{() => <ExternalRedirect url="https://docs.vicfoundation.com" />}</Route>
       <Route path="/buy-and-burn">{() => <Redirect to="/burn" />}</Route>
       <Route path="/pools">{() => <Redirect to="/dex-analytics" />}</Route>
       <Route path="/404" component={NotFound} />
@@ -103,6 +109,13 @@ function Router() {
     </Switch>
   );
 }
+
+// Safe external redirect component (avoids side effects during render)
+function ExternalRedirect({ url }: { url: string }) {
+  React.useEffect(() => { window.location.href = url; }, [url]);
+  return null;
+}
+
 function App() {
   return (
     <ErrorBoundary>

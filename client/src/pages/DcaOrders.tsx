@@ -16,6 +16,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { useNetwork } from "../contexts/NetworkContext";
 import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
+import { CommaInput } from "@/components/CommaInput";
 
 interface DcaOrderUI {
   id: number;
@@ -196,7 +197,7 @@ export default function DcaOrders() {
               <div className="space-y-2">
                 <Label className="text-foreground">Total Orders</Label>
                 <Input
-                  type="number"
+                  
                   placeholder="7"
                   value={totalOrders}
                   onChange={(e) => setTotalOrders(e.target.value)}

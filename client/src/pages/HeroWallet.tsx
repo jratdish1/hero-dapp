@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CommaInput } from "@/components/CommaInput";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
@@ -724,16 +725,12 @@ export default function HeroWallet() {
               </div>
               <div>
                 <label htmlFor="sendAmount" className="text-sm text-gray-400 mb-1 block">Amount</label>
-                <Input
+                <CommaInput
                   id="sendAmount"
                   value={sendAmount}
-                  onChange={(e) => setSendAmount(e.target.value)}
+                  onChange={setSendAmount}
                   placeholder="0.0"
-                  type="number"
-                  min="0"
-                  step="any"
                   className="bg-gray-800 border-gray-600 text-white"
-                  aria-label="Amount to send"
                 />
               </div>
               <Button onClick={handleSend} className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold" aria-label="Send transaction">
@@ -794,9 +791,9 @@ export default function HeroWallet() {
                   <Input
                     id="shieldAmount"
                     value={shieldAmount}
-                    onChange={(e) => setShieldAmount(e.target.value)}
+                    onChange={setShieldAmount}
                     placeholder="0.0"
-                    type="number"
+                    inputMode="decimal"
                     min="0"
                     step="any"
                     className="bg-gray-800 border-gray-600 text-white"
@@ -914,9 +911,9 @@ export default function HeroWallet() {
                 <Input
                   id="bridgeAmount"
                   value={bridgeAmount}
-                  onChange={(e) => setBridgeAmount(e.target.value)}
+                  onChange={setBridgeAmount}
                   placeholder="0.0"
-                  type="number"
+                  inputMode="decimal"
                   min="0"
                   step="any"
                   className="bg-gray-800 border-gray-600 text-white"

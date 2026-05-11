@@ -1,3 +1,4 @@
+import { sanitizeString } from "@/lib/validation";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,6 +10,8 @@ import { Streamdown } from "streamdown";
 /**
  * Message type matching server-side LLM Message interface
  */
+const MAX_INPUT_LENGTH = 2000;
+
 export type Message = {
   role: "system" | "user" | "assistant";
   content: string;
@@ -167,7 +170,7 @@ export function AIChatBox({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    const trimmedInput = input.trim();
+    const trimmedInput = input.trim().slice(0, MAX_INPUT_LENGTH);
     if (!trimmedInput || isLoading) return;
 
     onSendMessage(trimmedInput);
@@ -262,7 +265,7 @@ export function AIChatBox({
                     >
                       {message.role === "assistant" ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown>{message.content}</Streamdown>
+                          <Streamdown>{sanitizeString(message.content)}</Streamdown>
                         </div>
                       ) : (
                         <p className="whitespace-pre-wrap text-sm">

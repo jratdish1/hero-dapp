@@ -1,3 +1,4 @@
+import { isValidChainId } from "@/lib/validation";
 import { trpc } from "@/lib/trpc";
 import { UNAUTHED_ERR_MSG } from "@shared/const";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -62,3 +63,13 @@ createRoot(document.getElementById("root")!).render(
     </trpc.Provider>
   </WagmiAppProvider>
 );
+
+// Early chain validation — warn if user is on unsupported network
+if (typeof window !== "undefined" && (window as any).ethereum) {
+  (window as any).ethereum.request?.({ method: "eth_chainId" }).then((chainHex: string) => {
+    const chainId = parseInt(chainHex, 16);
+    if (!isValidChainId(chainId)) {
+      console.warn("[HERO DApp] Unsupported chain detected:", chainId, "— Please switch to PulseChain (369) or BASE (8453)");
+    }
+  }).catch(() => { /* No wallet connected — that's fine */ });
+}

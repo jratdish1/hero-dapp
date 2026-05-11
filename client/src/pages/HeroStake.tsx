@@ -6,6 +6,7 @@ import { parseUnits } from "viem";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { CommaInput } from "@/components/CommaInput";
 import { Badge } from "@/components/ui/badge";
 import {
   Shield,
@@ -55,8 +56,9 @@ const CHAIN_CONFIG = {
 
 type SupportedChainId = 369 | 8453;
 
+// Removed: local isSupportedChain — now uses isValidChainId from validation.ts
 function isSupportedChain(id: number | undefined): id is SupportedChainId {
-  return id === 369 || id === 8453;
+  return isValidChainId(id as number);
 }
 
 // ─── Stat Card Component ─────────────────────────────────────────────
@@ -121,12 +123,12 @@ export default function HeroStake() {
 
   // Refetch on confirmed tx
   useEffect(() => {
-    if (actions.isConfirmed) {
+    if (actions.isSuccess) {
       user.refetchAll();
       setStakeAmount("");
       setUnstakeAmount("");
     }
-  }, [actions.isConfirmed]);
+  }, [actions.isSuccess]);
 
   // ─── Handlers ────────────────────────────────────────────────────
   const handleStake = async () => {
@@ -135,12 +137,12 @@ export default function HeroStake() {
       return;
     }
     try {
-      const amount = parseUnits(stakeAmount, 18);
+      const amountBigInt = parseUnits(stakeAmount, 18);
 
       // Check allowance
-      if (!user.heroAllowance || user.heroAllowance < amount) {
+      if (!user.heroAllowance || user.heroAllowance < amountBigInt) {
         toast.info("Approving HERO for staking...", { description: "Please confirm the approval in your wallet" });
-        await actions.approve(amount);
+        await actions.approve(stakeAmount);
         toast.success("Approval confirmed! Now staking...");
         // Refetch allowance before staking
         await new Promise((r) => setTimeout(r, 2000));
@@ -148,7 +150,7 @@ export default function HeroStake() {
       }
 
       toast.info("Staking HERO...", { description: `Staking ${stakeAmount} HERO` });
-      await actions.stake(amount);
+      await actions.stake(stakeAmount);
       toast.success("Staked successfully!", {
         description: `${stakeAmount} HERO is now earning DAI rewards`,
       });
@@ -164,7 +166,7 @@ export default function HeroStake() {
       return;
     }
     try {
-      const amount = parseUnits(unstakeAmount, 18);
+      const amountBigInt = parseUnits(unstakeAmount, 18);
       const willPenalize = !user.isUnlocked;
 
       if (willPenalize) {
@@ -175,7 +177,7 @@ export default function HeroStake() {
       }
 
       toast.info("Unstaking HERO...");
-      await actions.unstake(amount);
+      await actions.unstake(unstakeAmount);
       toast.success("Unstaked successfully!", {
         description: willPenalize
           ? "Early exit penalty was applied"
@@ -202,13 +204,13 @@ export default function HeroStake() {
 
   const handleMaxStake = () => {
     if (user.heroBalance) {
-      setStakeAmount(formatHero(user.heroBalance, 18).replace(/,/g, ""));
+      setStakeAmount(formatHero(user.heroBalance).replace(/,/g, ""));
     }
   };
 
   const handleMaxUnstake = () => {
     if (user.stakedAmount) {
-      setUnstakeAmount(formatHero(user.stakedAmount, 18).replace(/,/g, ""));
+      setUnstakeAmount(formatHero(user.stakedAmount).replace(/,/g, ""));
     }
   };
 
@@ -422,11 +424,10 @@ export default function HeroStake() {
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <Input
-                      type="number"
+                    <CommaInput
                       placeholder="0.00"
                       value={stakeAmount}
-                      onChange={(e) => setStakeAmount(e.target.value)}
+                      onChange={setStakeAmount}
                       className="bg-black/90 border-[#3D5A3D] text-white"
                       disabled={isAnyTxPending || stats.isPaused}
                     />
@@ -494,8 +495,7 @@ export default function HeroStake() {
                     </span>
                   </div>
                   <div className="flex gap-2">
-                    <Input
-                      type="number"
+                    <CommaInput
                       placeholder="0.00"
                       value={unstakeAmount}
                       onChange={(e) => setUnstakeAmount(e.target.value)}

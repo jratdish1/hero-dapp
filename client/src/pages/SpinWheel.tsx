@@ -181,6 +181,7 @@ export default function SpinWheel() {
   }, []);
 
   const handleSpin = useCallback(async () => {
+    try {
     if (spinning || !canSpin || !walletConnected) return;
 
     setSpinning(true);
@@ -196,7 +197,10 @@ export default function SpinWheel() {
      * Client ONLY displays the animation — result is determined server-side.
      * Replay protection: server tracks nonce per wallet per day.
      * 
-     * PREVIEW MODE (current): Uses crypto.getRandomValues() with rejection
+     * ⚠️ PREVIEW MODE (current): Uses crypto.getRandomValues() with rejection
+     * sampling for unbiased client-side RNG. FOR PRODUCTION: Uncomment the tRPC
+     * endpoint call above. Client-side RNG is NOT suitable for real-money rewards.
+     * TODO: Connect to server-side spin-engine when backend is ready.
      * sampling to eliminate modulo bias. This is for UI testing only.
      */
     const totalWeight = SEGMENTS.reduce((s, seg) => s + seg.weight, 0);
@@ -260,6 +264,7 @@ export default function SpinWheel() {
       }));
       spinTimeoutRef.current = null;
     }, 4000);
+    } catch (err: unknown) { console.error("Spin error:", err); setSpinning(false); }
   }, [spinning, canSpin, walletConnected]);
 
   return (

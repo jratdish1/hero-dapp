@@ -1,9 +1,9 @@
-import { isValidChainId, isValidAmount } from "../lib/validation";
+import { isValidChainId, isValidAmount, validateDecimalInput, isBalanceSufficient } from "../lib/validation";
 import { useReadContract, useWriteContract, useAccount, useWaitForTransactionReceipt } from "wagmi";
 import { parseUnits, formatUnits } from "viem";
 import { STAKING_ABI } from "../lib/staking-abi";
 import { useNetwork } from "../contexts/NetworkContext";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 
 // V2 SSS Contract Addresses (Synthetix-style)
 const STAKING_ADDRESSES: Record<number, `0x${string}`> = {
@@ -165,7 +165,13 @@ export function useStakingActions(overrideChainId?: number) {
   const { chainId: networkChainId } = useNetwork();
   const chainId = overrideChainId ?? networkChainId;
   const stakingAddress = STAKING_ADDRESSES[chainId];
-  const { writeContract, data: hash, isPending } = useWriteContract();
+  const { writeContract, data: hash, isPending } = useWriteContract({
+    mutation: {
+      onError: (error: Error) => {
+        console.error("[Contract Write Error]", error.message);
+      },
+    },
+  });
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
   const { data: stakingToken } = useReadContract({
@@ -177,7 +183,8 @@ export function useStakingActions(overrideChainId?: number) {
 
   const approve = (amount: string) => {
     if (!stakingToken || !stakingAddress) return;
-    if (!isValidAmount(amount)) { console.error("Invalid amount:", amount); return; }
+    if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
+    if (!validateDecimalInput(amount, 18)) { console.error("Invalid amount format:", amount); return; }
     writeContract({
       address: stakingToken as `0x${string}`,
       abi: ERC20_ABI,
@@ -188,7 +195,8 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const stake = (amount: string) => {
-    if (!isValidAmount(amount)) { console.error("Invalid stake amount:", amount); return; }
+    if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
+    if (!validateDecimalInput(amount, 18)) { console.error("Invalid stake amount:", amount); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,
@@ -199,7 +207,8 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const withdraw = (amount: string) => {
-    if (!isValidAmount(amount)) { console.error("Invalid withdraw amount:", amount); return; }
+    if (!isValidChainId(chainId)) { console.error("Unsupported chain:", chainId); return; }
+    if (!validateDecimalInput(amount, 18)) { console.error("Invalid withdraw amount:", amount); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,
@@ -210,6 +219,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const claimRewards = () => {
+    if (!isValidChainId(chainId) || !stakingAddress) { console.error("Unsupported chain:", chainId); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,
@@ -219,6 +229,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const exitAll = () => {
+    if (!isValidChainId(chainId) || !stakingAddress) { console.error("Unsupported chain:", chainId); return; }
     writeContract({
       address: stakingAddress,
       abi: STAKING_ABI,
@@ -283,11 +294,10 @@ export function formatLockPeriod(seconds: bigint | undefined | null): string {
 export function useCountdown(targetTimestamp: bigint | undefined): string {
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
 
-  // Update every second
-  useState(() => {
+  useEffect(() => {
     const interval = setInterval(() => setNow(Math.floor(Date.now() / 1000)), 1000);
     return () => clearInterval(interval);
-  });
+  }, []);
 
   if (!targetTimestamp || targetTimestamp === BigInt(0)) return "";
   const remaining = Number(targetTimestamp) - now;
