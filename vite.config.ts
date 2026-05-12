@@ -175,10 +175,8 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Wagmi + viem (blockchain) — only needed for wallet interactions
-          if (id.includes('wagmi') || id.includes('viem') || id.includes('@wagmi')) {
-            return 'vendor-web3';
-          }
+          // NOTE: Do NOT split wagmi/viem — it has many optional peer deps
+          // (@walletconnect, @coinbase, @metamask, @safe-global) that fail as separate chunks.
           // Framer Motion — animation library
           if (id.includes('framer-motion')) {
             return 'vendor-motion';
