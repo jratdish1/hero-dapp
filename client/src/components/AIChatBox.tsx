@@ -5,7 +5,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { Loader2, Send, User, Sparkles } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
-import { LazyStreamdown } from "@/components/LazyStreamdown";
+import { Streamdown } from "streamdown";
 
 /**
  * Message type matching server-side LLM Message interface
@@ -265,7 +265,7 @@ export function AIChatBox({
                     >
                       {message.role === "assistant" ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <LazyStreamdown>{sanitizeString(message.content)}</LazyStreamdown>
+                          <Streamdown>{sanitizeString(message.content)}</Streamdown>
                         </div>
                       ) : (
                         <p className="whitespace-pre-wrap text-sm">

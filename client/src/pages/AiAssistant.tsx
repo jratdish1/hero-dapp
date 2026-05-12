@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { useNetwork } from "../contexts/NetworkContext";
 import { NetworkBadge } from "../components/NetworkSwitcher";
 import { sanitizeString } from "../lib/validation";
-import { LazyStreamdown } from "@/components/LazyStreamdown";
+import { Streamdown } from "streamdown";
 import {
   Bot,
   Send,
@@ -202,7 +202,7 @@ export default function AiAssistant() {
                 >
                   {msg.role === "assistant" ? (
                     <div className="prose prose-invert prose-sm max-w-none">
-                      <LazyStreamdown>{sanitizeString(msg.content)}</LazyStreamdown>
+                      <Streamdown>{sanitizeString(msg.content)}</Streamdown>
                     </div>
                   ) : (
                     <p className="text-sm">{msg.content}</p>
