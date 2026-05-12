@@ -29,7 +29,7 @@ import {
 } from "lucide-react";
 import { trpc } from "@/lib/trpc";
 import { sanitizeString } from "../lib/validation";
-import { Streamdown } from "streamdown";
+import { LazyStreamdown } from "@/components/LazyStreamdown";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { toast } from "sonner";
 
@@ -286,7 +286,7 @@ function ArticleCard({
         )}
         {expanded && postQuery.data && (
           <div className="mt-4 p-4 rounded-lg bg-secondary/30 border border-border/30 prose prose-sm prose-invert max-w-none">
-            <Streamdown>{sanitizeString(postQuery.data.content)}</Streamdown>
+            <LazyStreamdown>{sanitizeString(postQuery.data.content)}</LazyStreamdown>
           </div>
         )}
         <Button

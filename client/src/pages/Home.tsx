@@ -192,6 +192,7 @@ export default function Home() {
           loop
           muted
           playsInline
+          preload="none"
           className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
           src={CDN_ASSETS.tokenomicsVideo}
         />
@@ -328,6 +329,7 @@ export default function Home() {
                   <img
                     src="/regenvalor_og.png"
                     alt="RegenValor Logo"
+                    loading="lazy"
                     className="w-48 mx-auto mb-6 opacity-90 hover:opacity-100 transition-opacity"
                     onError={(e) => {
                       (e.target as HTMLImageElement).style.display = 'none';
@@ -415,6 +417,7 @@ export default function Home() {
             src={BLACKBEARD_URL}
             alt="Black Bear Footer"
             className="w-full object-contain"
+            loading="lazy"
             style={{height: "350px", objectFit: "cover"}}
           />
 

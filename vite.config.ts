@@ -166,6 +166,46 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    modulePreload: {
+      resolveDependencies: (filename, deps, { hostId, hostType }) => {
+        // Don't preload heavy diagram/chart chunks - they'll load on demand
+        return deps.filter(dep => !dep.includes('vendor-diagrams') && !dep.includes('vendor-charts'));
+      },
+    },
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Wagmi + viem (blockchain) — only needed for wallet interactions
+          if (id.includes('wagmi') || id.includes('viem') || id.includes('@wagmi')) {
+            return 'vendor-web3';
+          }
+          // Framer Motion — animation library
+          if (id.includes('framer-motion')) {
+            return 'vendor-motion';
+          }
+          // Recharts — chart library
+          if (id.includes('recharts') || id.includes('d3-')) {
+            return 'vendor-charts';
+          }
+          // Mermaid + code highlighting + streamdown (heavy, rarely needed)
+          if (id.includes('mermaid') || id.includes('cytoscape') || id.includes('shiki') || id.includes('oniguruma') || id.includes('streamdown') || id.includes('marked') || id.includes('katex') || id.includes('rehype') || id.includes('remark')) {
+            return 'vendor-diagrams';
+          }
+          // Radix UI components
+          if (id.includes('@radix-ui')) {
+            return 'vendor-ui';
+          }
+          // React core
+          if (id.includes('react-dom') || id.includes('react/')) {
+            return 'vendor-react';
+          }
+          // TanStack + tRPC
+          if (id.includes('@tanstack') || id.includes('@trpc')) {
+            return 'vendor-query';
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,
