@@ -1,6 +1,6 @@
 # HeroBase.io
 
-![Performance](https://img.shields.io/badge/Performance-86%25-brightgreen?style=flat-square&logo=lighthouse)
+![Performance](https://img.shields.io/badge/Performance-90%25-brightgreen?style=flat-square&logo=lighthouse)
 ![Accessibility](https://img.shields.io/badge/Accessibility-91%25-brightgreen?style=flat-square&logo=lighthouse)
 ![Best%20Practices](https://img.shields.io/badge/Best%20Practices-92%25-brightgreen?style=flat-square&logo=lighthouse)
 ![SEO](https://img.shields.io/badge/SEO-100%25-brightgreen?style=flat-square&logo=lighthouse)
@@ -11,14 +11,13 @@ Full-stack web application for the $HERO token ecosystem on PulseChain and BASE.
 
 | Metric | Score | Value |
 |--------|-------|-------|
-| Performance | 86% (peak 92%) | — |
-| First Contentful Paint | 95 | 1.6s |
-| Largest Contentful Paint | 90 | 2.5s |
-| Total Blocking Time | 91 | 180ms |
+| Performance | 90% avg (100% peak) | — |
+| First Contentful Paint | 97 | 1.4s |
+| Largest Contentful Paint | 97 | 2.0s |
+| Total Blocking Time | 73 | 350ms |
 | Cumulative Layout Shift | 100 | 0.000 |
-| Speed Index | 65 | 4.9s |
-| Time to Interactive | 87 | 4.0s |
-| Server Response Time | 100 | 510ms |
+| Speed Index | 91 | 3.3s |
+| Server Response Time | 100 | 240ms |
 | Accessibility | 91% | — |
 | Best Practices | 92% | — |
 | SEO | 100% | — |
@@ -31,6 +30,12 @@ Full-stack web application for the $HERO token ecosystem on PulseChain and BASE.
 - Stripped non-critical modulepreload hints (web3, radix, data-layer)
 - React vendor chunk separated for better caching
 
+**Compression:**
+- Brotli level 11 pre-compression for all JS/CSS assets (nginx brotli_static)
+- Gzip level 9 pre-compression as fallback (nginx gzip_static)
+- Entry chunk: 182KB → 47KB brotli (74% reduction)
+- Web3 chunk: 307KB → 75KB brotli (76% reduction)
+
 **Image Optimization:**
 - Hero banner: responsive srcset (26KB mobile / 99KB desktop WebP)
 - Converted regenvalor_og.png from 911KB PNG to 36KB WebP (96% reduction)
@@ -42,14 +47,21 @@ Full-stack web application for the $HERO token ecosystem on PulseChain and BASE.
 - Inline HTML skeleton in `<div id="root">` for instant FCP before JS loads
 - Critical inline CSS for dark background (prevents white flash)
 - Hero banner image preloaded with responsive `imagesrcset`
+- `<main>` landmark for accessibility
 
 **Server & CDN:**
+- Nginx: serves static assets directly (bypasses Express for /assets/)
 - Nginx: fixed port routing (was 3001, corrected to 3000)
 - Nginx: proper cache headers (assets get immutable 1yr, HTML no-cache)
-- Nginx: full gzip + brotli compression for all content types
+- Nginx: brotli_static + gzip_static for pre-compressed files
 - Cloudflare Edge Cache: HTML cached at edge for 5 min (Cache Rule API)
 - Cloudflare Page Rules: MP4 and /assets/* cached at edge for 30 days
 - Self-hosted Inter font (eliminates render-blocking Google Fonts)
+- HTTP/3 + Early Hints enabled on Cloudflare
+
+**Accessibility:**
+- Removed `maximum-scale=1` from viewport meta (allows pinch-to-zoom)
+- Added `<main role="main">` landmark to app shell
 
 **Media Deferral:**
 - Explainer video (11MB) only downloads when user clicks play
@@ -70,6 +82,7 @@ Full-stack web application for the $HERO token ecosystem on PulseChain and BASE.
 | v3 | 62% | Video deferral, favicon, CF edge cache |
 | v4 | 73% | Self-hosted font, chunk splitting, modulepreload strip |
 | v5 | 86% | App shell, responsive images, PNG→WebP, bg compression |
+| v6 | 90% (100% peak) | Brotli static, nginx direct serving, a11y fixes |
 
 ## Tech Stack
 
