@@ -167,7 +167,7 @@ export default defineConfig({
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
     cssCodeSplit: true,
-    modulePreload: { polyfill: false },
+    modulePreload: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
