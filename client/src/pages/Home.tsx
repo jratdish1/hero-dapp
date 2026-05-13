@@ -1,4 +1,5 @@
 import { Link } from "wouter";
+import { useState, useEffect } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -111,6 +112,28 @@ const FEATURES = [
   },
 ];
 
+// Deferred background video - doesn't load until 3s after page load
+// This prevents the 16MB video from blocking initial page render
+function DeferredBackgroundVideo({ src }: { src: string }) {
+  const [shouldLoad, setShouldLoad] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setShouldLoad(true), 3000);
+    return () => clearTimeout(timer);
+  }, []);
+  if (!shouldLoad) return null;
+  return (
+    <video
+      preload="none"
+      autoPlay
+      loop
+      muted
+      playsInline
+      className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
+      src={src}
+    />
+  );
+}
+
 export default function Home() {
   return (
     <div className="min-h-screen bg-background">
@@ -187,14 +210,7 @@ export default function Home() {
       {/* Hero section with background video */}
       <section className="relative overflow-hidden">
         {/* Background Video */}
-        <video preload="metadata"
-          loop
-          muted
-          playsInline
-          className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
-          src={CDN_ASSETS.tokenomicsVideo}
-          ref={(el) => { if (el) { const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { el.play(); obs.disconnect(); } }, { threshold: 0.1 }); obs.observe(el); } }}
-        />
+        <DeferredBackgroundVideo src={CDN_ASSETS.tokenomicsVideo} />
         <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/40 to-background" />
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--hero-orange)]/5 to-transparent" />
         

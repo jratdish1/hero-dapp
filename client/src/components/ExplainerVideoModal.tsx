@@ -130,13 +130,12 @@ export default function ExplainerVideoModal() {
               <div className="aspect-video bg-black relative">
                 <video
                   ref={videoRef}
-                  src={VIDEO_URL}
+                  src={isOpen ? VIDEO_URL : undefined}
                   className="w-full h-full object-contain"
-                  autoPlay
                   muted
                   playsInline
-                  preload="auto"
-                  poster={POSTER_URL}
+                  preload="none"
+                  poster={isOpen ? POSTER_URL : undefined}
                   onEnded={handleVideoEnded}
                   onPlay={() => { setIsPlaying(true); setShowPlayButton(false); }}
                   onPause={() => setIsPlaying(false)}
