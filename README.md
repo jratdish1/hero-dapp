@@ -1,6 +1,6 @@
 # HeroBase.io
 
-![Performance](https://img.shields.io/badge/Performance-62%25-orange?style=flat-square&logo=lighthouse)
+![Performance](https://img.shields.io/badge/Performance-86%25-brightgreen?style=flat-square&logo=lighthouse)
 ![Accessibility](https://img.shields.io/badge/Accessibility-91%25-brightgreen?style=flat-square&logo=lighthouse)
 ![Best%20Practices](https://img.shields.io/badge/Best%20Practices-92%25-brightgreen?style=flat-square&logo=lighthouse)
 ![SEO](https://img.shields.io/badge/SEO-100%25-brightgreen?style=flat-square&logo=lighthouse)
@@ -11,39 +11,65 @@ Full-stack web application for the $HERO token ecosystem on PulseChain and BASE.
 
 | Metric | Score | Value |
 |--------|-------|-------|
-| Performance | 62% | — |
-| First Contentful Paint | 40 | 3.3s |
-| Largest Contentful Paint | 15 | 5.8s |
-| Total Blocking Time | 84 | 250ms |
-| Cumulative Layout Shift | 100 | 0 |
-| Speed Index | 40 | 6.4s |
-| Time to Interactive | 67 | 5.8s |
-| Server Response Time | 100 | 470ms |
+| Performance | 86% (peak 92%) | — |
+| First Contentful Paint | 95 | 1.6s |
+| Largest Contentful Paint | 90 | 2.5s |
+| Total Blocking Time | 91 | 180ms |
+| Cumulative Layout Shift | 100 | 0.000 |
+| Speed Index | 65 | 4.9s |
+| Time to Interactive | 87 | 4.0s |
+| Server Response Time | 100 | 510ms |
 | Accessibility | 91% | — |
 | Best Practices | 92% | — |
 | SEO | 100% | — |
 
 ### Performance Optimizations Applied
 
-- **Code Splitting:** React.lazy() for all 40+ pages; only Home page loads initially
-- **Manual Chunks:** wagmi/viem (web3), recharts (charts), radix-ui separated into async chunks
-- **Nginx Caching:** Hashed assets get `Cache-Control: public, max-age=31536000, immutable`
-- **Cloudflare Edge Cache:** HTML cached at edge for 5 min (eliminates TTFB penalty)
-- **Cloudflare Page Rules:** MP4 and /assets/* cached at edge for 30 days
-- **Gzip Compression:** Full nginx gzip for JS, CSS, HTML, JSON, SVG, fonts
-- **Video Deferral:** Explainer video (11MB) only downloads when user clicks play
-- **Background Video Deferred:** Tokenomics background video loads after 8s
-- **Favicon Optimized:** 205KB CDN JPG replaced with 9KB local WebP
-- **Hero Banner Preloaded:** `<link rel="preload">` with `fetchpriority="high"`
-- **CDN Preconnect:** `<link rel="preconnect">` for CloudFront CDN
-- **Modal Delayed:** Intro modal opens after 5s to avoid blocking LCP measurement
+**Code Splitting & Bundling:**
+- React.lazy() for all 40+ pages; only Home page loads initially
+- Manual chunks: wagmi/viem (web3), recharts (charts), radix-ui, tanstack separated
+- Stripped non-critical modulepreload hints (web3, radix, data-layer)
+- React vendor chunk separated for better caching
 
-### Remaining Optimization Opportunities
+**Image Optimization:**
+- Hero banner: responsive srcset (26KB mobile / 99KB desktop WebP)
+- Converted regenvalor_og.png from 911KB PNG to 36KB WebP (96% reduction)
+- Compressed regenvalor_hero_bg.webp from 90KB to 30KB (67% reduction, 10% opacity bg)
+- Favicon: 205KB CDN JPG replaced with 9KB local WebP
+- Removed dead CloudFront preload (151KB wasted per page load)
 
-- Evaluate wagmi alternatives that tree-shake better for smaller web3 bundle
-- Consider Cloudflare Polish (auto WebP conversion) for remaining CDN images
-- Implement responsive hero banner (smaller image for mobile)
-- Further code splitting of the main index chunk (~127KB gzip)
+**App Shell & Rendering:**
+- Inline HTML skeleton in `<div id="root">` for instant FCP before JS loads
+- Critical inline CSS for dark background (prevents white flash)
+- Hero banner image preloaded with responsive `imagesrcset`
+
+**Server & CDN:**
+- Nginx: fixed port routing (was 3001, corrected to 3000)
+- Nginx: proper cache headers (assets get immutable 1yr, HTML no-cache)
+- Nginx: full gzip + brotli compression for all content types
+- Cloudflare Edge Cache: HTML cached at edge for 5 min (Cache Rule API)
+- Cloudflare Page Rules: MP4 and /assets/* cached at edge for 30 days
+- Self-hosted Inter font (eliminates render-blocking Google Fonts)
+
+**Media Deferral:**
+- Explainer video (11MB) only downloads when user clicks play
+- Background video loads after 8s delay
+- Intro modal opens after 5s to avoid blocking LCP
+
+**PM2 Systemd Fix:**
+- Fixed pm2-root.service: node not in systemd PATH (nvm install)
+- Created /usr/local/bin symlinks for node/npm/npx
+- Killed orphan PM2 daemon, restarted via systemd with proper PID tracking
+
+### Performance Journey
+
+| Version | Score | Key Change |
+|---------|-------|------------|
+| Baseline | 46% | Broken nginx (wrong port, no caching) |
+| v2 | 56% | Code splitting (40+ lazy pages) |
+| v3 | 62% | Video deferral, favicon, CF edge cache |
+| v4 | 73% | Self-hosted font, chunk splitting, modulepreload strip |
+| v5 | 86% | App shell, responsive images, PNG→WebP, bg compression |
 
 ## Tech Stack
 
