@@ -84,7 +84,9 @@
     "viem": "^2.47.6",
     "wagmi": "^3.6.0",
     "wouter": "^3.3.5",
-    "zod": "^4.1.12"
+    "zod": "^4.1.12",
+    "compression": "^1.7.5",
+    "@types/compression": "^1.7.5"
   },
   "devDependencies": {
     "@builder.io/vite-plugin-jsx-loc": "^0.1.1",

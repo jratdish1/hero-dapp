@@ -139,7 +139,7 @@ export default function Home() {
         <img
           src={HERO_BANNER_URL}
           alt="HERO United Nations Banner"
-          className="w-full h-full object-cover object-center"
+          fetchPriority="high" className="w-full h-full object-cover object-center"
         />
         {/* Bottom gradient fade for clean break */}
         <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-background to-transparent" />
@@ -187,7 +187,7 @@ export default function Home() {
       {/* Hero section with background video */}
       <section className="relative overflow-hidden">
         {/* Background Video */}
-        <video
+        <video preload="none"
           autoPlay
           loop
           muted
@@ -412,7 +412,7 @@ export default function Home() {
         {/* Blackbeard footer banner */}
         <div className="w-full relative overflow-hidden" style={{maxHeight: "350px"}}>
           <img
-            src={BLACKBEARD_URL}
+            loading="lazy" src={BLACKBEARD_URL}
             alt="Black Bear Footer"
             className="w-full object-contain"
             style={{height: "350px", objectFit: "cover"}}
