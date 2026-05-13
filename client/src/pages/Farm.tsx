@@ -275,7 +275,7 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <img
-              src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png"
+              src="/hero-logo-200.webp"
               alt="HERO"
               className="w-8 h-8 rounded-lg object-contain"
             />

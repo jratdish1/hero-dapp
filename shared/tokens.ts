@@ -402,7 +402,7 @@ export const FARM_POOLS_BASE = [
 
 // ─── CDN Assets ─────────────────────────────────────────────────────────
 export const CDN_ASSETS = {
-  heroLogo: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png",
+  heroLogo: "/hero-logo-200.webp",
   blackbeard: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif",
   kycBadge: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png",
   auditBadge: "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/audited-by-spywolf_8a337ccc.png",

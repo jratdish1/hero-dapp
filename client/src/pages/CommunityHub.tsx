@@ -17,7 +17,7 @@ function isSafeUrl(url: string): boolean {
 
 
 const EXPLAINER_VIDEO = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4";
-const HERO_LOGO = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero-logo-official_808c9ab8.png";
+const HERO_LOGO = "/hero-logo-200.webp";
 
 // Weekly Monster Threads from @CrypMvs
 const MONSTER_THREADS = [
