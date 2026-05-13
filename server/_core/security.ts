@@ -122,6 +122,8 @@ export function setupHelmet(app: Express) {
       xPermittedCrossDomainPolicies: { permittedPolicies: "none" },
       xPoweredBy: false,
       xXssProtection: true,
+      // Disable helmet's noCache — we set our own Cache-Control per route
+      noCache: false,
     })
   );
 }
