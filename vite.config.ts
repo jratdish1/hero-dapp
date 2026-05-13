@@ -166,6 +166,31 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          // Separate wagmi/viem/web3 into its own chunk (loaded on demand)
+          if (id.includes('node_modules/wagmi') || 
+              id.includes('node_modules/viem') || 
+              id.includes('node_modules/@wagmi') ||
+              id.includes('node_modules/@walletconnect') ||
+              id.includes('node_modules/@reown')) {
+            return 'web3';
+          }
+          // Separate heavy UI libraries
+          if (id.includes('node_modules/framer-motion')) {
+            return 'framer';
+          }
+          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
+            return 'charts';
+          }
+          // Radix UI components
+          if (id.includes('node_modules/@radix-ui')) {
+            return 'radix';
+          }
+        },
+      },
+    },
   },
   server: {
     host: true,
