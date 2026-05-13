@@ -88,8 +88,8 @@ function buildCspDirectives() {
   return {
     defaultSrc: ["'self'"],
     scriptSrc,
-    styleSrc: ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
-    fontSrc: ["'self'", "https://fonts.gstatic.com", "data:"],
+    styleSrc: ["'self'", "'unsafe-inline'"],
+    fontSrc: ["'self'", "data:"],
     imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
     connectSrc,
     frameSrc: ["'self'", "https://*.walletconnect.com", "https://*.walletconnect.org", "https://app.safe.global", "https://app.squirrelswap.pro", "https://*.squirrelswap.pro", "https://transferto.xyz", "https://*.transferto.xyz", "https://www.youtube.com", "https://youtube.com", "https://libertyswap.finance", "https://switch.win", "https://*.switch.win"],
