@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 const STORAGE_KEY = "hero-dapp-intro-completed";
 const VIDEO_URL = "/hero-explainer-edited.mp4";
 const POSTER_URL = "/hero-explainer-poster.webp";
-const HERO_LOGO_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerologowithSoldier_092f3ebf.jpg";
+const HERO_LOGO_URL = "/hero-soldier.webp";
 
 type Step = "video" | "disclaimer";
 

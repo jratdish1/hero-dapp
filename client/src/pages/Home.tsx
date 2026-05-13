@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 
 // CDN Asset URLs
 const HERO_LOGO_URL = "/hero-logo-200.webp";
-const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
+const HERO_BANNER_URL = "/hero-banner-un.webp";
 const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/hero_not_a_hero_footer_40622e74.jpg";
 const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
 import { Card, CardContent } from "@/components/ui/card";

@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 
 const HERO_LOGO = "/hero-logo-200.webp";
-const HERO_BANNER = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
+const HERO_BANNER = "/hero-banner-un.webp";
 const HERO_SUNSET = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/herouniversalgoodstonesunset_905fb0ba.webp";
 const HERO_TRUDEFI = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HeroTruDefi_4b9604ff.jpg";
 const VIC_INFOCHART = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/Vetsincryptoinfochartforvets,hero_c1479748.jpg";

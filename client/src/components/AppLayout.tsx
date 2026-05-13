@@ -52,7 +52,7 @@ import {
 
 // CDN asset URLs
 const HERO_LOGO_URL = "/hero-logo-200.webp";
-const HERO_BANNER_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg";
+const HERO_BANNER_URL = "/hero-banner-un.webp";
 const BLACKBEARD_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/BlackBeard_94de3f9d.jfif";
 const KYC_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/KYC-certificate-badge_4bce12b5.png";
 const AUDIT_BADGE_URL = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/audited-by-spywolf_8a337ccc.png";
@@ -385,7 +385,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
               <div className="flex items-center gap-2">
                 <PriceTicker />
-                <img src="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/XieYK2a8rpN3wLQcLrDc5d/HerobannerUN_342fe48e.jpg" alt="HERO Banner" className="h-8 rounded object-cover hidden md:block" style={{maxWidth: "200px"}} />
+                <img src="/hero-banner-un.webp" alt="HERO Banner" className="h-8 rounded object-cover hidden md:block" style={{maxWidth: "200px"}} />
                 <LanguageSelector />
                 <ThemeToggle />
                 <WalletButton />
