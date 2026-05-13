@@ -15,6 +15,8 @@ export default function ExplainerVideoModal() {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(true);
   const [showPlayButton, setShowPlayButton] = useState(true);
+  // Video src is NOT set until user clicks play — prevents 11MB download on page load
+  const [videoSrc, setVideoSrc] = useState<string | undefined>(undefined);
   const videoRef = useRef<HTMLVideoElement>(null);
 
   useEffect(() => {
@@ -25,41 +27,52 @@ export default function ExplainerVideoModal() {
     }
   }, []);
 
-  // Auto-play video when modal opens (Edge/Chrome/Safari compatible)
-  // Must be muted for autoplay to work across all browsers
-  useEffect(() => {
-    if (isOpen && step === "video" && videoRef.current) {
-      const video = videoRef.current;
-      // Workaround for React muted prop bug — set via DOM directly
-      video.muted = true;
-      video.defaultMuted = true;
-      // Small delay to ensure DOM is ready
-      const playTimer = setTimeout(() => {
-        video.play().then(() => {
-          setIsPlaying(true);
-          setShowPlayButton(false);
-        }).catch(() => {
-          // Autoplay still blocked — keep play button visible for manual click
-          setShowPlayButton(true);
-        });
-      }, 300);
-      return () => clearTimeout(playTimer);
-    }
-  }, [isOpen, step]);
-
   const handlePlay = useCallback(() => {
     const video = videoRef.current;
     if (!video) return;
-    // Ensure muted for autoplay compatibility
+    // Set video src on first play click — this triggers the download
+    if (!videoSrc) {
+      setVideoSrc(VIDEO_URL);
+      // Wait for src to be set, then play
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          video.muted = true;
+          video.play().then(() => {
+            setIsPlaying(true);
+            setShowPlayButton(false);
+          }).catch(() => {
+            setShowPlayButton(true);
+          });
+        });
+      });
+      return;
+    }
     video.muted = true;
     video.play().then(() => {
       setIsPlaying(true);
       setShowPlayButton(false);
     }).catch(() => {
-      // Autoplay blocked — keep play button visible
       setShowPlayButton(true);
     });
-  }, []);
+  }, [videoSrc]);
+
+  // When videoSrc changes and video element updates, try to play
+  useEffect(() => {
+    if (videoSrc && videoRef.current && isOpen) {
+      const video = videoRef.current;
+      video.muted = true;
+      video.defaultMuted = true;
+      const playTimer = setTimeout(() => {
+        video.play().then(() => {
+          setIsPlaying(true);
+          setShowPlayButton(false);
+        }).catch(() => {
+          setShowPlayButton(true);
+        });
+      }, 100);
+      return () => clearTimeout(playTimer);
+    }
+  }, [videoSrc, isOpen]);
 
   const handleToggleMute = useCallback(() => {
     const video = videoRef.current;
@@ -126,22 +139,22 @@ export default function ExplainerVideoModal() {
                 </div>
               </div>
 
-              {/* Video Player */}
+              {/* Video Player — video src only set after user clicks play */}
               <div className="aspect-video bg-black relative">
                 <video
                   ref={videoRef}
-                  src={isOpen ? VIDEO_URL : undefined}
+                  src={videoSrc}
                   className="w-full h-full object-contain"
                   muted
                   playsInline
                   preload="none"
-                  poster={isOpen ? POSTER_URL : undefined}
+                  poster={POSTER_URL}
                   onEnded={handleVideoEnded}
                   onPlay={() => { setIsPlaying(true); setShowPlayButton(false); }}
                   onPause={() => setIsPlaying(false)}
                 />
 
-                {/* Play overlay */}
+                {/* Play overlay — always shown until user clicks */}
                 {showPlayButton && (
                   <div
                     className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/40"
