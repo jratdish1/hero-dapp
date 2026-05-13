@@ -187,13 +187,13 @@ export default function Home() {
       {/* Hero section with background video */}
       <section className="relative overflow-hidden">
         {/* Background Video */}
-        <video preload="none"
-          autoPlay
+        <video preload="metadata"
           loop
           muted
           playsInline
           className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
           src={CDN_ASSETS.tokenomicsVideo}
+          ref={(el) => { if (el) { const obs = new IntersectionObserver(([e]) => { if (e.isIntersecting) { el.play(); obs.disconnect(); } }, { threshold: 0.1 }); obs.observe(el); } }}
         />
         <div className="absolute inset-0 bg-gradient-to-b from-background/60 via-background/40 to-background" />
         <div className="absolute inset-0 bg-gradient-to-b from-[var(--hero-orange)]/5 to-transparent" />
@@ -326,7 +326,7 @@ export default function Home() {
               <div className="relative bg-card/80 rounded-2xl border border-border p-8">
                 <a href="https://regenvalor.com" target="_blank" rel="noopener noreferrer">
                   <img
-                    src="/regenvalor_og.png"
+                    src="/regenvalor_og.png" loading="lazy"
                     alt="RegenValor Logo"
                     className="w-48 mx-auto mb-6 opacity-90 hover:opacity-100 transition-opacity"
                     onError={(e) => {
