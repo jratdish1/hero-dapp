@@ -73,9 +73,8 @@
     <meta name="twitter:title" content="HERO Dapp — Trade Smarter on PulseChain & BASE" />
     <meta name="twitter:description" content="Trade $HERO and $VETS on PulseChain and BASE. DEX aggregator with gasless swaps, DCA, limit orders, and LP staking for veterans." />
     <!-- Preconnect to CDN for faster asset loading -->
-    <link rel="preconnect" href="https://d2xsxph8kpxj0f.cloudfront.net" crossorigin />
-    <!-- Preload LCP hero banner image -->
-    <link rel="preload" as="image" type="image/webp" href="https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/445vqAqzbQinaz2K7dFjjJ/hero-banner-QpyKdvivL5TcgqnXxrRZh5.webp" fetchpriority="high" />
+    <!-- Preload LCP hero banner (responsive: small for mobile, full for desktop) -->
+    <link rel="preload" as="image" type="image/webp" href="/hero-banner-sm.webp" imagesrcset="/hero-banner-sm.webp 800w, /hero-banner-un.webp 1920w" imagesizes="100vw" fetchpriority="high" />
     <!-- Self-hosted Inter font (eliminates render-blocking Google Fonts request) -->
     <link rel="preload" href="/fonts/inter-latin.woff2" as="font" type="font/woff2" crossorigin />
     <style>

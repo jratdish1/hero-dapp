@@ -160,7 +160,7 @@ export default function Home() {
       {/* HERO UN Banner — Full Size Hero Header */}
       <div className="w-full relative" style={{height: '60vh', minHeight: '400px', maxHeight: '700px'}}>
         <img
-          src={HERO_BANNER_URL}
+          src={HERO_BANNER_URL} srcSet="/hero-banner-sm.webp 800w, /hero-banner-un.webp 1920w" sizes="100vw"
           alt="HERO United Nations Banner"
           fetchPriority="high" className="w-full h-full object-cover object-center"
         />
@@ -342,7 +342,7 @@ export default function Home() {
               <div className="relative bg-card/80 rounded-2xl border border-border p-8">
                 <a href="https://regenvalor.com" target="_blank" rel="noopener noreferrer">
                   <img
-                    src="/regenvalor_og.png" loading="lazy"
+                    src="/regenvalor_og.webp" loading="lazy"
                     alt="RegenValor Logo"
                     className="w-48 mx-auto mb-6 opacity-90 hover:opacity-100 transition-opacity"
                     onError={(e) => {
