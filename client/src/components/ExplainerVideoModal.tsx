@@ -22,7 +22,7 @@ export default function ExplainerVideoModal() {
   useEffect(() => {
     const completed = localStorage.getItem(STORAGE_KEY);
     if (!completed) {
-      const timer = setTimeout(() => setIsOpen(true), 600);
+      const timer = setTimeout(() => setIsOpen(true), 5000);
       return () => clearTimeout(timer);
     }
   }, []);

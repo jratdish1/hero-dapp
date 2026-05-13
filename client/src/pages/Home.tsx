@@ -117,7 +117,7 @@ const FEATURES = [
 function DeferredBackgroundVideo({ src }: { src: string }) {
   const [shouldLoad, setShouldLoad] = useState(false);
   useEffect(() => {
-    const timer = setTimeout(() => setShouldLoad(true), 3000);
+    const timer = setTimeout(() => setShouldLoad(true), 8000);
     return () => clearTimeout(timer);
   }, []);
   if (!shouldLoad) return null;
