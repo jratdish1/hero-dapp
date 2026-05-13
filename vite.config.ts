@@ -166,16 +166,26 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
+    cssCodeSplit: true,
+    modulePreload: { polyfill: false },
     rollupOptions: {
       output: {
         manualChunks(id) {
-          // Separate wagmi/viem/web3 into its own chunk (loaded on demand)
+          // React core — cached separately, rarely changes
+          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+            return 'react-vendor';
+          }
+          // Separate wagmi/viem/web3 into its own chunk
           if (id.includes('node_modules/wagmi') || 
               id.includes('node_modules/viem') || 
               id.includes('node_modules/@wagmi') ||
               id.includes('node_modules/@walletconnect') ||
               id.includes('node_modules/@reown')) {
             return 'web3';
+          }
+          // TanStack/tRPC — data layer
+          if (id.includes('node_modules/@tanstack') || id.includes('node_modules/@trpc')) {
+            return 'data-layer';
           }
           // Separate heavy UI libraries
           if (id.includes('node_modules/framer-motion')) {
