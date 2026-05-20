@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users, AlertCircle } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { sanitizeProposalContent, truncateAddress } from "@/lib/sanitize-output";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -48,6 +49,12 @@ export default function ProposalDetail() {
   const votingPower = heroBalance ? Math.floor(Number(formatUnits(heroBalance, 18))) : 0;
   const connectedChain = chainId === 369 ? "pulsechain" : "base";
 
+  // Fetch proposal first (must be declared before dependent queries)
+  const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
+    { proposalId },
+    { enabled: !!proposalId }
+  );
+
   // Check if user already voted (audit fix: disable UI if already voted)
   const { data: myVote } = trpc.dao.votes.myVote.useQuery(
     { proposalDbId: proposal?.id ?? 0 },
@@ -55,10 +62,6 @@ export default function ProposalDetail() {
   );
   const hasVoted = !!myVote;
 
-  const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
-    { proposalId },
-    { enabled: !!proposalId }
-  );
   const { data: votes } = trpc.dao.votes.list.useQuery(
     { proposalDbId: proposal?.id ?? 0 },
     { enabled: !!proposal?.id }
@@ -137,11 +140,11 @@ export default function ProposalDetail() {
             <Badge variant="outline">{proposal.category}</Badge>
             <Badge variant="outline">{proposal.chain}</Badge>
           </div>
-          <h1 className="text-2xl font-bold">{proposal.title}</h1>
+          <h1 className="text-2xl font-bold">{sanitizeProposalContent(proposal.title)}</h1>
           <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
             <span>{proposal.proposalId}</span>
             <span>·</span>
-            <span>By {proposal.proposerAddress.slice(0, 6)}...{proposal.proposerAddress.slice(-4)}</span>
+            <span>By {truncateAddress(proposal.proposerAddress)}</span>
             <span>·</span>
             <span>
               <Clock className="h-3 w-3 inline mr-1" />
@@ -160,7 +163,7 @@ export default function ProposalDetail() {
             </CardHeader>
             <CardContent>
               <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">
-                {proposal.description}
+                {sanitizeProposalContent(proposal.description)}
               </div>
             </CardContent>
           </Card>
