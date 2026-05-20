@@ -15,3 +15,11 @@ updates:
       all-deps:
         patterns:
           - "*"
+    # Ignore packages with known breaking changes
+    ignore:
+      - dependency-name: "wouter"
+        versions: [">=4.0.0"]
+      - dependency-name: "ip-address"
+        versions: [">=10.0.0"]
+      - dependency-name: "ws"
+        versions: [">=9.0.0"]

@@ -83,7 +83,7 @@
     "vaul": "^1.1.2",
     "viem": "^2.47.6",
     "wagmi": "^3.6.0",
-    "wouter": "^3.3.5",
+    "wouter": "~3.3.5",
     "zod": "^4.1.12",
     "compression": "^1.7.5",
     "@types/compression": "^1.7.5"
