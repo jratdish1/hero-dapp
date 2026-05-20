@@ -13,8 +13,12 @@ set -euo pipefail
 # --- Configuration ---
 DEPLOY_DIR="/var/www/hero-dapp"
 BUILD_DIR="/root/hero-dapp"
-CLOUDFLARE_ZONE_ID="0e4a5f5c4d5b5e6f7a8b9c0d1e2f3a4b"  # herobase.io zone
+CLOUDFLARE_ZONE_ID="1f894ca8151cd3419688c8a87ce9f5e3"  # herobase.io zone
 CLOUDFLARE_API_KEY="${CLOUDFLARE_API_KEY:-}"
+CLOUDFLARE_EMAIL="${CLOUDFLARE_EMAIL:-}"
+
+# Auth method: X-Auth-Email + X-Auth-Key (Global API Key)
+# NOT Bearer token (which requires a scoped API token)
 NGINX_ASSETS_ROOT="/var/www/hero-dapp/public/assets"
 RELEASES_DIR="/var/www/hero-dapp/releases"
 CURRENT_LINK="/var/www/hero-dapp/public/assets"
@@ -51,10 +55,11 @@ command -v nginx >/dev/null || error "nginx not found"
 # Load NVM if available
 [ -f /root/.nvm/nvm.sh ] && source /root/.nvm/nvm.sh
 
-# Load Cloudflare key from env_architecture if not set
+# Load Cloudflare credentials from env_architecture if not set
 if [ -z "$CLOUDFLARE_API_KEY" ]; then
   if [ -f /root/.env_architecture ]; then
-    CLOUDFLARE_API_KEY=$(grep -oP 'CLOUDFLARE_API_KEY=\K.*' /root/.env_architecture 2>/dev/null || echo "")
+    CLOUDFLARE_API_KEY=$(grep -oP 'CF_GLOBAL_API_KEY=\K.*' /root/.env_architecture 2>/dev/null || echo "")
+    CLOUDFLARE_EMAIL=$(grep -oP 'CLOUDFLARE_EMAIL=\K.*' /root/.env_architecture 2>/dev/null || echo "")
   fi
 fi
 
@@ -128,7 +133,8 @@ if [ "$SKIP_PURGE" = false ] && [ -n "$CLOUDFLARE_API_KEY" ]; then
   
   if [ -n "$PURGE_URLS" ] && [ "$PURGE_URLS" != "[]" ]; then
     curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-      -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+      -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
+      -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
       -H "Content-Type: application/json" \
       --data "{\"files\": $PURGE_URLS}" > /dev/null
     log "Targeted asset purge sent"
@@ -137,7 +143,8 @@ if [ "$SKIP_PURGE" = false ] && [ -n "$CLOUDFLARE_API_KEY" ]; then
   # Then: full purge to catch index.html and any edge-cached 404s
   sleep 2
   PURGE_RESULT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-    -H "Authorization: Bearer $CLOUDFLARE_API_KEY" \
+    -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
+    -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
     -H "Content-Type: application/json" \
     --data '{"purge_everything": true}')
   
