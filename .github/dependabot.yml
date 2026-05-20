@@ -1,0 +1,17 @@
+# Dependabot configuration - limits noise from transitive dependency conflicts
+version: 2
+updates:
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+    # Only create PRs for direct dependencies, not transitive
+    allow:
+      - dependency-type: "direct"
+    # Auto-dismiss if version conflict exists
+    open-pull-requests-limit: 3
+    # Group all updates into one PR
+    groups:
+      all-deps:
+        patterns:
+          - "*"
