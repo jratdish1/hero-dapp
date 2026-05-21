@@ -1,5 +1,5 @@
-# HERO Ecosystem Architecture Blueprint v5
-## Last Updated: May 12, 2026
+# HERO Ecosystem Architecture Blueprint v6
+## Last Updated: May 20, 2026
 
 ---
 
@@ -13,10 +13,11 @@
 | Component | Location | Details |
 |-----------|----------|---------|
 | Frontend + Server | VPS1 (62.146.175.67) | Express + Vite SSR, PM2 managed |
-| Domain | herobase.io | Cloudflare DNS + CDN + WAF |
+| Domain | herobase.io | Cloudflare DNS + CDN + WAF + HTTP/3 + Early Hints |
 | Database | MySQL on VPS1 | Drizzle ORM, 8 migrations (0000–0007) |
 | CDN Assets | d2xsxph8kpxj0f.cloudfront.net | Images, videos, static assets |
 | Git Repo | GitHub (jratdish1/hero-dapp) | Public, auto-sync cron on VPS1 |
+| Static Serving | Nginx (direct) | Bypasses Express for /assets/, brotli_static + gzip_static |
 
 ---
 
@@ -24,20 +25,22 @@
 
 | Layer | Technology |
 |-------|-----------|
-| Frontend | React 19 + TypeScript + Vite |
+| Frontend | React 19.2 + TypeScript + Vite |
 | Styling | Tailwind CSS + MARPAT Woodland Camo theme |
 | State | React Context (Network, Language, Theme, Wagmi) + Hooks |
-| Backend | Express + tRPC 11 |
-| Database | MySQL (Drizzle ORM) — 15 tables |
-| Auth | Wallet-based (wagmi 3.6 + WalletConnect) + JWT sessions (jose) |
+| Backend | Express 4.21 + tRPC 11.6 |
+| Database | MySQL (Drizzle ORM 0.44) — 15 tables |
+| Auth | Wallet-based (wagmi 3.6 + WalletConnect) + JWT sessions (jose 6.1) |
 | Web3 | wagmi 3.6 + viem 2.47 + WalletConnect (env-gated) |
 | Process Mgr | PM2 (id: 19, name: hero-dapp) |
 | Testing | Vitest (9 test files) |
 | Formatting | Prettier |
-| Charts | Recharts + TradingView (lightweight-charts) |
+| Charts | Recharts 2.15 + TradingView (lightweight-charts) |
 | Routing | wouter 3.3 |
-| Forms | react-hook-form + zod 4 |
-| Code Splitting | React.lazy + Suspense (20+ lazy-loaded routes) |
+| Forms | react-hook-form 7.64 + zod 4.1 |
+| Code Splitting | React.lazy + Suspense (40+ lazy-loaded routes/components) |
+| Compression | Brotli 11 + Gzip 9 pre-compression (precompress.mjs) |
+| Font | Self-hosted Inter (inter-latin.woff2) |
 
 ---
 
@@ -47,7 +50,7 @@
 |-------|---------------|------|-------------|
 | / | Home | No | Landing page |
 | /wallet | HeroWallet | Yes | Multi-tab wallet (Overview, Send, Privacy, Bridge, Approvals, Discover) |
-| /swap | Swap | No | DEX aggregator with route comparison + price impact |
+| /swap | Swap | Yes | DEX aggregator with route comparison + price impact |
 | /dashboard | Dashboard | Yes | Market overview + Treasury + Wallet balance integration |
 | /portfolio | Portfolio | Yes | Token balances, P&L, transaction history (chain-aware) |
 | /dca | DcaOrders | Yes | Dollar-cost averaging order management |
@@ -55,38 +58,39 @@
 | /approvals | ApprovalsEnhanced | Yes | Token approval manager with real wallet data |
 | /bootcamp | Farm | Yes | PulseChain farm pools (aliased from /dapp-farm) |
 | /stake | Stake | Yes | Farm pools (PulseChain) |
-| /stake/base | BaseStake | No | Farm pools (BASE) |
-| /stake/dai | HeroStake | No | V2 SSS single-sided HERO staking → DAI rewards |
+| /stake/base | BaseStake | Yes | Farm pools (BASE) |
+| /stake/dai | HeroStake | Yes | V2 SSS single-sided HERO staking → DAI rewards |
 | /bots | AbleBots | Yes | ABLE bot status display |
 | /spin | SpinWheel | Yes | Daily spin (requires HERO NFT) |
 | /nft | NftCollection | Yes | HERO NFT gallery |
-| /nft-mint | NFTMint | No | NFT minting interface |
+| /nft-mint | NFTMint | Yes | NFT minting interface |
 | /burn | BuyAndBurn | Yes | Buy-and-burn mechanism display |
 | /giveaways | Giveaways | Yes | Community giveaways |
 | /holder-rewards | HolderRewards | Yes | Holder reward distribution |
-| /dao | DaoDashboard | No | DAO governance dashboard |
-| /dao/proposals | Proposals | No | Governance proposals list |
-| /dao/proposals/create | CreateProposal | No | Create new proposal |
-| /dao/proposals/:id | ProposalDetail | No | Individual proposal detail + voting |
-| /dao/treasury | Treasury | No | DAO treasury overview |
-| /dao/delegates | Delegates | No | Delegate voting power |
-| /dao-proposals | DAOProposals | No | Legacy DAO proposals page |
+| /dao | DaoDashboard | Yes | DAO governance dashboard |
+| /dao/proposals | Proposals | Yes | Governance proposals list |
+| /dao/proposals/create | CreateProposal | Yes | Create new proposal |
+| /dao/proposals/:id | ProposalDetail | Yes | Individual proposal detail + voting |
+| /dao/treasury | Treasury | Yes | DAO treasury overview |
+| /dao/delegates | Delegates | Yes | Delegate voting power |
+| /dao-proposals | DAOProposals | Yes | Legacy DAO proposals page |
 | /community | Blog | Yes | Blog posts + Twitter mentions |
 | /community-hub | CommunityHub | Yes | Weekly Blog + Monster Threads + Video + Quick Vote |
 | /media | MediaHub | Yes | Video content + explainer |
 | /ai | AiAssistant | Yes | AI chat assistant |
 | /tokenomics | Tokenomics | Yes | Token economics display |
-| /ecosystem | Subdomains | No | Ecosystem subdomain directory |
-| /directory | EcosystemDirectory | No | Ecosystem directory (DApp catalog) |
+| /ecosystem | Subdomains | Yes | Ecosystem subdomain directory |
+| /directory | EcosystemDirectory | Yes | Ecosystem directory (DApp catalog) |
 | /dex-analytics | DexAnalytics | Yes | DEX analytics + pool data |
-| /explainer | Explainer | No | Platform explainer |
-| /beta-disclaimer | BetaDisclaimer | No | Beta disclaimer page |
-| /disclaimer | BetaDisclaimer | No | Alias for beta-disclaimer |
+| /explainer | Explainer | Yes | Platform explainer |
+| /beta-disclaimer | BetaDisclaimer | Yes | Beta disclaimer page |
+| /disclaimer | BetaDisclaimer | Yes | Alias for beta-disclaimer |
 | /whitepaper | (external redirect) | — | Redirects to docs.vicfoundation.com |
-| /start | Onboarding | No | Onboarding guide |
+| /start | Onboarding | Yes | Onboarding guide |
+| /login | LoginPage | Yes | Login page |
 | /404 | NotFound | No | 404 page |
 
-**Redirects**: /dapp-farm → /bootcamp, /ai-assistant → /ai, /able-bots → /bots, /liberty-swap → /swap, /buy-and-burn → /burn, /pools → /dex-analytics, /stake-base → /stake/base, /stake-dai → /stake/dai, /nfts → /nft, /farm → /bootcamp, /governance → /dao, /start-here → /start
+**Redirects**: /dapp-farm → /bootcamp, /ai-assistant → /ai, /able-bots → /bots, /liberty-swap → /swap, /buy-and-burn → /burn, /pools → /dex-analytics, /stake-base → /stake/base, /stake-dai → /stake/dai, /nfts → /nft, /farm → /bootcamp
 
 ---
 
@@ -98,7 +102,6 @@
 | AppLayout.tsx | Collapsible sidebar + main layout + ScrollToTop + CodexAuditBadge |
 | BetaDisclaimer.tsx | Beta warning modal |
 | ChainStatsWidget.tsx | On-chain statistics widget |
-| CodexAuditBadge.tsx | GPT-4.1 Codex audit score badge (88.85 score) |
 | CommaInput.tsx | Number input with comma formatting for readability |
 | CommunityFeed.tsx | Unified activity stream |
 | CommunityStats.tsx | Holder/voter/treasury stats |
@@ -107,9 +110,9 @@
 | DashboardLayoutSkeleton.tsx | Loading skeleton for dashboard layout |
 | DiscoverTab.tsx | 42+ DApp directory with search, favorites, categories |
 | ErrorBoundary.tsx | React class-based error boundary with crash recovery UI |
-| ExplainerVideoModal.tsx | Video explainer overlay |
+| ExplainerVideoModal.tsx | Video explainer overlay (deferred download — plays on click only) |
 | FloatingSocial.tsx | Floating social media links |
-| IntroOverlay.tsx | First-visit intro video overlay |
+| IntroOverlay.tsx | First-visit intro video overlay (8s delayed load) |
 | LPPositionMonitor.tsx | LP tracking + impermanent loss calculator |
 | LanguageSelector.tsx | i18n language picker |
 | LiveTicker.tsx | Live price ticker (PLS + BASE tokens) |
@@ -123,7 +126,6 @@
 | QuickVote.tsx | Inline proposal voting |
 | RewardsDashboard.tsx | Consolidated rewards view |
 | RouteComparison.tsx | Best-rate routing across DEXes |
-| ScrollToTop.tsx | Scroll-to-top button (appears after 400px scroll) |
 | SlippageSelector.tsx | Preset + custom slippage selector (0.1%, 0.5%, 1%, 3%, custom) |
 | SlippageSettings.tsx | Slippage/gas/MEV settings (swap page) |
 | SquirrelSwapWidget.tsx | Squirrel swap integration |
@@ -152,6 +154,7 @@
 
 | Hook | Purpose |
 |------|---------|
+| useAuth.ts | Core authentication hook |
 | useComposition.ts | Component composition utilities |
 | useMobile.tsx | Mobile responsive detection |
 | usePageSEO.ts | Dynamic SEO meta tags |
@@ -167,7 +170,14 @@
 | File | Purpose |
 |------|---------|
 | nft-trait-constants.ts | NFT trait definitions and rarity tables |
-| rng/ | Random number generation utilities |
+| rng/ | Random number generation utilities (7 modules) |
+| rng/dao-rng-fallback.ts | DAO RNG fallback logic |
+| rng/email-notify.ts | Email notification from RNG events |
+| rng/nft-trait-engine.ts | NFT trait randomization |
+| rng/raffle-engine.ts | Raffle/giveaway engine |
+| rng/rewards-engine.ts | Reward calculation |
+| rng/rng-engine.ts | Core RNG engine |
+| rng/spin-engine.ts | Spin wheel logic |
 | sss-config.ts | SSS staking configuration (addresses, ABIs per chain) |
 | staking-abi.ts | Staking contract ABI definitions |
 | trpc.ts | tRPC client configuration |
@@ -363,7 +373,7 @@
 
 | ID | Name | Status | Purpose |
 |----|------|--------|---------|
-| 19 | hero-dapp | online | Main DApp server (port 3001) |
+| 19 | hero-dapp | online | Main DApp server (port 3000, Nginx proxy) |
 | 22 | hero-terminal | online | PulseChain trading terminal |
 | 23 | hero-terminal-base | online | BASE trading terminal |
 | 20 | Hero-ABLE | online | PulseChain ABLE bot |
@@ -420,15 +430,95 @@
 
 ---
 
-## Performance Optimizations (May 11-12, 2026)
+## Performance Optimizations (May 11-13, 2026)
+
+### Lighthouse Scores (May 13, 2026)
+
+| Metric | Score | Value |
+|--------|-------|-------|
+| Performance | 90% avg (100% peak) | — |
+| First Contentful Paint | 97 | 1.4s |
+| Largest Contentful Paint | 97 | 2.0s |
+| Total Blocking Time | 73 | 350ms |
+| Cumulative Layout Shift | 100 | 0.000 |
+| Speed Index | 91 | 3.3s |
+| Server Response Time | 100 | 240ms |
+| Accessibility | 91% | — |
+| Best Practices | 92% | — |
+| SEO | 100% | — |
+
+### Code Splitting & Bundling
 
 | Optimization | Description |
 |--------------|-------------|
-| React.lazy + Suspense | 20+ routes lazy-loaded with loading spinner fallback |
+| React.lazy + Suspense | 40+ routes/components lazy-loaded with loading spinner fallback |
+| Manual chunks | wagmi/viem (web3), recharts (charts), radix-ui, tanstack separated |
+| strip-modulepreload.mjs | Removes non-critical modulepreload hints (web3, radix, data-layer) |
+| React vendor chunk | Separated for better long-term caching |
 | Route memoization (P10) | withLayout wrapper prevents unnecessary remounts |
 | LoadingFallback | Shared spinner component for Suspense boundaries |
-| Chain-gated queries | useReadContracts only fires when wallet connected + correct chain |
-| Token balance batching | Dashboard reads HERO + VETS balances in single multicall |
+
+### Compression (precompress.mjs)
+
+| Optimization | Description |
+|--------------|-------------|
+| Brotli level 11 | Pre-compression for all JS/CSS assets (nginx brotli_static) |
+| Gzip level 9 | Fallback pre-compression (nginx gzip_static) |
+| Entry chunk | 182KB → 47KB brotli (74% reduction) |
+| Web3 chunk | 307KB → 75KB brotli (76% reduction) |
+
+### Image Optimization
+
+| Optimization | Description |
+|--------------|-------------|
+| Hero banner responsive | srcset (26KB mobile / 99KB desktop WebP) |
+| regenvalor_og.png | 911KB PNG → 36KB WebP (96% reduction) |
+| regenvalor_hero_bg | 90KB → 30KB WebP (67% reduction, 10% opacity bg) |
+| Favicon | 205KB CDN JPG → 9KB local WebP |
+| Dead preload removed | 151KB CloudFront wasted per page load eliminated |
+| CDN poster replaced | 1.2MB → local optimized WebP |
+| CDN logo replaced | 632KB → local optimized WebP |
+| CDN video replaced | 16MB → 141KB local 360p version |
+
+### App Shell & Rendering
+
+| Optimization | Description |
+|--------------|-------------|
+| Inline HTML skeleton | `<div id="root">` contains skeleton for instant FCP before JS loads |
+| Critical inline CSS | Dark background prevents white flash |
+| Hero banner preload | Responsive `imagesrcset` with fetchpriority="high" |
+| `<main>` landmark | Accessibility landmark for screen readers |
+| Self-hosted Inter font | Eliminates render-blocking Google Fonts request |
+
+### Server & CDN
+
+| Optimization | Description |
+|--------------|-------------|
+| Nginx static bypass | Serves /assets/ directly (bypasses Express) |
+| Nginx port fix | Corrected from 3001 to 3000 |
+| Cache headers | Assets: immutable 1yr; HTML: no-cache |
+| Nginx brotli_static | Serves pre-compressed .br files |
+| Nginx gzip_static | Serves pre-compressed .gz files |
+| Cloudflare Edge Cache | HTML cached at edge for 5 min (Cache Rule API) |
+| Cloudflare Page Rules | MP4 and /assets/* cached at edge for 30 days |
+| HTTP/3 + Early Hints | Enabled on Cloudflare |
+| Helmet noCache disabled | Allows proper static asset caching |
+
+### Media Deferral
+
+| Optimization | Description |
+|--------------|-------------|
+| Explainer video (11MB) | Only downloads when user clicks play |
+| Background video | Loads after 8s delay |
+| Lazy-load below-fold images | loading="lazy" attribute |
+| Conditional video/poster | ExplainerModal only loads media when opened |
+
+### Accessibility (May 13, 2026)
+
+| Optimization | Description |
+|--------------|-------------|
+| Viewport zoom | Removed maximum-scale=1 (allows pinch-to-zoom) |
+| Main landmark | Added `<main role="main">` to app shell |
 
 ---
 
@@ -439,9 +529,9 @@
 - **Secondary Color**: HERO Green (#22C55E)
 - **Dark**: Navy dark backgrounds
 - **Accents**: Cream, Orange highlights
-- **Font**: System + custom heading fonts
+- **Font**: Self-hosted Inter (latin subset, woff2)
 - **Branding**: "HERO DApp" (not DEX), enlarged HERO text in sidebar
-- **Header**: HERO banner image from CDN
+- **Header**: HERO banner image (responsive WebP, local)
 - **KYC Badge**: SpyWolf verified (displayed on homepage + sidebar)
 - **Audit Badge**: SpyWolf audit badge displayed
 - **Codex Audit Badge**: GPT-4.1 Codex audit score (88.85) in sidebar
@@ -457,9 +547,11 @@
 | Hero Logo | d2xsxph8kpxj0f.cloudfront.net/.../hero-logo-official_808c9ab8.png |
 | KYC Badge | d2xsxph8kpxj0f.cloudfront.net/.../KYC-certificate-badge_4bce12b5.png |
 | Audit Badge | d2xsxph8kpxj0f.cloudfront.net/.../audited-by-spywolf_8a337ccc.png |
-| Hero Banner | d2xsxph8kpxj0f.cloudfront.net/.../hero-banner-QpyKdvivL5TcgqnXxrRZh5.webp |
+| Hero Banner | Local: /hero-banner-sm.webp (mobile), /hero-banner-un.webp (desktop) |
 | Hero Emblem | d2xsxph8kpxj0f.cloudfront.net/.../hero-emblem-aHVuQc59ySp2SrqEGw29rZ.webp |
-| Tokenomics Video | files.manuscdn.com/.../unfIxrIvyPBCHqez.mp4 |
+| Tokenomics Video | Local: /tokenomics_video.mp4 |
+| Explainer Video | Local: /hero-explainer-edited.mp4 |
+| Favicon | Local: /hero-logo-200.webp |
 
 ---
 
@@ -467,34 +559,50 @@
 
 ```
 1. Edit source on VPS1: /root/hero-dapp/
-2. Build: cd /root/hero-dapp && npx vite build
-3. Deploy: cp -r dist/* /var/www/hero-dapp/
-4. Restart: pm2 restart hero-dapp
-5. Verify: curl -s http://localhost:3001
-6. Commit: git add -A && git commit -m "..." && git push
-7. Purge CDN: Cloudflare API purge cache
+2. Build: npm run build (vite build + esbuild server bundle)
+3. Deploy: bash deploy.sh (syncs dist → /var/www/hero-dapp/dist, restarts PM2)
+4. Post-build: node precompress.mjs (brotli + gzip static assets)
+5. Post-build: node strip-modulepreload.mjs (remove non-critical preloads, inject critical CSS)
+6. Verify: curl -s http://localhost:3000
+7. Commit: git add -A && git commit -m "..." && git push
+8. Purge CDN: Cloudflare API purge cache
 ```
 
 ---
 
-## Recent Changes (May 11-12, 2026)
+## Recent Changes (May 12-13, 2026) — Since Blueprint v5
 
-| Commit | Description |
-|--------|-------------|
-| 732c0fd | P6: Wire SlippageSelector into Bridge tab + pass slippage to API |
-| 296d924 | P4 balance checks, P5 Portfolio sanitize, P6 SlippageSelector, P10 memoize routes |
-| 7e07bca | Final wallet audit: remove isSupportedChain shadow, Portfolio state reset on error |
-| 49a4f61 | Wallet audit fixes: chain-aware reads, disconnect handling, race conditions |
-| c50680f | Dashboard: wallet balance integration + correct deploy path |
-| 6f2633f | V2 SSS migration — Synthetix-style staking ABI, hook rewrite, WalletButton connect fix |
-| 15d6075 | Revert to single-file HeroWallet — fix ReferenceError crash |
-| f12e74f | Fix HeroWallet crash — ESM-compliant imports, retryWithBackoff, CSP |
-| c44d8b1 | Refactor HeroWallet into subcomponents, retryWithBackoff across all network calls |
-| 2ac2322 | GPT-4.1 Codex audit: ErrorBoundary, retryWithBackoff, handleRpcError, navigator.onLine, iframe sandbox, address validation, token sanitization, RPC fallbacks, AbortController, ARIA labels, env var WC project ID — audit score 75 → 88.85 |
+| Commit | Date | Description |
+|--------|------|-------------|
+| 41db347 | May 13 | docs: update README with final Lighthouse scores (90% avg, 100% peak) |
+| df6b451 | May 13 | a11y: fix viewport zoom restriction and add main landmark |
+| 7e1ab5e | May 13 | chore: add precompress script for brotli static serving |
+| 2f15447 | May 13 | docs: update README with 86% Lighthouse score |
+| 17e7fde | May 13 | perf: add app shell skeleton for instant FCP + compress background image |
+| 9019350 | May 13 | perf: revert CSS non-blocking (hurts Speed Index), keep critical inline CSS |
+| cb38d38 | May 13 | perf: massive image optimization — fix broken hero, convert PNG to WebP, responsive srcset |
+| a15865d | May 13 | perf: self-host Inter font, disable modulePreload for web3/radix chunks |
+| f372b4d | May 13 | perf: non-blocking CSS, critical inline CSS, remove Google Fonts from CSP |
+| fc2cbeb | May 13 | perf: self-host Inter font, split React/data-layer chunks, strip non-critical modulepreload |
+| 880b8b5 | May 13 | docs: add Lighthouse performance badges and optimization details to README |
+| 613f4c8 | May 13 | perf: delay modal to 5s, defer bg video to 8s, optimize favicon |
+| 2041690 | May 13 | perf: defer video download until user clicks play |
+| 5c34162 | May 13 | perf: code splitting with React.lazy + manual chunks for web3/radix/charts |
+| c9ddbef | May 13 | perf: replace remaining CDN images with local optimized WebP |
+| c389d6a | May 13 | perf: replace CDN poster (1.2MB) and logo (632KB) with local optimized WebP |
+| e9586dc | May 13 | perf: replace 16MB CDN video with 141KB local 360p version |
+| 613f54e | May 13 | perf: defer background video load by 3s, conditional video/poster in ExplainerModal |
+| 3c76be3 | May 13 | perf: lazy-load background video, add loading=lazy to below-fold images |
+| c9e982e | May 13 | fix: disable helmet noCache to allow static asset caching |
+| 2af1a79 | May 13 | perf: add compression, caching headers, LCP preload, lazy loading, fix CSP font-src |
+| c971e77 | May 12 | revert: undo code splitting (breaks wagmi optional peer deps) |
+| 1d7ac84 | May 12 | fix: remove vendor-web3 chunk split — wagmi optional peer deps break |
+| 6cf25c4 | May 12 | perf: preload LCP hero banner image + fetchpriority=high |
+| 3a2fa37 | May 12 | perf: code splitting + lazy load streamdown/mermaid (12MB deferred) |
 
 ---
 
-## Route Health Check (May 12, 2026)
+## Route Health Check (May 20, 2026)
 
 | Route | Status |
 |-------|--------|
@@ -516,3 +624,4 @@
 6. Check Cloudflare for any security alerts
 7. Verify ABLE bots have sufficient gas
 8. Check Telegram bot responsiveness
+
