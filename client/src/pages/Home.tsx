@@ -186,7 +186,6 @@ export default function Home() {
           </div>
           <div className="hidden md:flex items-center gap-6 text-sm">
             <Link href="/swap" className="text-muted-foreground hover:text-foreground transition-colors">Swap</Link>
-            <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">Dashboard</Link>
             <Link href="/portfolio" className="text-muted-foreground hover:text-foreground transition-colors">Portfolio</Link>
             <Link href="/bootcamp" className="px-3 py-1 rounded-md bg-[var(--hero-orange)]/10 border border-[var(--hero-orange)]/30 text-[var(--hero-orange)] font-semibold hover:bg-[var(--hero-orange)]/20 transition-colors">Boot Camp</Link>
             <Link href="/dca" className="text-muted-foreground hover:text-foreground transition-colors">DCA</Link>
@@ -237,9 +236,9 @@ export default function Home() {
                 Start Trading <ArrowRight className="w-4 h-4 ml-2" />
               </Button>
             </Link>
-            <Link href="/dashboard">
+            <Link href="/portfolio">
               <Button size="lg" variant="outline" className="border-border h-12 px-8 text-base text-foreground hover:bg-secondary">
-                View Dashboard <BarChart3 className="w-4 h-4 ml-2" />
+                View Portfolio <BarChart3 className="w-4 h-4 ml-2" />
               </Button>
             </Link>
           </div>
