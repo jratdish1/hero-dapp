@@ -7,6 +7,7 @@ import { NetworkSwitcher } from "./NetworkSwitcher";
 import { WalletButton } from "./WalletButton";
 import { ThemeToggle } from "./ThemeToggle";
 import PriceTicker from "./PriceTicker";
+import ScrollToTop from "./ScrollToTop";
 import IntroOverlay from "./IntroOverlay";
 import LanguageSelector from "./LanguageSelector";
 import { useNetwork } from "../contexts/NetworkContext";
@@ -78,7 +79,6 @@ const NAV_TOP: NavItem[] = [
   { path: "/start", label: "🇺🇸 Start Here", icon: Star },
   { path: "/wallet", label: "Wallet", icon: Wallet },
   { path: "/swap", label: "Swap", icon: ArrowLeftRight },
-  { path: "/dashboard", label: "Dashboard", icon: BarChart3 },
 ];
 
 const NAV_GROUPS: NavGroup[] = [
@@ -373,18 +373,18 @@ export default function AppLayout({ children }: { children: ReactNode }) {
             <div className="flex items-center justify-between px-4 py-3">
               <div className="flex items-center gap-3">
                 <button
-                  className="lg:hidden text-muted-foreground hover:text-foreground"
+                  className="lg:hidden text-muted-foreground hover:text-foreground" aria-label="Open sidebar"
                   onClick={() => setSidebarOpen(true)}
                 >
                   <Menu className="w-5 h-5" />
                 </button>
-                <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors">
+                <Link href="/" className="text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap">
                   <ChevronLeft className="w-4 h-4 inline mr-1" />
                   Home
                 </Link>
               </div>
               <div className="flex items-center gap-2">
-                <PriceTicker />
+                <div className="max-w-[260px] lg:max-w-[380px] overflow-hidden flex-shrink"><PriceTicker /></div>
                 <img src="/hero-banner-un.webp" alt="HERO Banner" className="h-8 rounded object-cover hidden md:block" style={{maxWidth: "200px"}} />
                 <LanguageSelector />
                 <ThemeToggle />
@@ -398,6 +398,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           </div>
         </main>
       </div>
+      <ScrollToTop />
     </>
   );
 }

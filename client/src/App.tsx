@@ -17,7 +17,6 @@ import NotFound from "@/pages/NotFound";
 const LoginPage = React.lazy(() => import("./pages/LoginPage"));
 const Farm = React.lazy(() => import("./pages/Farm"));
 const Swap = React.lazy(() => import("./pages/Swap"));
-const Dashboard = React.lazy(() => import("./pages/Dashboard"));
 const Portfolio = React.lazy(() => import("./pages/Portfolio"));
 const DcaOrders = React.lazy(() => import("./pages/DcaOrders"));
 const LimitOrders = React.lazy(() => import("./pages/LimitOrders"));
@@ -49,12 +48,12 @@ const SpinWheel = React.lazy(() => import("./pages/SpinWheel"));
 const HeroWallet = React.lazy(() => import("./pages/HeroWallet"));
 
 // Lazy-load DAO pages
-const DaoDashboard = React.lazy(() => import("./pages/dao").then(m => ({ default: m.DaoDashboard })));
 const Proposals = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Proposals })));
 const ProposalDetail = React.lazy(() => import("./pages/dao").then(m => ({ default: m.ProposalDetail })));
 const CreateProposal = React.lazy(() => import("./pages/dao").then(m => ({ default: m.CreateProposal })));
 const Treasury = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Treasury })));
 const Delegates = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Delegates })));
+const DaoDashboard = React.lazy(() => import("./pages/dao").then(m => ({ default: m.DaoDashboard })));
 
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
@@ -98,7 +97,6 @@ function Router() {
       <Route path="/" component={Home} />
       <Route path="/swap" component={withLayout(Swap)} />
       <Route path="/wallet" component={withLayout(HeroWallet)} />
-      <Route path="/dashboard" component={withLayout(Dashboard)} />
       <Route path="/portfolio" component={withLayout(Portfolio)} />
       <Route path="/dca" component={withLayout(DcaOrders)} />
       <Route path="/limits" component={withLayout(LimitOrders)} />

@@ -13,7 +13,7 @@ import {
 import { useNetwork } from "../contexts/NetworkContext";
 import PortfolioPnL from "../components/PortfolioPnL";
 import TransactionHistory from "../components/TransactionHistory";
-import { useAccount, useBalance } from "wagmi";
+import { useAccount, useBalance, useChainId } from "wagmi";
 import { toast } from "sonner";
 
 interface TokenHolding {

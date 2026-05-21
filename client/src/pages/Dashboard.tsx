@@ -1,5 +1,5 @@
 import TreasuryDisplay from "@/components/TreasuryDisplay";
-import { useAccount, useBalance, useReadContracts } from "wagmi";
+import { useAccount, useBalance, useReadContracts, useChainId } from "wagmi";
 import { formatUnits } from "viem";
 import TradingViewChart from "@/components/TradingViewChart";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
