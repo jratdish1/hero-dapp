@@ -90,10 +90,28 @@ export async function transcribeAudio(
       };
     }
 
-    // Step 2: Download audio from URL
+    // Step 2: Download audio from URL (with SSRF protection)
     let audioBuffer: Buffer;
     let mimeType: string;
     try {
+      // SSRF protection: validate URL scheme and block private/internal IPs
+      const audioUrl = new URL(options.audioUrl);
+      if (!['https:', 'http:'].includes(audioUrl.protocol)) {
+        return {
+          error: "Invalid audio URL protocol",
+          code: "INVALID_FORMAT" as const,
+          details: "Only HTTP and HTTPS URLs are allowed"
+        };
+      }
+      const hostname = audioUrl.hostname.toLowerCase();
+      const blockedPatterns = ['localhost', '127.0.0.1', '0.0.0.0', '169.254.', '10.', '192.168.', '172.16.', '172.17.', '172.18.', '172.19.', '172.20.', '172.21.', '172.22.', '172.23.', '172.24.', '172.25.', '172.26.', '172.27.', '172.28.', '172.29.', '172.30.', '172.31.', '[::1]', 'metadata.google', 'metadata.aws'];
+      if (blockedPatterns.some(p => hostname.startsWith(p) || hostname === p)) {
+        return {
+          error: "Audio URL points to a blocked address",
+          code: "INVALID_FORMAT" as const,
+          details: "Internal/private network URLs are not allowed"
+        };
+      }
       const response = await fetch(options.audioUrl);
       if (!response.ok) {
         return {

@@ -149,9 +149,21 @@ function Router() {
   );
 }
 
-// Safe external redirect component (avoids side effects during render)
+// Safe external redirect component with domain whitelist validation
+const ALLOWED_REDIRECT_DOMAINS = ["docs.vicfoundation.com", "vicfoundation.com", "herobase.io"];
 function ExternalRedirect({ url }: { url: string }) {
-  React.useEffect(() => { window.location.href = url; }, [url]);
+  React.useEffect(() => {
+    try {
+      const parsed = new URL(url);
+      if (ALLOWED_REDIRECT_DOMAINS.includes(parsed.hostname)) {
+        window.location.href = url;
+      } else {
+        console.error("[Security] Blocked redirect to untrusted domain:", parsed.hostname);
+      }
+    } catch {
+      console.error("[Security] Invalid redirect URL:", url);
+    }
+  }, [url]);
   return null;
 }
 

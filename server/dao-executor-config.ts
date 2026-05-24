@@ -20,6 +20,14 @@
  * - DAO_SAFE_CHAIN_ID: Chain ID for the Safe (369 for PulseChain)
  */
 
+// Security: Block private key usage in production at module load time
+if (process.env.NODE_ENV === "production" && process.env.DAO_EXECUTOR_PRIVATE_KEY) {
+  throw new Error(
+    "[FATAL] DAO_EXECUTOR_PRIVATE_KEY must NOT be set in production. " +
+    "Use Gnosis Safe multisig (DAO_EXECUTOR_TYPE=gnosis_safe) instead."
+  );
+}
+
 export type ExecutorType = "eoa" | "gnosis_safe" | "timelock_controller";
 
 export interface ExecutorConfig {

@@ -134,6 +134,22 @@ export async function anchorProposalOnChain(
   votingEndsAt: Date,
   maxRetries: number = 2
 ): Promise<string | null> {
+  // Input validation: proposalId must match expected format
+  if (!proposalId || !/^HERO-M\d+-[A-Za-z0-9]+$/.test(proposalId)) {
+    console.error(`[DAO Anchor] Invalid proposalId format: ${proposalId}`);
+    return null;
+  }
+  // Input validation: contentHash must be a 64-char hex string (SHA-256)
+  if (!contentHash || !/^[a-fA-F0-9]{64}$/.test(contentHash)) {
+    console.error(`[DAO Anchor] Invalid contentHash format (expected 64 hex chars)`);
+    return null;
+  }
+  // Input validation: votingEndsAt must be a valid future date
+  if (!(votingEndsAt instanceof Date) || isNaN(votingEndsAt.getTime()) || votingEndsAt.getTime() < Date.now()) {
+    console.error(`[DAO Anchor] Invalid votingEndsAt: must be a valid future date`);
+    return null;
+  }
+
   const clients = getClients();
   if (!clients) {
     console.log("[DAO Anchor] On-chain anchoring disabled — skipping");
@@ -198,6 +214,19 @@ export async function finalizeProposalOnChain(
   votesAgainst: number,
   votesAbstain: number
 ): Promise<string | null> {
+  // Input validation: proposalId format
+  if (!proposalId || !/^HERO-M\d+-[A-Za-z0-9]+$/.test(proposalId)) {
+    console.error(`[DAO Anchor] Invalid proposalId format: ${proposalId}`);
+    return null;
+  }
+  // Input validation: vote counts must be safe integers and non-negative
+  if (!Number.isSafeInteger(votesFor) || votesFor < 0 ||
+      !Number.isSafeInteger(votesAgainst) || votesAgainst < 0 ||
+      !Number.isSafeInteger(votesAbstain) || votesAbstain < 0) {
+    console.error(`[DAO Anchor] Invalid vote counts: must be non-negative safe integers`);
+    return null;
+  }
+
   const clients = getClients();
   if (!clients) return null;
 
