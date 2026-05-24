@@ -180,42 +180,70 @@ else
   log "Nginx reloaded"
 fi
 
-# --- Step 6: Cloudflare Cache Purge ---
+# --- Step 6: Cloudflare Cache Purge (with Exponential Backoff) ---
+# Retry logic: up to MAX_PURGE_RETRIES attempts with exponential backoff (1s, 2s, 4s, 8s)
+MAX_PURGE_RETRIES=4
+
+cf_purge_with_retry() {
+  local PURGE_TYPE="$1"  # "targeted" or "full"
+  local PURGE_DATA="$2"
+  local ATTEMPT=1
+  local DELAY=1
+
+  while [ $ATTEMPT -le $MAX_PURGE_RETRIES ]; do
+    local RESULT
+    RESULT=$(curl -s -w "\n%{http_code}" -X POST \
+      "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
+      -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
+      -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
+      -H "Content-Type: application/json" \
+      --data "$PURGE_DATA" 2>/dev/null)
+
+    local HTTP_CODE
+    HTTP_CODE=$(echo "$RESULT" | tail -1)
+    local BODY
+    BODY=$(echo "$RESULT" | sed '$d')
+
+    if echo "$BODY" | grep -q '"success":true'; then
+      log "Cloudflare $PURGE_TYPE purge: SUCCESS (attempt $ATTEMPT)"
+      return 0
+    fi
+
+    # Check for rate limiting (429) or server errors (5xx) — worth retrying
+    if [ "$HTTP_CODE" = "429" ] || [ "${HTTP_CODE:0:1}" = "5" ]; then
+      warn "Cloudflare $PURGE_TYPE purge attempt $ATTEMPT/$MAX_PURGE_RETRIES failed (HTTP $HTTP_CODE) — retrying in ${DELAY}s..."
+    else
+      # Client error (4xx except 429) — don't retry, it won't help
+      warn "Cloudflare $PURGE_TYPE purge failed (HTTP $HTTP_CODE) — non-retryable error"
+      return 1
+    fi
+
+    sleep $DELAY
+    DELAY=$((DELAY * 2))  # Exponential backoff: 1s -> 2s -> 4s -> 8s
+    ATTEMPT=$((ATTEMPT + 1))
+  done
+
+  warn "Cloudflare $PURGE_TYPE purge FAILED after $MAX_PURGE_RETRIES attempts — manual purge recommended"
+  return 1
+}
+
 if [ "$SKIP_PURGE" = false ] && [ -n "$CLOUDFLARE_API_KEY" ] && [ -n "$CLOUDFLARE_EMAIL" ]; then
-  log "[6/6] Purging Cloudflare cache..."
-  
+  log "[6/6] Purging Cloudflare cache (with exponential backoff retries)..."
+
   # First: purge specific asset patterns (faster propagation)
   PURGE_URLS=$(find "$RELEASES_DIR/$TIMESTAMP" \( -name "*.js" -o -name "*.css" \) -type f | \
     sed "s|$RELEASES_DIR/$TIMESTAMP|https://herobase.io/assets|" | \
     head -30 | \
     jq -R -s 'split("\n") | map(select(. != ""))')
-  
+
   if [ -n "$PURGE_URLS" ] && [ "$PURGE_URLS" != "[]" ]; then
-    TARGETED_RESULT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-      -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-      -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
-      -H "Content-Type: application/json" \
-      --data "{\"files\": $PURGE_URLS}")
-    if echo "$TARGETED_RESULT" | grep -q '"success":true'; then
-      log "Targeted asset purge: SUCCESS"
-    else
-      warn "Targeted purge may have failed (continuing with full purge)"
-    fi
+    cf_purge_with_retry "targeted" "{\"files\": $PURGE_URLS}" || true
   fi
-  
+
   # Then: full purge to catch index.html and any edge-cached 404s
   sleep 2
-  PURGE_RESULT=$(curl -s -X POST "https://api.cloudflare.com/client/v4/zones/$CLOUDFLARE_ZONE_ID/purge_cache" \
-    -H "X-Auth-Email: $CLOUDFLARE_EMAIL" \
-    -H "X-Auth-Key: $CLOUDFLARE_API_KEY" \
-    -H "Content-Type: application/json" \
-    --data '{"purge_everything": true}')
-  
-  if echo "$PURGE_RESULT" | grep -q '"success":true'; then
-    log "Cloudflare full purge: SUCCESS"
-  else
-    warn "Cloudflare purge may have failed — manual purge recommended"
-  fi
+  cf_purge_with_retry "full" '{"purge_everything": true}' || \
+    warn "Full purge exhausted retries — run manually: curl -X POST CF_API/purge_cache"
 else
   if [ "$SKIP_PURGE" = true ]; then
     log "[6/6] Skipping Cloudflare purge (--skip-purge)"
