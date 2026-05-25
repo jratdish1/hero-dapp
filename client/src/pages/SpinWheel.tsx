@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { useAccount } from 'wagmi';
 /**
  * HERO Daily Spin-the-Wheel Page
  * 
