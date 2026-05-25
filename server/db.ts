@@ -535,3 +535,11 @@ export async function getInfluencerMentionStats() {
     partner: all.filter(m => m.category === "partner").length,
   };
 }
+
+// AUDIT FIX: Bind wallet address to user on first vote (prevents vote spoofing)
+export async function updateUserWalletAddress(userId: number, walletAddress: string) {
+  await db
+    .update(users)
+    .set({ walletAddress: walletAddress.toLowerCase() })
+    .where(eq(users.id, userId));
+}

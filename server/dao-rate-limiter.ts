@@ -59,8 +59,11 @@ export async function isProposalRateLimited(
     // Only fail-open if the table doesn't exist yet (pre-migration)
     const isTableMissing = err?.message?.includes("doesn't exist") || err?.code === 'ER_NO_SUCH_TABLE';
     if (isTableMissing) {
-      console.warn("[DAO Rate Limiter] Table not yet created (pre-migration), failing open:", err.message);
-      return false;
+      // AUDIT NOTE: This fail-open window only exists if migration hasn't been run.
+      // The deploy-production.sh script runs migrations BEFORE restarting the app,
+      // so in practice this path should never be hit in production.
+      console.error("[DAO Rate Limiter] CRITICAL: Table missing — migration not applied! Failing CLOSED.");
+      return true; // Fail-closed even for missing table — deploy script ensures migration runs first
     }
     // For all other DB errors in production: fail-closed (block proposals)
     console.error("[DAO Rate Limiter] DB error — FAILING CLOSED to prevent abuse:", err.message);

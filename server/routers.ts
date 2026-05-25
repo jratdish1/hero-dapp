@@ -103,6 +103,7 @@ import {
   updateMentionCategory,
   getInfluencerMentionStats,
   atomicIncrementDelegateStats,
+  updateUserWalletAddress,
 } from "./db";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
@@ -658,8 +659,15 @@ export const appRouter = router({
         }))
         .mutation(async ({ ctx, input }) => {
           // AUDIT FIX 1.4: Verify wallet address belongs to authenticated user
-          if (ctx.user.walletAddress && input.voterAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
-            throw new Error("Voter address does not match authenticated user's wallet");
+          // If user has a registered wallet, it MUST match. If not registered, bind it on first vote.
+          if (ctx.user.walletAddress) {
+            if (input.voterAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+              throw new Error("Voter address does not match authenticated user's wallet");
+            }
+          } else {
+            // First-time voter: bind this wallet to their account to prevent future spoofing
+            // This ensures subsequent votes must come from the same wallet
+            await updateUserWalletAddress(ctx.user.id, input.voterAddress);
           }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) throw new Error("Already voted on this proposal");
