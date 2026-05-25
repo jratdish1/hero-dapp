@@ -121,3 +121,5 @@ run-migration.mjs
 # Verification notes
 verification_*.txt
 notes_*.txt
+releases/
+dist/

@@ -41,6 +41,9 @@ async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "ba
 // Ethereum/PulseChain hex address: exactly 42 chars, 0x prefix + 40 hex chars
 const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet address format");
 // Transaction hash: 0x prefix + 64 hex chars
+// ─── In-memory stores for spin records and active raffles ─────────────────
+const spinRecords = new Map<string, UserSpinRecord>();
+const activeRaffles = new Map<string, Raffle>();
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
 // Safe string: no HTML tags, no script injection
 const safeStringSchema = (maxLen: number) => z.string().max(maxLen).refine(
@@ -110,6 +113,8 @@ import { invokeLLM } from "./_core/llm";
 import { getHeroRestId, fetchHeroTweets, toDbRecord } from "./twitterFetcher";
 import { alertNewMention } from "./telegramBot";
 import { getSchedulerStatus } from "./mentionScheduler";
+import { performSpin, canSpinToday, updateSpinRecord, getStreakBonus, DEFAULT_WHEEL_SEGMENTS, type UserSpinRecord } from "./spin-engine";
+import { createRaffle, enterRaffle, drawRaffleWinners, type Raffle, type RaffleEntry } from "./raffle-engine";
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData, fetchPulsechainTickerTokens, fetchBaseTickerTokens } from "./priceFeed";
 
 export const appRouter = router({
@@ -124,9 +129,11 @@ export const appRouter = router({
   }),
 
   dca: router({
-    list: protectedProcedure.query(async ({ ctx }) => {
-      return getDcaOrdersByUser(ctx.user.id);
-    }),
+    list: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema, chainId: z.number().optional() }))
+      .query(async ({ input }) => {
+        return getDcaOrdersByUser(input.wallet);
+      }),
     create: protectedProcedure
       .input(z.object({
         walletAddress: ethAddressSchema,
@@ -189,7 +196,7 @@ export const appRouter = router({
   }),
 
   swap: router({
-    history: protectedProcedure
+    history: publicProcedure
       .input(z.object({ walletAddress: ethAddressSchema }))
       .query(async ({ input }) => {
         return getSwapHistoryByWallet(input.walletAddress);
@@ -982,6 +989,66 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
           isHidden: false,
         });
         return { success: true };
+      }),
+  }),
+  // ─── Spin Wheel Router ─────────────────────────────────────────────────────
+  spin: router({
+    canSpin: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema }))
+      .query(({ input }) => {
+        const record = spinRecords.get(input.wallet.toLowerCase()) || null;
+        const eligible = canSpinToday(record);
+        const streak = record?.currentStreak || 0;
+        const bonus = getStreakBonus(streak);
+        return { eligible, streak, bonus, totalSpins: record?.totalSpins || 0 };
+      }),
+    execute: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema, chain: z.enum(["pulsechain", "base"]).optional() }))
+      .mutation(async ({ input }) => {
+        const key = input.wallet.toLowerCase();
+        const record = spinRecords.get(key) || null;
+        if (!canSpinToday(record)) {
+          throw new Error("Already spun today. Come back tomorrow!");
+        }
+        const result = await performSpin(input.wallet, DEFAULT_WHEEL_SEGMENTS, input.chain || "pulsechain");
+        const updated = updateSpinRecord(record, input.wallet, result);
+        spinRecords.set(key, updated);
+        return result;
+      }),
+    history: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema }))
+      .query(({ input }) => {
+        const record = spinRecords.get(input.wallet.toLowerCase());
+        return record?.history || [];
+      }),
+  }),
+  // ─── Raffle/Giveaway Router ────────────────────────────────────────────────
+  raffle: router({
+    list: publicProcedure.query(() => {
+      return Array.from(activeRaffles.values()).map(r => ({
+        id: r.id, title: r.title, description: r.description,
+        prize: r.prize, prizeValue: r.prizeValue,
+        status: r.status, startTime: r.startTime, endTime: r.endTime,
+        entries: r.entries.length, maxEntries: r.maxEntries,
+        winnerCount: r.winnerCount, winners: r.winners || [],
+      }));
+    }),
+    enter: publicProcedure
+      .input(z.object({ raffleId: z.string().min(1), wallet: ethAddressSchema, heroBalance: z.string() }))
+      .mutation(({ input }) => {
+        const raffle = activeRaffles.get(input.raffleId);
+        if (!raffle) throw new Error("Raffle not found");
+        const entry = enterRaffle(raffle, input.wallet, BigInt(input.heroBalance));
+        return { success: true, enteredAt: entry.enteredAt };
+      }),
+    draw: adminProcedure
+      .input(z.object({ raffleId: z.string().min(1) }))
+      .mutation(async ({ input }) => {
+        const raffle = activeRaffles.get(input.raffleId);
+        if (!raffle) throw new Error("Raffle not found");
+        const result = await drawRaffleWinners(raffle);
+        activeRaffles.set(input.raffleId, { ...raffle, status: "completed", winners: result.winners });
+        return result;
       }),
   }),
 });

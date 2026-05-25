@@ -147,42 +147,18 @@ export default function Portfolio() {
           }
         }
       } catch {
-        // Fallback to mock data for demo
       }
       
-      // If no real data, show demo holdings
+      // If no real data available, show empty state (no fake demo data)
       if (holdings.length === 0) {
-        const demoHoldings: TokenHolding[] = isBase ? [
-          { symbol: 'ETH', name: 'Ethereum', balance: '0.0000', valueUsd: '$0.00', change24h: 1.67, logoURI: 'https://ui-avatars.com/api/?name=ETH&background=627EEA&color=fff&size=32' },
-          { symbol: 'HERO', name: 'HERO Token', balance: '0', valueUsd: '$0.00', change24h: 3.5, logoURI: 'https://ui-avatars.com/api/?name=HERO&background=FF6B00&color=fff&size=32' },
-          { symbol: 'USDC', name: 'USD Coin', balance: '0', valueUsd: '$0.00', change24h: 0.01, logoURI: 'https://ui-avatars.com/api/?name=USDC&background=2775CA&color=fff&size=32' },
-        ] : [
-          { symbol: 'PLS', name: 'PulseChain', balance: '0', valueUsd: '$0.00', change24h: 4.85, logoURI: 'https://ui-avatars.com/api/?name=PLS&background=FF6B00&color=fff&size=32' },
-          { symbol: 'HERO', name: 'HERO Token', balance: '0', valueUsd: '$0.00', change24h: 3.5, logoURI: 'https://ui-avatars.com/api/?name=HERO&background=FF6B00&color=fff&size=32' },
-          { symbol: 'VETS', name: 'VETS Token', balance: '0', valueUsd: '$0.00', change24h: 4.05, logoURI: 'https://ui-avatars.com/api/?name=VETS&background=22C55E&color=fff&size=32' },
-          { symbol: 'HEX', name: 'HEX', balance: '0', valueUsd: '$0.00', change24h: -1.2, logoURI: 'https://ui-avatars.com/api/?name=HEX&background=FF6600&color=fff&size=32' },
-        ];
-        setHoldings(demoHoldings);
+        setHoldings([]);
       }
       
-      // Demo LP positions
-      setLpPositions(isBase ? [
-        { pair: 'HERO/WETH', dex: 'Aerodrome', lpTokens: '0', valueUsd: '$0.00', token0Amount: '0 HERO', token1Amount: '0 WETH' },
-        { pair: 'HERO/USDC', dex: 'Uniswap V3', lpTokens: '0', valueUsd: '$0.00', token0Amount: '0 HERO', token1Amount: '0 USDC' },
-      ] : [
-        { pair: 'HERO/PLS', dex: 'PulseX', lpTokens: '0', valueUsd: '$0.00', token0Amount: '0 HERO', token1Amount: '0 PLS' },
-        { pair: 'HERO/TruFarm', dex: 'TruDefi', lpTokens: '0', valueUsd: '$0.00', token0Amount: '0 HERO', token1Amount: '0 TruFarm' },
-        { pair: 'VETS/WPLS', dex: 'PulseX', lpTokens: '0', valueUsd: '$0.00', token0Amount: '0 VETS', token1Amount: '0 WPLS' },
-      ]);
+      // LP positions — fetched from on-chain data when available
+      setLpPositions([]);
       
-      // Demo HEX stakes (PulseChain only)
-      if (!isBase) {
-        setHexStakes([
-          { stakeId: '—', stakedHex: '0', shares: '0', startDay: 0, endDay: 0, progress: 0, valueUsd: '$0.00' },
-        ]);
-      } else {
-        setHexStakes([]);
-      }
+      // HEX stakes — fetched from on-chain data when available
+      setHexStakes([]);
       
       setTotalValue('$0.00');
       

@@ -13,6 +13,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Clock, Plus, Pause, Play, Trash2, Info } from "lucide-react";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { trpc } from "@/lib/trpc";
 import { useNetwork } from "../contexts/NetworkContext";
 import { FEATURED_TOKENS, type TokenInfo } from "@shared/tokens";
 import { toast } from "sonner";
@@ -43,40 +44,19 @@ export default function DcaOrders() {
   const PLS_TOKENS = FEATURED_TOKENS;
   const activeTokens = isBase ? BASE_TOKENS : PLS_TOKENS;
   
-  // Chain-specific mock orders
-  const baseMockOrders = [
-    { id: 1, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'USDC') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[1], amount: '10', frequency: 'Daily' as const, totalOrders: 30, completedOrders: 12, status: 'active' as const, nextExecution: '2026-04-17 09:00' },
-    { id: 2, tokenIn: BASE_TOKENS.find((t: any) => t.symbol === 'WETH') || BASE_TOKENS[0], tokenOut: BASE_TOKENS.find((t: any) => t.symbol === 'HERO') || BASE_TOKENS[1], amount: '0.01', frequency: 'Weekly' as const, totalOrders: 12, completedOrders: 4, status: 'active' as const, nextExecution: '2026-04-21 09:00' },
-  ];
   const [showCreate, setShowCreate] = useState(false);
-  const [tokenIn, setTokenIn] = useState<string>(FEATURED_TOKENS[5].address);
-  const [tokenOut, setTokenOut] = useState<string>(FEATURED_TOKENS[1].address);
+  const [tokenIn, setTokenIn] = useState<string>(FEATURED_TOKENS[5]?.address || "");
+  const [tokenOut, setTokenOut] = useState<string>(FEATURED_TOKENS[1]?.address || "");
   const [amount, setAmount] = useState("");
   const [dcaInterval, setDcaInterval] = useState("daily");
   const [totalOrders, setTotalOrders] = useState("7");
 
-  const mockOrders: DcaOrderUI[] = [
-    {
-      id: 1,
-      tokenIn: FEATURED_TOKENS[5],
-      tokenOut: FEATURED_TOKENS[1],
-      amountPerInterval: "10 USDC",
-      interval: "Daily",
-      totalIntervals: 30,
-      completedIntervals: 12,
-      status: "active",
-    },
-    {
-      id: 2,
-      tokenIn: FEATURED_TOKENS[0],
-      tokenOut: FEATURED_TOKENS[2],
-      amountPerInterval: "1,000 PLS",
-      interval: "Weekly",
-      totalIntervals: 12,
-      completedIntervals: 4,
-      status: "paused",
-    },
-  ];
+  // Live DCA orders from tRPC backend
+  const { data: liveOrders } = (trpc as any).dca.list.useQuery(
+    { wallet: address || "", chainId: chainId || 369 },
+    { enabled: !!address }
+  );
+  const createDcaMutation = trpc.dca.create.useMutation();
 
   const statusColors: Record<string, string> = {
     active: "bg-[var(--hero-green)]/10 text-[var(--hero-green)] border-[var(--hero-green)]/20",
@@ -121,15 +101,23 @@ export default function DcaOrders() {
     }
     // ─── ORDER CREATION ─────────────────────────────────────────
     try {
-      // TODO: Replace with actual tRPC/contract call when backend is ready
-      // const result = await trpc.dca.createOrder.mutate({
-      //   wallet: address,
-      //   tokenIn, tokenOut, amount: cleanAmount,
-      //   frequency, totalOrders: numOrders,
-      //   chainId: chain?.id
-      // });
+      // Call real backend DCA creation
+      const selectedIn = activeTokens.find((t: any) => t.address === tokenIn);
+      const selectedOut = activeTokens.find((t: any) => t.address === tokenOut);
+      const intervalMap: Record<string, number> = { daily: 86400, weekly: 604800, biweekly: 1209600, monthly: 2592000 };
+      await createDcaMutation.mutateAsync({
+        walletAddress: address,
+        tokenInAddress: tokenIn,
+        tokenInSymbol: selectedIn?.symbol || "???",
+        tokenOutAddress: tokenOut,
+        tokenOutSymbol: selectedOut?.symbol || "???",
+        amountPerInterval: cleanAmount,
+        intervalSeconds: intervalMap[dcaInterval] || 86400,
+        totalIntervals: numOrders,
+      });
+      return; // mutation handles success/error via callbacks
       toast.success("DCA Order Created", {
-        description: `${cleanAmount} ${tokenIn} → ${tokenOut} every ${frequency.toLowerCase()} for ${numOrders} orders`,
+        description: `${cleanAmount} ${tokenIn} → ${tokenOut} every ${dcaInterval.toLowerCase()} for ${numOrders} orders`,
       });
       // Reset form
       setAmount("");
@@ -263,7 +251,7 @@ export default function DcaOrders() {
       {/* Existing orders */}
       <div className="space-y-3">
         <h2 className="text-lg font-semibold text-foreground">Active Orders</h2>
-        {(isBase ? baseMockOrders : mockOrders).map((order: any) => (
+        {(liveOrders || []).map((order: any) => (
           <Card key={order.id} className="bg-card border-border hover:border-[var(--hero-orange)]/20 transition-colors">
             <CardContent className="p-4">
               <div className="flex items-center justify-between flex-wrap gap-3">

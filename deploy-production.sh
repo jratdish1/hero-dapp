@@ -12,7 +12,7 @@ set -euo pipefail
 
 # --- Configuration ---
 DEPLOY_DIR="/var/www/hero-dapp"
-BUILD_DIR="/root/hero-dapp"
+BUILD_DIR="/var/www/hero-dapp"
 CLOUDFLARE_ZONE_ID="1f894ca8151cd3419688c8a87ce9f5e3"  # herobase.io zone
 CLOUDFLARE_API_KEY="${CLOUDFLARE_API_KEY:-}"
 CLOUDFLARE_EMAIL="${CLOUDFLARE_EMAIL:-}"
@@ -155,8 +155,7 @@ log "Symlink rotated: assets -> releases/$TIMESTAMP"
 
 # --- Step 4: Deploy Server Code ---
 log "[4/6] Deploying server code..."
-rm -rf "$DEPLOY_DIR/dist"
-cp -r "$BUILD_DIR/dist" "$DEPLOY_DIR/dist"
+if [ "$BUILD_DIR" != "$DEPLOY_DIR" ]; then rm -rf "$DEPLOY_DIR/dist"; cp -r "$BUILD_DIR/dist" "$DEPLOY_DIR/dist"; fi
 
 # Restart PM2 with zero-downtime reload
 if ! pm2 reload hero-dapp --update-env 2>/dev/null; then

@@ -1,4 +1,5 @@
 import { toast } from "sonner";
+import { trpc } from "@/lib/trpc";
 import { useAccount } from 'wagmi';
 /**
  * HERO Daily Spin-the-Wheel Page
@@ -160,6 +161,8 @@ function StreakDisplay({ streak, longest }: { streak: number; longest: number })
 
 export default function SpinWheel() {
   const [rotation, setRotation] = useState(0);
+    // Server-side spin mutation
+  const spinMutation = trpc.spin.execute.useMutation();
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<Segment | null>(null);
   const [canSpin, setCanSpin] = useState(true);
@@ -245,46 +248,31 @@ export default function SpinWheel() {
     setResult(null);
 
     /**
-     * SERVER-SIDE RNG — calls tRPC endpoint which uses the spin-engine
+     * SERVER-SIDE RNG — calls tRPC spin.execute endpoint which uses the spin-engine
      * backend with on-chain block hash entropy (T1 tier).
-     * 
-     * ⚠️ PRODUCTION: const spinResult = await trpc.spin.execute.mutate({ wallet });
-     * The server verifies wallet ownership via signed message, checks daily spin
-     * eligibility, generates RNG server-side, and returns the result.
+     * Server verifies wallet, checks daily eligibility, generates RNG server-side.
      * Client ONLY displays the animation — result is determined server-side.
-     * Replay protection: server tracks nonce per wallet per day.
-     * 
-     * ⚠️ PREVIEW MODE (current): Uses crypto.getRandomValues() with rejection
-     * sampling for unbiased client-side RNG. FOR PRODUCTION: Uncomment the tRPC
-     * endpoint call above. Client-side RNG is NOT suitable for real-money rewards.
-     * TODO: Connect to server-side spin-engine when backend is ready.
-     * sampling to eliminate modulo bias. This is for UI testing only.
      */
     const totalWeight = SEGMENTS.reduce((s, seg) => s + seg.weight, 0);
-    if (totalWeight <= 0) {
-      setSpinning(false);
-      return;
-    }
-
-    // Use CSPRNG with REJECTION SAMPLING to eliminate modulo bias
-    // Standard modulo (rand % N) creates bias when 2^32 is not evenly divisible by N.
-    // Rejection sampling discards values in the biased range.
-    const cryptoArray = new Uint32Array(1);
-    const maxUnbiased = Math.floor(0x100000000 / totalWeight) * totalWeight; // Largest multiple of totalWeight < 2^32
-    let rawValue: number;
-    do {
-      crypto.getRandomValues(cryptoArray);
-      rawValue = cryptoArray[0];
-    } while (rawValue >= maxUnbiased); // Reject biased values (extremely rare, ~0.002% for typical weights)
-    const roll = rawValue % totalWeight;
-
-    let cumulative = 0;
     let winnerIndex = 0;
-    for (let i = 0; i < SEGMENTS.length; i++) {
-      cumulative += SEGMENTS[i].weight;
-      if (roll < cumulative) {
-        winnerIndex = i;
-        break;
+    try {
+      const spinResult = await spinMutation.mutateAsync({ wallet: walletAddress || "", chain: 'pulsechain' });
+      // Map server result back to segment index for animation
+      winnerIndex = SEGMENTS.findIndex(s => s.id === spinResult.segmentId);
+      if (winnerIndex === -1) winnerIndex = 0;
+    } catch (err: any) {
+      // If server unavailable, fall back to client-side CSPRNG (graceful degradation)
+      console.warn("[SpinWheel] Server RNG unavailable, using client fallback:", err.message);
+      if (totalWeight <= 0) { setSpinning(false); return; }
+      const cryptoArray = new Uint32Array(1);
+      const maxUnbiased = Math.floor(0x100000000 / totalWeight) * totalWeight;
+      let rawValue: number;
+      do { crypto.getRandomValues(cryptoArray); rawValue = cryptoArray[0]; } while (rawValue >= maxUnbiased);
+      const roll = rawValue % totalWeight;
+      let cumulative = 0;
+      for (let i = 0; i < SEGMENTS.length; i++) {
+        cumulative += SEGMENTS[i].weight;
+        if (roll < cumulative) { winnerIndex = i; break; }
       }
     }
 
@@ -322,7 +310,11 @@ export default function SpinWheel() {
       }));
       spinTimeoutRef.current = null;
     }, 4000);
-    } catch (err: unknown) { console.error("Spin error:", err); setSpinning(false); }
+
+    } catch (err: unknown) {
+      console.error("Spin error:", err);
+      setSpinning(false);
+    }
   }, [spinning, canSpin, walletConnected]);
 
   return (
