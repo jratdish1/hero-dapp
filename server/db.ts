@@ -1,4 +1,4 @@
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/mysql2";
 import {
   InsertUser,
@@ -374,6 +374,15 @@ export async function updateDelegate(id: number, data: Partial<InsertDelegate>) 
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(delegates).set(data).where(eq(delegates.id, id));
+}
+
+// AUDIT FIX 1.2/3.1: Atomic increment to prevent race conditions on delegation stats
+export async function atomicIncrementDelegateStats(delegateId: number, amount: number) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  await db.execute(
+    sql`UPDATE delegates SET votingPower = votingPower + ${amount}, delegatorCount = delegatorCount + 1 WHERE id = ${delegateId}`
+  );
 }
 
 // --- Delegations ---

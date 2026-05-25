@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
 import { z } from "zod";
 import { createPublicClient, http, erc20Abi } from "viem";
 import { pulsechain } from "viem/chains";
@@ -18,13 +18,19 @@ const HERO_TOKENS: Record<string, `0x${string}`> = {
 async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
   const client = chain === "pulsechain" ? pulsechainClient : baseClient;
   const tokenAddress = HERO_TOKENS[chain];
+  // AUDIT FIX 2.2: Add timeout to RPC calls to prevent hanging
+  const RPC_TIMEOUT_MS = 10_000;
   try {
-    const balance = await client.readContract({
+    const balancePromise = client.readContract({
       address: tokenAddress,
       abi: erc20Abi,
       functionName: "balanceOf",
       args: [voterAddress as `0x${string}`],
     });
+    const timeoutPromise = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)
+    );
+    const balance = await Promise.race([balancePromise, timeoutPromise]);
     return Math.floor(Number(balance) / 1e18);
   } catch {
     return 0;
@@ -96,6 +102,7 @@ import {
   toggleMentionHidden,
   updateMentionCategory,
   getInfluencerMentionStats,
+  atomicIncrementDelegateStats,
 } from "./db";
 import { storagePut } from "./storage";
 import { invokeLLM } from "./_core/llm";
@@ -321,7 +328,17 @@ export const appRouter = router({
 
         const rawContent = llmResponse.choices[0].message.content;
         const contentStr = typeof rawContent === "string" ? rawContent : JSON.stringify(rawContent);
-        const parsed = JSON.parse(contentStr || "{}");
+        // AUDIT FIX 1.5: Safe JSON parsing with validation
+        let parsed: { title: string; content: string; excerpt: string; tags: string };
+        try {
+          parsed = JSON.parse(contentStr || "{}");
+        } catch {
+          throw new Error("LLM returned invalid JSON — please retry");
+        }
+        const blogSchema = z.object({ title: z.string().min(1), content: z.string().min(1), excerpt: z.string().min(1), tags: z.string() });
+        const validated = blogSchema.safeParse(parsed);
+        if (!validated.success) throw new Error("LLM response missing required fields — please retry");
+        parsed = validated.data;
         const slug = parsed.title
           .toLowerCase()
           .replace(/[^a-z0-9]+/g, "-")
@@ -640,6 +657,10 @@ export const appRouter = router({
           txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
+          // AUDIT FIX 1.4: Verify wallet address belongs to authenticated user
+          if (ctx.user.walletAddress && input.voterAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+            throw new Error("Voter address does not match authenticated user's wallet");
+          }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) throw new Error("Already voted on this proposal");
           // AUDIT FIX: Server-side on-chain verification of voting power
@@ -731,6 +752,10 @@ export const appRouter = router({
           txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
+          // AUDIT FIX 1.4: Verify delegator address belongs to authenticated user
+          if (ctx.user.walletAddress && input.delegatorAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+            throw new Error("Delegator address does not match authenticated user's wallet");
+          }
           const delegate = await getDelegateByAddress(input.delegateAddress);
           if (!delegate) throw new Error("Delegate not found");
           await createDelegation({
@@ -742,11 +767,8 @@ export const appRouter = router({
             chain: input.chain,
             txHash: input.txHash || null,
           });
-          // Update delegate's voting power and delegator count
-          await updateDelegate(delegate.id, {
-            votingPower: delegate.votingPower + input.amount,
-            delegatorCount: delegate.delegatorCount + 1,
-          });
+          // AUDIT FIX 1.2/3.1: Use atomic SQL increment to prevent race conditions
+          await atomicIncrementDelegateStats(delegate.id, input.amount);
           return { success: true };
         }),
       revoke: protectedProcedure
@@ -879,7 +901,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
     }),
 
     /** Protected (admin): toggle pin on a mention */
-    togglePin: protectedProcedure
+    togglePin: adminProcedure
       .input(z.object({
         id: z.number().int().positive(),
         isPinned: z.boolean(),
@@ -890,7 +912,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
       }),
 
     /** Protected (admin): toggle highlight on a mention */
-    toggleHighlight: protectedProcedure
+    toggleHighlight: adminProcedure
       .input(z.object({
         id: z.number().int().positive(),
         isHighlighted: z.boolean(),
@@ -901,7 +923,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
       }),
 
     /** Protected (admin): hide/unhide a mention */
-    toggleHidden: protectedProcedure
+    toggleHidden: adminProcedure
       .input(z.object({
         id: z.number().int().positive(),
         isHidden: z.boolean(),
@@ -912,7 +934,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
       }),
 
     /** Protected (admin): update mention category */
-    updateCategory: protectedProcedure
+    updateCategory: adminProcedure
       .input(z.object({
         id: z.number().int().positive(),
         category: z.enum(["influencer", "community", "press", "partner"]),

@@ -111,7 +111,8 @@ export default function Swap() {
             <a
               href="https://switch.win/"
               target="_blank"
-              rel="noopener noreferrer"
+             rel="noopener noreferrer"
+              
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               Open Full App <ExternalLink className="w-3 h-3" />
@@ -209,7 +210,8 @@ export default function Swap() {
             <a
               href="https://app.squirrelswap.pro/"
               target="_blank"
-              rel="noopener noreferrer"
+             rel="noopener noreferrer"
+              
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               Open Full App <ExternalLink className="w-3 h-3" />
@@ -264,7 +266,8 @@ export default function Swap() {
           <a
             href="https://libertyswap.finance/"
             target="_blank"
-            rel="noopener noreferrer"
+           rel="noopener noreferrer"
+            
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
             Open Full App <ExternalLink className="w-3 h-3" />
@@ -325,7 +328,8 @@ export default function Swap() {
             <a
               href="https://libertyswap.finance/"
               target="_blank"
-              rel="noopener noreferrer"
+             rel="noopener noreferrer"
+              
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity"
             >
               <span>🗽</span> Open Liberty Swap <ExternalLink className="w-4 h-4" />

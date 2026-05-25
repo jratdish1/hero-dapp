@@ -1079,7 +1079,8 @@ export default function Farm() {
                     <a
                       href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`}
                       target="_blank"
-                      rel="noopener noreferrer"
+                     rel="noopener noreferrer"
+                      
                       className="text-[#0052FF] hover:underline font-mono text-xs"
                     >
                       {HERO_TOKEN_BASE.address.slice(0, 10)}...

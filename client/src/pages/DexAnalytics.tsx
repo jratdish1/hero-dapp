@@ -18,7 +18,8 @@ function PoolRow({ pair, rank }: { pair: any; rank: number }) {
     <a
       href={pair.url || `https://dexscreener.com/${pair.chainId}/${pair.pairAddress}`}
       target="_blank"
-      rel="noopener noreferrer"
+     rel="noopener noreferrer"
+      
       className="grid grid-cols-[24px_1fr_100px_100px_80px_60px] gap-3 items-center px-3 py-2.5 rounded-lg bg-secondary/30 hover:bg-secondary/50 transition-colors group"
     >
       <span className="text-xs text-muted-foreground font-medium">#{rank}</span>

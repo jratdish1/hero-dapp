@@ -296,7 +296,8 @@ export default function Subdomains() {
                 key={link.name}
                 href={link.url}
                 target="_blank"
-                rel="noopener noreferrer"
+               rel="noopener noreferrer"
+                
               >
                 <Button
                   size="sm"

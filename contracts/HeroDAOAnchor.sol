@@ -23,6 +23,7 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Address.sol";
 
 contract HeroDAOAnchor is Ownable, ReentrancyGuard {
 
@@ -204,8 +205,8 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
         executedPayloads[payloadHash] = true;
 
         // External call LAST
-        (bool success, ) = target.call{value: value}(data);
-        if (!success) revert ExecutionFailed();
+        // AUDIT FIX 1.3: Use OpenZeppelin Address for safer external calls (reverts on failure)
+        Address.functionCallWithValue(target, data, value, "ExecutionFailed");
 
         emit ProposalExecuted(proposalIdHash, target, value, data);
     }
@@ -258,4 +259,9 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
 
     // Allow contract to receive native tokens for treasury operations
     receive() external payable {}
+
+    // AUDIT FIX 1.4: Explicit fallback to reject invalid calls
+    fallback() external payable {
+        revert("Invalid call");
+    }
 }

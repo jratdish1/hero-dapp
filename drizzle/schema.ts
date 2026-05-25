@@ -1,4 +1,4 @@
-import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, bigint, boolean } from "drizzle-orm/mysql-core";
+import { int, mysqlEnum, mysqlTable, text, timestamp, varchar, decimal, bigint, boolean, uniqueIndex } from "drizzle-orm/mysql-core";
 
 export const users = mysqlTable("users", {
   id: int("id").autoincrement().primaryKey(),
@@ -29,7 +29,10 @@ export const dcaOrders = mysqlTable("dca_orders", {
   nextExecutionAt: timestamp("nextExecutionAt"),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
-});
+}, (table) => ({
+  // AUDIT FIX 3.4: Index on frequently queried columns
+  walletIdx: uniqueIndex("idx_dca_wallet").on(table.userId, table.walletAddress),
+}));
 
 export const limitOrders = mysqlTable("limit_orders", {
   id: int("id").autoincrement().primaryKey(),
@@ -155,7 +158,7 @@ export type InsertMediaPost = typeof mediaPosts.$inferInsert;
 
 export const proposals = mysqlTable("proposals", {
   id: int("id").autoincrement().primaryKey(),
-  proposalId: varchar("proposalId", { length: 16 }).notNull().unique(),
+  proposalId: varchar("proposalId", { length: 40 }).notNull().unique(),
   title: varchar("title", { length: 512 }).notNull(),
   description: text("description").notNull(),
   proposerId: int("proposerId").notNull(),
@@ -184,7 +187,10 @@ export const votes = mysqlTable("votes", {
   chain: mysqlEnum("chain", ["base", "pulsechain"]).notNull(),
   txHash: varchar("txHash", { length: 66 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
-});
+}, (table) => ({
+  // AUDIT FIX 3.2: Unique constraint to prevent double voting at DB level
+  uniqueVote: uniqueIndex("idx_unique_vote").on(table.proposalId, table.voterId),
+}));
 
 export const delegates = mysqlTable("delegates", {
   id: int("id").autoincrement().primaryKey(),
@@ -219,8 +225,8 @@ export const treasurySnapshots = mysqlTable("treasury_snapshots", {
   chain: mysqlEnum("chain", ["base", "pulsechain"]).notNull(),
   tokenSymbol: varchar("tokenSymbol", { length: 16 }).notNull(),
   tokenAddress: varchar("tokenAddress", { length: 42 }).notNull(),
-  balance: varchar("balance", { length: 78 }).notNull(),
-  valueUsd: varchar("valueUsd", { length: 32 }),
+  balance: decimal("balance", { precision: 36, scale: 18 }).notNull(),
+  valueUsd: decimal("valueUsd", { precision: 32, scale: 8 }),
   snapshotAt: timestamp("snapshotAt").defaultNow().notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 });

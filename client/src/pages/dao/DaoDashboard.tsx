@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
+import { sanitizeProposalContent } from "@/lib/sanitize-output";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -93,7 +94,7 @@ export default function DaoDashboard() {
                   <div className="p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors cursor-pointer">
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
-                        <p className="font-medium truncate">{p.title}</p>
+                        <p className="font-medium truncate">{sanitizeProposalContent(p.title)}</p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {p.proposalId} · {p.category}
                         </p>

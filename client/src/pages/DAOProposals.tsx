@@ -6,6 +6,7 @@
  */
 
 import React, { useState, useEffect, useMemo } from 'react';
+import { sanitizeProposalContent } from "@/lib/sanitize-output";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -128,13 +129,14 @@ function NomineeCard({
       )}
 
       <h3 className="text-lg font-bold text-white mb-1">{nominee.name}</h3>
-      <p className="text-sm text-gray-400 mb-4">{nominee.description}</p>
+      <p className="text-sm text-gray-400 mb-4">{sanitizeProposalContent(nominee.description)}</p>
 
       {nominee.website && (
         <a
           href={nominee.website}
           target="_blank"
-          rel="noopener noreferrer"
+         rel="noopener noreferrer"
+          
           className="text-xs text-green-400 hover:underline mb-3 block"
         >
           Visit Website →

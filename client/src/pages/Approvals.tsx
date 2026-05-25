@@ -166,7 +166,8 @@ export default function Approvals() {
                       <a
                         href={`https://scan.pulsechain.com/address/${approval.spender}`}
                         target="_blank"
-                        rel="noopener noreferrer"
+                       rel="noopener noreferrer"
+                        
                         className="text-xs text-muted-foreground hover:text-[var(--hero-orange)] flex items-center gap-0.5"
                       >
                         {approval.spender} <ExternalLink className="w-3 h-3" />

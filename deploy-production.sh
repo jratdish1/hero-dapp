@@ -81,6 +81,13 @@ if [ -z "$CLOUDFLARE_API_KEY" ]; then
   fi
 fi
 
+# AUDIT FIX 2.1: Strict credential validation (fail if purge is needed but creds missing)
+if [ "$SKIP_PURGE" = false ]; then
+  if [ -z "$CLOUDFLARE_API_KEY" ] || [ -z "$CLOUDFLARE_EMAIL" ]; then
+    error "Cloudflare credentials missing. Set CLOUDFLARE_API_KEY and CLOUDFLARE_EMAIL or use --skip-purge."
+  fi
+fi
+
 # --- Rollback Function ---
 PREVIOUS_RELEASE=""
 rollback() {
@@ -246,6 +253,14 @@ done
 
 if [ "$HEALTH_PASS" = false ]; then
   rollback
+fi
+
+# AUDIT FIX 2.3: Deep health check — verify API is responding (not just static serving)
+API_STATUS=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000/api/trpc/system.health" 2>/dev/null || echo "000")
+if [ "$API_STATUS" = "200" ] || [ "$API_STATUS" = "401" ]; then
+  log "API health check: HTTP $API_STATUS — PASS (server responding)"
+else
+  warn "API health check: HTTP $API_STATUS — API may not be fully operational"
 fi
 
 # Check assets are accessible
