@@ -120,6 +120,8 @@ mkdir -p "$RELEASES_DIR/$TIMESTAMP"
 
 # Copy new build assets to release directory (show errors, don't suppress)
 if ! cp -r "$BUILD_DIR/dist/public/assets/"* "$RELEASES_DIR/$TIMESTAMP/"; then
+  # Also sync to nginx-served public/assets directory
+  cp -f "$BUILD_DIR/dist/public/assets/"* "$BUILD_DIR/public/assets/" 2>/dev/null || true
   error "Failed to copy assets to release directory. Check disk space and permissions."
 fi
 
