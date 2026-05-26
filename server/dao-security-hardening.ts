@@ -265,15 +265,13 @@ export function isProposalVoteable(proposal: {
 /**
  * In-memory rate limiter for proposal creation.
  * 
- * PRODUCTION NOTE (Pass 2 Audit): For multi-instance deployments,
- * replace this with Redis-backed rate limiting (e.g., ioredis + sliding window).
- * This in-memory implementation is suitable for single-instance deployments.
+ * @deprecated Use the persistent MySQL-backed rate limiter in dao-rate-limiter.ts instead.
+ * This in-memory fallback is kept for backward compatibility but should NOT be used
+ * in production. The persistent version (dao-rate-limiter.ts) survives restarts and
+ * works across multiple instances without Redis.
  * 
- * Example Redis replacement:
- *   const key = `rate:proposal:${userId}`;
- *   const count = await redis.incr(key);
- *   if (count === 1) await redis.expire(key, 86400);
- *   return count > MAX_PROPOSALS_PER_DAY;
+ * AUDIT FIX (2026-05-26): Marked deprecated. Production code should import from
+ * dao-rate-limiter.ts which uses MySQL for persistence and fails-closed on errors.
  */
 const proposalCreationTracker = new Map<number, number[]>(); // userId -> timestamps
 

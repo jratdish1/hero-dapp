@@ -191,7 +191,14 @@ export async function anchorProposalOnChain(
         continue;
       }
       // All retries exhausted — don't throw, anchoring failure shouldn't block proposal creation
-      console.error(`[DAO Anchor] All ${maxRetries + 1} attempts failed for ${proposalId}. Proposal created without on-chain anchor.`);
+      // AUDIT FIX: Enhanced alerting for anchor failures
+      const alertMsg = `[DAO Anchor] ALERT: All ${maxRetries + 1} attempts FAILED for ${proposalId}. Proposal created WITHOUT on-chain anchor. Last error: ${err.message}`;
+      console.error(alertMsg);
+      // Log to audit trail for monitoring
+      try {
+        const { logDaoAction } = await import('./dao-rate-limiter');
+        await logDaoAction(proposalId, 'anchor_failed', 0, { error: err.message, attempts: maxRetries + 1 });
+      } catch { /* best-effort audit logging */ }
       return null;
     }
   }

@@ -43,7 +43,10 @@ export async function isProposalRateLimited(
   maxPerDay: number = 3
 ): Promise<boolean> {
   const db = await getDb();
-  if (!db) return false; // Fail open if DB unavailable (don't block governance)
+  if (!db) {
+    console.error("[DAO Rate Limiter] CRITICAL: DB unavailable — FAILING CLOSED to prevent abuse");
+    return true; // AUDIT FIX: Fail-closed when DB unavailable to prevent spam/DoS
+  }
 
   try {
     const result = await db.execute(
