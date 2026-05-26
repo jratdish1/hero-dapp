@@ -166,8 +166,23 @@ if ! pm2 reload hero-dapp --update-env 2>/dev/null; then
 fi
 log "PM2 reloaded"
 
-# --- Step 5: Nginx Cache Flush ---
-log "[5/6] Flushing nginx proxy cache..."
+# --- Step 5: Nginx Config + Cache Flush ---
+log "[5/6] Ensuring nginx config includes all domains..."
+
+# Auto-add dao.vicfoundation.com to nginx server_name if not present
+NGINX_CONF=$(find /etc/nginx/sites-enabled/ -type f -exec grep -l 'herobase.io' {} \; 2>/dev/null | head -1)
+if [ -n "$NGINX_CONF" ]; then
+  if ! grep -q 'dao.vicfoundation.com' "$NGINX_CONF" 2>/dev/null; then
+    log "Adding dao.vicfoundation.com to nginx server_name..."
+    sed -i 's/server_name.*herobase.io[^;]*/& dao.vicfoundation.com/' "$NGINX_CONF"
+    log "Added dao.vicfoundation.com to $NGINX_CONF"
+  else
+    log "dao.vicfoundation.com already in nginx config"
+  fi
+else
+  warn "Could not find herobase.io nginx config in sites-enabled"
+fi
+
 # Clear nginx proxy cache if directory exists
 if [ -d /var/cache/nginx ]; then
   find /var/cache/nginx -type f -delete 2>/dev/null || true
