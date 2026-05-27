@@ -116,6 +116,8 @@ import { getSchedulerStatus } from "./mentionScheduler";
 import { performSpin, canSpinToday, updateSpinRecord, getStreakBonus, DEFAULT_WHEEL_SEGMENTS, type UserSpinRecord } from "./spin-engine";
 import { createRaffle, enterRaffle, drawRaffleWinners, type Raffle, type RaffleEntry } from "./raffle-engine";
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData, fetchPulsechainTickerTokens, fetchBaseTickerTokens } from "./priceFeed";
+import { anchorProposalOnChain } from "./dao-anchor-integration";
+import { generateProposalHash } from "./dao-security-hardening";
 
 export const appRouter = router({
   system: systemRouter,
@@ -617,6 +619,11 @@ export const appRouter = router({
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
           const endTime = new Date(now.getTime() + durationMs);
+          // AUDIT FIX #3 (May 27, 2026): Generate content hash for tamper detection
+          const contentHash = generateProposalHash(
+            proposalId, input.title, input.description,
+            input.walletAddress, input.chain || "both", now, endTime
+          );
           await createProposal({
             proposalId,
             title: input.title,
@@ -628,7 +635,20 @@ export const appRouter = router({
             startTime: now,
             endTime,
           });
-          return { success: true, proposalId };
+          // AUDIT FIX #3: Anchor on-chain (non-blocking — don't fail proposal creation)
+          let anchorTxHash: string | null = null;
+          try {
+            anchorTxHash = await anchorProposalOnChain(proposalId, contentHash, endTime);
+            if (anchorTxHash) {
+              const anchored = await getProposalById(proposalId);
+              if (anchored) {
+                await updateProposal(anchored.id, { anchoredOnChain: true, anchorTxHash } as any);
+              }
+            }
+          } catch (err) {
+            console.warn("[DAO] On-chain anchoring failed (non-blocking):", err);
+          }
+          return { success: true, proposalId, contentHash, anchorTxHash };
         }),
       updateStatus: protectedProcedure
         .input(z.object({
@@ -1010,7 +1030,14 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
         if (!canSpinToday(record)) {
           throw new Error("Already spun today. Come back tomorrow!");
         }
-        const result = await performSpin(input.wallet, DEFAULT_WHEEL_SEGMENTS, input.chain || "pulsechain");
+        // AUDIT FIX #4 (May 27, 2026): Wrap performSpin in try/catch for user-friendly errors
+        let result;
+        try {
+          result = await performSpin(input.wallet, DEFAULT_WHEEL_SEGMENTS, input.chain || "pulsechain");
+        } catch (err) {
+          console.error("[Spin] RNG failure for wallet", key, err);
+          throw new Error("Spin failed — RNG service temporarily unavailable. Please try again in a moment.");
+        }
         const updated = updateSpinRecord(record, input.wallet, result);
         spinRecords.set(key, updated);
         return result;

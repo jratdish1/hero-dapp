@@ -5,12 +5,12 @@ import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
 import crypto from "crypto";
 
-// Simple constant-time comparison to prevent timing attacks
+// AUDIT FIX #2 (May 27, 2026): Constant-time comparison that doesn't leak length
+// Hash both values before comparing to prevent length-based timing attacks
 function safeCompare(a: string, b: string): boolean {
-  if (a.length !== b.length) return false;
-  const bufA = Buffer.from(a);
-  const bufB = Buffer.from(b);
-  return crypto.timingSafeEqual(bufA, bufB);
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
 }
 
 export function registerStandaloneAuthRoutes(app: Express) {

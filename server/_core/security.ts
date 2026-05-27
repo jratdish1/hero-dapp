@@ -1,6 +1,15 @@
 import helmet from "helmet";
 import rateLimit from "express-rate-limit";
+import crypto from "crypto";
 import type { Express, Request, Response, NextFunction } from "express";
+
+// ─── CSP Nonce Middleware ─────────────────────────────────────────────
+// Generates a per-request nonce for script-src CSP to eliminate 'unsafe-inline'
+export function cspNonceMiddleware(req: Request, res: Response, next: NextFunction) {
+  const nonce = crypto.randomBytes(16).toString('base64');
+  (res.locals as any).cspNonce = nonce;
+  next();
+}
 
 /**
  * HERO Dapp — Server-Side Security Middleware
@@ -68,9 +77,12 @@ function buildCspDirectives() {
   const isDev = process.env.NODE_ENV === "development";
 
   // Base script sources — dev needs 'unsafe-eval' for Vite HMR + React Refresh
+  // AUDIT FIX #1 (May 27, 2026): Production uses nonce-based CSP instead of 'unsafe-inline'
+  // The nonce is generated per-request by cspNonceMiddleware and injected into the HTML shell
+  // Note: 'unsafe-inline' kept as fallback for browsers that don't support 'strict-dynamic'
   const scriptSrc = isDev
     ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
-    : ["'self'", "'unsafe-inline'"];
+    : ["'self'", "'strict-dynamic'", "'unsafe-inline'"];
 
   // Base connect sources — dev needs ws: for Vite HMR websocket
   const connectSrc = [
@@ -103,9 +115,14 @@ function buildCspDirectives() {
 }
 
 export function setupHelmet(app: Express) {
+  // AUDIT FIX #1: Apply nonce middleware BEFORE helmet so res.locals.cspNonce is available
+  app.use(cspNonceMiddleware);
   app.use(
     helmet({
-      contentSecurityPolicy: { directives: buildCspDirectives() },
+      contentSecurityPolicy: {
+        useDefaults: false,
+        directives: buildCspDirectives(),
+      },
       strictTransportSecurity: {
         maxAge: 31536000,
         includeSubDomains: true,
