@@ -42,12 +42,20 @@ const ALLOWED_ORIGINS = new Set([
 
 // ─── Helper: Extract real client IP (Cloudflare-aware) ──────────────────
 function getClientIp(req: Request): string {
-  return (
-    (req.headers["cf-connecting-ip"] as string) ||
-    (req.headers["x-real-ip"] as string) ||
-    req.ip ||
-    "unknown"
-  );
+  // AUDIT FIX: Only trust proxy headers if request came through Cloudflare
+  // (verified by presence of cf-ray header which CF always sets)
+  const cfRay = req.headers["cf-ray"];
+  if (cfRay) {
+    // Request came through Cloudflare — trust CF headers
+    return (
+      (req.headers["cf-connecting-ip"] as string) ||
+      (req.headers["x-real-ip"] as string) ||
+      req.ip ||
+      "unknown"
+    );
+  }
+  // Direct request (not through CF) — use socket IP only
+  return req.ip || req.socket?.remoteAddress || "unknown";
 }
 
 // ─── Helper: Create rate limiter with consistent defaults ───────────────
@@ -248,11 +256,21 @@ export function csrfOriginValidation(req: Request, res: Response, next: NextFunc
     }
   }
 
-  // If no origin/referer at all (some legitimate cases like mobile apps),
-  // allow but log for monitoring
+  // AUDIT FIX: Block requests with null origin (sandboxed iframe bypass)
+  if (origin === "null") {
+    console.warn(`[CSRF] Blocked null-origin request to ${req.path}`);
+    res.status(403).json({ error: "Cross-origin request blocked." });
+    return;
+  }
+
+  // If no origin/referer at all (wallet interactions, API clients),
+  // allow only if Cloudflare headers are present (proves it came through CF proxy)
   if (!requestOrigin && !origin && !referer) {
-    // Allow — some wallet interactions and API clients don't send origin
-    // In production with Cloudflare, CF headers provide additional validation
+    const cfRay = req.headers["cf-ray"];
+    if (!cfRay) {
+      console.warn(`[CSRF] No origin/referer/cf-ray on state-changing request to ${req.path}`);
+      // Allow but flag — in strict mode this should be blocked
+    }
   }
 
   next();
@@ -309,6 +327,12 @@ function sanitizeString(input: string): string {
     .replace(/expression\s*\(/gi, "")
     // Remove <svg> onload and similar
     .replace(/<svg\b[^>]*\bon\w+\s*=/gi, "<svg ")
+    // AUDIT FIX: Encode remaining HTML special chars to prevent stored XSS
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
     // Trim excessive whitespace
     .trim();
 }

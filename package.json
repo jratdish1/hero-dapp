@@ -86,7 +86,7 @@
     "vaul": "^1.1.2",
     "viem": "^2.47.6",
     "wagmi": "^3.6.0",
-    "wouter": "~3.3.5",
+    "wouter": "^3.7.1",
     "zod": "^4.1.12"
   },
   "devDependencies": {
@@ -122,7 +122,9 @@
     "overrides": {
       "tailwindcss>nanoid": "3.3.7",
       "fast-xml-parser": ">=5.3.8",
-      "tar": ">=7.5.10"
+      "tar": ">=7.5.10",
+      "qs": ">=6.14.0",
+      "uuid": ">=11.1.0"
     },
     "ignoredBuiltDependencies": [
       "@tailwindcss/oxide",
@@ -130,6 +132,10 @@
     ]
   },
   "overrides": {
-    "ws": "^8.20.1"
+    "ws": "^8.20.1",
+    "qs": ">=6.14.0",
+    "uuid": ">=11.1.0",
+    "fast-xml-parser": ">=5.3.8",
+    "tar": ">=7.5.10"
   }
 }

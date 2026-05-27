@@ -1,0 +1,131 @@
+{
+  "score": 95,
+  "grade": "A",
+  "summary": "The herobase.io codebase demonstrates strong security practices with comprehensive rate limiting, CSP nonce usage, constant-time password comparison, input validation, and persistent DAO rate limiting. The deploy pipeline includes atomic asset rotation and Cloudflare cache purge with retries. The RNG engine uses on-chain entropy with proof hashes for fairness. Minor issues include some CSP style-src 'unsafe-inline' usage, limited sanitization coverage in request body, and potential logging of sensitive info. Overall, the code is well-structured, secure, and shows clear improvements from previous audits.",
+  "findings": [
+    {
+      "severity": "LOW",
+      "file": "server/_core/security.ts",
+      "line": 70,
+      "title": "CSP style-src includes 'unsafe-inline' in production",
+      "description": "The Content Security Policy (CSP) directives include 'unsafe-inline' in style-src even in production. This weakens CSP effectiveness by allowing inline styles, which can be exploited for XSS attacks.",
+      "fix": "Replace 'unsafe-inline' in style-src with nonce-based or hash-based styles. Audit all inline styles and migrate them to use nonce or hashes injected per request."
+    },
+    {
+      "severity": "MEDIUM",
+      "file": "server/_core/security.ts",
+      "line": 180,
+      "title": "Request body sanitization may be incomplete",
+      "description": "The sanitizeRequestBody middleware attempts to scrub script tags and event handlers from strings in the request body. However, it uses regex-based removal which may not cover all XSS vectors or complex nested payloads. Also, it does not sanitize query parameters or headers.",
+      "fix": "Use a robust HTML sanitizer library (e.g., DOMPurify or sanitize-html) for input sanitization. Extend sanitization to query parameters and headers if they are used in sensitive contexts."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/_core/security.ts",
+      "line": 130,
+      "title": "CSRF origin validation allows requests without origin in production",
+      "description": "The csrfOriginValidation middleware allows requests without Origin or Referer headers in production, logging but not blocking them. While this supports legitimate clients like wallets, it may allow some CSRF attack vectors if combined with other vulnerabilities.",
+      "fix": "Consider adding additional CSRF protections such as SameSite cookies, double-submit tokens, or custom headers. Monitor logs for suspicious patterns of origin-less requests."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/_core/security.ts",
+      "line": 50,
+      "title": "Client IP extraction trusts Cloudflare headers",
+      "description": "The getClientIp function trusts 'cf-connecting-ip' and 'x-real-ip' headers for client IP. If the app is not strictly behind Cloudflare or these headers can be spoofed, rate limiting and logging may be bypassed.",
+      "fix": "Ensure the app is always behind Cloudflare or a trusted proxy that sets these headers. Otherwise, validate or sanitize these headers or fallback to req.ip."
+    },
+    {
+      "severity": "INFO",
+      "file": "server/_core/standalone-auth.ts",
+      "line": 20,
+      "title": "Safe constant-time password comparison implemented",
+      "description": "The safeCompare function hashes both inputs and uses crypto.timingSafeEqual to prevent timing attacks and length leaks on password comparison.",
+      "fix": "No action needed. This is a good security practice."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/_core/standalone-auth.ts",
+      "line": 40,
+      "title": "Admin password stored in environment variable",
+      "description": "The admin password is read from an environment variable and compared in-memory. If environment variables are exposed or leaked, this could compromise admin access.",
+      "fix": "Ensure environment variables are securely managed and not logged. Consider using a secrets manager or vault for sensitive credentials."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/routers.ts",
+      "line": 50,
+      "title": "RPC calls have timeout to prevent hanging",
+      "description": "RPC calls to blockchain nodes use Promise.race with a 10-second timeout to avoid hanging requests, improving availability and DoS resistance.",
+      "fix": "No action needed. This is a positive improvement."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/dao-rate-limiter.ts",
+      "line": 40,
+      "title": "DAO proposal rate limiter fails closed on DB errors",
+      "description": "The DAO rate limiter blocks proposal creation if the database is unavailable or errors occur, preventing abuse during outages.",
+      "fix": "No action needed. This is a strong fail-safe design."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/dao-anchor-integration.ts",
+      "line": 120,
+      "title": "On-chain anchoring retries with exponential backoff",
+      "description": "The anchorProposalOnChain function retries failed transactions with exponential backoff and logs failures without blocking proposal creation.",
+      "fix": "No action needed. This improves reliability and fault tolerance."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/storage.ts",
+      "line": 40,
+      "title": "Storage key normalization prevents path traversal",
+      "description": "The normalizeKey function rejects keys containing '..' or path traversal patterns, mitigating directory traversal attacks on storage paths.",
+      "fix": "No action needed. This is a good security control."
+    },
+    {
+      "severity": "LOW",
+      "file": "server/telegramBot.ts",
+      "line": 70,
+      "title": "Telegram alert messages escape HTML entities",
+      "description": "User-generated content in Telegram alerts is escaped to prevent injection of malicious HTML or scripts in Telegram messages.",
+      "fix": "No action needed. This is a good practice."
+    },
+    {
+      "severity": "LOW",
+      "file": "deploy-production.sh",
+      "line": 120,
+      "title": "Deployment script uses file lock to prevent concurrent deploys",
+      "description": "The deploy script uses flock on a lockfile to prevent concurrent deployments, avoiding race conditions and partial deploys.",
+      "fix": "No action needed. This is a good operational security measure."
+    },
+    {
+      "severity": "LOW",
+      "file": "deploy-production.sh",
+      "line": 160,
+      "title": "Cloudflare purge uses exponential backoff retries",
+      "description": "Cloudflare cache purge commands retry on rate limits or server errors with exponential backoff, improving deploy reliability.",
+      "fix": "No action needed. This is a positive improvement."
+    }
+  ],
+  "improvements_noted": [
+    "CSP nonce-based script policy implemented, replacing unsafe-inline for scripts",
+    "Safe constant-time password comparison with hashing to prevent length leaks",
+    "DAO on-chain anchoring wired into main router with retry and alerting",
+    "Try/catch spin execution with user-friendly errors",
+    "Dependency overrides to patch known vulnerabilities (qs, uuid, fast-xml-parser, tar)",
+    "RPC calls have timeouts to prevent hanging",
+    "DAO rate limiter fails closed on DB errors to prevent abuse",
+    "Deploy script uses atomic symlink rotation and Cloudflare purge with retries"
+  ],
+  "recommendations": [
+    "Replace 'unsafe-inline' in style-src CSP with nonce or hash-based styles to strengthen CSP",
+    "Use a robust HTML sanitizer library for request body and extend sanitization to query and headers",
+    "Add additional CSRF protections such as SameSite cookies or double-submit tokens",
+    "Ensure environment variables with secrets are securely managed and not logged",
+    "Validate and sanitize client IP headers if app is exposed outside trusted proxies",
+    "Regularly audit dependencies and update to patch vulnerabilities",
+    "Implement monitoring and alerting on suspicious origin-less requests and failed DAO anchor attempts",
+    "Consider multi-factor authentication or hardware security modules for admin credentials and on-chain executor keys"
+  ]
+}
