@@ -1,10 +1,10 @@
-# HERO Ecosystem Architecture Blueprint v6
-## Last Updated: May 20, 2026
+# HERO Ecosystem Architecture Blueprint v7
+## Last Updated: May 27, 2026
 
 ---
 
 ## Overview
-**HeroBase.io** is a multi-chain DeFi DApp serving PulseChain (369) and BASE (8453) networks. Built for Veterans, by Veterans. Supports $HERO and $VETS tokens with DEX aggregation, V2 Synthetix-style staking, DAO governance, community features, AI assistant, and NFT ecosystem.
+**HeroBase.io** is a multi-chain DeFi DApp serving PulseChain (369) and BASE (8453) networks. Built for Veterans, by Veterans. Supports $HERO and $VETS tokens with DEX aggregation, V2 Synthetix-style staking, DAO governance (on-chain anchored), community features, AI assistant, NFT ecosystem, spin wheel, raffles/giveaways, and holder rewards.
 
 ---
 
@@ -14,10 +14,12 @@
 |-----------|----------|---------|
 | Frontend + Server | VPS1 (62.146.175.67) | Express + Vite SSR, PM2 managed |
 | Domain | herobase.io | Cloudflare DNS + CDN + WAF + HTTP/3 + Early Hints |
-| Database | MySQL on VPS1 | Drizzle ORM, 8 migrations (0000–0007) |
+| Database | MySQL on VPS1 | Drizzle ORM, 8 migrations (0000–0007) + DAO security hardening |
 | CDN Assets | d2xsxph8kpxj0f.cloudfront.net | Images, videos, static assets |
 | Git Repo | GitHub (jratdish1/hero-dapp) | Public, auto-sync cron on VPS1 |
 | Static Serving | Nginx (direct) | Bypasses Express for /assets/, brotli_static + gzip_static |
+| Smart Contract | HeroDAOAnchor.sol | On-chain proposal anchoring, timelocks, vote snapshots |
+| CI/CD | GitHub Dependabot | Monthly grouped dependency updates |
 
 ---
 
@@ -29,7 +31,7 @@
 | Styling | Tailwind CSS + MARPAT Woodland Camo theme |
 | State | React Context (Network, Language, Theme, Wagmi) + Hooks |
 | Backend | Express 4.21 + tRPC 11.6 |
-| Database | MySQL (Drizzle ORM 0.44) — 15 tables |
+| Database | MySQL (Drizzle ORM 0.44) — 15 tables + DAO security columns |
 | Auth | Wallet-based (wagmi 3.6 + WalletConnect) + JWT sessions (jose 6.1) |
 | Web3 | wagmi 3.6 + viem 2.47 + WalletConnect (env-gated) |
 | Process Mgr | PM2 (id: 19, name: hero-dapp) |
@@ -41,6 +43,7 @@
 | Code Splitting | React.lazy + Suspense (40+ lazy-loaded routes/components) |
 | Compression | Brotli 11 + Gzip 9 pre-compression (precompress.mjs) |
 | Font | Self-hosted Inter (inter-latin.woff2) |
+| Validation | zod schemas (ethAddressSchema, txHashSchema, safeStringSchema, tokenSymbolSchema) |
 
 ---
 
@@ -49,9 +52,9 @@
 | Route | Page Component | Lazy | Description |
 |-------|---------------|------|-------------|
 | / | Home | No | Landing page |
+| /login | LoginPage | Yes | Login page |
 | /wallet | HeroWallet | Yes | Multi-tab wallet (Overview, Send, Privacy, Bridge, Approvals, Discover) |
 | /swap | Swap | Yes | DEX aggregator with route comparison + price impact |
-| /dashboard | Dashboard | Yes | Market overview + Treasury + Wallet balance integration |
 | /portfolio | Portfolio | Yes | Token balances, P&L, transaction history (chain-aware) |
 | /dca | DcaOrders | Yes | Dollar-cost averaging order management |
 | /limits | LimitOrders | Yes | Limit order management |
@@ -61,7 +64,7 @@
 | /stake/base | BaseStake | Yes | Farm pools (BASE) |
 | /stake/dai | HeroStake | Yes | V2 SSS single-sided HERO staking → DAI rewards |
 | /bots | AbleBots | Yes | ABLE bot status display |
-| /spin | SpinWheel | Yes | Daily spin (requires HERO NFT) |
+| /spin | SpinWheel | Yes | Daily spin (requires HERO NFT, streak bonuses) |
 | /nft | NftCollection | Yes | HERO NFT gallery |
 | /nft-mint | NFTMint | Yes | NFT minting interface |
 | /burn | BuyAndBurn | Yes | Buy-and-burn mechanism display |
@@ -79,18 +82,15 @@
 | /media | MediaHub | Yes | Video content + explainer |
 | /ai | AiAssistant | Yes | AI chat assistant |
 | /tokenomics | Tokenomics | Yes | Token economics display |
-| /ecosystem | Subdomains | Yes | Ecosystem subdomain directory |
-| /directory | EcosystemDirectory | Yes | Ecosystem directory (DApp catalog) |
+| /ecosystem | EcosystemDirectory | Yes | Ecosystem directory (DApp catalog) |
+| /directory | Subdomains | Yes | Ecosystem subdomain directory |
 | /dex-analytics | DexAnalytics | Yes | DEX analytics + pool data |
 | /explainer | Explainer | Yes | Platform explainer |
 | /beta-disclaimer | BetaDisclaimer | Yes | Beta disclaimer page |
-| /disclaimer | BetaDisclaimer | Yes | Alias for beta-disclaimer |
-| /whitepaper | (external redirect) | — | Redirects to docs.vicfoundation.com |
 | /start | Onboarding | Yes | Onboarding guide |
-| /login | LoginPage | Yes | Login page |
 | /404 | NotFound | No | 404 page |
 
-**Redirects**: /dapp-farm → /bootcamp, /ai-assistant → /ai, /able-bots → /bots, /liberty-swap → /swap, /buy-and-burn → /burn, /pools → /dex-analytics, /stake-base → /stake/base, /stake-dai → /stake/dai, /nfts → /nft, /farm → /bootcamp
+**Redirects**: /dapp-farm → /bootcamp, /ai-assistant → /ai, /able-bots → /bots, /liberty-swap → /swap, /buy-and-burn → /burn, /pools → /dex-analytics, /stake-base → /stake/base, /stake-dai → /stake/dai, /nfts → /nft, /farm → /bootcamp, /disclaimer → /beta-disclaimer, /whitepaper → docs.vicfoundation.com
 
 ---
 
@@ -126,6 +126,7 @@
 | QuickVote.tsx | Inline proposal voting |
 | RewardsDashboard.tsx | Consolidated rewards view |
 | RouteComparison.tsx | Best-rate routing across DEXes |
+| ScrollToTop.tsx | Auto-scroll to top on route change |
 | SlippageSelector.tsx | Preset + custom slippage selector (0.1%, 0.5%, 1%, 3%, custom) |
 | SlippageSettings.tsx | Slippage/gas/MEV settings (swap page) |
 | SquirrelSwapWidget.tsx | Squirrel swap integration |
@@ -188,6 +189,19 @@
 ---
 
 ## Smart Contracts
+
+### HeroDAOAnchor.sol (Solidity ^0.8.20)
+
+On-chain anchor contract for hybrid DAO governance. Stores proposal hashes, vote snapshots, and execution timelocks. Implements:
+- Proposal hash commitment (prevents tampering)
+- 48-hour timelock on execution
+- ReentrancyGuard on all state-changing functions
+- Role-based access (owner + executor)
+- Event emission for all critical state changes
+- No unbounded loops
+- Checks-Effects-Interactions pattern
+- Zero-value input validation
+- OpenZeppelin Ownable + ReentrancyGuard
 
 ### PulseChain (369)
 
@@ -285,14 +299,15 @@
 | mvs | save, list, byId | Monster Video Series |
 | media | create, byCategory, all, byUser, delete | Media posts + NFT gallery |
 | prices | (price procedures) | DexScreener price feeds |
-| dao | (dao procedures) | DAO governance |
-| proposals | create, list, byId, update, updateVotes | Governance proposals |
-| votes | cast, byProposal, userVote | On-chain voting with token verification |
-| delegates | register, list, byAddress, update | Delegation management |
-| delegations | create, byDelegator, byDelegate, revoke | Delegation tracking |
-| treasury | save, latest | Treasury snapshots |
+| dao.proposals | create, list, byId, update, updateVotes | Governance proposals (anchored on-chain) |
+| dao.votes | cast, byProposal, userVote | On-chain voting with token verification |
+| dao.delegates | register, list, byAddress, update | Delegation management |
+| dao.delegations | create, byDelegator, byDelegate, revoke | Delegation tracking |
+| dao.treasury | save, latest | Treasury snapshots |
 | ai | (AI procedures) | AI assistant backend |
-| influencer | upsert, list, byTweetId, togglePin, toggleHighlight, toggleHidden, updateCategory, stats | Influencer mention tracking |
+| influencer | upsert, list, byTweetId, togglePin, toggleHighlight, toggleHidden, updateCategory, addManual, stats | Influencer mention tracking |
+| spin | canSpin, execute, history | Daily spin wheel (streak bonuses, chain-aware) |
+| raffle | list, enter, draw | Raffle/giveaway system |
 | system | (system router) | Health checks + system info |
 
 ---
@@ -309,10 +324,10 @@
 | blog_posts | Blog/content posts (with hero/vets mention flags) |
 | mvs_content | Monster Video Series content |
 | media_posts | Media posts (images, videos, NFTs) — 6 categories |
-| proposals | DAO governance proposals (7 statuses, 4 categories) |
-| votes | DAO votes (on-chain verified, 3 choices) |
+| proposals | DAO governance proposals (7 statuses, 4 categories) + contentHash, timelockExpiresAt, anchoredOnChain, anchorTxHash |
+| votes | DAO votes (on-chain verified, 3 choices) + receiptHash, verifiedOnChain, unique(proposalId, voterId) |
 | delegates | DAO delegates (with activity tracking) |
-| delegations | Voting power delegations |
+| delegations | Voting power delegations + effectiveAfter, cooldownExpired |
 | treasury_snapshots | Treasury balance history |
 | chain_data_cache | On-chain data cache |
 | influencer_mentions | Twitter/social influencer mentions (with sentiment, categories) |
@@ -328,10 +343,16 @@
 | server/twitterFetcher.ts | Twitter/X mention fetching |
 | server/mentionScheduler.ts | Scheduled mention scanning |
 | server/email-notify.ts | Email notification service |
-| server/spin-engine.ts | Daily spin wheel logic |
+| server/spin-engine.ts | Daily spin wheel logic (streak bonuses, chain-aware prizes) |
 | server/rewards-engine.ts | Reward distribution engine |
-| server/raffle-engine.ts | Raffle/giveaway engine |
+| server/raffle-engine.ts | Raffle/giveaway engine (weighted entries by HERO balance) |
 | server/dao-rng-fallback.ts | DAO random number fallback |
+| server/dao-router-hardened.ts | Hardened DAO router with security middleware |
+| server/dao-router-production.ts | Production DAO router |
+| server/dao-security-hardening.ts | DAO security hardening (rate limiter, anchor integration) |
+| server/dao-rate-limiter.ts | Fail-closed rate limiter for DAO operations |
+| server/dao-anchor-integration.ts | On-chain anchor contract integration |
+| server/dao-executor-config.ts | DAO executor configuration |
 | server/standalone-auth.ts | Standalone auth handler |
 | server/storage.ts | S3 file storage management |
 | server/vrf-provider.ts | Verifiable random function provider |
@@ -397,6 +418,8 @@
 ---
 
 ## Security Measures
+
+### Core Security
 - Wallet-based auth (no passwords stored)
 - JWT sessions with expiry (jose library)
 - CORS restricted to herobase.io
@@ -407,6 +430,29 @@
 - URL validation on all external links
 - BigInt guards on RPC responses
 - Mounted ref cleanup on async operations
+
+### DAO Security Hardening (May 2026)
+- **Fail-closed rate limiter** — blocks requests when rate limit state is uncertain
+- **Anchor failure alerting** — notifications when on-chain anchoring fails
+- **48-hour timelock** on proposal execution
+- **Proposal hash commitment** — prevents post-vote tampering
+- **Vote receipt hashing** — audit trail for all votes
+- **Unique constraint** on (proposalId, voterId) — prevents double voting at DB level
+- **Delegation cooldown** — prevents rapid delegation gaming
+- **ReentrancyGuard** on all state-changing contract functions
+- **Exponential backoff** on Cloudflare cache purge retries
+
+### Input Validation & Sanitization
+- ethAddressSchema, txHashSchema, safeStringSchema, tokenSymbolSchema (zod)
+- HTML/script injection prevention (sanitizeString)
+- CSV injection prevention on exports
+- Division-by-zero guards
+- localStorage try/catch wrappers
+- Path traversal prevention
+- SSRF protection
+- Token symbol sanitization and allowlist validation
+
+### Frontend Security
 - **ErrorBoundary** component for graceful crash recovery
 - **retryWithBackoff** helper (1s/2s/4s exponential backoff) on all network calls
 - **handleRpcError** with error differentiation (network/RPC/user rejection/unknown)
@@ -416,12 +462,6 @@
 - WalletConnect project ID moved to env var (VITE_WALLETCONNECT_PROJECT_ID)
 - Tightened iframe sandbox (removed allow-popups)
 - Address validation via isAddress() before transactions
-- Token symbol sanitization and allowlist validation
-- Input validation: ethAddressSchema, txHashSchema, safeStringSchema, tokenSymbolSchema
-- HTML/script injection prevention (sanitizeString)
-- CSV injection prevention on exports
-- Division-by-zero guards
-- localStorage try/catch wrappers
 - Accessibility ARIA labels throughout (aria-hidden, aria-label, role attributes)
 - Cache RPC clients via getOrCreateClient singleton pattern
 - **Chain-aware reads** — all balance/contract calls gated by isValidChainId()
@@ -522,6 +562,35 @@
 
 ---
 
+## Deployment Pipeline (v2.0 — Atomic Deploy)
+
+```
+1. Edit source on VPS1: /root/hero-dapp/
+2. Build: npm run build (vite build + esbuild server bundle)
+3. Deploy: bash deploy-production.sh (atomic symlink rotation for zero-downtime)
+   - Creates timestamped release in /var/www/hero-dapp/releases/
+   - Atomic symlink swap for /var/www/hero-dapp/public/assets
+   - Keeps last 5 releases for instant rollback
+   - Health check with 5 retries (3s delay)
+   - Lockfile prevents concurrent deploys
+4. Post-build: node precompress.mjs (brotli + gzip static assets)
+5. Post-build: node strip-modulepreload.mjs (remove non-critical preloads, inject critical CSS)
+6. Verify: curl -s http://localhost:3000
+7. Commit: git add -A && git commit -m "..." && git push
+8. Purge CDN: Cloudflare API purge cache (with exponential backoff retries)
+9. Auto-add dao.vicfoundation.com to nginx server_name during deploy
+```
+
+**Deploy Script Features**:
+- Atomic symlink rotation (zero-downtime)
+- Lockfile prevents concurrent deploys
+- Health check with retries before going live
+- Automatic rollback on failure
+- Keeps last 5 releases for instant rollback
+- Cloudflare zone: 1f894ca8151cd3419688c8a87ce9f5e3
+
+---
+
 ## Design System
 - **Theme**: MARPAT Woodland Digital Camo (USMC)
 - **Background**: CDN-hosted camo image with navy overlay (72% opacity)
@@ -555,54 +624,24 @@
 
 ---
 
-## Deployment Pipeline
-
-```
-1. Edit source on VPS1: /root/hero-dapp/
-2. Build: npm run build (vite build + esbuild server bundle)
-3. Deploy: bash deploy.sh (syncs dist → /var/www/hero-dapp/dist, restarts PM2)
-4. Post-build: node precompress.mjs (brotli + gzip static assets)
-5. Post-build: node strip-modulepreload.mjs (remove non-critical preloads, inject critical CSS)
-6. Verify: curl -s http://localhost:3000
-7. Commit: git add -A && git commit -m "..." && git push
-8. Purge CDN: Cloudflare API purge cache
-```
-
----
-
-## Recent Changes (May 12-13, 2026) — Since Blueprint v5
+## Recent Changes (May 21-26, 2026) — Since Blueprint v6
 
 | Commit | Date | Description |
 |--------|------|-------------|
-| 41db347 | May 13 | docs: update README with final Lighthouse scores (90% avg, 100% peak) |
-| df6b451 | May 13 | a11y: fix viewport zoom restriction and add main landmark |
-| 7e1ab5e | May 13 | chore: add precompress script for brotli static serving |
-| 2f15447 | May 13 | docs: update README with 86% Lighthouse score |
-| 17e7fde | May 13 | perf: add app shell skeleton for instant FCP + compress background image |
-| 9019350 | May 13 | perf: revert CSS non-blocking (hurts Speed Index), keep critical inline CSS |
-| cb38d38 | May 13 | perf: massive image optimization — fix broken hero, convert PNG to WebP, responsive srcset |
-| a15865d | May 13 | perf: self-host Inter font, disable modulePreload for web3/radix chunks |
-| f372b4d | May 13 | perf: non-blocking CSS, critical inline CSS, remove Google Fonts from CSP |
-| fc2cbeb | May 13 | perf: self-host Inter font, split React/data-layer chunks, strip non-critical modulepreload |
-| 880b8b5 | May 13 | docs: add Lighthouse performance badges and optimization details to README |
-| 613f4c8 | May 13 | perf: delay modal to 5s, defer bg video to 8s, optimize favicon |
-| 2041690 | May 13 | perf: defer video download until user clicks play |
-| 5c34162 | May 13 | perf: code splitting with React.lazy + manual chunks for web3/radix/charts |
-| c9ddbef | May 13 | perf: replace remaining CDN images with local optimized WebP |
-| c389d6a | May 13 | perf: replace CDN poster (1.2MB) and logo (632KB) with local optimized WebP |
-| e9586dc | May 13 | perf: replace 16MB CDN video with 141KB local 360p version |
-| 613f54e | May 13 | perf: defer background video load by 3s, conditional video/poster in ExplainerModal |
-| 3c76be3 | May 13 | perf: lazy-load background video, add loading=lazy to below-fold images |
-| c9e982e | May 13 | fix: disable helmet noCache to allow static asset caching |
-| 2af1a79 | May 13 | perf: add compression, caching headers, LCP preload, lazy loading, fix CSP font-src |
-| c971e77 | May 12 | revert: undo code splitting (breaks wagmi optional peer deps) |
-| 1d7ac84 | May 12 | fix: remove vendor-web3 chunk split — wagmi optional peer deps break |
-| 6cf25c4 | May 12 | perf: preload LCP hero banner image + fetchpriority=high |
-| 3a2fa37 | May 12 | perf: code splitting + lazy load streamdown/mermaid (12MB deferred) |
+| d18182e | May 26 | security: GPT-4.1 audit fixes — fail-closed rate limiter, anchor failure alerting |
+| 4819cb2 | May 26 | fix: auto-add dao.vicfoundation.com to nginx server_name during deploy |
+| 1a6c9e7 | May 26 | feat: add exponential backoff retries to Cloudflare cache purge |
+| 227d36c | May 25 | feat: wire spin/raffle/DCA/DAO/giveaway endpoints, fix deploy script, remove all mock data |
+| 6f17c16 | May 25 | fix(deploy): sync build assets to nginx-served public/assets directory |
+| 98bdcb7 | May 25 | fix: Add missing useAccount import to SpinWheel.tsx (browser test bug fix) |
+| 4f83553 | May 25 | AUDIT A+ PUSH: Fix final 2 MEDIUM findings |
+| e2b1fe1 | May 25 | FULL ECOSYSTEM AUDIT: Fix all HIGH/MEDIUM/LOW findings |
+| b4864b8 | May 24 | security: GPT-4.1 Codex audit fixes — path traversal, SSRF, JWT hardening, rate limiting, input validation |
+| 1f9cd00 | May 21 | fix: remove Dashboard tab, fix ticker width, add ScrollToTop, update logo |
 
 ---
 
-## Route Health Check (May 20, 2026)
+## Route Health Check (May 27, 2026)
 
 | Route | Status |
 |-------|--------|
@@ -615,6 +654,17 @@
 
 ---
 
+## Security Audit History
+
+| Date | Auditor | Report |
+|------|---------|--------|
+| May 24, 2026 | GPT-4.1 Codex | Path traversal, SSRF, JWT hardening, rate limiting, input validation |
+| May 25, 2026 | Full Ecosystem | All HIGH/MEDIUM/LOW findings fixed |
+| May 25, 2026 | Final A+ Push | Final 2 MEDIUM findings resolved |
+| May 26, 2026 | GPT-4.1 Codex | Fail-closed rate limiter, anchor failure alerting |
+
+---
+
 ## Daily Auto-Update Checklist
 1. Check for new git commits on VPS1 / GitHub
 2. Verify all routes respond 200
@@ -624,4 +674,3 @@
 6. Check Cloudflare for any security alerts
 7. Verify ABLE bots have sufficient gas
 8. Check Telegram bot responsiveness
-
