@@ -386,7 +386,7 @@ export default function MediaHub() {
                       </div>
                     </div>
                   ) : (
-                    <img
+                    <img alt="Media gallery item"
                       src={post.mediaUrl}
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

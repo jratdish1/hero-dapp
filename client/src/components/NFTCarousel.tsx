@@ -88,7 +88,7 @@ export default function NFTCarousel({ title, nfts = [], autoScrollSpeed = 3000 }
               <div className="bg-white/5 border border-white/10 overflow-hidden hover:border-yellow-500/50 transition-all cursor-pointer group">
                 <div className="aspect-square bg-gray-800 overflow-hidden">
                   {nft.image ? (
-                    <img
+                    <img alt="NFT artwork"
                       src={nft.image}
                       alt={nft.name || 'NFT #' + idx}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

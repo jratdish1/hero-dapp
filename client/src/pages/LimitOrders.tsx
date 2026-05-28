@@ -70,7 +70,7 @@ export default function LimitOrders() {
         setIsLoaded(true);
       }
       if (e.data?.type === "squirrelswap:swap") {
-        console.log("[SquirrelSwap] Swap completed:", e.data);
+        // console.log("[SquirrelSwap] Swap completed:", e.data);
       }
     };
 

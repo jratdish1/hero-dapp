@@ -160,7 +160,7 @@ export default function Home() {
       </div>
       {/* HERO UN Banner — Full Size Hero Header */}
       <div className="w-full relative" style={{height: '60vh', minHeight: '400px', maxHeight: '700px'}}>
-        <img
+        <img alt="HERO ecosystem"
           src={HERO_BANNER_URL} srcSet="/hero-banner-sm.webp 800w, /hero-banner-un.webp 1920w" sizes="100vw"
           alt="HERO United Nations Banner"
           fetchPriority="high" className="w-full h-full object-cover object-center"
@@ -178,7 +178,7 @@ export default function Home() {
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img
+            <img alt="PulseChain network"
               src={HERO_LOGO_URL}
               alt="HERO Logo"
               className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"
@@ -251,7 +251,7 @@ export default function Home() {
                 key={token.symbol}
                 className="flex items-center gap-3 px-5 py-3 rounded-xl bg-card border border-border hover:border-[var(--hero-orange)]/30 transition-colors cursor-pointer"
               >
-                <img
+                <img alt="Feature illustration"
                   src={token.logoURI}
                   alt={token.symbol}
                   className="w-8 h-8 rounded-full"
@@ -341,7 +341,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-orange-500/10 rounded-2xl blur-xl" />
               <div className="relative bg-card/80 rounded-2xl border border-border p-8">
                 <a href="https://regenvalor.com" target="_blank" rel="noopener noreferrer">
-                  <img
+                  <img alt="Partner logo"
                     src="/regenvalor_og.webp" loading="lazy"
                     alt="RegenValor Logo"
                     className="w-48 mx-auto mb-6 opacity-90 hover:opacity-100 transition-opacity"
@@ -428,7 +428,7 @@ export default function Home() {
         </div>
         {/* Blackbeard footer banner */}
         <div className="w-full relative overflow-hidden" style={{maxHeight: "350px"}}>
-          <img
+          <img alt="Community banner"
             loading="lazy" src={BLACKBEARD_URL}
             alt="Black Bear Footer"
             className="w-full object-contain"

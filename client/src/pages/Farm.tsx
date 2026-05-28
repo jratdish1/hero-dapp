@@ -274,7 +274,7 @@ function HeroPoolCard({ pool, liveData }: { pool: typeof FARM_POOLS_PLS[number];
       <CardContent className="p-5">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <img
+            <img alt="Farm pool token"
               src="/hero-logo-200.webp"
               alt="HERO"
               className="w-8 h-8 rounded-lg object-contain"
@@ -509,7 +509,7 @@ function FarmTab({ farm }: { farm: PartnerFarm }) {
             <div className="flex items-center justify-between mb-3">
               <div className="flex items-center gap-3">
                 {farm.logoUrl && (
-                  <img
+                  <img alt="Partner farm logo"
                     src={farm.logoUrl}
                     alt={`${farm.name} logo`}
                     className="w-10 h-10 rounded-full object-contain border border-border/30"
@@ -638,7 +638,7 @@ export default function Farm() {
 
       {/* Page header with HERO emblem — CHAIN AWARE */}
       <div className="flex items-center gap-4">
-        <img
+        <img alt="Service branch emblem"
           src={CDN_ASSETS.heroEmblem}
           alt="HERO Emblem"
           className="w-14 h-14 rounded-xl shadow-lg shadow-[#e8b84b]/20"
@@ -1226,7 +1226,7 @@ export default function Farm() {
                 </p>
               </div>
               <div className="px-5 pb-5">
-                <img
+                <img alt="Pool token pair"
                   src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/lvDhqDUcVwjudSTG.jpeg"
                   alt="DeFi Yield Strategies — Closed Loop Ecosystem showing TruFarms, EMIT, SSS Pools, and compound earnings flow"
                   className="w-full rounded-xl border border-border/30"

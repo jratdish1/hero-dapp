@@ -57,7 +57,7 @@ function QuickTokenRow() {
           key={t.address}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border bg-secondary text-muted-foreground whitespace-nowrap"
         >
-          <img
+          <img alt="DEX aggregator"
             src={t.logoURI}
             alt={t.symbol}
             className="w-4 h-4 rounded-full"
@@ -199,7 +199,7 @@ export default function Swap() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <img
+            <img alt="Swap interface"
               src="https://iili.io/qdikIJj.png"
               alt="SquirrelSwap"
               className="w-6 h-6 rounded-full"

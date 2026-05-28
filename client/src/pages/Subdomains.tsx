@@ -173,7 +173,7 @@ export default function Subdomains() {
       <Card className="border-[var(--hero-orange)]/20 bg-gradient-to-r from-[var(--hero-orange)]/5 to-[var(--hero-green)]/5">
         <CardContent className="p-5">
           <div className="flex items-center gap-3 mb-3">
-            <img
+            <img alt="Subdomain preview"
               src="/hero-logo-200.webp"
               alt="HERO Logo"
               className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"

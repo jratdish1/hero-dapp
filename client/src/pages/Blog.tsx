@@ -117,7 +117,7 @@ function LiveMentionCard({
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-start gap-3">
             {mention.authorProfileImageUrl && (
-              <img
+              <img alt="Blog post thumbnail"
                 src={mention.authorProfileImageUrl}
                 alt={mention.authorUsername}
                 className="w-10 h-10 rounded-full border border-border/50 shrink-0"

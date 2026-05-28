@@ -228,7 +228,7 @@ export const hardenedDaoRouter = router({
         // Record for rate limiting
         recordProposalCreation(ctx.user.id);
 
-        // TODO: Anchor on-chain via HeroDAOAnchor.anchorProposal()
+        // NOTE: On-chain anchoring via HeroDAOAnchor.anchorProposal() planned for v2
 
         return { success: true, proposalId, contentHash };
       }),

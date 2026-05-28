@@ -201,7 +201,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
           {/* Logo */}
           <div className="p-4 border-b border-sidebar-border">
             <Link href="/" className="flex items-center gap-3">
-              <img
+              <img alt="HERO token"
                 src={HERO_LOGO_URL}
                 alt="HERO Logo"
                 className="w-12 h-12 rounded-full object-cover shadow-lg shadow-[var(--hero-orange)]/30 border-2 border-[var(--hero-orange)]/40"

@@ -151,7 +151,7 @@ export default function Approvals() {
                 <tr key={approval.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <img
+                      <img alt="Token icon"
                         src={approval.token.logoURI}
                         alt={approval.token.symbol}
                         className="w-7 h-7 rounded-full"

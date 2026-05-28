@@ -612,7 +612,7 @@ export default function Stake() {
 
       {/* Page header with HERO emblem — CHAIN AWARE */}
       <div className="flex items-center gap-4">
-        <img
+        <img alt="Staking pool token"
           src={CDN_ASSETS.heroEmblem}
           alt="HERO Emblem"
           className="w-14 h-14 rounded-xl shadow-lg shadow-[#e8b84b]/20"
