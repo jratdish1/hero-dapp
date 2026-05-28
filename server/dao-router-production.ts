@@ -1,3 +1,5 @@
+import { createDaoLogger } from "./dao-logger";
+const routerLogger = createDaoLogger("dao-router");
 /**
  * HERO DAO — Production Router (Final)
  * ======================================
@@ -296,7 +298,7 @@ export const daoRouter = router({
             } as any);
           }
         } catch (err) {
-          console.warn("[DAO] Content hash storage failed (non-blocking):", err);
+          routerLogger.warn(" Content hash storage failed (non-blocking):", err);
         }
 
         // ─── CONDITION #4: Anchor on-chain (non-blocking) ────────
@@ -314,7 +316,7 @@ export const daoRouter = router({
           }
         } catch (err) {
           // Non-blocking: log but don't fail proposal creation
-          console.warn("[DAO] On-chain anchoring failed (non-blocking):", err);
+          routerLogger.warn(" On-chain anchoring failed (non-blocking):", err);
         }
 
         return { success: true, proposalId, contentHash, anchorTxHash };
@@ -355,7 +357,7 @@ export const daoRouter = router({
               proposal.votesAbstain
             );
           } catch (err) {
-            console.warn("[DAO] On-chain finalization failed (non-blocking):", err);
+            routerLogger.warn(" On-chain finalization failed (non-blocking):", err);
           }
         }
 

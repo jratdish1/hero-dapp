@@ -48,7 +48,7 @@ export interface ExecutorConfig {
 export function getExecutorConfig(): ExecutorConfig {
   const type = (process.env.DAO_EXECUTOR_TYPE || "eoa") as ExecutorType;
   const address = process.env.DAO_EXECUTOR_ADDRESS || "";
-  const chainId = parseInt(process.env.DAO_SAFE_CHAIN_ID || "369");
+  const chainId = parseInt(process.env.DAO_SAFE_CHAIN_ID || "369", 10);
   const isProduction = process.env.NODE_ENV === "production";
 
   const config: ExecutorConfig = {
@@ -61,8 +61,15 @@ export function getExecutorConfig(): ExecutorConfig {
   if (type === "gnosis_safe") {
     config.safeConfig = {
       txServiceUrl: process.env.DAO_SAFE_TX_SERVICE_URL || "https://safe-transaction.pulsechain.com",
-      threshold: parseInt(process.env.DAO_SAFE_THRESHOLD || "2"),
-      owners: (process.env.DAO_SAFE_OWNERS || "").split(",").filter(Boolean),
+      threshold: parseInt(process.env.DAO_SAFE_THRESHOLD || "2", 10),
+      owners: (() => {
+        const owners = (process.env.DAO_SAFE_OWNERS || "").split(",").map(o => o.trim()).filter(Boolean);
+        const invalidOwners = owners.filter(o => !/^0x[a-fA-F0-9]{40}$/.test(o));
+        if (invalidOwners.length > 0) {
+          throw new Error(`Invalid owner addresses in DAO_SAFE_OWNERS: ${invalidOwners.join(', ')}`);
+        }
+        return owners;
+      })(),
     };
   }
 
@@ -104,6 +111,12 @@ export function validateExecutorConfig(): {
       }
       if ((config.safeConfig?.threshold || 0) < 2) {
         errors.push("Gnosis Safe threshold must be at least 2 for production");
+      }
+      if ((config.safeConfig?.threshold || 0) > (config.safeConfig?.owners?.length || 0)) {
+        errors.push("Gnosis Safe threshold cannot exceed number of owners");
+      }
+      if ((config.safeConfig?.threshold || 0) <= 0) {
+        errors.push("DAO_SAFE_THRESHOLD must be a positive integer");
       }
     }
   } else {
