@@ -1,0 +1,37 @@
+name: Deploy to VPS1
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: root
+          key: ${{ secrets.VDS_SSH_KEY }}
+          script: |
+            ssh root@${{ secrets.VPS1_HOST }} << 'DEPLOY'
+              cd /var/www/hero-dapp
+              git pull origin main
+              npm run build
+              pm2 reload hero-dapp
+            DEPLOY
+
+      - name: Purge Cloudflare Cache
+        if: success()
+        run: |
+          curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
+            -H "X-Auth-Email: ${{ secrets.CF_EMAIL }}" \
+            -H "X-Auth-Key: ${{ secrets.CF_API_KEY }}" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}'
+
+      - name: Notify Success
+        if: success()
+        run: echo "✅ Deployed to VPS1 and Cloudflare purged"

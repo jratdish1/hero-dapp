@@ -123,4 +123,3 @@ verification_*.txt
 notes_*.txt
 releases/
 dist/
-.github/workflows/
