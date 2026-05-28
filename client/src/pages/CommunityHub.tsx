@@ -2,7 +2,9 @@ import CommunityFeed from "@/components/CommunityFeed";
 import QuickVote from "@/components/QuickVote";
 import CommunityStats from "@/components/CommunityStats";
 import { useNetwork } from "@/contexts/NetworkContext";
-import { Newspaper, Twitter, Video, ExternalLink, Flame } from "lucide-react";
+import { Newspaper, Twitter, Video, ExternalLink, Flame, RefreshCw, Loader2 } from "lucide-react";
+import { trpc } from "@/lib/trpc";
+import { useMemo } from "react";
 
 // URL validation to prevent XSS via javascript: or data: URLs
 function isSafeUrl(url: string): boolean {
@@ -15,18 +17,17 @@ function isSafeUrl(url: string): boolean {
   }
 }
 
-
-const EXPLAINER_VIDEO = "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4";
+const EXPLAINER_VIDEO = "/hero-explainer-edited.mp4";
 const HERO_LOGO = "/hero-logo-200.webp";
 
-// Weekly Monster Threads from @CrypMvs
-const MONSTER_THREADS = [
+// Fallback static data — used only when API is unavailable
+const STATIC_MONSTER_THREADS = [
   {
     id: 51,
     title: "PulseChain Weekly Monster Thread #51",
     author: "@CrypMvs",
     date: "Apr 27, 2026",
-    summary: "🚨 PulseChain Weekly Monster Thread #51 🚨  Richard\'s Alpha, PulseChain In Europe, Ladies Night & More Monster Moves! 🔥  Check out $EMIT & $TruFarm for ",
+    summary: "\u{1F6A8} PulseChain Weekly Monster Thread #51 \u{1F6A8}  Richard's Alpha, PulseChain In Europe, Ladies Night & More Monster Moves! \u{1F525}",
     tags: ["PulseChain: Weekly"],
     url: "https://x.com/CrypMvs/status/2048687020168638465",
   },
@@ -35,142 +36,60 @@ const MONSTER_THREADS = [
     title: "PulseChain Weekly Monster Thread #52",
     author: "@CrypMvs",
     date: "May 08, 2026",
-    summary: "🚨 PulseChain Weekly Monster Thread #52 🚨    Richard\'s Teachings, ChangeNow Documentary,  Giveaway Frenzy & More Monster Moves! 🔥    🥳1 Year Of Monster",
+    summary: "\u{1F6A8} PulseChain Weekly Monster Thread #52 \u{1F6A8} Richard's Teachings, ChangeNow Documentary, Giveaway Frenzy & More Monster Moves! \u{1F525}",
     tags: ["PulseChain: Weekly"],
     url: "https://x.com/CrypMvs/status/2051247846675104165",
-  },
-  {
-    id: 99,
-    title: "PulseChain Weekly Monster Thread #99",
-    author: "@CrypMvs",
-    date: "May 08, 2026",
-    summary: "",
-    tags: ["PulseChain: Weekly"],
-    url: "https://x.com/crypmvs",
-  },
-  {
-    id: 1,
-    title: "Weekly HERO Ecosystem Roundup — May 4, 2026",
-    author: "@CrypMvs",
-    date: "May 4, 2026",
-    summary: "Farm yields update: $VETS/$EMIT 147% APR | $HERO/$EMIT 127% APR | $HERO/$PLS 154% APR | TruFarm SSS 221% APR",
-    tags: ["$HERO: Trending", "$VETS: Trending"],
-    url: "https://x.com/crypmvs",
-  },
-  {
-    id: 2,
-    title: "Weekly HERO Ecosystem Roundup — April 27, 2026",
-    author: "@CrypMvs",
-    date: "Apr 27, 2026",
-    summary: "New partnerships announced. HERO single-sided staking live with 500 DAI reward pool. Community treasury at 4.9M PLS.",
-    tags: ["$HERO: Growth", "Staking: Live"],
-    url: "https://x.com/crypmvs",
-  },
-  {
-    id: 3,
-    title: "Weekly HERO Ecosystem Roundup — April 20, 2026",
-    author: "@CrypMvs",
-    date: "Apr 20, 2026",
-    summary: "HeroBase.io DApp launch on BASE chain. Multi-chain aggregation now live. DAO governance proposal system deployed.",
-    tags: ["$HERO: BASE Launch", "DApp: Live"],
-    url: "https://x.com/crypmvs",
-  },
-];
-
-// Weekly Blog Posts
-const WEEKLY_BLOGS = [
-  {
-    id: "2052250760600285651",
-    title: "🎙️ Bullish on @LibertySwapFi - PulseChain DeFi is levelling up ",
-    source: "@KryptoniteShow",
-    date: "May 07, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2052250760600285651",
-  },
-  {
-    id: "2052205943379951969",
-    title: "🎙️ Michael Saylor Strategy MSTR Results, Bitmine Immersion ETH ",
-    source: "@KryptoniteShow",
-    date: "May 07, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2052205943379951969",
-  },
-  {
-    id: "2051840762573451676",
-    title: "🎙️ Michael Saylor Strategy MSTR Results, Bitmine Immersion ETH ",
-    source: "@KryptoniteShow",
-    date: "May 06, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051840762573451676",
-  },
-  {
-    id: "2051648067372503443",
-    title: "🎙️ Pulsechain Season is coming! RichardHeartWin",
-    source: "@KryptoniteShow",
-    date: "May 05, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051648067372503443",
-  },
-  {
-    id: "2051938031414755736",
-    title: "🎙️ Pulsechain is doing something interesting. Trying to find th",
-    source: "@KryptoniteShow",
-    date: "May 06, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051938031414755736",
-  },
-  {
-    id: "2051938040000676054",
-    title: "🎙️ After 9 red months and a mega downtrend for 36 months. Is it",
-    source: "@KryptoniteShow",
-    date: "May 06, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051938040000676054",
-  },
-  {
-    id: "2051938051258196327",
-    title: "🎙️ RichardHeartWin is Working towards Pulsechain Season. For Gl",
-    source: "@KryptoniteShow",
-    date: "May 06, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051938051258196327",
-  },
-  {
-    id: "2051485173514899930",
-    title: "🎙️ Pulsechain MONSTER Thread Weekly NEWS One Year Celebration!",
-    source: "@KryptoniteShow",
-    date: "May 05, 2026",
-    excerpt: "Nightly PulseChain show covering the latest DeFi, tokenomics, and ecosystem updates.",
-    url: "https://x.com/KryptoniteShow/status/2051485173514899930",
-  },
-  {
-    id: 1,
-    title: "Veteran-Led DeFi: How $HERO is Building a Benevolent Protocol",
-    source: "VIC Foundation Blog",
-    date: "Apr 28, 2026",
-    excerpt: "An in-depth look at how the HERO token ecosystem leverages DeFi yield farming to fund veteran and first responder support programs through the 501(c)(3) VIC Foundation.",
-    url: "/community",
-  },
-  {
-    id: 2,
-    title: "PulseChain DeFi Projects to Watch in 2026",
-    source: "PulseChain Community",
-    date: "Apr 21, 2026",
-    excerpt: "HERO DApp highlighted as a standout project combining multi-DEX aggregation with a charitable mission.",
-    url: "/community",
-  },
-  {
-    id: 3,
-    title: "Weekly Farm Yield Report: May 1-7",
-    source: "HERO Analytics",
-    date: "May 7, 2026",
-    excerpt: "Top performing pools this week: VETS/EMIT at 147% APR, HERO/PLS at 154% APR. Single-sided staking reward pool funded.",
-    url: "/community",
   },
 ];
 
 export default function CommunityHub() {
   const { isPulseChain } = useNetwork();
+
+  // Live API: Fetch MVS content (Weekly Monster Threads + Roundups)
+  const mvsQuery = trpc.mvs.list.useQuery({ limit: 20 }, {
+    refetchInterval: 5 * 60 * 1000, // Refresh every 5 minutes
+    staleTime: 2 * 60 * 1000,
+    retry: 2,
+  });
+
+  // Live API: Fetch published blog posts (Weekly HERO Blog)
+  const blogQuery = trpc.blog.published.useQuery({ limit: 20 }, {
+    refetchInterval: 5 * 60 * 1000,
+    staleTime: 2 * 60 * 1000,
+    retry: 2,
+  });
+
+  // Transform MVS data into display format
+  const monsterThreads = useMemo(() => {
+    if (!mvsQuery.data || mvsQuery.data.length === 0) return STATIC_MONSTER_THREADS;
+    return mvsQuery.data.map((item: any) => ({
+      id: item.id,
+      title: item.content?.slice(0, 80) || `Weekly Thread by ${item.authorHandle}`,
+      author: item.authorHandle || item.author,
+      date: item.createdAt ? new Date(item.createdAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "",
+      summary: item.content || "",
+      tags: item.weekLabel ? [item.weekLabel] : ["PulseChain: Weekly"],
+      url: item.tweetUrl || "https://x.com/crypmvs",
+    }));
+  }, [mvsQuery.data]);
+
+  // Transform blog data into display format
+  const weeklyBlogs = useMemo(() => {
+    if (!blogQuery.data || blogQuery.data.length === 0) return [];
+    return blogQuery.data.map((post: any) => ({
+      id: post.id,
+      title: post.title,
+      source: post.tweetAuthor || "HERO Blog",
+      date: post.publishedAt ? new Date(post.publishedAt).toLocaleDateString("en-US", { month: "short", day: "2-digit", year: "numeric" }) : "",
+      excerpt: post.excerpt || "",
+      url: post.tweetUrl || `/community`,
+      slug: post.slug,
+    }));
+  }, [blogQuery.data]);
+
+  const isLoading = mvsQuery.isLoading || blogQuery.isLoading;
+  const isLive = (mvsQuery.data && mvsQuery.data.length > 0) || (blogQuery.data && blogQuery.data.length > 0);
+
   return (
     <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
       {/* Page Header */}
@@ -181,6 +100,22 @@ export default function CommunityHub() {
         <p className="text-sm text-muted-foreground mt-1">
           Weekly Blog, Monster Threads, Governance & Community Updates
         </p>
+        {/* Live indicator */}
+        <div className="flex items-center justify-center gap-2 mt-2">
+          {isLoading ? (
+            <span className="flex items-center gap-1 text-xs text-yellow-400">
+              <Loader2 className="w-3 h-3 animate-spin" /> Loading live feed...
+            </span>
+          ) : isLive ? (
+            <span className="flex items-center gap-1 text-xs text-green-400">
+              <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" /> Live Feed Active
+            </span>
+          ) : (
+            <span className="flex items-center gap-1 text-xs text-muted-foreground">
+              <span className="w-2 h-2 rounded-full bg-yellow-500" /> Showing cached data
+            </span>
+          )}
+        </div>
       </div>
 
       {/* Community Stats Banner */}
@@ -208,7 +143,7 @@ export default function CommunityHub() {
         </p>
       </div>
 
-      {/* Weekly Monster Threads */}
+      {/* Weekly Monster Threads - LIVE from API */}
       <div className="rounded-xl border border-blue-500/30 bg-card/80 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
@@ -216,18 +151,27 @@ export default function CommunityHub() {
             <h2 className="font-bold text-lg text-foreground">Weekly Monster Threads</h2>
             <span className="text-xs bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full">@CrypMvs</span>
           </div>
-          <a href="https://x.com/crypmvs" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1">
-            <Twitter className="w-3 h-3" /> Follow
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => mvsQuery.refetch()}
+              className="text-xs text-blue-400 hover:text-blue-300 flex items-center gap-1 transition-colors"
+              disabled={mvsQuery.isFetching}
+              title="Refresh feed"
+            >
+              <RefreshCw className={`w-3 h-3 ${mvsQuery.isFetching ? 'animate-spin' : ''}`} />
+            </button>
+            <a href="https://x.com/crypmvs" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:underline flex items-center gap-1">
+              <Twitter className="w-3 h-3" /> Follow
+            </a>
+          </div>
         </div>
         <div className="space-y-3">
-          {MONSTER_THREADS.map((thread) => (
+          {monsterThreads.map((thread) => (
             <a
               key={thread.id}
               href={isSafeUrl(thread.url) ? thread.url : "#"}
-              target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
-              
+              target="_blank"
+              rel="noopener noreferrer"
               className="block p-3 rounded-lg border border-border/50 hover:border-blue-500/50 transition-colors bg-background/40"
             >
               <div className="flex items-center justify-between mb-1">
@@ -237,7 +181,7 @@ export default function CommunityHub() {
               <p className="text-xs text-muted-foreground mb-2">
                 {thread.author} | {thread.date}
               </p>
-              <p className="text-xs text-foreground/80">{thread.summary}</p>
+              <p className="text-xs text-foreground/80 line-clamp-2">{thread.summary}</p>
               <div className="flex gap-2 mt-2">
                 {thread.tags.map((tag) => (
                   <span key={tag} className="text-[10px] px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-semibold">
@@ -247,34 +191,58 @@ export default function CommunityHub() {
               </div>
             </a>
           ))}
+          {monsterThreads.length === 0 && (
+            <p className="text-xs text-muted-foreground text-center py-4">No threads available yet. Check back soon!</p>
+          )}
         </div>
       </div>
 
-      {/* Weekly HERO Blog */}
+      {/* Weekly HERO Blog - LIVE from API */}
       <div className="rounded-xl border border-green-500/30 bg-card/80 backdrop-blur-sm p-4">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <Newspaper className="w-5 h-5 text-green-400" />
             <h2 className="font-bold text-lg text-foreground">Weekly HERO Blog</h2>
+            {isLive && (
+              <span className="text-[10px] bg-green-500/20 text-green-400 px-2 py-0.5 rounded-full">LIVE</span>
+            )}
           </div>
-          <a href="/community" className="text-xs text-green-400 hover:underline">
-            View All Posts →
-          </a>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => blogQuery.refetch()}
+              className="text-xs text-green-400 hover:text-green-300 flex items-center gap-1 transition-colors"
+              disabled={blogQuery.isFetching}
+              title="Refresh blog"
+            >
+              <RefreshCw className={`w-3 h-3 ${blogQuery.isFetching ? 'animate-spin' : ''}`} />
+            </button>
+            <a href="/community" className="text-xs text-green-400 hover:underline">
+              View All Posts →
+            </a>
+          </div>
         </div>
         <div className="space-y-3">
-          {WEEKLY_BLOGS.map((post) => (
+          {weeklyBlogs.length > 0 ? weeklyBlogs.map((post) => (
             <a
               key={post.id}
               href={isSafeUrl(post.url) ? post.url : "#"}
+              target={post.url.startsWith("http") ? "_blank" : undefined}
+              rel={post.url.startsWith("http") ? "noopener noreferrer" : undefined}
               className="block p-3 rounded-lg border border-border/50 hover:border-green-500/50 transition-colors bg-background/40"
             >
               <h3 className="font-semibold text-sm text-foreground mb-1">{post.title}</h3>
               <p className="text-xs text-muted-foreground mb-1">
                 {post.source} | {post.date}
               </p>
-              <p className="text-xs text-foreground/80">{post.excerpt}</p>
+              <p className="text-xs text-foreground/80 line-clamp-2">{post.excerpt}</p>
             </a>
-          ))}
+          )) : (
+            <div className="text-center py-4">
+              <p className="text-xs text-muted-foreground">
+                {blogQuery.isLoading ? "Loading blog posts..." : "No blog posts yet. Generate from the Blog admin panel."}
+              </p>
+            </div>
+          )}
         </div>
       </div>
 
