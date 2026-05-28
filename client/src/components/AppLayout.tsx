@@ -348,11 +348,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </button>
               </div>
             ) : (
-              <a href={getLoginUrl()}>
-                <Button variant="outline" className="w-full border-[var(--hero-orange)]/30 text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10">
-                  Connect
-                </Button>
-              </a>
+              <WalletButton />
             )}
             {/* Audit badges */}
             <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-sidebar-border/50">

@@ -143,6 +143,7 @@ function Router() {
       <Route path="/whitepaper"><ExternalRedirect url="https://docs.vicfoundation.com" /></Route>
       <Route path="/buy-and-burn"><Redirect to="/burn" /></Route>
       <Route path="/pools"><Redirect to="/dex-analytics" /></Route>
+      <Route path="/stake/hero"><Redirect to="/stake/dai" /></Route>
       <Route path="/404" component={NotFound} />
       <Route component={NotFound} />
     </Switch>

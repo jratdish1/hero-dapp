@@ -925,7 +925,7 @@ export default function Farm() {
                     </Badge>
                   </div>
                 </div>
-                <a href={LIVE_DAPP_URLS.farm} target="_blank" rel="noopener noreferrer">
+                <a href="/stake/dai">
                   <Button className="bg-gradient-to-r from-[#e8b84b]/20 to-[#f0c95c]/25 border border-[#e8b84b]/30 text-[#f0c95c] hover:from-[#e8b84b]/30 hover:to-[#f0c95c]/38 font-bold tracking-wider text-base px-8 py-3">
                     <ArrowUpRight className="w-5 h-5 mr-2" />
                     Launch Boot Camp

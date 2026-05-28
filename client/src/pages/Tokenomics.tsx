@@ -389,24 +389,32 @@ export default function Tokenomics() {
                   description="Automated deflationary mechanism. When the burn period elapses, anyone can trigger buyAndBurn() to buy HERO from the market and burn it permanently."
                   icon={Flame}
                   badge="Active"
+                  link="/burn"
+                  linkText="View Buy & Burn"
                 />
                 <RevenueCard
                   title="Single-Sided Staking → DAI"
                   description="Stake earned EMIT or TruFarm tokens in single-sided pools that reward DAI (≈$1 stablecoin). This DAI funds treasury buys without selling any HERO."
                   icon={CircleDollarSign}
                   badge="Active"
+                  link="/stake/dai"
+                  linkText="View SSS"
                 />
                 <RevenueCard
                   title="NFT Collection Revenue"
                   description="1,000-piece military/first responder NFT collection with utility. Mint revenue flows to treasury. Holding NFTs reduces buy/sell fees."
                   icon={Shield}
                   badge="Coming Soon"
+                  link="/nft"
+                  linkText="View NFTs"
                 />
                 <RevenueCard
                   title="Additional External Streams"
                   description="Multiple external revenue streams being onboarded to ensure the protocol never relies on a single source. Diversification is key to long-term sustainability."
                   icon={Target}
                   badge="In Progress"
+                  link="/tokenomics"
+                  linkText="View Contracts"
                 />
               </div>
             </CardContent>

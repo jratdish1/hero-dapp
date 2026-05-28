@@ -1041,7 +1041,7 @@ export default function Stake() {
               </div>
 
               {/* Base chain coming soon */}
-              <Card className="border-[#0052FF]/20 bg-[#0052FF]/5">
+              <Card className="border-[#0052FF]/30 bg-[#0a0c14]">
                 <CardContent className="p-5 text-center">
                   <div className="flex items-center justify-center gap-2 mb-2">
                     <span className="text-xl">🔵</span>

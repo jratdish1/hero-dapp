@@ -219,7 +219,7 @@ export default function MediaHub() {
               playsInline
               preload="metadata"
             >
-              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/hFXqEKDGLjZqGGBP.mp4" type="video/mp4" />
+              <source src="/hero-explainer-edited.mp4" type="video/mp4" />
             </video>
           </div>
           <p className="text-center text-xs text-muted-foreground mt-3">
@@ -241,7 +241,7 @@ export default function MediaHub() {
               playsInline
               preload="metadata"
             >
-              <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/TpBuoUpQVyJrFzak.mp4" type="video/mp4" />
+              <source src="/hero-explainer-edited.mp4" type="video/mp4" />
             </video>
           </div>
           <p className="text-center text-xs text-muted-foreground mt-3">
