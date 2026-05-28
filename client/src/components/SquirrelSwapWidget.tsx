@@ -128,7 +128,7 @@ export default function SquirrelSwapWidget({
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <a
                 href={`https://aerodrome.finance/swap?from=ETH&to=${HERO_BASE}`}
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
                 style={{
@@ -141,7 +141,7 @@ export default function SquirrelSwapWidget({
               </a>
               <a
                 href={`https://app.uniswap.org/swap?outputCurrency=${HERO_BASE}&chain=base`}
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                 rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
                 style={{
@@ -165,7 +165,7 @@ export default function SquirrelSwapWidget({
             <span>Powered by</span>
             <a
               href="https://app.squirrelswap.pro"
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
               rel="noopener noreferrer"
               className="hover:underline"
               style={{ color: "#C8A84B" }}

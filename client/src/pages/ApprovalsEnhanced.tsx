@@ -330,7 +330,7 @@ export default function ApprovalsEnhanced() {
       <div className="flex items-center justify-center gap-4 text-xs text-muted-foreground">
         <a
           href="https://revoke.cash"
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
          rel="noopener noreferrer"
           
           className="flex items-center gap-1 text-[var(--hero-orange)] hover:underline"
@@ -340,7 +340,7 @@ export default function ApprovalsEnhanced() {
         <span className="text-muted-foreground/40">|</span>
         <a
           href="https://scan.pulsechain.com"
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
          rel="noopener noreferrer"
           
           className="flex items-center gap-1 text-[var(--hero-orange)] hover:underline"

@@ -286,7 +286,7 @@ export default function EcosystemDirectory() {
               </p>
               <a
                 href={project.url}
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="inline-flex items-center gap-1 text-xs text-[var(--hero-orange)] hover:underline"

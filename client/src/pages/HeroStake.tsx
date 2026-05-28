@@ -672,7 +672,7 @@ export default function HeroStake() {
             Staking Contract:{" "}
             <a
               href={`${chainConfig.explorer}/address/${getStakingAddress(chainId)}`}
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="hover:underline"
@@ -689,7 +689,7 @@ export default function HeroStake() {
             HERO CA:{" "}
             <a
               href={`${chainConfig.explorer}/token/${chainConfig.heroCA}`}
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="hover:underline"

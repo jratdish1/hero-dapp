@@ -135,7 +135,7 @@ function NomineeCard({
       {nominee.website && (
         <a
           href={nominee.website}
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
          rel="noopener noreferrer"
           
           className="text-xs text-green-400 hover:underline mb-3 block"

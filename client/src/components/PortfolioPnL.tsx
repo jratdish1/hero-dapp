@@ -277,7 +277,7 @@ export default function PortfolioPnL() {
                       <span className="text-sm font-semibold text-foreground">{token.symbol}</span>
                       <a
                         href={token.dexScreenerUrl}
-                        target="_blank"
+                        target="_blank" rel="noopener noreferrer"
                         rel="noopener noreferrer"
                         aria-label={`View ${token.symbol} on DexScreener`}
                         className="text-muted-foreground hover:text-[var(--hero-green)] transition-colors"
@@ -327,7 +327,7 @@ export default function PortfolioPnL() {
       <div className="text-center pt-2">
         <a
           href={`${DEXSCREENER_BASE}/${isPulseChain ? "pulsechain" : "base"}`}
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
           rel="noopener noreferrer"
           className="inline-flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground transition-colors"
         >

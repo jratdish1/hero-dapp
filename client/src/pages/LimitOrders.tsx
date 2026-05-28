@@ -126,7 +126,7 @@ export default function LimitOrders() {
           </Badge>
           <a
             href="https://app.squirrelswap.pro/#/?mode=limit"
-            target="_blank"
+            target="_blank" rel="noopener noreferrer"
            rel="noopener noreferrer"
             
             className="text-xs text-muted-foreground hover:text-[var(--hero-green)] flex items-center gap-1 transition-colors"
@@ -180,7 +180,7 @@ export default function LimitOrders() {
         <span>Aggregating PulseX, 9mm, 9inch, PHUX, 0xTide & more</span>
         <a
           href="https://app.squirrelswap.pro/#/docs"
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
          rel="noopener noreferrer"
           
           className="hover:text-[var(--hero-green)] transition-colors"

@@ -220,7 +220,7 @@ function StepCard({ step, isLast }: { step: (typeof STEPS)[0]; isLast: boolean }
                 {d.link ? (
                   <a
                     href={d.link}
-                    target="_blank"
+                    target="_blank" rel="noopener noreferrer"
                    rel="noopener noreferrer"
                     
                     className="text-xs flex items-center gap-1 hover:underline break-all"

@@ -143,7 +143,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto px-4 text-center">
           <a
             href="https://midgard.wtf/"
-            target="_blank"
+            target="_blank" rel="noopener noreferrer"
            rel="noopener noreferrer"
             
             className="text-[var(--hero-orange)] hover:text-white font-bold text-sm tracking-wider uppercase transition-colors inline-flex items-center gap-2"
@@ -409,7 +409,7 @@ export default function Home() {
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row items-center justify-center gap-4">
             <a
               href="https://www.youtube.com/@LIFEWAVEPATCH1"
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-red-600/90 hover:bg-red-600 transition-colors text-white font-semibold text-sm shadow-lg"
@@ -447,7 +447,7 @@ export default function Home() {
             <div className="flex items-center gap-4 text-xs text-white/70">
               <a
                 href="https://scan.pulsechain.com/token/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
@@ -456,7 +456,7 @@ export default function Home() {
               </a>
               <a
                 href="https://scan.pulsechain.com/token/0x4013abBf94A745EfA7cc848989Ee83424A770060"
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
@@ -465,7 +465,7 @@ export default function Home() {
               </a>
               <a
                 href="https://x.com/hero501c3"
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
@@ -474,7 +474,7 @@ export default function Home() {
               </a>
               <a
                 href="https://dashboard.vicfoundation.com"
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
@@ -483,7 +483,7 @@ export default function Home() {
               </a>
               <a
                 href="https://docs.vicfoundation.com"
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"

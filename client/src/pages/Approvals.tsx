@@ -165,7 +165,7 @@ export default function Approvals() {
                       <p className="text-sm font-medium text-foreground">{approval.spenderName}</p>
                       <a
                         href={`https://scan.pulsechain.com/address/${approval.spender}`}
-                        target="_blank"
+                        target="_blank" rel="noopener noreferrer"
                        rel="noopener noreferrer"
                         
                         className="text-xs text-muted-foreground hover:text-[var(--hero-orange)] flex items-center gap-0.5"

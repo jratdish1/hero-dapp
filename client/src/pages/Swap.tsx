@@ -116,7 +116,7 @@ export default function Swap() {
           <div className="flex items-center gap-2">
             <a
               href="https://switch.win/"
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -215,7 +215,7 @@ export default function Swap() {
           <div className="flex items-center gap-2">
             <a
               href="https://app.squirrelswap.pro/"
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -272,7 +272,7 @@ export default function Swap() {
           </div>
           <a
             href="https://libertyswap.finance/"
-            target="_blank"
+            target="_blank" rel="noopener noreferrer"
            rel="noopener noreferrer"
             
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
@@ -334,7 +334,7 @@ export default function Swap() {
             {/* CTA Button */}
             <a
               href="https://libertyswap.finance/"
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity"

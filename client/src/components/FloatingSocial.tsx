@@ -24,7 +24,7 @@ export default function FloatingSocial() {
         <a
           key={link.label}
           href={link.href}
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
           rel="noopener noreferrer"
           title={link.label}
           className="flex items-center justify-center w-10 h-10 rounded-lg text-base

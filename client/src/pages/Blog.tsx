@@ -531,7 +531,7 @@ export default function Blog() {
           )}
           <a
             href="https://double.trudefi.io/"
-            target="_blank"
+            target="_blank" rel="noopener noreferrer"
             rel="noopener noreferrer"
             className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors text-sm font-medium"
           >

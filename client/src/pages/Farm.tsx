@@ -1040,7 +1040,7 @@ export default function Farm() {
                   className="data-[state=active]:bg-[var(--hero-orange)]/10 data-[state=active]:text-[var(--hero-orange)]"
                 >
                   {farm.logoUrl ? (
-                    <img src={farm.logoUrl} alt="" className="w-4 h-4 rounded-full object-contain mr-1.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
+                    <img src={farm.logoUrl} alt="Farm logo" className="w-4 h-4 rounded-full object-contain mr-1.5" onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }} />
                   ) : (
                     <Sprout className="w-3.5 h-3.5 mr-1.5" />
                   )}
@@ -1078,7 +1078,7 @@ export default function Farm() {
                     HERO is live on Base at{" "}
                     <a
                       href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`}
-                      target="_blank"
+                      target="_blank" rel="noopener noreferrer"
                      rel="noopener noreferrer"
                       
                       className="text-[#0052FF] hover:underline font-mono text-xs"

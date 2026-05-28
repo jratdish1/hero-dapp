@@ -295,7 +295,7 @@ export default function Subdomains() {
               <a
                 key={link.name}
                 href={link.url}
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                rel="noopener noreferrer"
                 
               >

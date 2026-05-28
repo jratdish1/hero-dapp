@@ -217,7 +217,7 @@ function PoolCard({ pool }: { pool: (typeof BASE_FARM_POOLS)[0] }) {
           </button>
           <a
             href={`https://dexscreener.com/base/${pool.pairAddress}`}
-            target="_blank"
+            target="_blank" rel="noopener noreferrer"
            rel="noopener noreferrer"
             
             className="px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all hover:opacity-80"
@@ -249,7 +249,7 @@ function PoolCard({ pool }: { pool: (typeof BASE_FARM_POOLS)[0] }) {
             <span style={{ color: "#8a9a8a" }}>Pair Address</span>
             <a
               href={`https://basescan.org/address/${pool.pairAddress}`}
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="flex items-center gap-1 hover:underline"
@@ -345,7 +345,7 @@ export default function BaseFarm() {
         <span style={{ color: "#8a9a8a" }}>HERO Token (BASE):</span>
         <a
           href={`https://basescan.org/token/${HERO_BASE_CA}`}
-          target="_blank"
+          target="_blank" rel="noopener noreferrer"
          rel="noopener noreferrer"
           
           className="flex items-center gap-1 hover:underline"

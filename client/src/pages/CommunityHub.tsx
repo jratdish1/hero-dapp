@@ -225,7 +225,7 @@ export default function CommunityHub() {
             <a
               key={thread.id}
               href={isSafeUrl(thread.url) ? thread.url : "#"}
-              target="_blank"
+              target="_blank" rel="noopener noreferrer"
              rel="noopener noreferrer"
               
               className="block p-3 rounded-lg border border-border/50 hover:border-blue-500/50 transition-colors bg-background/40"

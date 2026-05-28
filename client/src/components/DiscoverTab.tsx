@@ -187,7 +187,7 @@ export default function DiscoverTab() {
               <a
                 key={app.id}
                 href={app.url}
-                target="_blank"
+                target="_blank" rel="noopener noreferrer"
                 rel="noopener noreferrer"
                 className="group flex items-center gap-2 p-2.5 rounded-lg bg-gradient-to-r from-[var(--hero-orange)]/5 to-transparent border border-[var(--hero-orange)]/20 hover:border-[var(--hero-orange)]/40 transition-all"
               >
@@ -299,7 +299,7 @@ export default function DiscoverTab() {
                 </button>
                 <a
                   href={app.url}
-                  target="_blank"
+                  target="_blank" rel="noopener noreferrer"
                   rel="noopener noreferrer"
                   className="p-1.5 rounded-lg text-gray-500 hover:text-[var(--hero-orange)] hover:bg-[var(--hero-orange)]/10 transition-all"
                 >
