@@ -84,9 +84,15 @@ export default function Swap() {
   // ── Switch.win widget URL — themed to herobase.io dark military style ──
   // HERO (PulseChain): 0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27
   // PLS native: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  // NOTE: Color params are REQUIRED or widget renders blank white page
   const switchWidgetSrc = [
     "https://switch.win/widget",
     "?network=pulsechain",
+    "&background_color=000000",
+    "&font_color=ffffff",
+    "&secondary_font_color=7a7a7a",
+    "&border_color=01e401",
+    "&backdrop_color=transparent",
     "&from=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "&to=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
   ].join("");
@@ -137,11 +143,11 @@ export default function Swap() {
         {/* Switch widget iframe */}
         {showSwitch && (
           <Card className="bg-card border-border overflow-hidden">
-            <div className="w-full" style={{ minHeight: "500px" }}>
+            <div className="w-full" style={{ minHeight: "700px" }}>
               <iframe
                 src={switchWidgetSrc}
                 className="w-full border-0"
-                style={{ height: "680px", minHeight: "500px", borderRadius: "12px", display: "block" }}
+                style={{ height: "900px", minHeight: "700px", borderRadius: "12px", display: "block" }}
                 title="Switch — PulseChain DEX Aggregator"
                 allow="clipboard-read; clipboard-write"
                 loading="lazy"
@@ -227,12 +233,13 @@ export default function Swap() {
 
         {showSquirrel && (
           <Card className="bg-card border-border overflow-hidden">
-            <div className="w-full" style={{ height: "680px" }}>
+            <div className="w-full" style={{ height: "750px" }}>
               <iframe
                 src="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&accentColor=e8b84b&bgColor=0d1a0d&cardColor=161825&borderColor=2a2b3d&textColor=e6edf3&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
                 className="w-full h-full border-0"
                 title="SquirrelSwap Pro — PulseChain DEX Aggregator"
                 allow="clipboard-write; clipboard-read"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-top-navigation"
                 loading="lazy"
               />
             </div>

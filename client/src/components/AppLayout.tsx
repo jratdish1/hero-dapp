@@ -370,8 +370,9 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         <main className="flex-1 flex flex-col min-h-screen marpat-body">
           {/* Top bar */}
           <header className="sticky top-0 z-30 bg-background/80 backdrop-blur-lg border-b border-border/50">
-            <div className="flex items-center justify-between px-4 py-3">
-              <div className="flex items-center gap-3">
+            <div className="flex items-center px-4 py-3 gap-3">
+              {/* Left: hamburger + Home button */}
+              <div className="flex items-center gap-3 flex-shrink-0">
                 <button
                   className="lg:hidden text-muted-foreground hover:text-foreground" aria-label="Open sidebar"
                   onClick={() => setSidebarOpen(true)}
@@ -383,8 +384,12 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                   Home
                 </Link>
               </div>
-              <div className="flex items-center gap-2">
-                <div className="max-w-[260px] lg:max-w-[380px] overflow-hidden flex-shrink"><PriceTicker /></div>
+              {/* Center: Ticker — fills all available space between Home and right controls */}
+              <div className="flex-1 overflow-hidden ml-2">
+                <PriceTicker />
+              </div>
+              {/* Right: banner + controls */}
+              <div className="flex items-center gap-2 flex-shrink-0">
                 <img src="/hero-banner-un.webp" alt="HERO Banner" className="h-8 rounded object-cover hidden md:block" style={{maxWidth: "200px"}} />
                 <LanguageSelector />
                 <ThemeToggle />
