@@ -206,7 +206,7 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
 
         // External call LAST
         // AUDIT FIX 1.3: Use OpenZeppelin Address for safer external calls (reverts on failure)
-        Address.functionCallWithValue(target, data, value, "ExecutionFailed");
+        Address.functionCallWithValue(target, data, value);
 
         emit ProposalExecuted(proposalIdHash, target, value, data);
     }
