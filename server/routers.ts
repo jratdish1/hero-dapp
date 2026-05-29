@@ -615,6 +615,14 @@ export const appRouter = router({
           durationDays: z.number().int().min(1).max(30).optional(),
         }))
         .mutation(async ({ ctx, input }) => {
+          // AUDIT FIX (May 29, 2026): Verify wallet ownership before proposal creation
+          if (ctx.user.walletAddress) {
+            if (input.walletAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+              throw new Error("Wallet address does not match authenticated user");
+            }
+          } else {
+            await updateUserWalletAddress(ctx.user.id, input.walletAddress);
+          }
           const proposalId = "HERO-" + Date.now().toString(36).toUpperCase();
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
@@ -790,6 +798,8 @@ export const appRouter = router({
           // AUDIT FIX 1.4: Verify delegator address belongs to authenticated user
           if (ctx.user.walletAddress && input.delegatorAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
             throw new Error("Delegator address does not match authenticated user's wallet");
+          } else if (!ctx.user.walletAddress) {
+            await updateUserWalletAddress(ctx.user.id, input.delegatorAddress);
           }
           const delegate = await getDelegateByAddress(input.delegateAddress);
           if (!delegate) throw new Error("Delegate not found");

@@ -682,6 +682,8 @@ export function setupSecurity(app: Express) {
 
   // 12. Auth-specific rate limiting
   app.use("/api/oauth", authLimiter);
+  // 12.5 User-based rate limiting for authenticated mutation routes (Audit Fix: May 29, 2026)
+  app.use("/api/trpc", userMutationLimiter);
 
   // 13. Request body sanitization (XSS prevention)
   app.use(sanitizeRequestBody);
@@ -712,3 +714,34 @@ export function setupSecurity(app: Express) {
   // AUDIT CONSIDERATION RESOLVED: Authorization is explicit and documented.
   // ═══════════════════════════════════════════════════════════════════════
 }
+
+// ─── User-Based Rate Limiting (Audit Fix: May 29, 2026) ────────────────────
+// Complements IP-based rate limiting for authenticated users
+// Prevents abuse from shared IPs/proxies by keying on user ID
+export function createUserRateLimiter(opts: { windowMs: number; max: number; message: string }) {
+  return rateLimit({
+    windowMs: opts.windowMs,
+    max: opts.max,
+    keyGenerator: (req: any) => {
+      // Use user ID if authenticated, fall back to IP
+      return req.user?.id?.toString() || getClientIp(req);
+    },
+    message: { error: opts.message },
+    standardHeaders: true,
+    legacyHeaders: false,
+    skipFailedRequests: false,
+  });
+}
+
+// Pre-configured user rate limiters for common use cases
+export const userApiLimiter = createUserRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 30, // 30 requests per minute per user
+  message: "Too many requests from this account. Please wait.",
+});
+
+export const userMutationLimiter = createUserRateLimiter({
+  windowMs: 60 * 1000, // 1 minute
+  max: 10, // 10 mutations per minute per user
+  message: "Too many write operations. Please slow down.",
+});

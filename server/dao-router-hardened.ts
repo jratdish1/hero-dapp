@@ -31,8 +31,8 @@ import {
   calculateEffectiveVotingPower,
   generateVoteReceipt,
   isProposalVoteable,
-  isProposalRateLimited,
-  recordProposalCreation,
+
+
   calculateQuorum,
   isQuorumMet,
   isValidStatusTransition,
@@ -42,6 +42,11 @@ import {
   MIN_PROPOSAL_BALANCE,
   TIMELOCK_DURATION_MS,
 } from "./dao-security-hardening";
+
+import {
+  isProposalRateLimited,
+  recordProposalCreation,
+} from "./dao-rate-limiter";
 
 // ─── On-Chain Verification Clients ──────────────────────────────────────
 const pulsechainClient = createPublicClient({
@@ -178,7 +183,7 @@ export const hardenedDaoRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         // [HIGH] Rate limiting: max 3 proposals per day per user
-        if (isProposalRateLimited(ctx.user.id)) {
+        if (await isProposalRateLimited(ctx.user.id)) {
           throw new Error("Rate limited: maximum 3 proposals per 24 hours");
         }
 
@@ -226,7 +231,7 @@ export const hardenedDaoRouter = router({
         });
 
         // Record for rate limiting
-        recordProposalCreation(ctx.user.id);
+        await recordProposalCreation(ctx.user.id, proposalId, input.walletAddress);
 
         // NOTE: On-chain anchoring via HeroDAOAnchor.anchorProposal() planned for v2
 
