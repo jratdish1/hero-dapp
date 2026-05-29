@@ -61,6 +61,7 @@ import {
   isAnchoringEnabled,
   getAnchorStatus,
 } from "./dao-anchor-integration";
+import { fetchSnapshotProposals, fetchSnapshotProposalById } from "./snapshot-integration";
 import {
   createProposal,
   getProposals,
@@ -643,6 +644,28 @@ export const daoRouter = router({
   anchor: router({
     status: publicProcedure.query(() => {
       return getAnchorStatus();
+    }),
+  }),
+
+  // ─── NEW: Snapshot governance integration ─────────────────────────────
+  snapshot: router({
+    proposals: publicProcedure
+      .input(z.object({ limit: z.number().int().positive().max(50).optional() }).optional())
+      .query(async ({ input }) => {
+        return fetchSnapshotProposals(input?.limit ?? 20);
+      }),
+    proposal: publicProcedure
+      .input(z.object({ id: z.string().min(1) }))
+      .query(async ({ input }) => {
+        return fetchSnapshotProposalById(input.id);
+      }),
+    spaceInfo: publicProcedure.query(async () => {
+      return {
+        spaceId: "hero-dao.eth",
+        url: "https://snapshot.org/#/hero-dao.eth",
+        network: "1",
+        strategies: ["erc20-balance-of"],
+      };
     }),
   }),
 });

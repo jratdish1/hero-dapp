@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Vote, Plus, Filter, Clock, CheckCircle, XCircle, AlertCircle } from "lucide-react";
+import { Vote, Plus, Filter, Clock, CheckCircle, XCircle, AlertCircle, ExternalLink } from "lucide-react";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -31,10 +31,53 @@ const filters = ["all", "active", "pending", "passed", "executed", "defeated"] a
 
 export default function Proposals() {
   const [filter, setFilter] = useState<string>("all");
-  const { data: proposals, isLoading } = trpc.dao.proposals.list.useQuery({
+
+  // Fetch local DB proposals
+  const { data: localProposals, isLoading: localLoading } = trpc.dao.proposals.list.useQuery({
     status: filter === "all" ? undefined : filter,
     limit: 100,
   });
+
+  // Fetch Snapshot proposals
+  const { data: snapshotProposals, isLoading: snapLoading } = trpc.dao.snapshot.proposals.useQuery({
+    limit: 20,
+  });
+
+  // Merge and sort proposals
+  const allProposals = useMemo(() => {
+    const local = (localProposals || []).map((p) => ({
+      ...p,
+      source: "local" as const,
+      snapshotUrl: null as string | null,
+    }));
+
+    const snapshot = (snapshotProposals || [])
+      .filter((sp) => filter === "all" || sp.status === filter)
+      .map((sp) => ({
+        id: 0,
+        proposalId: sp.proposalId,
+        title: sp.title,
+        description: sp.description,
+        status: sp.status,
+        votesFor: sp.votesFor,
+        votesAgainst: sp.votesAgainst,
+        votesAbstain: sp.votesAbstain,
+        category: sp.category,
+        chain: sp.chain,
+        proposerAddress: sp.proposerAddress,
+        endTime: sp.endTime,
+        createdAt: sp.createdAt,
+        source: "snapshot" as const,
+        snapshotUrl: sp.snapshotUrl,
+      }));
+
+    // Merge and sort by createdAt descending
+    return [...local, ...snapshot].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [localProposals, snapshotProposals, filter]);
+
+  const isLoading = localLoading || snapLoading;
 
   return (
     <div className="space-y-6">
@@ -49,12 +92,20 @@ export default function Proposals() {
             Browse, vote, and track governance proposals for the HERO Protocol.
           </p>
         </div>
-        <Link href="/dao/proposals/create">
-          <Button className="gap-2">
-            <Plus className="h-4 w-4" />
-            New Proposal
-          </Button>
-        </Link>
+        <div className="flex gap-2">
+          <a href="https://snapshot.org/#/hero-dao.eth" target="_blank" rel="noopener noreferrer">
+            <Button variant="outline" className="gap-2">
+              <ExternalLink className="h-4 w-4" />
+              Snapshot
+            </Button>
+          </a>
+          <Link href="/dao/proposals/create">
+            <Button className="gap-2">
+              <Plus className="h-4 w-4" />
+              New Proposal
+            </Button>
+          </Link>
+        </div>
       </div>
 
       {/* Filters */}
@@ -77,8 +128,8 @@ export default function Proposals() {
       <div className="space-y-4">
         {isLoading ? (
           Array.from({ length: 5 }).map((_, i) => <Skeleton key={i} className="h-32 w-full" />)
-        ) : proposals && proposals.length > 0 ? (
-          proposals.map((p) => {
+        ) : allProposals && allProposals.length > 0 ? (
+          allProposals.map((p) => {
             const StatusIcon = statusIcons[p.status] || AlertCircle;
             const totalVotes = p.votesFor + p.votesAgainst + p.votesAbstain;
             const forPct = totalVotes > 0 ? (p.votesFor / totalVotes) * 100 : 0;
@@ -89,52 +140,70 @@ export default function Proposals() {
               ? "Ended"
               : `${Math.ceil((endDate.getTime() - Date.now()) / (1000 * 60 * 60 * 24))}d left`;
 
-            return (
-              <Link key={p.id} href={`/dao/proposals/${p.proposalId}`}>
-                <Card className="bg-card text-card-foreground border-border hover:border-primary/50 transition-colors cursor-pointer">
-                  <CardContent className="p-5">
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="outline" className={statusColors[p.status] || ""}>
-                            <StatusIcon className="h-3 w-3 mr-1" />
-                            {p.status}
+            const cardContent = (
+              <Card className="bg-card text-card-foreground border-border hover:border-primary/50 transition-colors cursor-pointer">
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <Badge variant="outline" className={statusColors[p.status] || ""}>
+                          <StatusIcon className="h-3 w-3 mr-1" />
+                          {p.status}
+                        </Badge>
+                        <Badge variant="outline" className="text-xs">{p.category}</Badge>
+                        <Badge variant="outline" className="text-xs">{p.chain}</Badge>
+                        {p.source === "snapshot" && (
+                          <Badge variant="outline" className="text-xs bg-indigo-500/20 text-indigo-400 border-indigo-500/30">
+                            Snapshot
                           </Badge>
-                          <Badge variant="outline" className="text-xs">{p.category}</Badge>
-                          <Badge variant="outline" className="text-xs">{p.chain}</Badge>
-                        </div>
-                        <h3 className="text-lg font-semibold mt-2">{p.title}</h3>
-                        <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                          {p.description.slice(0, 200)}{p.description.length > 200 ? "..." : ""}
-                        </p>
-                        <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                          <span>{p.proposalId}</span>
-                          <span>·</span>
-                          <span>By {p.proposerAddress.slice(0, 6)}...{p.proposerAddress.slice(-4)}</span>
-                          <span>·</span>
-                          <span>{timeLeft}</span>
-                        </div>
+                        )}
+                      </div>
+                      <h3 className="text-lg font-semibold mt-2">{p.title}</h3>
+                      <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
+                        {p.description.slice(0, 200)}{p.description.length > 200 ? "..." : ""}
+                      </p>
+                      <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                        <span>{p.proposalId}</span>
+                        <span>·</span>
+                        <span>By {p.proposerAddress.slice(0, 6)}...{p.proposerAddress.slice(-4)}</span>
+                        <span>·</span>
+                        <span>{timeLeft}</span>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Vote Progress */}
-                    {totalVotes > 0 && (
-                      <div className="mt-4">
-                        <div className="flex justify-between text-xs mb-1">
-                          <span className="text-green-400">For: {forPct.toFixed(1)}% ({p.votesFor.toLocaleString()})</span>
-                          <span className="text-red-400">Against: {againstPct.toFixed(1)}% ({p.votesAgainst.toLocaleString()})</span>
-                        </div>
-                        <div className="h-2 bg-muted rounded-full overflow-hidden flex">
-                          <div className="h-full bg-green-500" style={{ width: `${forPct}%` }} />
-                          <div className="h-full bg-red-500" style={{ width: `${againstPct}%` }} />
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          {totalVotes.toLocaleString()} total votes · {p.votesAbstain.toLocaleString()} abstained
-                        </p>
+                  {/* Vote Progress */}
+                  {totalVotes > 0 && (
+                    <div className="mt-4">
+                      <div className="flex justify-between text-xs mb-1">
+                        <span className="text-green-400">For: {forPct.toFixed(1)}% ({p.votesFor.toLocaleString()})</span>
+                        <span className="text-red-400">Against: {againstPct.toFixed(1)}% ({p.votesAgainst.toLocaleString()})</span>
                       </div>
-                    )}
-                  </CardContent>
-                </Card>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden flex">
+                        <div className="h-full bg-green-500" style={{ width: `${forPct}%` }} />
+                        <div className="h-full bg-red-500" style={{ width: `${againstPct}%` }} />
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {totalVotes.toLocaleString()} total votes · {p.votesAbstain.toLocaleString()} abstained
+                      </p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            );
+
+            // Snapshot proposals link externally, local proposals link internally
+            if (p.source === "snapshot" && p.snapshotUrl) {
+              return (
+                <a key={p.proposalId} href={p.snapshotUrl} target="_blank" rel="noopener noreferrer">
+                  {cardContent}
+                </a>
+              );
+            }
+
+            return (
+              <Link key={p.proposalId} href={`/dao/proposals/${p.proposalId}`}>
+                {cardContent}
               </Link>
             );
           })
