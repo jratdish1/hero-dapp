@@ -85,12 +85,13 @@ function buildCspDirectives() {
   const isDev = process.env.NODE_ENV === "development";
 
   // Base script sources — dev needs 'unsafe-eval' for Vite HMR + React Refresh
-  // AUDIT FIX (May 27, 2026): Production uses nonce-based CSP with strict-dynamic
-  // 'unsafe-inline' REMOVED from production — strict-dynamic + nonce is sufficient
-  // Browsers that support strict-dynamic (all modern) ignore unsafe-inline when nonce present
+  // Production uses 'unsafe-inline' since the SPA serves pre-built static JS bundles
+  // via <script> tags in index.html without server-side nonce injection.
+  // NOTE: strict-dynamic requires nonce attributes on all script tags at render time;
+  // until a full SSR nonce pipeline is implemented, 'unsafe-inline' is the correct policy.
   const scriptSrc = isDev
     ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
-    : ["'self'", "'strict-dynamic'"];
+    : ["'self'", "'unsafe-inline'"];
 
   // Base connect sources — dev needs ws: for Vite HMR websocket
   const connectSrc = [
