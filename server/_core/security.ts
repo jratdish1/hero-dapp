@@ -3,6 +3,37 @@ import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import type { Express, Request, Response, NextFunction } from "express";
 
+// ═══════════════════════════════════════════════════════════════════════════════
+// CSRF DOUBLE-SUBMIT COOKIE PROTOCOL — Documentation
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// MECHANISM:
+// 1. Server sets a `csrf_token` cookie (httpOnly: false, secure: true, sameSite: strict)
+//    containing a cryptographically random 32-byte hex token.
+// 2. Client reads the cookie and includes the token in the `X-CSRF-Token` header
+//    on every state-changing (POST/PUT/DELETE) request.
+// 3. Server middleware (`csrfDoubleSubmitProtection`) compares:
+//    - The `csrf_token` cookie value
+//    - The `X-CSRF-Token` header value
+//    If they don't match, the request is rejected with 403.
+//
+// WHY THIS WORKS:
+// - An attacker on a different origin CANNOT read our cookies (same-origin policy)
+// - An attacker CANNOT set the X-CSRF-Token header on cross-origin requests
+// - Even if the browser auto-sends the cookie, the header won't match
+//
+// TOKEN ROTATION:
+// - A new CSRF token is generated on every login/session creation (oauth.ts)
+// - Tokens expire with the session (maxAge: 86400000ms = 24 hours)
+// - On logout, both session and CSRF cookies are cleared
+//
+// COMPLEMENTARY PROTECTIONS:
+// - Origin/Referer header validation (csrfOriginValidation middleware)
+// - SameSite=Strict cookie attribute prevents cross-site cookie sending
+// - Cloudflare WAF provides additional CSRF protection at the edge
+//
+// ═══════════════════════════════════════════════════════════════════════════════
+
 // ─── CSP Nonce Middleware ─────────────────────────────────────────────
 // Generates a per-request nonce for script-src CSP to eliminate 'unsafe-inline'
 export function cspNonceMiddleware(req: Request, res: Response, next: NextFunction) {

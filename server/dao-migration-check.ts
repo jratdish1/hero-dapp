@@ -35,6 +35,7 @@ const logger = createDaoLogger("dao-startup");
 const REQUIRED_TABLES = [
   "proposal_audit_log",
   "proposal_timelocks",
+  "mutation_rate_limits",
 ] as const;
 
 /** Environment variables required for DAO operations */

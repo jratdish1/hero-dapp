@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
@@ -121,6 +122,19 @@ import { generateProposalHash } from "./dao-security-hardening";
 import { createDaoLogger } from "./dao-logger";
 import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
 
+/**
+ * STANDARDIZED ERROR RESPONSE PROTOCOL
+ * All errors use TRPCError with semantic codes for consistent client handling.
+ * Client receives: { error: { message: string, code: string } }
+ */
+function createStandardError(
+  code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TOO_MANY_REQUESTS" | "INTERNAL_SERVER_ERROR" | "PRECONDITION_FAILED",
+  message: string
+): never {
+  throw new TRPCError({ code, message });
+}
+
+
 
 // ─── Output Sanitization (Audit Fix: May 29, 2026) ───
 // Strips any residual HTML/script from user-generated content before sending to client
@@ -134,6 +148,37 @@ function sanitizeOutput(text: string): string {
 }
 
 const routerLogger = createDaoLogger("routers");
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// WALLET BINDING CONFIRMATION PROTOCOL — Documentation
+// ═══════════════════════════════════════════════════════════════════════════════
+//
+// PURPOSE:
+// Prevents accidental or malicious wallet address binding to user accounts.
+// Once a wallet is bound, it controls governance voting power and fund access.
+//
+// MECHANISM:
+// 1. User submits wallet address via `user.updateWallet` mutation
+// 2. If user has NO existing wallet bound:
+//    - Requires `confirmBinding: true` flag in the request payload
+//    - Without this flag, the request is rejected with a descriptive error
+//    - This forces the client to show a confirmation dialog before binding
+// 3. If user ALREADY has a wallet bound:
+//    - The existing wallet is verified against the request
+//    - Wallet changes require admin intervention (no self-service rebinding)
+//
+// SECURITY RATIONALE:
+// - Prevents drive-by wallet binding via CSRF or XSS
+// - Ensures user explicitly acknowledges the binding action
+// - Bind-on-first-use pattern: first wallet address becomes permanent
+// - Wallet mismatch attempts are logged for security monitoring
+//
+// AUDIT TRAIL:
+// - All wallet binding events are logged via dao-logger
+// - Wallet mismatch attempts trigger shouldAlert() for monitoring
+// - Binding timestamp is recorded for forensic analysis
+//
+// ═══════════════════════════════════════════════════════════════════════════════
 
 export const appRouter = router({
   system: systemRouter,
@@ -359,11 +404,11 @@ export const appRouter = router({
         try {
           parsed = JSON.parse(contentStr || "{}");
         } catch {
-          throw new Error("LLM returned invalid JSON — please retry");
+          createStandardError("INTERNAL_SERVER_ERROR", "LLM returned invalid JSON — please retry");
         }
         const blogSchema = z.object({ title: z.string().min(1), content: z.string().min(1), excerpt: z.string().min(1), tags: z.string() });
         const validated = blogSchema.safeParse(parsed);
-        if (!validated.success) throw new Error("LLM response missing required fields — please retry");
+        if (!validated.success) createStandardError("INTERNAL_SERVER_ERROR", "LLM response missing required fields — please retry");
         parsed = validated.data;
         const slug = parsed.title
           .toLowerCase()
@@ -640,7 +685,7 @@ export const appRouter = router({
                 expected: ctx.user.walletAddress,
                 received: input.walletAddress,
               });
-              throw new Error("Wallet address does not match authenticated user");
+              createStandardError("FORBIDDEN", "Wallet address does not match authenticated user");
             }
           } else {
             // Wallet binding on first use — requires explicit confirmation
@@ -667,7 +712,7 @@ export const appRouter = router({
               count: rateCheck.count,
               walletAddress: input.walletAddress,
             });
-            throw new Error("Rate limited: maximum 3 proposals per 24 hours");
+            createStandardError("TOO_MANY_REQUESTS", "Rate limited: maximum 3 proposals per 24 hours");
           }
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
@@ -710,7 +755,7 @@ export const appRouter = router({
         }))
         .mutation(async ({ input }) => {
           const proposal = await getProposalById(input.proposalId);
-          if (!proposal) throw new Error("Proposal not found");
+          if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
           await updateProposal(proposal.id, { status: input.status });
           return { success: true };
         }),
@@ -742,7 +787,7 @@ export const appRouter = router({
           // If user has a registered wallet, it MUST match. If not registered, bind it on first vote.
           if (ctx.user.walletAddress) {
             if (input.voterAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
-              throw new Error("Voter address does not match authenticated user's wallet");
+              createStandardError("FORBIDDEN", "Voter address does not match authenticated user's wallet");
             }
           } else {
             // First-time voter: bind this wallet to their account to prevent future spoofing
@@ -755,10 +800,10 @@ export const appRouter = router({
             });
           }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
-          if (existing) throw new Error("Already voted on this proposal");
+          if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
           // AUDIT FIX: Server-side on-chain verification of voting power
           const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
-          if (verifiedPower <= 0) throw new Error("No HERO tokens found — cannot vote");
+          if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
           // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
           const trustedPower = Math.min(input.votingPower, verifiedPower);
           await castVote({
@@ -801,7 +846,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
           const existing = await getDelegateByAddress(input.address);
-          if (existing) throw new Error("Already registered as delegate");
+          if (existing) createStandardError("BAD_REQUEST", "Already registered as delegate");
           await registerDelegate({
             userId: ctx.user.id,
             address: input.address,
@@ -818,7 +863,7 @@ export const appRouter = router({
       }))
       .mutation(async ({ input }) => {
           const delegate = await getDelegateByAddress(input.address);
-          if (!delegate) throw new Error("Delegate not found");
+          if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
           await updateDelegate(delegate.id, {
             displayName: input.displayName || delegate.displayName,
             statement: input.statement || delegate.statement,
@@ -853,7 +898,7 @@ export const appRouter = router({
               expected: ctx.user.walletAddress,
               received: input.delegatorAddress,
             });
-            throw new Error("Delegator address does not match authenticated user's wallet");
+            createStandardError("FORBIDDEN", "Delegator address does not match authenticated user's wallet");
           } else if (!ctx.user.walletAddress) {
             if (!input.confirmBinding) {
               return {
@@ -870,7 +915,7 @@ export const appRouter = router({
             });
           }
           const delegate = await getDelegateByAddress(input.delegateAddress);
-          if (!delegate) throw new Error("Delegate not found");
+          if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
           await createDelegation({
             delegatorId: ctx.user.id,
             delegatorAddress: input.delegatorAddress,
@@ -1110,13 +1155,13 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
             expected: ctx.user.walletAddress,
             received: input.wallet,
           });
-          throw new Error("Wallet address does not match authenticated user");
+          createStandardError("FORBIDDEN", "Wallet address does not match authenticated user");
         }
         const key = input.wallet.toLowerCase();
         routerLogger.info("Spin attempt", { userId: ctx.user.id, wallet: key });
         const record = spinRecords.get(key) || null;
         if (!canSpinToday(record)) {
-          throw new Error("Already spun today. Come back tomorrow!");
+          createStandardError("TOO_MANY_REQUESTS", "Already spun today. Come back tomorrow!");
         }
         // AUDIT FIX #4 (May 27, 2026): Wrap performSpin in try/catch for user-friendly errors
         let result;
@@ -1124,7 +1169,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
           result = await performSpin(input.wallet, DEFAULT_WHEEL_SEGMENTS, input.chain || "pulsechain");
         } catch (err) {
           console.error("[Spin] RNG failure for wallet", key, err);
-          throw new Error("Spin failed — RNG service temporarily unavailable. Please try again in a moment.");
+          createStandardError("INTERNAL_SERVER_ERROR", "Spin failed — RNG service temporarily unavailable. Please try again in a moment.");
         }
         const updated = updateSpinRecord(record, input.wallet, result);
         spinRecords.set(key, updated);
@@ -1153,10 +1198,10 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
       .mutation(({ ctx, input }) => {
         // AUDIT FIX: Verify wallet ownership for raffle entry
         if (ctx.user.walletAddress && input.wallet.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
-          throw new Error("Wallet address does not match authenticated user");
+          createStandardError("FORBIDDEN", "Wallet address does not match authenticated user");
         }
         const raffle = activeRaffles.get(input.raffleId);
-        if (!raffle) throw new Error("Raffle not found");
+        if (!raffle) createStandardError("NOT_FOUND", "Raffle not found");
         const entry = enterRaffle(raffle, input.wallet, BigInt(input.heroBalance));
         return { success: true, enteredAt: entry.enteredAt };
       }),
@@ -1164,7 +1209,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
       .input(z.object({ raffleId: z.string().min(1) }))
       .mutation(async ({ input }) => {
         const raffle = activeRaffles.get(input.raffleId);
-        if (!raffle) throw new Error("Raffle not found");
+        if (!raffle) createStandardError("NOT_FOUND", "Raffle not found");
         const result = await drawRaffleWinners(raffle);
         activeRaffles.set(input.raffleId, { ...raffle, status: "completed", winners: result.winners });
         return result;

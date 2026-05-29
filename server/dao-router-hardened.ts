@@ -1,3 +1,4 @@
+import { TRPCError } from "@trpc/server";
 /**
  * HERO DAO — Hardened Router (Drop-in Replacement)
  * =================================================
@@ -21,6 +22,18 @@ import { z } from "zod";
 import { publicProcedure, protectedProcedure, router } from "./_core/trpc";
 import { createPublicClient, http, erc20Abi } from "viem";
 import { pulsechain } from "viem/chains";
+
+/**
+ * STANDARDIZED ERROR RESPONSE PROTOCOL
+ * All errors use TRPCError with semantic codes for consistent client handling.
+ */
+function createStandardError(
+  code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TOO_MANY_REQUESTS" | "INTERNAL_SERVER_ERROR" | "PRECONDITION_FAILED",
+  message: string
+): never {
+  throw new TRPCError({ code, message });
+}
+
 import {
   generateProposalHash,
   generateSecureProposalId,
@@ -184,14 +197,14 @@ export const hardenedDaoRouter = router({
       .mutation(async ({ ctx, input }) => {
         // [HIGH] Rate limiting: max 3 proposals per day per user
         if (await isProposalRateLimited(ctx.user.id)) {
-          throw new Error("Rate limited: maximum 3 proposals per 24 hours");
+          createStandardError("TOO_MANY_REQUESTS", "Rate limited: maximum 3 proposals per 24 hours");
         }
 
         // [HIGH] Minimum balance check: must hold 100k HERO to propose
         // AUDIT FIX #13: Use aggregated balance across all relevant chains
         const balance = await verifyAggregatedVotingPower(input.walletAddress, input.chain || "both");
         if (balance < MIN_PROPOSAL_BALANCE) {
-          throw new Error(`Insufficient HERO balance to create proposal. Required: ${MIN_PROPOSAL_BALANCE.toLocaleString()}, Found: ${balance.toLocaleString()}`);
+          createStandardError("PRECONDITION_FAILED", "Insufficient HERO balance to create proposal");
         }
 
         // [HIGH] Secure proposal ID (crypto random, collision-resistant)
@@ -245,13 +258,11 @@ export const hardenedDaoRouter = router({
       }))
       .mutation(async ({ ctx, input }) => {
         const proposal = await getProposalById(input.proposalId);
-        if (!proposal) throw new Error("Proposal not found");
+        if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
 
         // [HIGH] Enforce valid status transitions
         if (!isValidStatusTransition(proposal.status, input.status)) {
-          throw new Error(
-            `Invalid status transition: "${proposal.status}" → "${input.status}". ` +
-            `Allowed transitions from "${proposal.status}": ${getValidTransitions(proposal.status).join(", ") || "none (terminal state)"}`
+          createStandardError("BAD_REQUEST", "Operation not permitted").join(", ") || "none (terminal state)"}`
           );
         }
 
@@ -260,10 +271,10 @@ export const hardenedDaoRouter = router({
           // Check timelock exists and has expired
           const timelock = await getTimelockForProposal(input.proposalId);
           if (!timelock) {
-            throw new Error("Cannot execute: proposal must be queued with a timelock first");
+            createStandardError("BAD_REQUEST", "Cannot execute: proposal must be queued with a timelock first");
           }
           if (!isTimelockExpired(timelock)) {
-            throw new Error(`Cannot execute: timelock has not expired. ${getTimelockRemaining(timelock)}`);
+            createStandardError("BAD_REQUEST", "Cannot execute: timelock has not expired");
           }
         }
 
@@ -312,25 +323,25 @@ export const hardenedDaoRouter = router({
         // [HIGH] Verify wallet ownership matches registered account
         const walletCheck = verifyWalletOwnership(input.voterAddress, ctx.user.walletAddress);
         if (!walletCheck.valid) {
-          throw new Error(`Wallet verification failed: ${walletCheck.reason}`);
+          createStandardError("FORBIDDEN", "Wallet verification failed");
         }
 
         // [MEDIUM] Verify proposal is in voteable state
         const proposal = await getProposalById(input.proposalId);
-        if (!proposal) throw new Error("Proposal not found");
+        if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
 
         const voteableCheck = isProposalVoteable(proposal);
         if (!voteableCheck.voteable) {
-          throw new Error(`Cannot vote: ${voteableCheck.reason}`);
+          createStandardError("FORBIDDEN", "Cannot vote: eligibility check failed");
         }
 
         // [CRITICAL] Double-vote prevention (application level + DB unique constraint)
         const existing = await getUserVote(input.proposalDbId, ctx.user.id);
-        if (existing) throw new Error("Already voted on this proposal");
+        if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
 
         // [HIGH] Server-side on-chain verification of voting power
         const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
-        if (verifiedPower <= 0) throw new Error("No HERO tokens found — cannot vote");
+        if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
 
         // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
         const trustedPower = Math.min(input.votingPower, verifiedPower);
@@ -362,7 +373,7 @@ export const hardenedDaoRouter = router({
         } catch (err: any) {
           // Catch DB unique constraint violation (race condition protection)
           if (err.code === 'ER_DUP_ENTRY' || err.message?.includes('Duplicate entry')) {
-            throw new Error("Already voted on this proposal (concurrent request detected)");
+            createStandardError("BAD_REQUEST", "Already voted on this proposal (concurrent request detected)");
           }
           throw err;
         }
@@ -412,11 +423,11 @@ export const hardenedDaoRouter = router({
         // [HIGH] Verify minimum balance to become a delegate
         const balance = await verifyVotingPower(input.address, "pulsechain");
         if (balance < 10_000) {
-          throw new Error("Must hold at least 10,000 HERO tokens to register as delegate");
+          createStandardError("PRECONDITION_FAILED", "Must hold at least 10,000 HERO tokens to register as delegate");
         }
 
         const existing = await getDelegateByAddress(input.address);
-        if (existing) throw new Error("Already registered as delegate");
+        if (existing) createStandardError("BAD_REQUEST", "Already registered as delegate");
 
         await registerDelegate({
           userId: ctx.user.id,
@@ -435,7 +446,7 @@ export const hardenedDaoRouter = router({
       }))
       .mutation(async ({ input }) => {
         const delegate = await getDelegateByAddress(input.address);
-        if (!delegate) throw new Error("Delegate not found");
+        if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
         await updateDelegate(delegate.id, {
           displayName: input.displayName || delegate.displayName,
           statement: input.statement || delegate.statement,
@@ -466,16 +477,16 @@ export const hardenedDaoRouter = router({
       .mutation(async ({ ctx, input }) => {
         // [HIGH] Cannot delegate to yourself
         if (input.delegatorAddress.toLowerCase() === input.delegateAddress.toLowerCase()) {
-          throw new Error("Cannot delegate to yourself");
+          createStandardError("BAD_REQUEST", "Cannot delegate to yourself");
         }
 
         const delegate = await getDelegateByAddress(input.delegateAddress);
-        if (!delegate) throw new Error("Delegate not found");
+        if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
 
         // [HIGH] Verify delegator actually holds the tokens they're delegating
         const balance = await verifyVotingPower(input.delegatorAddress, input.chain);
         if (balance < input.amount) {
-          throw new Error(`Insufficient balance to delegate. Claimed: ${input.amount}, Actual: ${balance}`);
+          createStandardError("PRECONDITION_FAILED", "Insufficient balance to delegate");
         }
 
         // [HIGH] Delegation cooldown: mark with effectiveAfter timestamp

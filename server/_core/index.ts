@@ -7,9 +7,11 @@ import { createExpressMiddleware } from "@trpc/server/adapters/express";
 import { registerOAuthRoutes } from "./oauth";
 import { registerStandaloneAuthRoutes } from "./standalone-auth";
 import { appRouter } from "../routers";
+import { getDb } from "../db";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupSecurity } from "./security";
+import { initTrpcRateLimiter, ensureRateLimitTable } from "./trpc";
 import { startMentionScheduler } from "../mentionScheduler";
 
 function isPortAvailable(port: number): Promise<boolean> {
@@ -42,6 +44,10 @@ async function startServer() {
   app.use(compression());
   // Security middleware: helmet, rate limiting, sanitization
   setupSecurity(app);
+
+  // Initialize persistent MySQL-backed tRPC rate limiter
+  initTrpcRateLimiter(getDb);
+  await ensureRateLimitTable();
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   registerStandaloneAuthRoutes(app);
