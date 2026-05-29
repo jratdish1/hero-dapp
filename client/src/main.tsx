@@ -39,15 +39,25 @@ queryClient.getMutationCache().subscribe((event) => {
   }
 });
 
+// CSRF double-submit token helper (Audit Fix: May 29, 2026)
+function getCsrfToken(): string | null {
+  const match = document.cookie.match(/csrf_token=([^;]+)/);
+  return match ? match[1] : null;
+}
+
 const trpcClient = trpc.createClient({
   links: [
     httpBatchLink({
       url: "/api/trpc",
       transformer: superjson,
       fetch(input, init) {
+        const csrfToken = getCsrfToken();
+        const headers = new Headers((init as RequestInit)?.headers || {});
+        if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
         return globalThis.fetch(input, {
           ...(init ?? {}),
           credentials: "include",
+          headers,
         });
       },
     }),

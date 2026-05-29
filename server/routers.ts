@@ -1,7 +1,7 @@
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
 import { systemRouter } from "./_core/systemRouter";
-import { publicProcedure, protectedProcedure, adminProcedure, router } from "./_core/trpc";
+import { publicProcedure, protectedProcedure, adminProcedure, router , rateLimitedMutation } from "./_core/trpc";
 import { z } from "zod";
 import { createPublicClient, http, erc20Abi } from "viem";
 import { pulsechain } from "viem/chains";
@@ -118,6 +118,22 @@ import { createRaffle, enterRaffle, drawRaffleWinners, type Raffle, type RaffleE
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData, fetchPulsechainTickerTokens, fetchBaseTickerTokens } from "./priceFeed";
 import { anchorProposalOnChain } from "./dao-anchor-integration";
 import { generateProposalHash } from "./dao-security-hardening";
+import { createDaoLogger } from "./dao-logger";
+import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
+
+
+// ─── Output Sanitization (Audit Fix: May 29, 2026) ───
+// Strips any residual HTML/script from user-generated content before sending to client
+function sanitizeOutput(text: string): string {
+  return text
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;")
+    .replace(/\//g, "&#x2F;");
+}
+
+const routerLogger = createDaoLogger("routers");
 
 export const appRouter = router({
   system: systemRouter,
@@ -607,23 +623,52 @@ export const appRouter = router({
         }),
       create: protectedProcedure
         .input(z.object({
-          title: z.string().min(1).max(512),
-          description: z.string().min(1).max(10000),
+          title: safeStringSchema(512),
+          description: safeStringSchema(10000),
           walletAddress: ethAddressSchema,
           chain: z.enum(["base", "pulsechain", "both"]).optional(),
           category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
           durationDays: z.number().int().min(1).max(30).optional(),
+          confirmBinding: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
           // AUDIT FIX (May 29, 2026): Verify wallet ownership before proposal creation
           if (ctx.user.walletAddress) {
             if (input.walletAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+              routerLogger.warn("Wallet mismatch on proposal creation", {
+                userId: ctx.user.id,
+                expected: ctx.user.walletAddress,
+                received: input.walletAddress,
+              });
               throw new Error("Wallet address does not match authenticated user");
             }
           } else {
+            // Wallet binding on first use — requires explicit confirmation
+            if (!input.confirmBinding) {
+              return {
+                success: false,
+                requiresConfirmation: true,
+                message: "This will permanently bind this wallet to your account. Set confirmBinding: true to proceed.",
+                walletAddress: input.walletAddress,
+              };
+            }
             await updateUserWalletAddress(ctx.user.id, input.walletAddress);
+            routerLogger.info("Wallet bound to user on proposal creation", {
+              userId: ctx.user.id,
+              walletAddress: input.walletAddress,
+            });
           }
           const proposalId = "HERO-" + Date.now().toString(36).toUpperCase();
+          // AUDIT FIX: Atomic rate limit + record (race-condition safe)
+          const rateCheck = await atomicRateLimitAndRecord(ctx.user.id, proposalId, input.walletAddress, 3);
+          if (!rateCheck.allowed) {
+            routerLogger.warn("Proposal rate limit exceeded (atomic)", {
+              userId: ctx.user.id,
+              count: rateCheck.count,
+              walletAddress: input.walletAddress,
+            });
+            throw new Error("Rate limited: maximum 3 proposals per 24 hours");
+          }
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
           const endTime = new Date(now.getTime() + durationMs);
@@ -703,6 +748,11 @@ export const appRouter = router({
             // First-time voter: bind this wallet to their account to prevent future spoofing
             // This ensures subsequent votes must come from the same wallet
             await updateUserWalletAddress(ctx.user.id, input.voterAddress);
+            routerLogger.info("Wallet bound to user on vote cast", {
+              userId: ctx.user.id,
+              walletAddress: input.voterAddress,
+              proposalId: input.proposalId,
+            });
           }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) throw new Error("Already voted on this proposal");
@@ -793,13 +843,31 @@ export const appRouter = router({
           amount: z.number().int().positive().max(1_000_000_000),
           chain: z.enum(["base", "pulsechain"]),
           txHash: txHashSchema,
+          confirmBinding: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
           // AUDIT FIX 1.4: Verify delegator address belongs to authenticated user
           if (ctx.user.walletAddress && input.delegatorAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+            routerLogger.warn("Wallet mismatch on delegation", {
+              userId: ctx.user.id,
+              expected: ctx.user.walletAddress,
+              received: input.delegatorAddress,
+            });
             throw new Error("Delegator address does not match authenticated user's wallet");
           } else if (!ctx.user.walletAddress) {
+            if (!input.confirmBinding) {
+              return {
+                success: false,
+                requiresConfirmation: true,
+                message: "This will permanently bind this wallet to your account. Set confirmBinding: true to proceed.",
+                walletAddress: input.delegatorAddress,
+              };
+            }
             await updateUserWalletAddress(ctx.user.id, input.delegatorAddress);
+            routerLogger.info("Wallet bound to user on delegation", {
+              userId: ctx.user.id,
+              walletAddress: input.delegatorAddress,
+            });
           }
           const delegate = await getDelegateByAddress(input.delegateAddress);
           if (!delegate) throw new Error("Delegate not found");
@@ -1032,10 +1100,20 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
         const bonus = getStreakBonus(streak);
         return { eligible, streak, bonus, totalSpins: record?.totalSpins || 0 };
       }),
-    execute: publicProcedure
+    execute: protectedProcedure
       .input(z.object({ wallet: ethAddressSchema, chain: z.enum(["pulsechain", "base"]).optional() }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
+        // AUDIT FIX: Verify wallet ownership for spin
+        if (ctx.user.walletAddress && input.wallet.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+          routerLogger.warn("Wallet mismatch on spin execute", {
+            userId: ctx.user.id,
+            expected: ctx.user.walletAddress,
+            received: input.wallet,
+          });
+          throw new Error("Wallet address does not match authenticated user");
+        }
         const key = input.wallet.toLowerCase();
+        routerLogger.info("Spin attempt", { userId: ctx.user.id, wallet: key });
         const record = spinRecords.get(key) || null;
         if (!canSpinToday(record)) {
           throw new Error("Already spun today. Come back tomorrow!");
@@ -1070,9 +1148,13 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
         winnerCount: r.winnerCount, winners: r.winners || [],
       }));
     }),
-    enter: publicProcedure
+    enter: protectedProcedure
       .input(z.object({ raffleId: z.string().min(1), wallet: ethAddressSchema, heroBalance: z.string() }))
-      .mutation(({ input }) => {
+      .mutation(({ ctx, input }) => {
+        // AUDIT FIX: Verify wallet ownership for raffle entry
+        if (ctx.user.walletAddress && input.wallet.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
+          throw new Error("Wallet address does not match authenticated user");
+        }
         const raffle = activeRaffles.get(input.raffleId);
         if (!raffle) throw new Error("Raffle not found");
         const entry = enterRaffle(raffle, input.wallet, BigInt(input.heroBalance));

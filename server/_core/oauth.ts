@@ -43,6 +43,15 @@ export function registerOAuthRoutes(app: Express) {
 
       const cookieOptions = getSessionCookieOptions(req);
       res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      // AUDIT FIX: Rotate CSRF token on session creation to prevent fixation
+      const crypto = await import("crypto");
+      const newCsrfToken = crypto.randomBytes(32).toString("hex");
+      res.cookie("csrf_token", newCsrfToken, {
+        httpOnly: false,
+        secure: true,
+        sameSite: "strict",
+        maxAge: 86400000,
+      });
 
       res.redirect(302, "/");
     } catch (error) {

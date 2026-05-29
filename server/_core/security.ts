@@ -664,6 +664,7 @@ export function setupSecurity(app: Express) {
 
   // 7. CSRF origin validation for state-changing requests
   app.use("/api", csrfOriginValidation);
+  app.use("/api", csrfDoubleSubmitProtection);
 
   // 8. Dangerous header scrubbing
   //    AUDIT CONSIDERATION RESOLVED: Sanitize custom headers
@@ -718,6 +719,56 @@ export function setupSecurity(app: Express) {
 // ─── User-Based Rate Limiting (Audit Fix: May 29, 2026) ────────────────────
 // Complements IP-based rate limiting for authenticated users
 // Prevents abuse from shared IPs/proxies by keying on user ID
+// Security audit logger (Audit Fix: May 29, 2026)
+function securityAuditLog(event: string, data: Record<string, unknown>) {
+  console.log(JSON.stringify({
+    timestamp: new Date().toISOString(),
+    level: "info",
+    module: "security-audit",
+    event,
+    ...data,
+  }));
+}
+
+
+// ─── CSRF Double-Submit Cookie (Audit Fix: May 29, 2026) ───
+// Adds a secondary CSRF protection layer via double-submit cookie pattern.
+// The client must send X-CSRF-Token header matching the csrf_token cookie.
+
+export function csrfDoubleSubmitProtection(req: any, res: any, next: any) {
+  // Only enforce on state-changing methods
+  if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
+    // Set CSRF cookie if not present
+    if (!req.cookies?.csrf_token) {
+      const token = crypto.randomBytes(32).toString("hex");
+      res.cookie("csrf_token", token, {
+        httpOnly: false, // Client JS needs to read it
+        secure: true,
+        sameSite: "strict",
+        maxAge: 86400000, // 24h
+      });
+    }
+    return next();
+  }
+  
+  // For mutations: verify the X-CSRF-Token header matches the cookie
+  const cookieToken = req.cookies?.csrf_token;
+  const headerToken = req.headers["x-csrf-token"];
+  
+  if (!cookieToken || !headerToken || cookieToken !== headerToken) {
+    securityAuditLog("csrf_validation_failed", {
+      ip: getClientIp(req),
+      path: req.path,
+      method: req.method,
+      hasCookie: !!cookieToken,
+      hasHeader: !!headerToken,
+    });
+    return res.status(403).json({ error: "CSRF validation failed" });
+  }
+  
+  next();
+}
+
 export function createUserRateLimiter(opts: { windowMs: number; max: number; message: string }) {
   return rateLimit({
     windowMs: opts.windowMs,

@@ -68,3 +68,24 @@ export function createDaoLogger(module: string) {
     fatal: (msg: string, data?: Record<string, unknown>) => log('fatal', module, msg, data),
   };
 }
+
+// ─── Security Monitoring & Alerting Configuration (Audit Fix: May 29, 2026) ───
+export const SECURITY_ALERT_THRESHOLDS = {
+  rateLimitBreaches: 10,      // Alert after 10 rate limit hits from same IP in 5min
+  walletMismatches: 3,        // Alert after 3 wallet mismatch attempts from same user
+  csrfFailures: 5,            // Alert after 5 CSRF validation failures from same IP
+  failedAuthAttempts: 10,     // Alert after 10 failed auth attempts from same IP
+  alertCooldownMs: 300_000,   // 5 minute cooldown between alerts
+} as const;
+
+// Track alert state to prevent spam
+const alertState = new Map<string, number>();
+
+export function shouldAlert(category: string, identifier: string): boolean {
+  const key = `${category}:${identifier}`;
+  const lastAlert = alertState.get(key) || 0;
+  const now = Date.now();
+  if (now - lastAlert < SECURITY_ALERT_THRESHOLDS.alertCooldownMs) return false;
+  alertState.set(key, now);
+  return true;
+}
