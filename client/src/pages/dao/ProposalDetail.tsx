@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users, AlertCircle } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
-import { sanitizeProposalContent, truncateAddress } from "@/lib/sanitize-output";
+import { IdentityBadge } from "@/components/WalletIdentity";
 
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -24,7 +24,9 @@ const statusColors: Record<string, string> = {
 
 export default function ProposalDetail() {
   const [, params] = useRoute("/dao/proposals/:id");
-  const proposalId = params?.id || "";
+  // Validate proposalId from URL params to prevent injection
+  const rawProposalId = params?.id || "";
+  const proposalId = /^[a-zA-Z0-9_-]{1,64}$/.test(rawProposalId) ? rawProposalId : "";
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
@@ -41,7 +43,7 @@ export default function ProposalDetail() {
     abi: erc20Abi,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    chainId: chainId as 369 | 8453,
+    chainId: chainId === 369 || chainId === 8453 ? chainId : undefined,
     query: { enabled: isConnected && !!address },
   });
 
@@ -49,29 +51,31 @@ export default function ProposalDetail() {
   const votingPower = heroBalance ? Math.floor(Number(formatUnits(heroBalance, 18))) : 0;
   const connectedChain = chainId === 369 ? "pulsechain" : "base";
 
-  // Fetch proposal first (must be declared before dependent queries)
+  // Fetch proposal first — dependent queries gate on proposal.id
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
     { proposalId },
     { enabled: !!proposalId }
   );
 
+  const proposalDbId = proposal?.id;
+
   // Check if user already voted (audit fix: disable UI if already voted)
   const { data: myVote } = trpc.dao.votes.myVote.useQuery(
-    { proposalDbId: proposal?.id ?? 0 },
-    { enabled: !!proposal?.id && !!user }
+    { proposalDbId: proposalDbId! },
+    { enabled: !!proposalDbId && !!user }
   );
   const hasVoted = !!myVote;
 
   const { data: votes } = trpc.dao.votes.list.useQuery(
-    { proposalDbId: proposal?.id ?? 0 },
-    { enabled: !!proposal?.id }
+    { proposalDbId: proposalDbId! },
+    { enabled: !!proposalDbId }
   );
 
   const utils = trpc.useUtils();
   const castVote = trpc.dao.votes.cast.useMutation({
     onSuccess: () => {
       utils.dao.proposals.get.invalidate({ proposalId });
-      utils.dao.votes.list.invalidate({ proposalDbId: proposal?.id ?? 0 });
+      if (proposalDbId) utils.dao.votes.list.invalidate({ proposalDbId });
       setVotingChoice(null);
     },
   });
@@ -140,11 +144,11 @@ export default function ProposalDetail() {
             <Badge variant="outline">{proposal.category}</Badge>
             <Badge variant="outline">{proposal.chain}</Badge>
           </div>
-          <h1 className="text-2xl font-bold">{sanitizeProposalContent(proposal.title)}</h1>
+          <h1 className="text-2xl font-bold">{proposal.title}</h1>
           <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
             <span>{proposal.proposalId}</span>
             <span>·</span>
-            <span>By {truncateAddress(proposal.proposerAddress)}</span>
+            <span>By {proposal.proposerAddress.slice(0, 6)}...{proposal.proposerAddress.slice(-4)}</span>
             <span>·</span>
             <span>
               <Clock className="h-3 w-3 inline mr-1" />
@@ -162,8 +166,9 @@ export default function ProposalDetail() {
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap">
-                {sanitizeProposalContent(proposal.description)}
+              {/* React auto-escapes text content — no XSS risk from JSX interpolation */}
+              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap break-words">
+                {String(proposal.description ?? "")}  
               </div>
             </CardContent>
           </Card>
@@ -185,9 +190,7 @@ export default function ProposalDetail() {
                         {v.choice === "for" && <ThumbsUp className="h-4 w-4 text-green-400" />}
                         {v.choice === "against" && <ThumbsDown className="h-4 w-4 text-red-400" />}
                         {v.choice === "abstain" && <Minus className="h-4 w-4 text-muted-foreground" />}
-                        <span className="text-sm font-mono">
-                          {v.voterAddress.slice(0, 6)}...{v.voterAddress.slice(-4)}
-                        </span>
+                        <IdentityBadge address={v.voterAddress} />
                       </div>
                       <div className="flex items-center gap-2">
                         <span className="text-sm text-muted-foreground">{v.votingPower.toLocaleString()} VP</span>

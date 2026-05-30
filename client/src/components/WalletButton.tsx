@@ -1,5 +1,4 @@
-import { isValidChainId } from "../lib/validation";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -19,6 +18,7 @@ import {
   Shield,
   QrCode,
   Smartphone,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -26,8 +26,22 @@ import {
   useBalance,
   useConnect,
   useDisconnect,
+  useEnsName,
+  useEnsAvatar,
 } from "wagmi";
+import { mainnet } from "wagmi/chains";
+import { normalize } from "viem/ens";
+import { getAddress, isAddress } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
+
+// ─── Jazzicon-style gradient avatar ─────────────────────────────────────
+function generateGradient(address: string): string {
+  const checksummed = getAddress(address);
+  const seed = parseInt(checksummed.slice(2, 10), 16);
+  const hue1 = seed % 360;
+  const hue2 = (seed * 7) % 360;
+  return `linear-gradient(135deg, hsl(${hue1}, 70%, 50%), hsl(${hue2}, 60%, 40%))`;
+}
 
 // ─── Connector metadata ─────────────────────────────────────────────────
 const CONNECTOR_META: Record<
@@ -82,27 +96,45 @@ export function WalletButton() {
   const [isOpen, setIsOpen] = useState(false);
   const [copied, setCopied] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
+  const [showDetails, setShowDetails] = useState(false);
+  const [avatarError, setAvatarError] = useState(false);
 
   // wagmi hooks
   const { address, isConnected, connector: activeConnector } = useAccount();
+  // Validate chainId to prevent passing invalid values to hooks
+  const validChainId = chainId === 369 || chainId === 8453 ? chainId : undefined;
+
   const { data: balanceData } = useBalance({
     address,
-    chainId: chainId as 369 | 8453,
+    chainId: validChainId,
+    query: { enabled: !!address && !!validChainId },
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
-    if (chainId && !isValidChainId(chainId)) { console.warn('Unsupported chain:', chainId); }
   const { disconnect } = useDisconnect();
+
+  // ─── Identity Resolution ────────────────────────────────────────────
+  const { data: ensName } = useEnsName({
+    address,
+    chainId: mainnet.id,
+    query: { enabled: !!address, staleTime: 1000 * 60 * 60 },
+  });
+
+  const normalizedEnsName = useMemo(() => ensName ? normalize(ensName) : undefined, [ensName]);
+
+  const { data: ensAvatar } = useEnsAvatar({
+    name: normalizedEnsName,
+    chainId: mainnet.id,
+    query: { enabled: !!ensName, staleTime: 1000 * 60 * 60 },
+  });
 
   // Deduplicate and sort connectors
   const sortedConnectors = useMemo(() => {
     const seen = new Set<string>();
     return connectors
       .filter((c) => {
-        // Skip duplicate injected if MetaMask is present
         if (c.name === "Injected" && connectors.some((x) => x.name === "MetaMask")) {
           return false;
         }
-        // Skip Safe in non-Safe environments
         if (c.name === "Safe" && typeof window !== "undefined" && !window.parent) {
           return false;
         }
@@ -117,19 +149,28 @@ export function WalletButton() {
       });
   }, [connectors]);
 
-  const handleConnect = async (connector: (typeof connectors)[number]) => {
+  const handleConnect = (connector: (typeof connectors)[number]) => {
+    if (connectingId) return; // Prevent race condition — block while connecting
     setConnectingId(connector.uid);
+
+    // Safety timeout: reset connectingId after 30s to prevent permanent blocking
+    const connectorUid = connector.uid;
+    const timeout = setTimeout(() => {
+      setConnectingId((current) => {
+        if (current === connectorUid) {
+          toast.error("Connection timed out");
+          return null;
+        }
+        return current;
+      });
+    }, 30000);
+
     try {
-      // Fix: If already connected, disconnect first to prevent "Connector already connected" error
-      if (isConnected) {
-        disconnect();
-        // Small delay to let wagmi clean up connector state
-        await new Promise(resolve => setTimeout(resolve, 200));
-      }
       connect(
-        { connector, chainId: chainId as 369 | 8453 },
+        { connector, chainId: validChainId },
         {
           onSuccess: () => {
+            clearTimeout(timeout);
             toast.success("Wallet connected", {
               description: `Connected to ${chain.name} via ${connector.name}`,
             });
@@ -137,18 +178,13 @@ export function WalletButton() {
             setConnectingId(null);
           },
           onError: (err) => {
+            clearTimeout(timeout);
             setConnectingId(null);
             const msg = (err as Error)?.message ?? "Connection failed";
             if (msg.includes("User rejected") || msg.includes("rejected")) {
               toast.info("Connection cancelled");
             } else if (msg.includes("Already processing")) {
               toast.info("Check your wallet — a connection request is pending");
-            } else if (msg.includes("already connected") || msg.includes("Connector already connected")) {
-              // Stale connector state - disconnect and retry
-              disconnect();
-              toast.info("Reconnecting wallet...");
-              setTimeout(() => connect({ connector, chainId: chainId as 369 | 8453 }), 300);
-              return;
             } else {
               toast.error("Connection failed", {
                 description: msg.length > 100 ? msg.slice(0, 100) + "..." : msg,
@@ -158,27 +194,43 @@ export function WalletButton() {
         }
       );
     } catch {
+      clearTimeout(timeout);
       setConnectingId(null);
       toast.error("Could not connect wallet");
     }
   };
 
-  const handleDisconnect = () => {
-    disconnect();
-    toast.success("Wallet disconnected");
-  };
-
-  const copyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-      toast.success("Address copied to clipboard");
+  const handleDisconnect = async () => {
+    try {
+      await disconnect();
+      setShowDetails(false);
+      toast.success("Wallet disconnected");
+    } catch {
+      toast.error("Failed to disconnect wallet");
     }
   };
 
-  const truncateAddress = (addr: string) =>
-    `${addr.slice(0, 6)}...${addr.slice(-4)}`;
+  const copyAddress = async () => {
+    if (!address || !isAddress(address)) return;
+    if (!navigator.clipboard?.writeText) {
+      toast.error("Clipboard not supported in this browser");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(getAddress(address));
+      setCopied(true);
+      toast.success("Address copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      toast.error("Failed to copy address");
+    }
+  };
+
+  const truncateAddress = (addr: string) => {
+    if (!isAddress(addr)) return addr;
+    const checksummed = getAddress(addr as `0x${string}`);
+    return `${checksummed.slice(0, 6)}...${checksummed.slice(-4)}`;
+  };
 
   const formatBalance = (val: bigint | undefined, decimals: number) => {
     if (val === undefined) return "0";
@@ -186,50 +238,161 @@ export function WalletButton() {
     return num < 0.001 && num > 0 ? "<0.001" : num.toFixed(3);
   };
 
-  // ─── Connected State ────────────────────────────────────────────────
+  // ─── Connected State (Enhanced with Identity) ──────────────────────────
   if (isConnected && address) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/50 px-3 py-1.5">
-          {activeConnector && (
-            <span className="text-xs text-muted-foreground" title={`Connected via ${activeConnector.name}`}>
-              {activeConnector.name === "MetaMask"
-                ? "🦊"
-                : activeConnector.name === "WalletConnect"
-                  ? "🔗"
-                  : activeConnector.name === "Coinbase Wallet"
-                    ? "🔵"
-                    : activeConnector.name === "Safe"
-                      ? "🛡️"
-                      : "🔌"}
-            </span>
-          )}
-          <span className="text-xs text-hero-green font-medium">
-            {formatBalance(balanceData?.value, balanceData?.decimals ?? 18)}{" "}
-            {chain.nativeCurrency.symbol}
-          </span>
-          <div className="h-4 w-px bg-border/50" />
-          <button
-            onClick={copyAddress}
-            className="flex items-center gap-1.5 text-sm font-mono text-foreground/80 hover:text-foreground transition-colors"
-          >
-            {truncateAddress(address)}
-            {copied ? (
-              <Check className="h-3 w-3 text-hero-green" />
-            ) : (
-              <Copy className="h-3 w-3" />
-            )}
-          </button>
-        </div>
-        <Button
-          variant="ghost"
-          size="icon"
-          onClick={handleDisconnect}
-          className="h-8 w-8 text-muted-foreground hover:text-destructive"
-          title="Disconnect wallet"
+      <div className="relative">
+        {/* Main wallet pill */}
+        <button
+          onClick={() => setShowDetails(!showDetails)}
+          className="flex items-center gap-2 rounded-xl border border-border/50 bg-card/80 backdrop-blur-sm px-3 py-2 hover:border-hero-orange/30 hover:shadow-lg hover:shadow-hero-orange/10 transition-all duration-200 group"
         >
-          <LogOut className="h-4 w-4" />
-        </Button>
+          {/* Avatar */}
+          {ensAvatar && !avatarError ? (
+            <img
+              src={ensAvatar}
+              alt="Avatar"
+              className="h-7 w-7 rounded-full ring-2 ring-hero-orange/40 object-cover"
+              onError={() => setAvatarError(true)}
+            />
+          ) : (
+            <div
+              className="h-7 w-7 rounded-full ring-2 ring-hero-orange/40 flex items-center justify-center text-white font-bold text-[10px]"
+              style={{ background: generateGradient(address) }}
+            >
+              {address.slice(2, 4).toUpperCase()}
+            </div>
+          )}
+
+          {/* Name + Balance */}
+          <div className="flex flex-col items-start">
+            <span className="text-sm font-semibold text-foreground leading-tight">
+              {ensName || truncateAddress(address)}
+            </span>
+            <span className="text-[10px] text-hero-green font-medium leading-tight">
+              {formatBalance(balanceData?.value, balanceData?.decimals ?? 18)}{" "}
+              {chain.nativeCurrency.symbol}
+            </span>
+          </div>
+
+          {/* Network indicator */}
+          <div className="flex items-center gap-1 ml-1">
+            <div
+              className={`h-2 w-2 rounded-full ${
+                chainId === 8453 ? "bg-blue-400" : "bg-green-400"
+              } animate-pulse`}
+            />
+            <ChevronDown
+              className={`h-3 w-3 text-muted-foreground transition-transform duration-200 ${
+                showDetails ? "rotate-180" : ""
+              }`}
+            />
+          </div>
+        </button>
+
+        {/* Dropdown details panel */}
+        {showDetails && (
+          <div className="absolute right-0 top-full mt-2 w-64 rounded-xl border border-border/50 bg-card/95 backdrop-blur-xl shadow-2xl shadow-black/30 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+            {/* Identity header */}
+            <div className="flex items-center gap-3 pb-3 border-b border-border/30">
+              {ensAvatar && !avatarError ? (
+                <img
+                  src={ensAvatar}
+                  alt="Avatar"
+                  className="h-10 w-10 rounded-full ring-2 ring-hero-orange/40 object-cover"
+                  onError={() => setAvatarError(true)}
+                />
+              ) : (
+                <div
+                  className="h-10 w-10 rounded-full ring-2 ring-hero-orange/40 flex items-center justify-center text-white font-bold text-sm"
+                  style={{ background: generateGradient(address) }}
+                >
+                  {address.slice(2, 4).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                {ensName && (
+                  <div className="text-sm font-bold text-foreground truncate">
+                    {ensName}
+                  </div>
+                )}
+                <button
+                  onClick={copyAddress}
+                  className="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  {truncateAddress(address)}
+                  {copied ? (
+                    <Check className="h-3 w-3 text-hero-green" />
+                  ) : (
+                    <Copy className="h-3 w-3" />
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* Balance & Network */}
+            <div className="py-3 space-y-2">
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Balance</span>
+                <span className="text-sm font-semibold text-hero-green">
+                  {formatBalance(balanceData?.value, balanceData?.decimals ?? 18)}{" "}
+                  {chain.nativeCurrency.symbol}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Network</span>
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`h-2 w-2 rounded-full ${
+                      chainId === 8453 ? "bg-blue-400" : "bg-green-400"
+                    }`}
+                  />
+                  <span className="text-xs font-medium text-foreground">
+                    {chain.name}
+                  </span>
+                </div>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-xs text-muted-foreground">Wallet</span>
+                <span className="text-xs font-medium text-foreground">
+                  {activeConnector?.name || "Unknown"}
+                </span>
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 border-t border-border/30 flex gap-2">
+              <a
+                href={
+                  chainId === 8453
+                    ? `https://basescan.org/address/${address}`
+                    : `https://scan.pulsechain.com/address/${address}`
+                }
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-background/50 border border-border/30 py-2 text-xs font-medium text-muted-foreground hover:text-foreground hover:border-hero-orange/30 transition-all"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Explorer
+              </a>
+              <button
+                onClick={handleDisconnect}
+                className="flex-1 flex items-center justify-center gap-1.5 rounded-lg bg-destructive/10 border border-destructive/20 py-2 text-xs font-medium text-destructive hover:bg-destructive/20 transition-all"
+              >
+                <LogOut className="h-3 w-3" />
+                Disconnect
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Click-away overlay */}
+        {showDetails && (
+          <div
+            className="fixed inset-0 z-40"
+            onClick={() => setShowDetails(false)}
+          />
+        )}
       </div>
     );
   }
@@ -298,7 +461,6 @@ export function WalletButton() {
             Hardware & Multisig
           </p>
 
-          {/* Hardware wallet info — connects via WalletConnect or MetaMask */}
           <div className="flex items-center gap-3 rounded-xl border border-border/30 bg-background/30 p-3">
             <Smartphone className="h-6 w-6 text-muted-foreground" />
             <div className="flex-1">
@@ -313,7 +475,6 @@ export function WalletButton() {
             </div>
           </div>
 
-          {/* Safe connector — only shows if in Safe app context */}
           {sortedConnectors
             .filter((c) => c.name === "Safe")
             .map((connector) => {

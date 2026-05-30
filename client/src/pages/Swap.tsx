@@ -5,10 +5,7 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useMarketOverview, formatPrice, formatChange } from "../hooks/usePrices";
-import RouteComparison from "../components/RouteComparison";
-import SlippageSettings from "../components/SlippageSettings";
-import PriceImpactWarning from "../components/PriceImpactWarning";
-import SwapHistory from "../components/SwapHistory";
+import HeroSwapWidget from "@/components/HeroSwapWidget";
 
 /* ─── Live Price Banner ─── */
 function LivePriceBanner() {
@@ -57,7 +54,7 @@ function QuickTokenRow() {
           key={t.address}
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border border-border bg-secondary text-muted-foreground whitespace-nowrap"
         >
-          <img alt="DEX aggregator"
+          <img
             src={t.logoURI}
             alt={t.symbol}
             className="w-4 h-4 rounded-full"
@@ -84,15 +81,9 @@ export default function Swap() {
   // ── Switch.win widget URL — themed to herobase.io dark military style ──
   // HERO (PulseChain): 0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27
   // PLS native: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
-  // NOTE: Color params are REQUIRED or widget renders blank white page
   const switchWidgetSrc = [
     "https://switch.win/widget",
     "?network=pulsechain",
-    "&background_color=000000",
-    "&font_color=ffffff",
-    "&secondary_font_color=7a7a7a",
-    "&border_color=01e401",
-    "&backdrop_color=transparent",
     "&from=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "&to=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
   ].join("");
@@ -116,9 +107,8 @@ export default function Swap() {
           <div className="flex items-center gap-2">
             <a
               href="https://switch.win/"
-              target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
-              
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               Open Full App <ExternalLink className="w-3 h-3" />
@@ -143,11 +133,11 @@ export default function Swap() {
         {/* Switch widget iframe */}
         {showSwitch && (
           <Card className="bg-card border-border overflow-hidden">
-            <div className="w-full" style={{ minHeight: "700px" }}>
+            <div className="w-full" style={{ minHeight: "500px" }}>
               <iframe
                 src={switchWidgetSrc}
                 className="w-full border-0"
-                style={{ height: "900px", minHeight: "700px", borderRadius: "12px", display: "block" }}
+                style={{ height: "680px", minHeight: "500px", borderRadius: "12px", display: "block" }}
                 title="Switch — PulseChain DEX Aggregator"
                 allow="clipboard-read; clipboard-write"
                 loading="lazy"
@@ -171,21 +161,6 @@ export default function Swap() {
         </p>
       </div>
 
-      {/* ═══ SWAP INTELLIGENCE PANEL ═══ */}
-      <div className="space-y-3">
-        <div className="flex items-center gap-3">
-          <div className="flex-1 h-px bg-border" />
-          <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
-            Swap Intelligence
-          </span>
-          <div className="flex-1 h-px bg-border" />
-        </div>
-        <RouteComparison />
-        <PriceImpactWarning />
-        <SlippageSettings />
-        <SwapHistory />
-      </div>
-
       {/* ═══ DIVIDER ═══ */}
       <div className="flex items-center gap-3">
         <div className="flex-1 h-px bg-border" />
@@ -199,7 +174,7 @@ export default function Swap() {
       <div>
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
-            <img alt="Swap interface"
+            <img
               src="https://iili.io/qdikIJj.png"
               alt="SquirrelSwap"
               className="w-6 h-6 rounded-full"
@@ -215,9 +190,8 @@ export default function Swap() {
           <div className="flex items-center gap-2">
             <a
               href="https://app.squirrelswap.pro/"
-              target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
-              
+              target="_blank"
+              rel="noopener noreferrer"
               className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
             >
               Open Full App <ExternalLink className="w-3 h-3" />
@@ -233,13 +207,12 @@ export default function Swap() {
 
         {showSquirrel && (
           <Card className="bg-card border-border overflow-hidden">
-            <div className="w-full" style={{ height: "750px" }}>
+            <div className="w-full" style={{ height: "680px" }}>
               <iframe
                 src="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&accentColor=e8b84b&bgColor=0d1a0d&cardColor=161825&borderColor=2a2b3d&textColor=e6edf3&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
                 className="w-full h-full border-0"
                 title="SquirrelSwap Pro — PulseChain DEX Aggregator"
                 allow="clipboard-write; clipboard-read"
-                sandbox="allow-scripts allow-same-origin allow-popups allow-forms allow-modals allow-top-navigation"
                 loading="lazy"
               />
             </div>
@@ -250,6 +223,18 @@ export default function Swap() {
           Aggregates 10 DEXes on PulseChain — PulseX, 9mm, 9inch, PHUX, pDEX & more
         </p>
       </div>
+
+      {/* ═══ DIVIDER ═══ */}
+      <div className="flex items-center gap-3 mt-8">
+        <div className="flex-1 h-px bg-border" />
+        <span className="text-xs text-muted-foreground font-medium uppercase tracking-wider">
+          BASE Chain · Buy $HERO
+        </span>
+        <div className="flex-1 h-px bg-border" />
+      </div>
+
+      {/* ═══ 2.5. HERO SWAP WIDGET — BASE NATIVE ═══ */}
+      <HeroSwapWidget defaultChain="base" showStats />
 
       {/* ═══ DIVIDER ═══ */}
       <div className="flex items-center gap-3 mt-8">
@@ -272,9 +257,8 @@ export default function Swap() {
           </div>
           <a
             href="https://libertyswap.finance/"
-            target="_blank" rel="noopener noreferrer"
-           rel="noopener noreferrer"
-            
+            target="_blank"
+            rel="noopener noreferrer"
             className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
           >
             Open Full App <ExternalLink className="w-3 h-3" />
@@ -334,9 +318,8 @@ export default function Swap() {
             {/* CTA Button */}
             <a
               href="https://libertyswap.finance/"
-              target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
-              
+              target="_blank"
+              rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity"
             >
               <span>🗽</span> Open Liberty Swap <ExternalLink className="w-4 h-4" />

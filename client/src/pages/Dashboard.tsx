@@ -2,6 +2,7 @@ import TreasuryDisplay from "@/components/TreasuryDisplay";
 import { useAccount, useBalance, useReadContracts, useChainId } from "wagmi";
 import { formatUnits } from "viem";
 import TradingViewChart from "@/components/TradingViewChart";
+import PortfolioDashboard from "@/components/PortfolioDashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   BarChart3,
@@ -387,6 +388,9 @@ export default function Dashboard() {
           </CardContent>
         </Card>
       </div>
+
+      {/* My Portfolio */}
+      <PortfolioDashboard />
 
       {/* 24h Transaction Activity */}
       <Card className="bg-card border-border">
