@@ -537,7 +537,13 @@ export async function fetchFarmPoolData(chain: "pulsechain" | "base" = "pulsecha
 
 // ─── Buy & Burn Tracker ────────────────────────────────────────────────────
 
-const PULSECHAIN_RPC = "https://rpc-pulsechain.g4mm4.io";
+// RPC failover list — if one is down or rate-limited, try the next
+const PULSECHAIN_RPCS = [
+  "https://rpc.pulsechain.com",
+  "https://rpc-pulsechain.g4mm4.io",
+  "https://pulsechain-rpc.publicnode.com",
+  // 3 verified working PulseChain mainnet RPCs — failover ensures reliability
+];
 const HERO_ADDRESS = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
 const DEAD_ADDRESS = "0x000000000000000000000000000000000000dEaD";
 const ZERO_ADDRESS = "0x0000000000000000000000000000000000000000";
@@ -553,21 +559,46 @@ export interface BuyAndBurnData {
   lastUpdated: number;
 }
 
+/**
+ * RPC call with failover — tries each endpoint in order until one succeeds.
+ * 15s timeout per attempt, cycles through all RPCs before throwing.
+ */
 async function rpcCall(to: string, data: string): Promise<string> {
-  const res = await fetch(PULSECHAIN_RPC, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method: "eth_call",
-      params: [{ to, data }, "latest"],
-      id: 1,
-    }),
-    signal: AbortSignal.timeout(10000),
-  });
-  const json = await res.json();
-  if (json.error) throw new Error(json.error.message);
-  return json.result;
+  let lastError: Error | null = null;
+  for (const rpcUrl of PULSECHAIN_RPCS) {
+    try {
+      const res = await fetch(rpcUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          jsonrpc: "2.0",
+          method: "eth_call",
+          params: [{ to, data }, "latest"],
+          id: 1,
+        }),
+        signal: AbortSignal.timeout(15000),
+      });
+      if (!res.ok) {
+        lastError = new Error(`HTTP ${res.status} from ${rpcUrl}`);
+        continue;
+      }
+      const json = await res.json();
+      if (json.error) {
+        lastError = new Error(`${rpcUrl}: ${json.error.message}`);
+        continue;
+      }
+      if (!json.result || json.result === "0x") {
+        lastError = new Error(`Empty result from ${rpcUrl}`);
+        continue;
+      }
+      return json.result;
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      console.warn(`[RPC Failover] ${rpcUrl} failed:`, lastError.message);
+      continue;
+    }
+  }
+  throw lastError || new Error("All PulseChain RPCs failed");
 }
 
 /**
