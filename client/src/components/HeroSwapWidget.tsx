@@ -5,6 +5,7 @@
  */
 import { useState, useEffect } from "react";
 import { useAccount, useChainId } from "wagmi";
+import { useNetwork } from "@/contexts/NetworkContext";
 import {
   ArrowDownUp,
   Settings,
@@ -88,8 +89,9 @@ export default function HeroSwapWidget({
 }: HeroSwapWidgetProps) {
   const chainId = useChainId();
   const { isConnected } = useAccount();
+  const { isBase, isPulseChain } = useNetwork();
   const [activeChain, setActiveChain] = useState<"base" | "pulsechain">(
-    chainId === 8453 ? "base" : defaultChain
+    isBase ? "base" : isPulseChain ? "pulsechain" : defaultChain
   );
   const VALID_SLIPPAGE = ["0.1", "0.5", "1.0", "3.0"] as const;
   const [slippage, setSlippage] = useState<string>("0.5");
@@ -98,11 +100,11 @@ export default function HeroSwapWidget({
   };
   const [showSettings, setShowSettings] = useState(false);
 
-  // Auto-switch chain display based on connected network
+  // Auto-switch chain display based on global network context OR wallet chain
   useEffect(() => {
-    if (chainId === 8453) setActiveChain("base");
-    else if (chainId === 369) setActiveChain("pulsechain");
-  }, [chainId]);
+    if (isBase || chainId === 8453) setActiveChain("base");
+    else if (isPulseChain || chainId === 369) setActiveChain("pulsechain");
+  }, [chainId, isBase, isPulseChain]);
 
   const dexes = activeChain === "base" ? DEX_LINKS.base : DEX_LINKS.pulsechain;
   const heroAddress = activeChain === "base" ? TOKENS.HERO_BASE : TOKENS.HERO_PULSE;

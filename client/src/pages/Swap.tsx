@@ -268,7 +268,7 @@ export default function Swap() {
       </div>
 
       {/* ═══ 2.5. HERO SWAP WIDGET — BASE NATIVE ═══ */}
-      <HeroSwapWidget defaultChain="base" showStats />
+      <HeroSwapWidget defaultChain={chain.id === 8453 ? "base" : "pulsechain"} showStats />
 
       {/* ═══ DIVIDER ═══ */}
       <div className="flex items-center gap-3 mt-8">
