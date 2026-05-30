@@ -13,6 +13,7 @@ import { serveStatic, setupVite } from "./vite";
 import { setupSecurity } from "./security";
 import { initTrpcRateLimiter, ensureRateLimitTable } from "./trpc";
 import { startMentionScheduler } from "../mentionScheduler";
+import { widgetProxyRouter } from "../widget-proxy";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -51,6 +52,9 @@ async function startServer() {
   // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   registerStandaloneAuthRoutes(app);
+
+  // DEX widget reverse proxy (strips X-Frame-Options for iframe embedding)
+  app.use("/api/widget-proxy", widgetProxyRouter);
   // tRPC API
   app.use(
     "/api/trpc",

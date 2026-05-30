@@ -81,8 +81,9 @@ export default function Swap() {
   // ── Switch.win widget URL — themed to herobase.io dark military style ──
   // HERO (PulseChain): 0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27
   // PLS native: 0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee
+  // Route through our reverse proxy to bypass X-Frame-Options blocking
   const switchWidgetSrc = [
-    "https://switch.win/widget",
+    "/api/widget-proxy/switch/widget",
     "?network=pulsechain",
     "&from=0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
     "&to=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
@@ -222,7 +223,7 @@ export default function Swap() {
           <Card className="bg-card border-border overflow-hidden">
             <div className="w-full" style={{ height: "680px" }}>
               <iframe
-                src="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&accentColor=e8b84b&bgColor=0d1a0d&cardColor=161825&borderColor=2a2b3d&textColor=e6edf3&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
+                src="/api/widget-proxy/squirrelswap/?modes=swap,limit,dca&accentColor=e8b84b&bgColor=0d1a0d&cardColor=161825&borderColor=2a2b3d&textColor=e6edf3&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27#/widget"
                 className="w-full h-full border-0"
                 title="SquirrelSwap Pro — PulseChain DEX Aggregator"
                 allow="clipboard-write; clipboard-read"
