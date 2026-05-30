@@ -2,6 +2,7 @@ import helmet from "helmet";
 import rateLimit from "express-rate-limit";
 import crypto from "crypto";
 import type { Express, Request, Response, NextFunction } from "express";
+import { parse as parseCookie } from "cookie";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // CSRF DOUBLE-SUBMIT COOKIE PROTOCOL — Documentation
@@ -105,6 +106,7 @@ function createLimiter(opts: {
     message: { error: opts.message },
     validate: false,
     keyGenerator: getClientIp,
+    skip: (req) => { const ip = getClientIp(req); return ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1'; },
     skipSuccessfulRequests: opts.skipSuccessfulRequests ?? false,
     skipFailedRequests: opts.skipFailedRequests ?? false,
   });
@@ -364,7 +366,9 @@ export function sanitizeHeaders(req: Request, _res: Response, next: NextFunction
   next();
 }
 
-function sanitizeObject(obj: Record<string, unknown>) {
+function sanitizeObject(obj: Record<string, unknown>, seen: WeakSet<object> = new WeakSet()) {
+  if (seen.has(obj)) return; // Prevent circular reference stack overflow
+  seen.add(obj);
   for (const key of Object.keys(obj)) {
     // Protect against prototype pollution
     if (key === "__proto__" || key === "constructor" || key === "prototype") {
@@ -380,11 +384,11 @@ function sanitizeObject(obj: Record<string, unknown>) {
         if (typeof value[i] === "string") {
           value[i] = sanitizeString(value[i]);
         } else if (value[i] && typeof value[i] === "object") {
-          sanitizeObject(value[i] as Record<string, unknown>);
+          sanitizeObject(value[i] as Record<string, unknown>, seen);
         }
       }
     } else if (value && typeof value === "object") {
-      sanitizeObject(value as Record<string, unknown>);
+      sanitizeObject(value as Record<string, unknown>, seen);
     }
   }
 }
@@ -537,6 +541,8 @@ function recordBadRequest(ip: string): void {
 
 export function ipReputationGuard(req: Request, res: Response, next: NextFunction) {
   const ip = getClientIp(req);
+  // LOCALHOST_SKIP: Don't rate-limit localhost/server-to-server requests
+  if (ip === '127.0.0.1' || ip === '::1' || ip === '::ffff:127.0.0.1') { next(); return; }
   const rep = ipReputationMap.get(ip);
   if (rep && rep.blockedUntil > Date.now()) {
     const retryAfter = Math.ceil((rep.blockedUntil - Date.now()) / 1000);
@@ -770,7 +776,8 @@ export function csrfDoubleSubmitProtection(req: any, res: any, next: any) {
   // Only enforce on state-changing methods
   if (["GET", "HEAD", "OPTIONS"].includes(req.method)) {
     // Set CSRF cookie if not present
-    if (!req.cookies?.csrf_token) {
+    const _getCookies = parseCookie(req.headers.cookie || "");
+    if (!_getCookies.csrf_token) {
       const token = crypto.randomBytes(32).toString("hex");
       res.cookie("csrf_token", token, {
         httpOnly: false, // Client JS needs to read it
@@ -783,7 +790,8 @@ export function csrfDoubleSubmitProtection(req: any, res: any, next: any) {
   }
   
   // For mutations: verify the X-CSRF-Token header matches the cookie
-  const cookieToken = req.cookies?.csrf_token;
+  const _postCookies = parseCookie(req.headers.cookie || "");
+  const cookieToken = _postCookies.csrf_token;
   const headerToken = req.headers["x-csrf-token"];
   
   if (!cookieToken || !headerToken || cookieToken !== headerToken) {

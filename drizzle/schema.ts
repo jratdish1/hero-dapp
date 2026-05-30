@@ -283,3 +283,57 @@ export const influencerMentions = mysqlTable("influencer_mentions", {
 
 export type InfluencerMention = typeof influencerMentions.$inferSelect;
 export type InsertInfluencerMention = typeof influencerMentions.$inferInsert;
+
+// ─── Spin Wheel Tables ─────────────────────────────────────────
+export const spinRecords = mysqlTable("spin_records", {
+  id: int("id").primaryKey().autoincrement(),
+  wallet: varchar("wallet", { length: 42 }).notNull(),
+  lastSpinDate: varchar("last_spin_date", { length: 10 }).notNull(),
+  currentStreak: int("current_streak").notNull().default(0),
+  longestStreak: int("longest_streak").notNull().default(0),
+  totalSpins: int("total_spins").notNull().default(0),
+  nftTier: mysqlEnum("nft_tier", ["bronze", "silver", "gold"]).default("bronze"),
+  totalHeroEarned: decimal("total_hero_earned", { precision: 18, scale: 2 }).default("0"),
+  totalBurned: decimal("total_burned", { precision: 18, scale: 2 }).default("0"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => ({
+  walletIdx: uniqueIndex("wallet_idx").on(table.wallet),
+}));
+
+export const spinResults = mysqlTable("spin_results", {
+  id: int("id").primaryKey().autoincrement(),
+  wallet: varchar("wallet", { length: 42 }).notNull(),
+  segmentId: varchar("segment_id", { length: 50 }).notNull(),
+  segmentLabel: varchar("segment_label", { length: 100 }).notNull(),
+  rewardType: varchar("reward_type", { length: 50 }).notNull(),
+  rewardValue: varchar("reward_value", { length: 50 }).notNull(),
+  streakAtSpin: int("streak_at_spin").notNull().default(0),
+  multiplier: decimal("multiplier", { precision: 3, scale: 1 }).default("1.0"),
+  finalRewardValue: varchar("final_reward_value", { length: 50 }).notNull(),
+  claimed: boolean("claimed").default(false),
+  claimTxHash: varchar("claim_tx_hash", { length: 66 }),
+  proofHash: varchar("proof_hash", { length: 66 }).notNull(),
+  blockHash: varchar("block_hash", { length: 66 }).notNull(),
+  blockNumber: int("block_number").notNull(),
+  chain: varchar("chain", { length: 20 }).notNull().default("pulsechain"),
+  spinTimestamp: timestamp("spin_timestamp").defaultNow().notNull(),
+});
+
+export const spinLeaderboard = mysqlTable("spin_leaderboard", {
+  id: int("id").primaryKey().autoincrement(),
+  wallet: varchar("wallet", { length: 42 }).notNull(),
+  currentStreak: int("current_streak").notNull().default(0),
+  longestStreak: int("longest_streak").notNull().default(0),
+  totalSpins: int("total_spins").notNull().default(0),
+  totalHeroEarned: decimal("total_hero_earned", { precision: 18, scale: 2 }).default("0"),
+  biggestWin: varchar("biggest_win", { length: 100 }),
+  lastUpdated: timestamp("last_updated").defaultNow().notNull(),
+}, (table) => ({
+  walletIdx: uniqueIndex("lb_wallet_idx").on(table.wallet),
+}));
+
+// Insert types for spin tables
+export type InsertSpinRecord = typeof spinRecords.$inferInsert;
+export type InsertSpinResult = typeof spinResults.$inferInsert;
+export type InsertSpinLeaderboard = typeof spinLeaderboard.$inferInsert;

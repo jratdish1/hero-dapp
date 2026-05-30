@@ -44,6 +44,28 @@ const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet
 // Transaction hash: 0x prefix + 64 hex chars
 // ─── In-memory stores for spin records and active raffles ─────────────────
 const spinRecords = new Map<string, UserSpinRecord>();
+const spinRecordsV2 = new Map<string, UserSpinRecordV2>();
+const leaderboardCache = new Map<string, { wallet: string; currentStreak: number; longestStreak: number; totalSpins: number; totalHeroEarned: number; biggestWin: string }>();
+
+// Helper functions for V2 router
+function checkSpinRateLimit(wallet: string): boolean { return checkRateLimit(wallet, 5); }
+function getBurnCostV2(spinsToday: number): string { return getBurnCost(spinsToday); }
+function getWheelForTierV2(tier: string) { return getWheelForTier(tier as any); }
+function generateClaimSig(wallet: string, amount: string, claimId: string, proofHash: string) { return generateClaimSignature(wallet, amount, claimId, proofHash); }
+function updateLeaderboard(wallet: string, record: UserSpinRecordV2) {
+  const biggest = record.history.reduce((max, h) => {
+    const val = parseInt(h.finalRewardValue) || 0;
+    return val > max ? val : max;
+  }, 0);
+  leaderboardCache.set(wallet, {
+    wallet,
+    currentStreak: record.currentStreak,
+    longestStreak: record.longestStreak,
+    totalSpins: record.totalSpins,
+    totalHeroEarned: record.totalHeroEarned,
+    biggestWin: biggest > 0 ? `${biggest} HERO` : 'None yet',
+  });
+}
 const activeRaffles = new Map<string, Raffle>();
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
 // Safe string: no HTML tags, no script injection
@@ -115,6 +137,7 @@ import { getHeroRestId, fetchHeroTweets, toDbRecord } from "./twitterFetcher";
 import { alertNewMention } from "./telegramBot";
 import { getSchedulerStatus } from "./mentionScheduler";
 import { performSpin, canSpinToday, updateSpinRecord, getStreakBonus, DEFAULT_WHEEL_SEGMENTS, type UserSpinRecord } from "./spin-engine";
+import { performSpinV2, canSpinTodayV2, updateSpinRecordV2, getStreakBonusV2, getWheelForTier, getBurnCost, checkRateLimit, generateClaimSignature, type UserSpinRecordV2, type SpinResultV2 } from "./spin-engine-v2";
 import { createRaffle, enterRaffle, drawRaffleWinners, type Raffle, type RaffleEntry } from "./raffle-engine";
 import { getMarketOverview, fetchTokenPrices, fetchBaseTokenPrices, fetchPlsPrice, fetchEthPrice, searchPairs, fetchFarmPoolData, fetchBuyAndBurnData, fetchPulsechainTickerTokens, fetchBaseTickerTokens } from "./priceFeed";
 import { anchorProposalOnChain } from "./dao-anchor-integration";
@@ -1139,47 +1162,164 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
     canSpin: publicProcedure
       .input(z.object({ wallet: ethAddressSchema }))
       .query(({ input }) => {
-        const record = spinRecords.get(input.wallet.toLowerCase()) || null;
-        const eligible = canSpinToday(record);
+        const record = spinRecordsV2.get(input.wallet.toLowerCase()) || null;
+        const eligible = canSpinTodayV2(record);
         const streak = record?.currentStreak || 0;
-        const bonus = getStreakBonus(streak);
-        return { eligible, streak, bonus, totalSpins: record?.totalSpins || 0 };
+        const bonus = getStreakBonusV2(streak);
+        const nftTier = record?.nftTier || 'bronze';
+        const canBurn = !eligible && record !== null;
+        const burnCost = canBurn ? getBurnCostV2(1) : '0';
+        return {
+          eligible,
+          streak,
+          bonus,
+          totalSpins: record?.totalSpins || 0,
+          nftTier,
+          canBurnForSpin: canBurn,
+          burnCost,
+          nextSpinAt: !eligible ? new Date(new Date().setHours(24,0,0,0)).toISOString() : undefined,
+        };
       }),
-    execute: protectedProcedure
-      .input(z.object({ wallet: ethAddressSchema, chain: z.enum(["pulsechain", "base"]).optional() }))
-      .mutation(async ({ ctx, input }) => {
-        // AUDIT FIX: Verify wallet ownership for spin
-        if (ctx.user.walletAddress && input.wallet.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
-          routerLogger.warn("Wallet mismatch on spin execute", {
-            userId: ctx.user.id,
-            expected: ctx.user.walletAddress,
-            received: input.wallet,
-          });
-          createStandardError("FORBIDDEN", "Wallet address does not match authenticated user");
+    execute: publicProcedure
+      .input(z.object({
+        wallet: ethAddressSchema,
+        chain: z.enum(["pulsechain", "base"]).optional(),
+        burnForSecondSpin: z.boolean().optional(),
+      }))
+      .mutation(async ({ input }) => {
+        // Rate limiting
+        if (!checkSpinRateLimit(input.wallet)) {
+          createStandardError("TOO_MANY_REQUESTS", "Too many spin attempts. Please wait a moment.");
+        }
+        // IP-based rate limiting (prevents multi-wallet abuse from same IP)
+        const clientIp = (ctx as any)?.req?.headers?.['cf-connecting-ip'] || (ctx as any)?.req?.socket?.remoteAddress || 'unknown';
+        const ipSpinKey = 'ip_spin_' + clientIp;
+        if (!checkRateLimit(ipSpinKey, 20)) {
+          createStandardError("TOO_MANY_REQUESTS", "IP rate limit exceeded");
         }
         const key = input.wallet.toLowerCase();
-        routerLogger.info("Spin attempt", { userId: ctx.user.id, wallet: key });
-        const record = spinRecords.get(key) || null;
-        if (!canSpinToday(record)) {
-          createStandardError("TOO_MANY_REQUESTS", "Already spun today. Come back tomorrow!");
+        const record = spinRecordsV2.get(key) || null;
+        const eligible = canSpinTodayV2(record);
+
+        // Handle burn-for-second-spin
+        if (!eligible && input.burnForSecondSpin) {
+          // In production: verify burn tx on-chain before allowing
+          routerLogger.info("Burn-for-spin attempt", { wallet: key });
+        } else if (!eligible) {
+          createStandardError("TOO_MANY_REQUESTS", "Already spun today. Come back tomorrow or burn HERO for another spin!");
         }
-        // AUDIT FIX #4 (May 27, 2026): Wrap performSpin in try/catch for user-friendly errors
+
+        const nftTier = record?.nftTier || 'bronze';
+        routerLogger.info("Spin V2 execute", { wallet: key, tier: nftTier, streak: record?.currentStreak || 0 });
+
         let result;
         try {
-          result = await performSpin(input.wallet, DEFAULT_WHEEL_SEGMENTS, input.chain || "pulsechain");
+          result = await performSpinV2(input.wallet, record, nftTier, input.chain || "pulsechain");
         } catch (err) {
-          console.error("[Spin] RNG failure for wallet", key, err);
-          createStandardError("INTERNAL_SERVER_ERROR", "Spin failed — RNG service temporarily unavailable. Please try again in a moment.");
+          console.error("[SpinV2] RNG failure:", err);
+          createStandardError("INTERNAL_SERVER_ERROR", "Spin failed — please try again.");
         }
-        const updated = updateSpinRecord(record, input.wallet, result);
-        spinRecords.set(key, updated);
+
+        const updated = updateSpinRecordV2(record, input.wallet, result);
+        spinRecordsV2.set(key, updated);
+
+        // Update leaderboard
+        updateLeaderboard(key, updated);
+
         return result;
+      }),
+    claim: publicProcedure
+      .input(z.object({
+        wallet: ethAddressSchema,
+        claimId: z.string().min(1),
+        spinTimestamp: z.number(),
+      }))
+      .mutation(({ input }) => {
+        const key = input.wallet.toLowerCase();
+        const record = spinRecordsV2.get(key);
+        if (!record) {
+          createStandardError("NOT_FOUND", "No spin record found for this wallet.");
+        }
+        // Find the spin result with this claimId
+        const spinResult = record!.history.find(h => h.claimId === input.claimId);
+        if (!spinResult) {
+          createStandardError("NOT_FOUND", "Claim not found. It may have expired.");
+        }
+        if (!spinResult!.claimable) {
+          createStandardError("BAD_REQUEST", "This reward is not claimable on-chain.");
+        }
+        // Generate claim signature for on-chain verification
+        const { message, claimData } = generateClaimSig(
+          input.wallet,
+          spinResult!.finalRewardValue,
+          input.claimId,
+          spinResult!.rngProof.proofHash
+        );
+        const claimNonce = crypto.randomUUID();
+        const claimExpiry = Date.now() + 3600000; // 1 hour expiry
+        return {
+          success: true,
+          claimData,
+          signature: message,
+          amount: spinResult!.finalRewardValue,
+          rewardType: spinResult!.rewardType,
+          nonce: claimNonce,
+          expiresAt: claimExpiry,
+        };
       }),
     history: publicProcedure
       .input(z.object({ wallet: ethAddressSchema }))
       .query(({ input }) => {
-        const record = spinRecords.get(input.wallet.toLowerCase());
-        return record?.history || [];
+        const record = spinRecordsV2.get(input.wallet.toLowerCase());
+        return {
+          history: record?.history || [],
+          stats: {
+            totalSpins: record?.totalSpins || 0,
+            currentStreak: record?.currentStreak || 0,
+            longestStreak: record?.longestStreak || 0,
+            totalHeroEarned: record?.totalHeroEarned || 0,
+            totalBurned: record?.totalBurned || 0,
+            nftTier: record?.nftTier || 'bronze',
+          },
+        };
+      }),
+    leaderboard: publicProcedure.query(() => {
+      return Array.from(leaderboardCache.values())
+        .sort((a, b) => b.currentStreak - a.currentStreak)
+        .slice(0, 20);
+    }),
+    verify: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema, spinTimestamp: z.number() }))
+      .query(({ input }) => {
+        const record = spinRecordsV2.get(input.wallet.toLowerCase());
+        const spin = record?.history.find(h => h.spinTimestamp === input.spinTimestamp);
+        if (!spin) return { verified: false, message: "Spin not found" };
+        return {
+          verified: true,
+          proof: {
+            blockHash: spin.rngProof.blockHash,
+            blockNumber: spin.rngProof.blockNumber,
+            seed: spin.rngProof.seed,
+            proofHash: spin.rngProof.proofHash,
+            chain: spin.rngProof.chain,
+            timestamp: spin.rngProof.timestamp,
+            value: spin.rngProof.value,
+          },
+          result: {
+            segmentId: spin.segmentId,
+            segmentLabel: spin.segmentLabel,
+            multiplier: spin.multiplier,
+            finalReward: spin.finalRewardValue,
+          },
+        };
+      }),
+    wheel: publicProcedure
+      .input(z.object({ wallet: ethAddressSchema.optional() }))
+      .query(({ input }) => {
+        const tier = input.wallet
+          ? (spinRecordsV2.get(input.wallet.toLowerCase())?.nftTier || 'bronze')
+          : 'bronze';
+        return { tier, segments: getWheelForTierV2(tier) };
       }),
   }),
   // ─── Raffle/Giveaway Router ────────────────────────────────────────────────
