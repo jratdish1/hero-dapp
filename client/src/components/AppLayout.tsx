@@ -291,7 +291,6 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                                 key={item.path}
                                 href={item.external}
                                 target="_blank" rel="noopener noreferrer"
-                                rel="noopener noreferrer"
                                 className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-medium transition-all text-muted-foreground hover:text-foreground hover:bg-secondary/50"
                                 onClick={() => setSidebarOpen(false)}
                               >

@@ -221,7 +221,6 @@ function StepCard({ step, isLast }: { step: (typeof STEPS)[0]; isLast: boolean }
                   <a
                     href={d.link}
                     target="_blank" rel="noopener noreferrer"
-                   rel="noopener noreferrer"
                     
                     className="text-xs flex items-center gap-1 hover:underline break-all"
                     style={{ color: step.color, fontFamily: d.mono ? "monospace" : "inherit" }}

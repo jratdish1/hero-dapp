@@ -373,7 +373,6 @@ export default function TransactionHistory() {
                   <a
                     href={`${explorer}/tx/${tx.hash}`}
                     target="_blank" rel="noopener noreferrer"
-                    rel="noopener noreferrer"
                     aria-label={`View transaction on ${isPulseChain ? "PulseScan" : "BaseScan"}`}
                     className="p-1 rounded hover:bg-secondary/50 transition-colors"
                   >
@@ -392,7 +391,6 @@ export default function TransactionHistory() {
           <a
             href={`${explorer}/address/${address}`}
             target="_blank" rel="noopener noreferrer"
-            rel="noopener noreferrer"
             className="inline-flex items-center gap-1 text-xs text-[var(--hero-green)] hover:underline"
           >
             View all on {isPulseChain ? "PulseScan" : "BaseScan"} <ExternalLink className="w-3 h-3" />

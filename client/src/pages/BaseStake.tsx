@@ -218,7 +218,6 @@ function PoolCard({ pool }: { pool: (typeof BASE_STAKE_POOLS)[0] }) {
           <a
             href={`https://dexscreener.com/base/${pool.pairAddress}`}
             target="_blank" rel="noopener noreferrer"
-           rel="noopener noreferrer"
             
             className="px-3 py-2 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all hover:opacity-80"
             style={{
@@ -250,7 +249,6 @@ function PoolCard({ pool }: { pool: (typeof BASE_STAKE_POOLS)[0] }) {
             <a
               href={`https://basescan.org/address/${pool.pairAddress}`}
               target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
               
               className="flex items-center gap-1 hover:underline"
               style={{ color: "#C8A84B", fontFamily: "monospace" }}
@@ -346,7 +344,6 @@ export default function BaseStake() {
         <a
           href={`https://basescan.org/token/${HERO_BASE_CA}`}
           target="_blank" rel="noopener noreferrer"
-         rel="noopener noreferrer"
           
           className="flex items-center gap-1 hover:underline"
           style={{ color: "#C8A84B", fontFamily: "monospace" }}

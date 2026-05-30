@@ -172,7 +172,6 @@ function RaffleCard({ raffle, onEnter }: { raffle: RaffleDisplay; onEnter: (id: 
               <a
                 href={`https://scan.pulsechain.com/block/${w.blockNumber}`}
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="text-xs text-green-400 hover:underline"
               >
