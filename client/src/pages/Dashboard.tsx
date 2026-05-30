@@ -31,27 +31,46 @@ export default function Dashboard() {
   const { address, isConnected } = useAccount();
   const currentChainId = useChainId();
   const { data: plsBalance } = useBalance({ address });
+  // HERO token addresses per chain
+  const HERO_ADDRESS: Record<number, `0x${string}`> = {
+    369: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",  // HERO on PulseChain
+    8453: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", // HERO on BASE
+  };
+  const VETS_ADDRESS: Record<number, `0x${string}`> = {
+    369: "0x4013abBf94A745EfA7cc848989Ee83424A770060",  // VETS on PulseChain
+  };
+
+  const heroAddr = HERO_ADDRESS[currentChainId];
+  const vetsAddr = VETS_ADDRESS[currentChainId];
+  const isSupportedChain = currentChainId === 369 || currentChainId === 8453;
+
+  const balanceContracts = address && isSupportedChain ? [
+    ...(heroAddr ? [{
+      address: heroAddr,
+      abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }] as const,
+      functionName: "balanceOf" as const,
+      args: [address] as const,
+    }] : []),
+    ...(vetsAddr ? [{
+      address: vetsAddr,
+      abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }] as const,
+      functionName: "balanceOf" as const,
+      args: [address] as const,
+    }] : []),
+  ] : undefined;
+
   const { data: tokenBalances } = useReadContracts({
-    contracts: address && currentChainId === 369 ? [
-      {
-        address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" as `0x${string}`, // HERO on PulseChain
-        abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
-        functionName: "balanceOf",
-        args: [address],
-      },
-      {
-        address: "0x4013abBf94A745EfA7cc848989Ee83424A770060" as `0x${string}`, // VETS on PulseChain
-        abi: [{ name: "balanceOf", type: "function", stateMutability: "view", inputs: [{ name: "account", type: "address" }], outputs: [{ name: "", type: "uint256" }] }],
-        functionName: "balanceOf",
-        args: [address],
-      },
-    ] : undefined,
-    query: { enabled: isConnected && !!address && currentChainId === 369 },
+    contracts: balanceContracts,
+    query: { enabled: isConnected && !!address && isSupportedChain && !!balanceContracts?.length },
   });
 
   const heroBalance = tokenBalances?.[0]?.result ? Number(formatUnits(tokenBalances[0].result as bigint, 18)) : 0;
-  const vetsBalance = tokenBalances?.[1]?.result ? Number(formatUnits(tokenBalances[1].result as bigint, 18)) : 0;
-  const plsBalanceNum = plsBalance ? Number(formatUnits(plsBalance.value, 18)) : 0;
+  // VETS is only on PulseChain — on BASE the second contract doesn't exist
+  const vetsBalance = (currentChainId === 369 && tokenBalances?.[1]?.result)
+    ? Number(formatUnits(tokenBalances[1].result as bigint, 18))
+    : 0;
+  const nativeBalance = plsBalance ? Number(formatUnits(plsBalance.value, plsBalance.decimals)) : 0;
+  const nativeSymbol = currentChainId === 8453 ? "ETH" : "PLS";
 
   return (
     <div className="space-y-6">
@@ -95,9 +114,9 @@ export default function Dashboard() {
                 <p className="text-lg font-bold text-foreground">
                   {heroBalance > 0 ? heroBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
                 </p>
-                {heroBalance > 0 && heroPrice?.price && (
+                {heroBalance > 0 && heroPrice?.priceUsd && (
                   <p className="text-xs text-muted-foreground">
-                    ≈ ${(heroBalance * heroPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    ≈ ${(heroBalance * parseFloat(heroPrice.priceUsd)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </p>
                 )}
               </div>
@@ -106,20 +125,20 @@ export default function Dashboard() {
                 <p className="text-lg font-bold text-foreground">
                   {vetsBalance > 0 ? vetsBalance.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
                 </p>
-                {vetsBalance > 0 && vetsPrice?.price && (
+                {vetsBalance > 0 && vetsPrice?.priceUsd && (
                   <p className="text-xs text-muted-foreground">
-                    ≈ ${(vetsBalance * vetsPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    ≈ ${(vetsBalance * parseFloat(vetsPrice.priceUsd)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </p>
                 )}
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">PLS Balance</p>
+                <p className="text-xs text-muted-foreground">{nativeSymbol} Balance</p>
                 <p className="text-lg font-bold text-foreground">
-                  {plsBalanceNum > 0 ? plsBalanceNum.toLocaleString(undefined, { maximumFractionDigits: 0 }) : "—"}
+                  {nativeBalance > 0 ? nativeBalance.toLocaleString(undefined, { maximumFractionDigits: nativeSymbol === "ETH" ? 4 : 0 }) : "—"}
                 </p>
-                {plsBalanceNum > 0 && plsPrice?.price && (
+                {nativeBalance > 0 && plsPrice?.priceUsd && nativeSymbol === "PLS" && (
                   <p className="text-xs text-muted-foreground">
-                    ≈ ${(plsBalanceNum * plsPrice.price).toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                    ≈ ${(nativeBalance * parseFloat(plsPrice.priceUsd)).toLocaleString(undefined, { maximumFractionDigits: 2 })}
                   </p>
                 )}
               </div>

@@ -5,7 +5,8 @@
  */
 import { useState, useMemo } from "react";
 import { useAccount, useEnsName, useEnsAvatar } from "wagmi";
-import { mainnet } from "wagmi/chains";
+// ENS resolution requires mainnet (chainId 1) but wagmi Register only allows 369|8453
+const MAINNET_CHAIN_ID = 1 as unknown as 369;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress } from "viem";
 
@@ -104,7 +105,7 @@ export function WalletIdentity({
   // ENS resolution (mainnet)
   const { data: ensName } = useEnsName({
     address: targetAddress,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!targetAddress, staleTime: 1000 * 60 * 60 }, // Cache 1hr
   });
 
@@ -116,7 +117,7 @@ export function WalletIdentity({
 
   const { data: ensAvatar } = useEnsAvatar({
     name: normalizedEnsName,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!normalizedEnsName, staleTime: 1000 * 60 * 60 },
   });
 
@@ -150,7 +151,7 @@ export function IdentityBadge({
 }) {
   const { data: ensName } = useEnsName({
     address: address as `0x${string}`,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!address, staleTime: 1000 * 60 * 60 },
   });
 
@@ -162,7 +163,7 @@ export function IdentityBadge({
 
   const { data: ensAvatar } = useEnsAvatar({
     name: normalizedEnsName,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!normalizedEnsName, staleTime: 1000 * 60 * 60 },
   });
 

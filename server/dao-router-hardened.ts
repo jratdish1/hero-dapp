@@ -244,7 +244,7 @@ export const hardenedDaoRouter = router({
         });
 
         // Record for rate limiting
-        await recordProposalCreation(ctx.user.id, proposalId, input.walletAddress);
+        await recordProposalCreation(proposalId, ctx.user.id, input.walletAddress);
 
         // NOTE: On-chain anchoring via HeroDAOAnchor.anchorProposal() planned for v2
 
@@ -262,8 +262,8 @@ export const hardenedDaoRouter = router({
 
         // [HIGH] Enforce valid status transitions
         if (!isValidStatusTransition(proposal.status, input.status)) {
-          createStandardError("BAD_REQUEST", "Operation not permitted").join(", ") || "none (terminal state)"}`
-          );
+          createStandardError("BAD_REQUEST", `Invalid status transition from '${proposal.status}' to '${input.status}'. Valid transitions: ${getValidTransitions(proposal.status).join(", ") || "none (terminal state)"}`);
+          return;
         }
 
         // [CRITICAL] If transitioning to "executed", enforce timelock
@@ -562,4 +562,4 @@ declare function revokeDelegation(id: number, userId: number): Promise<void>;
 declare function getTimelockForProposal(proposalId: string): Promise<any>;
 declare function saveTimelock(data: any): Promise<void>;
 declare function logProposalAction(proposalId: string, action: string, actorId: number, metadata: any): Promise<void>;
-declare function getValidTransitions(status: string): string[];
+// getValidTransitions is imported from dao-governance-engine above

@@ -46,6 +46,7 @@ const Giveaways = React.lazy(() => import("./pages/Giveaways"));
 const HolderRewards = React.lazy(() => import("./pages/HolderRewards"));
 const SpinWheel = React.lazy(() => import("./pages/SpinWheel"));
 const HeroWallet = React.lazy(() => import("./pages/HeroWallet"));
+const Dashboard = React.lazy(() => import("./pages/Dashboard"));
 
 // Lazy-load DAO pages
 const Proposals = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Proposals })));
@@ -98,6 +99,7 @@ function Router() {
       <Route path="/swap" component={withLayout(Swap)} />
       <Route path="/wallet" component={withLayout(HeroWallet)} />
       <Route path="/portfolio" component={withLayout(Portfolio)} />
+      <Route path="/dashboard" component={withLayout(Dashboard)} />
       <Route path="/dca" component={withLayout(DcaOrders)} />
       <Route path="/limits" component={withLayout(LimitOrders)} />
       <Route path="/approvals" component={withLayout(Approvals)} />

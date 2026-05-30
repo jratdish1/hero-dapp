@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -29,7 +29,9 @@ import {
   useEnsName,
   useEnsAvatar,
 } from "wagmi";
-import { mainnet } from "wagmi/chains";
+// ENS resolution requires mainnet (chainId 1) but our wagmi config only has 369/8453
+// Use type assertion to satisfy the Register constraint while still querying mainnet ENS
+const MAINNET_CHAIN_ID = 1 as unknown as 369;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
@@ -98,6 +100,17 @@ export function WalletButton() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
+    };
+  }, []);
 
   // wagmi hooks
   const { address, isConnected, connector: activeConnector } = useAccount();
@@ -115,7 +128,7 @@ export function WalletButton() {
   // ─── Identity Resolution ────────────────────────────────────────────
   const { data: ensName } = useEnsName({
     address,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!address, staleTime: 1000 * 60 * 60 },
   });
 
@@ -123,7 +136,7 @@ export function WalletButton() {
 
   const { data: ensAvatar } = useEnsAvatar({
     name: normalizedEnsName,
-    chainId: mainnet.id,
+    chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!ensName, staleTime: 1000 * 60 * 60 },
   });
 
@@ -155,7 +168,7 @@ export function WalletButton() {
 
     // Safety timeout: reset connectingId after 30s to prevent permanent blocking
     const connectorUid = connector.uid;
-    const timeout = setTimeout(() => {
+    connectTimeoutRef.current = setTimeout(() => {
       setConnectingId((current) => {
         if (current === connectorUid) {
           toast.error("Connection timed out");
@@ -163,6 +176,7 @@ export function WalletButton() {
         }
         return current;
       });
+      connectTimeoutRef.current = null;
     }, 30000);
 
     try {
@@ -170,7 +184,10 @@ export function WalletButton() {
         { connector, chainId: validChainId },
         {
           onSuccess: () => {
-            clearTimeout(timeout);
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             toast.success("Wallet connected", {
               description: `Connected to ${chain.name} via ${connector.name}`,
             });
@@ -178,7 +195,10 @@ export function WalletButton() {
             setConnectingId(null);
           },
           onError: (err) => {
-            clearTimeout(timeout);
+            if (connectTimeoutRef.current) {
+              clearTimeout(connectTimeoutRef.current);
+              connectTimeoutRef.current = null;
+            }
             setConnectingId(null);
             const msg = (err as Error)?.message ?? "Connection failed";
             if (msg.includes("User rejected") || msg.includes("rejected")) {
@@ -194,7 +214,10 @@ export function WalletButton() {
         }
       );
     } catch {
-      clearTimeout(timeout);
+      if (connectTimeoutRef.current) {
+        clearTimeout(connectTimeoutRef.current);
+        connectTimeoutRef.current = null;
+      }
       setConnectingId(null);
       toast.error("Could not connect wallet");
     }

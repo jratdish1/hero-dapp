@@ -49,6 +49,7 @@ import {
   Compass,
   TrendingUp,
   Zap,
+  LayoutDashboard,
 } from "lucide-react";
 
 // CDN asset URLs
@@ -87,6 +88,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Trade",
     icon: TrendingUp,
     items: [
+      { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
       { path: "/portfolio", label: "Portfolio", icon: Wallet },
       { path: "/dca", label: "DCA Orders", icon: Clock },
       { path: "/limits", label: "Limit Orders", icon: Target },

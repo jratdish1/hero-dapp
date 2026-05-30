@@ -133,15 +133,28 @@ export default function Swap() {
         {/* Switch widget iframe */}
         {showSwitch && (
           <Card className="bg-card border-border overflow-hidden">
-            <div className="w-full" style={{ minHeight: "500px" }}>
+            <div className="w-full relative" style={{ minHeight: "500px" }}>
               <iframe
                 src={switchWidgetSrc}
                 className="w-full border-0"
                 style={{ height: "680px", minHeight: "500px", borderRadius: "12px", display: "block" }}
                 title="Switch — PulseChain DEX Aggregator"
                 allow="clipboard-read; clipboard-write"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
                 loading="lazy"
               />
+              {/* Fallback overlay — visible if iframe blocked by X-Frame-Options */}
+              <div className="absolute inset-0 flex flex-col items-center justify-center bg-card/95 backdrop-blur-sm opacity-0 pointer-events-none [iframe:not([src])~&]:opacity-100 [iframe:not([src])~&]:pointer-events-auto">
+                <p className="text-sm text-muted-foreground mb-3">Widget loading externally</p>
+                <a
+                  href="https://switch.win/?network=pulsechain&to=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-4 py-2 rounded-lg bg-[var(--hero-green)] text-black font-semibold text-sm hover:opacity-90 transition-opacity"
+                >
+                  Open Switch.win →
+                </a>
+              </div>
             </div>
           </Card>
         )}
@@ -213,6 +226,7 @@ export default function Swap() {
                 className="w-full h-full border-0"
                 title="SquirrelSwap Pro — PulseChain DEX Aggregator"
                 allow="clipboard-write; clipboard-read"
+                sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
                 loading="lazy"
               />
             </div>
