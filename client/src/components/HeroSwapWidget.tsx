@@ -1,22 +1,21 @@
 /**
- * HeroSwapWidget — Native token swap for $HERO on BASE.
- * Embeds Li.Fi aggregator for best routing across Aerodrome, Uniswap, etc.
- * Professional UI with real-time price impact and slippage controls.
+ * HeroSwapWidget — Native token swap for $HERO on BASE & PulseChain.
+ * Professional branded swap interface with direct DEX links.
+ * No iframes — clean, reliable, works everywhere.
  */
 import { useState, useEffect } from "react";
 import { useAccount, useChainId } from "wagmi";
 import {
   ArrowDownUp,
   Settings,
-  Info,
   ExternalLink,
   Zap,
   TrendingUp,
   Shield,
+  Layers,
+  Globe,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
 
 // ─── Token Addresses ────────────────────────────────────────────────────
 const TOKENS = {
@@ -24,19 +23,55 @@ const TOKENS = {
   HERO_PULSE: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
   ETH: "0x0000000000000000000000000000000000000000",
   USDC_BASE: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-  DAI_BASE: "0x50c5725949A6F0c72E6C4a641F24049A917DB0Cb",
 };
 
 // ─── DEX Links ──────────────────────────────────────────────────────────
 const DEX_LINKS = {
   base: {
-    aerodrome: `https://aerodrome.finance/swap?from=eth&to=${TOKENS.HERO_BASE}`,
-    uniswap: `https://app.uniswap.org/swap?outputCurrency=${TOKENS.HERO_BASE}&chain=base`,
-    lifi: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${TOKENS.HERO_BASE}`,
+    aerodrome: {
+      name: "Aerodrome",
+      url: `https://aerodrome.finance/swap?from=eth&to=${TOKENS.HERO_BASE}`,
+      color: "blue",
+      icon: Zap,
+      desc: "Top BASE DEX · Deep liquidity",
+    },
+    uniswap: {
+      name: "Uniswap",
+      url: `https://app.uniswap.org/swap?outputCurrency=${TOKENS.HERO_BASE}&chain=base`,
+      color: "pink",
+      icon: TrendingUp,
+      desc: "Universal swap · Multi-chain",
+    },
+    jumper: {
+      name: "Jumper (Li.Fi)",
+      url: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${TOKENS.HERO_BASE}`,
+      color: "purple",
+      icon: Globe,
+      desc: "Cross-chain aggregator",
+    },
   },
   pulsechain: {
-    pulsex: `https://app.pulsex.com/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
-    nines: `https://9mm.pro/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
+    pulsex: {
+      name: "PulseX",
+      url: `https://app.pulsex.com/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
+      color: "green",
+      icon: Zap,
+      desc: "Native PulseChain DEX",
+    },
+    nines: {
+      name: "9mm DEX",
+      url: `https://9mm.pro/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
+      color: "purple",
+      icon: TrendingUp,
+      desc: "Concentrated liquidity",
+    },
+    switch: {
+      name: "Switch.win",
+      url: `https://switch.win/?network=pulsechain&to=${TOKENS.HERO_PULSE}`,
+      color: "orange",
+      icon: Layers,
+      desc: "Multi-DEX aggregator",
+    },
   },
 };
 
@@ -65,10 +100,9 @@ export default function HeroSwapWidget({
     else if (chainId === 369) setActiveChain("pulsechain");
   }, [chainId]);
 
-  const iframeUrl =
-    activeChain === "base"
-      ? `https://jumper.exchange/widget?fromChain=8453&fromToken=${TOKENS.ETH}&toChain=8453&toToken=${TOKENS.HERO_BASE}&theme=dark`
-      : `https://app.squirrelswap.pro/#/widget?modes=swap&tokenOut=${TOKENS.HERO_PULSE}&accentColor=C8A84B&bgColor=0d1a0d&cardColor=1C2A1C&borderColor=3D5A3D&textColor=E8E8D0`;
+  const dexes = activeChain === "base" ? DEX_LINKS.base : DEX_LINKS.pulsechain;
+  const heroAddress = activeChain === "base" ? TOKENS.HERO_BASE : TOKENS.HERO_PULSE;
+  const nativeToken = activeChain === "base" ? "ETH" : "PLS";
 
   return (
     <Card className="border-hero-orange/20 bg-gradient-to-b from-card to-card/80 overflow-hidden">
@@ -138,84 +172,84 @@ export default function HeroSwapWidget({
         )}
       </CardHeader>
 
-      <CardContent className="p-0">
-        {/* Embedded Swap Widget */}
-        <div className="relative">
-          <iframe
-            src={iframeUrl}
-            className="w-full border-0 rounded-b-lg"
-            style={{ height: compact ? "420px" : "520px" }}
-            title={`Swap to HERO on ${activeChain === "base" ? "BASE" : "PulseChain"}`}
-            sandbox="allow-scripts allow-same-origin allow-popups allow-forms"
-          />
+      <CardContent className="px-4 pb-4 space-y-4">
+        {/* Swap Path Visualization */}
+        <div className="flex items-center justify-center gap-4 py-4 px-2 rounded-xl bg-secondary/30 border border-border/50">
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500/20 to-purple-500/20 border border-border flex items-center justify-center">
+              <span className="text-lg">{activeChain === "base" ? "💎" : "⚡"}</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground">{nativeToken}</span>
+          </div>
+          <div className="flex flex-col items-center gap-1">
+            <ArrowDownUp className="w-5 h-5 text-hero-orange animate-pulse" />
+            <span className="text-[10px] text-muted-foreground">Swap</span>
+          </div>
+          <div className="flex flex-col items-center gap-1.5">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-hero-orange/20 to-amber-500/20 border border-hero-orange/30 flex items-center justify-center">
+              <span className="text-lg">🦸</span>
+            </div>
+            <span className="text-sm font-semibold text-foreground">HERO</span>
+          </div>
         </div>
 
-        {/* Quick DEX Links */}
-        <div className="px-4 py-3 border-t border-border/30">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-2">
-            Or swap directly on
+        {/* DEX Options */}
+        <div className="space-y-2">
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">
+            Choose your DEX
           </p>
-          <div className="flex flex-wrap gap-2">
-            {activeChain === "base" ? (
-              <>
+          <div className="grid gap-2">
+            {Object.entries(dexes).map(([key, dex]) => {
+              const Icon = dex.icon;
+              const colorMap: Record<string, string> = {
+                blue: "border-blue-500/30 hover:border-blue-500/50 hover:bg-blue-500/5",
+                pink: "border-pink-500/30 hover:border-pink-500/50 hover:bg-pink-500/5",
+                purple: "border-purple-500/30 hover:border-purple-500/50 hover:bg-purple-500/5",
+                green: "border-green-500/30 hover:border-green-500/50 hover:bg-green-500/5",
+                orange: "border-[var(--hero-orange)]/30 hover:border-[var(--hero-orange)]/50 hover:bg-[var(--hero-orange)]/5",
+              };
+              const iconColorMap: Record<string, string> = {
+                blue: "text-blue-400",
+                pink: "text-pink-400",
+                purple: "text-purple-400",
+                green: "text-green-400",
+                orange: "text-[var(--hero-orange)]",
+              };
+              return (
                 <a
-                  href={DEX_LINKS.base.aerodrome}
+                  key={key}
+                  href={dex.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-500/10 border border-blue-500/20 text-xs font-medium text-blue-400 hover:bg-blue-500/20 transition-colors"
+                  className={`flex items-center gap-3 p-3 rounded-xl border bg-card transition-all duration-200 group ${colorMap[dex.color] || colorMap.blue}`}
                 >
-                  <Zap className="h-3 w-3" />
-                  Aerodrome
-                  <ExternalLink className="h-2.5 w-2.5 opacity-50" />
+                  <div className={`p-2 rounded-lg bg-secondary/50 ${iconColorMap[dex.color] || iconColorMap.blue}`}>
+                    <Icon className="h-5 w-5" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-semibold text-foreground">{dex.name}</span>
+                      <ExternalLink className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
+                    <span className="text-xs text-muted-foreground">{dex.desc}</span>
+                  </div>
+                  <div className="text-xs font-medium text-muted-foreground group-hover:text-foreground transition-colors">
+                    Swap →
+                  </div>
                 </a>
-                <a
-                  href={DEX_LINKS.base.uniswap}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-pink-500/10 border border-pink-500/20 text-xs font-medium text-pink-400 hover:bg-pink-500/20 transition-colors"
-                >
-                  <TrendingUp className="h-3 w-3" />
-                  Uniswap
-                  <ExternalLink className="h-2.5 w-2.5 opacity-50" />
-                </a>
-              </>
-            ) : (
-              <>
-                <a
-                  href={DEX_LINKS.pulsechain.pulsex}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-500/10 border border-green-500/20 text-xs font-medium text-green-400 hover:bg-green-500/20 transition-colors"
-                >
-                  <Zap className="h-3 w-3" />
-                  PulseX
-                  <ExternalLink className="h-2.5 w-2.5 opacity-50" />
-                </a>
-                <a
-                  href={DEX_LINKS.pulsechain.nines}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-purple-500/10 border border-purple-500/20 text-xs font-medium text-purple-400 hover:bg-purple-500/20 transition-colors"
-                >
-                  <TrendingUp className="h-3 w-3" />
-                  9mm DEX
-                  <ExternalLink className="h-2.5 w-2.5 opacity-50" />
-                </a>
-              </>
-            )}
+              );
+            })}
           </div>
         </div>
 
         {/* Security note */}
         {showStats && (
-          <div className="px-4 pb-3">
-            <div className="flex items-start gap-2 p-2 rounded-lg bg-hero-green/5 border border-hero-green/10">
-              <Shield className="h-3.5 w-3.5 text-hero-green mt-0.5 flex-shrink-0" />
-              <p className="text-[10px] text-muted-foreground leading-relaxed">
-                Swaps are routed through audited DEX contracts. Always verify the token
-                address: <span className="font-mono text-foreground/70">{activeChain === "base" ? TOKENS.HERO_BASE.slice(0, 10) + "..." : TOKENS.HERO_PULSE.slice(0, 10) + "..."}</span>
-              </p>
-            </div>
+          <div className="flex items-start gap-2 p-2.5 rounded-lg bg-hero-green/5 border border-hero-green/10">
+            <Shield className="h-3.5 w-3.5 text-hero-green mt-0.5 flex-shrink-0" />
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              Swaps are routed through audited DEX contracts. Always verify the token
+              address: <span className="font-mono text-foreground/70">{heroAddress.slice(0, 10) + "..."}</span>
+            </p>
           </div>
         )}
       </CardContent>
