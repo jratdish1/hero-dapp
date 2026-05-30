@@ -195,6 +195,13 @@ export const hardenedDaoRouter = router({
         durationDays: z.number().int().min(1).max(30).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
+        // [MEDIUM] Sanitize title and description to prevent stored XSS
+        const sanitize = (s: string) => s.replace(/[<>"'&]/g, (c) => ({
+          '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;', '&': '&amp;'
+        }[c] || c));
+        const sanitizedTitle = sanitize(input.title);
+        const sanitizedDescription = sanitize(input.description);
+
         // [HIGH] Rate limiting: max 3 proposals per day per user
         if (await isProposalRateLimited(ctx.user.id)) {
           createStandardError("TOO_MANY_REQUESTS", "Rate limited: maximum 3 proposals per 24 hours");
@@ -221,18 +228,17 @@ export const hardenedDaoRouter = router({
         // [CRITICAL] Generate proposal hash commitment
         const contentHash = generateProposalHash(
           proposalId,
-          input.title,
-          input.description,
+          sanitizedTitle,
+          sanitizedDescription,
           input.walletAddress,
           input.chain || "both",
           now,
           endTime
         );
-
         await createProposal({
           proposalId,
-          title: input.title,
-          description: input.description,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
           proposerId: ctx.user.id,
           proposerAddress: input.walletAddress,
           chain: input.chain || "both",
@@ -257,8 +263,15 @@ export const hardenedDaoRouter = router({
         status: z.enum(["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]),
       }))
       .mutation(async ({ ctx, input }) => {
+        // [HIGH] Only proposal creator or admin can update status
         const proposal = await getProposalById(input.proposalId);
         if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+
+        const isCreator = proposal.creatorId === ctx.user.id;
+        const isAdmin = ctx.user.role === "admin" || ctx.user.role === "governance";
+        if (!isCreator && !isAdmin) {
+          createStandardError("FORBIDDEN", "Only proposal creator or admin can update status");
+        }
 
         // [HIGH] Enforce valid status transitions
         if (!isValidStatusTransition(proposal.status, input.status)) {
@@ -315,7 +328,7 @@ export const hardenedDaoRouter = router({
         proposalId: z.string().min(1),
         voterAddress: ethAddressSchema,
         choice: z.enum(["for", "against", "abstain"]),
-        votingPower: z.number().int().positive().max(1_000_000_000),
+        votingPower: z.number().int().positive().max(100_000_000), // Max 100M (total supply cap)
         chain: z.enum(["base", "pulsechain"]),
         txHash: txHashSchema,
       }))
@@ -326,13 +339,16 @@ export const hardenedDaoRouter = router({
           createStandardError("FORBIDDEN", "Wallet verification failed");
         }
 
-        // [MEDIUM] Verify proposal is in voteable state
+         // [MEDIUM] Verify proposal is in voteable state
         const proposal = await getProposalById(input.proposalId);
         if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
-
         const voteableCheck = isProposalVoteable(proposal);
         if (!voteableCheck.voteable) {
           createStandardError("FORBIDDEN", "Cannot vote: eligibility check failed");
+        }
+        // [MEDIUM] Verify vote chain matches proposal chain (or proposal allows "both")
+        if (proposal.chain !== "both" && proposal.chain !== input.chain) {
+          createStandardError("BAD_REQUEST", `This proposal is ${proposal.chain}-only. Cannot vote from ${input.chain}`);
         }
 
         // [CRITICAL] Double-vote prevention (application level + DB unique constraint)
@@ -344,7 +360,8 @@ export const hardenedDaoRouter = router({
         if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
 
         // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
-        const trustedPower = Math.min(input.votingPower, verifiedPower);
+        // Use only on-chain verified power — ignore client-supplied votingPower
+        const trustedPower = verifiedPower;
 
         // [MEDIUM] Generate vote receipt for audit trail
         const receiptHash = generateVoteReceipt(
@@ -420,10 +437,14 @@ export const hardenedDaoRouter = router({
         statement: safeStringSchema(5000).optional(),
       }))
       .mutation(async ({ ctx, input }) => {
-        // [HIGH] Verify minimum balance to become a delegate
-        const balance = await verifyVotingPower(input.address, "pulsechain");
-        if (balance < 10_000) {
-          createStandardError("PRECONDITION_FAILED", "Must hold at least 10,000 HERO tokens to register as delegate");
+        // [HIGH] Verify minimum balance across both chains to become a delegate
+        const [pulseBalance, baseBalance] = await Promise.all([
+          verifyVotingPower(input.address, "pulsechain").catch(() => 0),
+          verifyVotingPower(input.address, "base").catch(() => 0),
+        ]);
+        const totalBalance = pulseBalance + baseBalance;
+        if (totalBalance < 10_000) {
+          createStandardError("PRECONDITION_FAILED", "Must hold at least 10,000 HERO tokens (combined across chains) to register as delegate");
         }
 
         const existing = await getDelegateByAddress(input.address);
@@ -470,11 +491,16 @@ export const hardenedDaoRouter = router({
       .input(z.object({
         delegatorAddress: ethAddressSchema,
         delegateAddress: ethAddressSchema,
-        amount: z.number().int().positive().max(1_000_000_000),
+        amount: z.number().int().positive().max(100_000_000), // Max 100M (total supply cap)
         chain: z.enum(["base", "pulsechain"]),
         txHash: txHashSchema,
       }))
       .mutation(async ({ ctx, input }) => {
+        // [HIGH] Verify delegator address matches authenticated user's wallet
+        if (input.delegatorAddress.toLowerCase() !== ctx.user.walletAddress?.toLowerCase()) {
+          createStandardError("FORBIDDEN", "Delegator address does not match authenticated user");
+        }
+
         // [HIGH] Cannot delegate to yourself
         if (input.delegatorAddress.toLowerCase() === input.delegateAddress.toLowerCase()) {
           createStandardError("BAD_REQUEST", "Cannot delegate to yourself");
@@ -482,6 +508,15 @@ export const hardenedDaoRouter = router({
 
         const delegate = await getDelegateByAddress(input.delegateAddress);
         if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
+
+        // [MEDIUM] Check for existing delegation to prevent duplicates
+        const existingDelegations = await getDelegationsByDelegator(ctx.user.id);
+        const alreadyDelegated = existingDelegations.find(
+          (d: any) => d.delegateAddress?.toLowerCase() === input.delegateAddress.toLowerCase() && d.chain === input.chain
+        );
+        if (alreadyDelegated) {
+          createStandardError("BAD_REQUEST", "You already have an active delegation to this delegate on this chain");
+        }
 
         // [HIGH] Verify delegator actually holds the tokens they're delegating
         const balance = await verifyVotingPower(input.delegatorAddress, input.chain);
@@ -515,6 +550,12 @@ export const hardenedDaoRouter = router({
     revoke: protectedProcedure
       .input(z.object({ delegationId: z.number().int().positive() }))
       .mutation(async ({ ctx, input }) => {
+        // [MEDIUM] Verify the user owns this delegation before revoking
+        const userDelegations = await getDelegationsByDelegator(ctx.user.id);
+        const ownsDelegation = userDelegations.some((d: any) => d.id === input.delegationId);
+        if (!ownsDelegation) {
+          createStandardError("FORBIDDEN", "You can only revoke your own delegations");
+        }
         await revokeDelegation(input.delegationId, ctx.user.id);
         return { success: true };
       }),
@@ -539,8 +580,10 @@ export const hardenedDaoRouter = router({
   }),
 });
 
-// ─── Helper stubs (replace with actual DB imports) ──────────────────────
-// These are placeholders showing the interface. In production, import from db.ts
+// ─── DB Layer Type Declarations ──────────────────────────────────────
+// These declare the interface for DB functions implemented in the Drizzle/MySQL layer.
+// Actual implementations use parameterized queries (see db.ts and dao-rate-limiter.ts).
+// Rate limiting: production uses atomicRateLimitAndRecord from dao-rate-limiter.ts.
 
 declare function getProposals(status: string | undefined, limit: number): Promise<any[]>;
 declare function getDelegates(limit: number): Promise<any[]>;

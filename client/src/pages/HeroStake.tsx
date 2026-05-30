@@ -673,7 +673,6 @@ export default function HeroStake() {
             <a
               href={`${chainConfig.explorer}/address/${getStakingAddress(chainId)}`}
               target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
               
               className="hover:underline"
               style={{ color: "#C8A84B", fontFamily: "monospace" }}
@@ -690,7 +689,6 @@ export default function HeroStake() {
             <a
               href={`${chainConfig.explorer}/token/${chainConfig.heroCA}`}
               target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
               
               className="hover:underline"
               style={{ color: "#C8A84B", fontFamily: "monospace" }}

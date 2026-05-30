@@ -117,7 +117,7 @@ function LiveMentionCard({
         <div className="flex items-start justify-between gap-3 mb-3">
           <div className="flex items-start gap-3">
             {mention.authorProfileImageUrl && (
-              <img alt="Blog post thumbnail"
+              <img
                 src={mention.authorProfileImageUrl}
                 alt={mention.authorUsername}
                 className="w-10 h-10 rounded-full border border-border/50 shrink-0"
@@ -532,7 +532,6 @@ export default function Blog() {
           <a
             href="https://double.trudefi.io/"
             target="_blank" rel="noopener noreferrer"
-            rel="noopener noreferrer"
             className="flex items-center gap-2 px-3 py-1.5 rounded-md border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors text-sm font-medium"
           >
             <img src="https://double.trudefi.io/favicon.ico" className="w-4 h-4" alt="TruDeFi" onError={(e: React.SyntheticEvent<HTMLImageElement>) => { (e.target as HTMLImageElement).style.display = 'none'; }} />

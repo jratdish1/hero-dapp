@@ -29,11 +29,11 @@ import {
   useEnsName,
   useEnsAvatar,
 } from "wagmi";
-// ENS resolution requires mainnet (chainId 1) but our wagmi config only has 369/8453
-// Use type assertion to satisfy the Register constraint while still querying mainnet ENS
+// ENS resolution requires mainnet (chainId 1) but wagmi Register only supports 369/8453.
+// We cast to satisfy typings; useEnsName/useEnsAvatar still query mainnet RPC internally.
 const MAINNET_CHAIN_ID = 1 as unknown as 369;
 import { normalize } from "viem/ens";
-import { getAddress, isAddress } from "viem";
+import { getAddress, isAddress, formatUnits } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
 
 // ─── Jazzicon-style gradient avatar ─────────────────────────────────────
@@ -96,7 +96,7 @@ function getConnectorMeta(name: string) {
 export function WalletButton() {
   const { chain, chainId } = useNetwork();
   const [isOpen, setIsOpen] = useState(false);
-  const [copied, setCopied] = useState(false);
+  const [isCopied, setIsCopied] = useState(false);
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
@@ -233,6 +233,14 @@ export function WalletButton() {
     }
   };
 
+  const copyTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+    };
+  }, []);
+
   const copyAddress = async () => {
     if (!address || !isAddress(address)) return;
     if (!navigator.clipboard?.writeText) {
@@ -241,9 +249,10 @@ export function WalletButton() {
     }
     try {
       await navigator.clipboard.writeText(getAddress(address));
-      setCopied(true);
+      setIsCopied(true);
       toast.success("Address copied to clipboard");
-      setTimeout(() => setCopied(false), 2000);
+      if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
+      copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
       toast.error("Failed to copy address");
     }
@@ -257,8 +266,15 @@ export function WalletButton() {
 
   const formatBalance = (val: bigint | undefined, decimals: number) => {
     if (val === undefined) return "0";
-    const num = Number(val) / 10 ** decimals;
-    return num < 0.001 && num > 0 ? "<0.001" : num.toFixed(3);
+    // Use formatUnits (string-based) to avoid BigInt→Number precision loss
+    const str = formatUnits(val, decimals);
+    const num = parseFloat(str);
+    if (num === 0) return "0";
+    if (num < 0.001) return "<0.001";
+    // For large numbers (>1M), show compact notation
+    if (num >= 1_000_000) return `${(num / 1_000_000).toFixed(2)}M`;
+    if (num >= 1_000) return `${(num / 1_000).toFixed(2)}K`;
+    return num.toFixed(3);
   };
 
   // ─── Connected State (Enhanced with Identity) ──────────────────────────
@@ -344,7 +360,7 @@ export function WalletButton() {
                   className="flex items-center gap-1 text-xs font-mono text-muted-foreground hover:text-foreground transition-colors"
                 >
                   {truncateAddress(address)}
-                  {copied ? (
+                  {isCopied ? (
                     <Check className="h-3 w-3 text-hero-green" />
                   ) : (
                     <Copy className="h-3 w-3" />
@@ -456,7 +472,7 @@ export function WalletButton() {
                 <button
                   key={connector.uid}
                   onClick={() => handleConnect(connector)}
-                  disabled={isConnecting}
+                  disabled={connectingId !== null && connectingId !== connector.uid}
                   className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-orange/30 hover:shadow-md group disabled:opacity-50"
                 >
                   {meta.icon}
@@ -507,7 +523,7 @@ export function WalletButton() {
                 <button
                   key={connector.uid}
                   onClick={() => handleConnect(connector)}
-                  disabled={isConnecting}
+                  disabled={connectingId !== null && connectingId !== connector.uid}
                   className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-green/30 hover:shadow-md group disabled:opacity-50"
                 >
                   {meta.icon}

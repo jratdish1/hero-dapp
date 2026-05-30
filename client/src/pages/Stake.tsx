@@ -612,7 +612,7 @@ export default function Stake() {
 
       {/* Page header with HERO emblem — CHAIN AWARE */}
       <div className="flex items-center gap-4">
-        <img alt="Staking pool token"
+        <img
           src={CDN_ASSETS.heroEmblem}
           alt="HERO Emblem"
           className="w-14 h-14 rounded-xl shadow-lg shadow-[#e8b84b]/20"
@@ -1055,7 +1055,6 @@ export default function Stake() {
                     <a
                       href={`https://basescan.org/token/${HERO_TOKEN_BASE.address}`}
                       target="_blank" rel="noopener noreferrer"
-                     rel="noopener noreferrer"
                       
                       className="text-[#0052FF] hover:underline font-mono text-xs"
                     >

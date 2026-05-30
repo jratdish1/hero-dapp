@@ -127,7 +127,6 @@ export default function LimitOrders() {
           <a
             href="https://app.squirrelswap.pro/#/?mode=limit"
             target="_blank" rel="noopener noreferrer"
-           rel="noopener noreferrer"
             
             className="text-xs text-muted-foreground hover:text-[var(--hero-green)] flex items-center gap-1 transition-colors"
             aria-label="Open SquirrelSwap full app in new tab"
@@ -181,7 +180,6 @@ export default function LimitOrders() {
         <a
           href="https://app.squirrelswap.pro/#/docs"
           target="_blank" rel="noopener noreferrer"
-         rel="noopener noreferrer"
           
           className="hover:text-[var(--hero-green)] transition-colors"
           aria-label="Open SquirrelSwap documentation in new tab"

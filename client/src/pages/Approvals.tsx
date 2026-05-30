@@ -151,7 +151,7 @@ export default function Approvals() {
                 <tr key={approval.id} className="border-b border-border/50 hover:bg-secondary/30 transition-colors">
                   <td className="py-3 px-4">
                     <div className="flex items-center gap-2">
-                      <img alt="Token icon"
+                      <img
                         src={approval.token.logoURI}
                         alt={approval.token.symbol}
                         className="w-7 h-7 rounded-full"
@@ -166,8 +166,6 @@ export default function Approvals() {
                       <a
                         href={`https://scan.pulsechain.com/address/${approval.spender}`}
                         target="_blank" rel="noopener noreferrer"
-                       rel="noopener noreferrer"
-                        
                         className="text-xs text-muted-foreground hover:text-[var(--hero-orange)] flex items-center gap-0.5"
                       >
                         {approval.spender} <ExternalLink className="w-3 h-3" />

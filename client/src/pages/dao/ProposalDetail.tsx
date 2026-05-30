@@ -26,7 +26,8 @@ export default function ProposalDetail() {
   const [, params] = useRoute("/dao/proposals/:id");
   // Validate proposalId from URL params to prevent injection
   const rawProposalId = params?.id || "";
-  const proposalId = /^[a-zA-Z0-9_-]{1,64}$/.test(rawProposalId) ? rawProposalId : "";
+  // Proposal IDs follow format: HERO-XXXX or alphanumeric with hyphens, 3-64 chars
+  const proposalId = /^[A-Za-z0-9][A-Za-z0-9-]{2,63}$/.test(rawProposalId) ? rawProposalId : "";
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();

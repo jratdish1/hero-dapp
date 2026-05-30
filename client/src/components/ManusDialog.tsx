@@ -55,9 +55,9 @@ export function ManusDialog({
         <div className="flex flex-col items-center gap-2 p-5 pt-12">
           {logo ? (
             <div className="w-16 h-16 bg-white rounded-xl border border-[rgba(0,0,0,0.08)] flex items-center justify-center">
-              <img alt="Manus AI assistant"
+              <img
                 src={logo}
-                alt="Dialog graphic"
+                alt="Manus AI assistant"
                 className="w-10 h-10 rounded-md"
               />
             </div>

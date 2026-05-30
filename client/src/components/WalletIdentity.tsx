@@ -5,7 +5,8 @@
  */
 import { useState, useMemo } from "react";
 import { useAccount, useEnsName, useEnsAvatar } from "wagmi";
-// ENS resolution requires mainnet (chainId 1) but wagmi Register only allows 369|8453
+// ENS resolution requires mainnet (chainId 1) but wagmi Register only supports 369/8453.
+// We cast to satisfy typings; useEnsName/useEnsAvatar still query mainnet RPC internally.
 const MAINNET_CHAIN_ID = 1 as unknown as 369;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress } from "viem";

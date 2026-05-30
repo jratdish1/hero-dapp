@@ -331,7 +331,6 @@ export default function ApprovalsEnhanced() {
         <a
           href="https://revoke.cash"
           target="_blank" rel="noopener noreferrer"
-         rel="noopener noreferrer"
           
           className="flex items-center gap-1 text-[var(--hero-orange)] hover:underline"
         >
@@ -341,7 +340,6 @@ export default function ApprovalsEnhanced() {
         <a
           href="https://scan.pulsechain.com"
           target="_blank" rel="noopener noreferrer"
-         rel="noopener noreferrer"
           
           className="flex items-center gap-1 text-[var(--hero-orange)] hover:underline"
         >

@@ -236,7 +236,6 @@ export default function SwapHistory() {
                         <a
                           href={getExplorerUrl(swap.txHash, swap.chain)}
                           target="_blank" rel="noopener noreferrer"
-                          rel="noopener noreferrer"
                           aria-label={`View transaction ${swap.txHash} on block explorer`}
                           className="inline-flex items-center gap-0.5 text-[10px] text-[var(--hero-green)] hover:underline"
                         >

@@ -332,7 +332,7 @@ export default function PortfolioDashboard() {
               {totalStakedFormatted} HERO
             </span>
           </div>
-          {totalStaked && heroBalance && (stakeData as [bigint, bigint, bigint])?.[0] > 0n && (
+          {totalStaked && Number(totalStaked) > 0 && heroBalance && (stakeData as [bigint, bigint, bigint])?.[0] > 0n && (
             <div className="flex items-center justify-between mt-1.5">
               <span className="text-[10px] text-muted-foreground">Your Pool Share</span>
               <span className="text-[10px] font-medium text-hero-orange">

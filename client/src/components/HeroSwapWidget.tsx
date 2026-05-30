@@ -91,7 +91,11 @@ export default function HeroSwapWidget({
   const [activeChain, setActiveChain] = useState<"base" | "pulsechain">(
     chainId === 8453 ? "base" : defaultChain
   );
-  const [slippage, setSlippage] = useState("0.5");
+  const VALID_SLIPPAGE = ["0.1", "0.5", "1.0", "3.0"] as const;
+  const [slippage, setSlippage] = useState<string>("0.5");
+  const safeSetSlippage = (val: string) => {
+    if ((VALID_SLIPPAGE as readonly string[]).includes(val)) setSlippage(val);
+  };
   const [showSettings, setShowSettings] = useState(false);
 
   // Auto-switch chain display based on connected network
@@ -156,7 +160,7 @@ export default function HeroSwapWidget({
                 {["0.1", "0.5", "1.0", "3.0"].map((val) => (
                   <button
                     key={val}
-                    onClick={() => setSlippage(val)}
+                    onClick={() => safeSetSlippage(val)}
                     className={`px-2 py-0.5 rounded text-xs font-medium transition-colors ${
                       slippage === val
                         ? "bg-hero-orange/20 text-hero-orange border border-hero-orange/30"

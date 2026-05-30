@@ -194,7 +194,6 @@ export default function BuyAndBurn() {
                 <a
                   href="https://scan.pulsechain.com/address/0x000000000000000000000000000000000000dEaD"
                   target="_blank" rel="noopener noreferrer"
-                 rel="noopener noreferrer"
                   
                   className="text-xs font-mono text-[var(--hero-orange)] hover:underline flex items-center gap-1"
                 >
@@ -203,7 +202,6 @@ export default function BuyAndBurn() {
                 <a
                   href="https://scan.pulsechain.com/address/0x0000000000000000000000000000000000000000"
                   target="_blank" rel="noopener noreferrer"
-                 rel="noopener noreferrer"
                   
                   className="text-xs font-mono text-[var(--hero-orange)] hover:underline flex items-center gap-1"
                 >

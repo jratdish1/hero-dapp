@@ -310,7 +310,6 @@ export default function MediaHub() {
               <a
                 href="https://double.trudefi.io/"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="flex items-center gap-2 px-4 py-2 rounded-md border border-blue-500/50 text-blue-400 hover:bg-blue-500/10 transition-colors text-sm font-medium"
               >
@@ -386,7 +385,7 @@ export default function MediaHub() {
                       </div>
                     </div>
                   ) : (
-                    <img alt="Media gallery item"
+                    <img
                       src={post.mediaUrl}
                       alt={post.title}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"

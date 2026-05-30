@@ -144,7 +144,6 @@ export default function Home() {
           <a
             href="https://midgard.wtf/"
             target="_blank" rel="noopener noreferrer"
-           rel="noopener noreferrer"
             
             className="text-[var(--hero-orange)] hover:text-white font-bold text-sm tracking-wider uppercase transition-colors inline-flex items-center gap-2"
           >
@@ -160,7 +159,7 @@ export default function Home() {
       </div>
       {/* HERO UN Banner — Full Size Hero Header */}
       <div className="w-full relative" style={{height: '60vh', minHeight: '400px', maxHeight: '700px'}}>
-        <img alt="HERO ecosystem"
+        <img
           src={HERO_BANNER_URL} srcSet="/hero-banner-sm.webp 800w, /hero-banner-un.webp 1920w" sizes="100vw"
           alt="HERO United Nations Banner"
           fetchPriority="high" className="w-full h-full object-cover object-center"
@@ -178,7 +177,7 @@ export default function Home() {
       <nav className="sticky top-0 z-50 bg-background/80 backdrop-blur-md border-b border-border">
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <img alt="PulseChain network"
+            <img
               src={HERO_LOGO_URL}
               alt="HERO Logo"
               className="w-10 h-10 rounded-full object-cover border-2 border-[var(--hero-orange)]/40 shadow-md"
@@ -251,7 +250,7 @@ export default function Home() {
                 key={token.symbol}
                 className="flex items-center gap-3 px-5 py-3 rounded-xl bg-card border border-border hover:border-[var(--hero-orange)]/30 transition-colors cursor-pointer"
               >
-                <img alt="Feature illustration"
+                <img
                   src={token.logoURI}
                   alt={token.symbol}
                   className="w-8 h-8 rounded-full"
@@ -341,7 +340,7 @@ export default function Home() {
               <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-orange-500/10 rounded-2xl blur-xl" />
               <div className="relative bg-card/80 rounded-2xl border border-border p-8">
                 <a href="https://regenvalor.com" target="_blank" rel="noopener noreferrer">
-                  <img alt="Partner logo"
+                  <img
                     src="/regenvalor_og.webp" loading="lazy"
                     alt="RegenValor Logo"
                     className="w-48 mx-auto mb-6 opacity-90 hover:opacity-100 transition-opacity"
@@ -410,7 +409,6 @@ export default function Home() {
             <a
               href="https://www.youtube.com/@LIFEWAVEPATCH1"
               target="_blank" rel="noopener noreferrer"
-             rel="noopener noreferrer"
               
               className="flex items-center gap-3 px-5 py-2.5 rounded-xl bg-red-600/90 hover:bg-red-600 transition-colors text-white font-semibold text-sm shadow-lg"
             >
@@ -428,7 +426,7 @@ export default function Home() {
         </div>
         {/* Blackbeard footer banner */}
         <div className="w-full relative overflow-hidden" style={{maxHeight: "350px"}}>
-          <img alt="Community banner"
+          <img
             loading="lazy" src={BLACKBEARD_URL}
             alt="Black Bear Footer"
             className="w-full object-contain"
@@ -448,7 +446,6 @@ export default function Home() {
               <a
                 href="https://scan.pulsechain.com/token/0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
@@ -457,7 +454,6 @@ export default function Home() {
               <a
                 href="https://scan.pulsechain.com/token/0x4013abBf94A745EfA7cc848989Ee83424A770060"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
@@ -466,7 +462,6 @@ export default function Home() {
               <a
                 href="https://x.com/hero501c3"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
@@ -475,7 +470,6 @@ export default function Home() {
               <a
                 href="https://dashboard.vicfoundation.com"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
@@ -484,7 +478,6 @@ export default function Home() {
               <a
                 href="https://docs.vicfoundation.com"
                 target="_blank" rel="noopener noreferrer"
-               rel="noopener noreferrer"
                 
                 className="hover:text-[var(--hero-orange)] flex items-center gap-1"
               >
