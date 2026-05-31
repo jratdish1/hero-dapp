@@ -12,7 +12,7 @@
     "test": "vitest run",
     "db:push": "drizzle-kit generate && drizzle-kit migrate",
     "postdeploy": "bash scripts/fix-nginx-dao.sh || true",
-    "prebuild": "npm install --legacy-peer-deps --prefer-offline"
+    "prebuild": "npm install --legacy-peer-deps && rm -rf node_modules/@reown"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
