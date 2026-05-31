@@ -176,6 +176,9 @@ export default defineConfig({
     cssCodeSplit: true,
     modulePreload: false,
     rollupOptions: {
+      // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
+      // even if Vite alias fails to intercept a dynamic import
+      external: (id) => id.includes('@reown/appkit'),
       output: {
         manualChunks(id) {
           // React core — cached separately, rarely changes
