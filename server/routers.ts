@@ -1162,7 +1162,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
   spin: router({
     canSpin: publicProcedure
       .input(z.object({ wallet: ethAddressSchema }))
-      .query(({ input }) => {
+      .query(async ({ input }) => {
         const record = spinRecordsV2.get(input.wallet.toLowerCase()) || null;
         const eligible = canSpinTodayV2(record);
         const streak = record?.currentStreak || 0;

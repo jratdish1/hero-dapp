@@ -134,11 +134,23 @@ export function WalletButton() {
 
   const normalizedEnsName = useMemo(() => ensName ? normalize(ensName) : undefined, [ensName]);
 
-  const { data: ensAvatar } = useEnsAvatar({
+  const { data: rawEnsAvatar } = useEnsAvatar({
     name: normalizedEnsName,
     chainId: MAINNET_CHAIN_ID,
     query: { enabled: !!ensName, staleTime: 1000 * 60 * 60 },
   });
+
+  // SECURITY: Sanitize ENS avatar URL to prevent XSS via malicious URIs
+  const ensAvatar = useMemo(() => {
+    if (!rawEnsAvatar) return undefined;
+    try {
+      const url = new URL(rawEnsAvatar);
+      if (url.protocol === 'https:' || url.protocol === 'http:') return rawEnsAvatar;
+      return undefined; // Block javascript:, data:, and other protocols
+    } catch {
+      return undefined;
+    }
+  }, [rawEnsAvatar]);
 
   // Deduplicate and sort connectors
   const sortedConnectors = useMemo(() => {
@@ -243,17 +255,27 @@ export function WalletButton() {
 
   const copyAddress = async () => {
     if (!address || !isAddress(address)) return;
-    if (!navigator.clipboard?.writeText) {
-      toast.error("Clipboard not supported in this browser");
-      return;
-    }
+    const checksummedAddr = getAddress(address);
     try {
-      await navigator.clipboard.writeText(getAddress(address));
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(checksummedAddr);
+      } else {
+        // Fallback for browsers without Clipboard API
+        const textArea = document.createElement('textarea');
+        textArea.value = checksummedAddr;
+        textArea.style.position = 'fixed';
+        textArea.style.opacity = '0';
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(textArea);
+      }
       setIsCopied(true);
       toast.success("Address copied to clipboard");
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000);
     } catch (err) {
+      console.error('Clipboard copy failed:', err);
       toast.error("Failed to copy address");
     }
   };
