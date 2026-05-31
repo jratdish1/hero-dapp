@@ -1,0 +1,92 @@
+{
+  "overall_grade": "A-",
+  "summary": "The HeroCards ERC-721 contract is well-structured, leveraging OpenZeppelin libraries for security and standard compliance. Access control is robust with Ownable2Step and proper modifiers. Reentrancy is mitigated using ReentrancyGuard and CEI pattern. Solidity 0.8+ built-in overflow checks are relied upon appropriately. Input validation is thorough, including zero address and boundary checks. The randomization mechanism uses a commit-reveal scheme with blockhash, which is reasonably secure but still vulnerable to miner influence within 256 blocks. Centralization risk exists as the owner controls mint phases, pricing, whitelist, and withdrawal of funds, but this is typical for NFT projects. Gas optimizations are present, especially in batch minting. ERC-721 and ERC-2981 standards are correctly implemented. Event emissions cover all critical state changes. Code quality is good with clear NatSpec comments and readable logic, though some minor improvements in error messages and documentation could be made. Overall, the contract is secure and production-ready with minor caveats around randomization and centralization.",
+  "categories": {
+    "access_control": {
+      "grade": "A",
+      "notes": "All admin functions are protected by onlyOwner modifier from Ownable2Step. No public functions allow unauthorized state changes. Mint phases and critical parameters can only be changed by owner."
+    },
+    "reentrancy": {
+      "grade": "A",
+      "notes": "ReentrancyGuard is used correctly on external payable functions (mint, whitelistMint, withdraw). CEI pattern is followed in withdraw. No external calls before state changes."
+    },
+    "overflow": {
+      "grade": "A+",
+      "notes": "Solidity 0.8+ built-in overflow/underflow checks are relied upon. No unchecked arithmetic except safe increments in loops."
+    },
+    "input_validation": {
+      "grade": "A",
+      "notes": "Inputs are validated for zero quantity, zero address, max supply, wallet limits, and payment sufficiency. Merkle proof verification is done correctly. No unchecked external inputs."
+    },
+    "dos": {
+      "grade": "A",
+      "notes": "No unbounded loops; batch minting loops are bounded by quantity parameter with max per wallet limit. Contract cannot be bricked by owner actions. Pausable functionality allows emergency stop."
+    },
+    "front_running": {
+      "grade": "B",
+      "notes": "Randomization uses blockhash of a future block with commit-reveal pattern, which reduces miner manipulation but does not eliminate it entirely. Miner can influence blockhash within 256 blocks window. No VRF or oracle integration."
+    },
+    "centralization": {
+      "grade": "B+",
+      "notes": "Owner controls mint phases, pricing, whitelist, fee discount, provenance setting, and fund withdrawal. This is standard but centralizes control and funds. No multisig or timelocks present."
+    },
+    "gas_optimization": {
+      "grade": "A",
+      "notes": "Batch minting caches state updates outside loops, uses unchecked increments, and minimizes storage writes. Uses efficient event emissions. Overall gas usage is optimized."
+    },
+    "logic_errors": {
+      "grade": "A",
+      "notes": "Randomization math for metadata offset is correct. Fee discount logic returns correct basis points. Mint limits and supply caps enforced properly. No apparent logic flaws."
+    },
+    "erc_compliance": {
+      "grade": "A",
+      "notes": "Inherits from OpenZeppelin ERC721, ERC721Enumerable, ERC721Royalty, ERC721Pausable. Overrides supportsInterface correctly. Implements ERC-2981 royalties with 5% default. TokenURI logic follows standard."
+    },
+    "event_emission": {
+      "grade": "A",
+      "notes": "All critical state changes emit events, including minting, phase changes, URI updates, provenance, randomization, fee discount, and withdrawals."
+    },
+    "code_quality": {
+      "grade": "A-",
+      "notes": "Code is well-documented with NatSpec comments, clear variable names, and modular functions. Minor improvements could be made in error message consistency and additional inline comments."
+    }
+  },
+  "critical_issues": [],
+  "high_issues": [],
+  "medium_issues": [
+    {
+      "title": "Randomization Vulnerable to Miner Manipulation",
+      "description": "The random start index is derived from a future blockhash within 256 blocks, which miners can influence by choosing whether to mine that block or not. This introduces some front-running risk in metadata assignment.",
+      "recommendation": "Consider integrating a decentralized VRF oracle (e.g., Chainlink VRF) for unbiased randomness or implement a longer commit-reveal scheme with multiple entropy sources."
+    }
+  ],
+  "low_issues": [
+    {
+      "title": "Centralized Owner Control",
+      "description": "Owner has broad control over mint phases, pricing, whitelist, fee discounts, provenance, and fund withdrawal without multisig or timelock.",
+      "recommendation": "Consider adding multisig ownership or timelock mechanisms to reduce centralization risk and increase trust."
+    },
+    {
+      "title": "Error Message Consistency",
+      "description": "Some revert errors use custom errors while others use revert strings; consistency could improve readability and gas efficiency.",
+      "recommendation": "Standardize on custom errors for all revert conditions to save gas and improve clarity."
+    }
+  ],
+  "informational": [
+    {
+      "title": "Use of Ownable2Step",
+      "description": "Ownable2Step is used for ownership transfer with acceptance, which is a good practice to prevent accidental ownership loss."
+    },
+    {
+      "title": "Fee Discount Logic",
+      "description": "Fee discount is implemented as a basis points value with a max cap of 10%, which is reasonable and clearly enforced."
+    }
+  ],
+  "recommendations": [
+    "Integrate a decentralized VRF oracle for improved randomness security.",
+    "Add multisig or timelock on owner functions to reduce centralization risk.",
+    "Standardize revert error handling using custom errors throughout the contract.",
+    "Add more inline NatSpec comments on complex logic sections for maintainability.",
+    "Consider emitting events on all state-changing admin functions for full transparency."
+  ]
+}
