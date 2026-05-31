@@ -19,6 +19,8 @@ import {
   QrCode,
   Smartphone,
   ChevronDown,
+  ArrowLeft,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -35,6 +37,7 @@ const MAINNET_CHAIN_ID = 1 as unknown as 369;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress, formatUnits } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
+import { QRCodeSVG } from "qrcode.react";
 
 // ─── Jazzicon-style gradient avatar ─────────────────────────────────────
 function generateGradient(address: string): string {
@@ -93,6 +96,111 @@ function getConnectorMeta(name: string) {
   );
 }
 
+// ─── Custom WalletConnect QR Modal ─────────────────────────────────────
+// This renders a QR code locally using the WC pairing URI.
+// No dependency on api.web3modal.com or cloud.reown.com.
+// Works on ALL browsers: Chrome, Brave, Safari, Firefox, mobile & desktop.
+function WcQrModal({
+  uri,
+  onBack,
+  onClose,
+}: {
+  uri: string;
+  onBack: () => void;
+  onClose: () => void;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const copyUri = async () => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(uri);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = uri;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
+      setCopied(true);
+      toast.success("Link copied to clipboard");
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy link");
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-center gap-4 py-2">
+      {/* Header with back button */}
+      <div className="flex items-center w-full">
+        <button
+          onClick={onBack}
+          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
+        >
+          <ArrowLeft className="h-5 w-5 text-muted-foreground" />
+        </button>
+        <h3 className="flex-1 text-center text-lg font-bold text-foreground">
+          WalletConnect
+        </h3>
+        <button
+          onClick={onClose}
+          className="p-1 rounded-lg hover:bg-muted/50 transition-colors"
+        >
+          <X className="h-5 w-5 text-muted-foreground" />
+        </button>
+      </div>
+
+      {/* QR Code */}
+      <div className="bg-white rounded-2xl p-4 shadow-lg">
+        <QRCodeSVG
+          value={uri}
+          size={260}
+          level="M"
+          includeMargin={false}
+          imageSettings={{
+            src: "/hero-soldier.webp",
+            x: undefined,
+            y: undefined,
+            height: 40,
+            width: 40,
+            excavate: true,
+          }}
+        />
+      </div>
+
+      {/* Instructions */}
+      <p className="text-sm text-muted-foreground text-center">
+        Scan this QR code with your mobile wallet
+      </p>
+      <p className="text-xs text-muted-foreground/70 text-center">
+        Trust Wallet, MetaMask Mobile, Rainbow, Ledger Live, and 300+ wallets supported
+      </p>
+
+      {/* Copy link button */}
+      <button
+        onClick={copyUri}
+        className="flex items-center gap-2 rounded-xl border border-border/50 bg-background/50 px-4 py-2.5 text-sm font-medium text-foreground hover:bg-card hover:border-hero-orange/30 transition-all"
+      >
+        {copied ? (
+          <>
+            <Check className="h-4 w-4 text-hero-green" />
+            Copied!
+          </>
+        ) : (
+          <>
+            <Copy className="h-4 w-4" />
+            Copy link
+          </>
+        )}
+      </button>
+    </div>
+  );
+}
+
 export function WalletButton() {
   const { chain, chainId } = useNetwork();
   const [isOpen, setIsOpen] = useState(false);
@@ -100,6 +208,8 @@ export function WalletButton() {
   const [connectingId, setConnectingId] = useState<string | null>(null);
   const [showDetails, setShowDetails] = useState(false);
   const [avatarError, setAvatarError] = useState(false);
+  const [wcUri, setWcUri] = useState<string | null>(null);
+  const [showWcQr, setShowWcQr] = useState(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Cleanup timeout on unmount
@@ -124,6 +234,26 @@ export function WalletButton() {
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
+
+  // ─── Listen for WalletConnect URI ──────────────────────────────────────
+  // When showQrModal is false, wagmi emits a 'message' event with the URI
+  // that we use to render our own QR code locally.
+  useEffect(() => {
+    const wcConnector = connectors.find((c) => c.name === "WalletConnect");
+    if (!wcConnector) return;
+
+    const handleMessage = ({ type, data }: { type: string; data?: unknown }) => {
+      if (type === "display_uri" && typeof data === "string") {
+        setWcUri(data);
+        setShowWcQr(true);
+      }
+    };
+
+    wcConnector.emitter.on("message", handleMessage);
+    return () => {
+      wcConnector.emitter.off("message", handleMessage);
+    };
+  }, [connectors]);
 
   // ─── Identity Resolution ────────────────────────────────────────────
   const { data: ensName } = useEnsName({
@@ -184,12 +314,14 @@ export function WalletButton() {
       setConnectingId((current) => {
         if (current === connectorUid) {
           toast.error("Connection timed out");
+          setShowWcQr(false);
+          setWcUri(null);
           return null;
         }
         return current;
       });
       connectTimeoutRef.current = null;
-    }, 30000);
+    }, 60000); // 60s timeout for WC (QR scanning takes time)
 
     try {
       connect(
@@ -205,6 +337,8 @@ export function WalletButton() {
             });
             setIsOpen(false);
             setConnectingId(null);
+            setShowWcQr(false);
+            setWcUri(null);
           },
           onError: (err) => {
             if (connectTimeoutRef.current) {
@@ -212,6 +346,8 @@ export function WalletButton() {
               connectTimeoutRef.current = null;
             }
             setConnectingId(null);
+            setShowWcQr(false);
+            setWcUri(null);
             const msg = (err as Error)?.message ?? "Connection failed";
             if (msg.includes("User rejected") || msg.includes("rejected")) {
               toast.info("Connection cancelled");
@@ -231,6 +367,8 @@ export function WalletButton() {
         connectTimeoutRef.current = null;
       }
       setConnectingId(null);
+      setShowWcQr(false);
+      setWcUri(null);
       toast.error("Could not connect wallet");
     }
   };
@@ -460,7 +598,17 @@ export function WalletButton() {
 
   // ─── Disconnected State ─────────────────────────────────────────────
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog
+      open={isOpen}
+      onOpenChange={(open) => {
+        setIsOpen(open);
+        if (!open) {
+          setShowWcQr(false);
+          setWcUri(null);
+          setConnectingId(null);
+        }
+      }}
+    >
       <DialogTrigger asChild>
         <Button
           className="bg-hero-orange text-white font-bold shadow-lg shadow-hero-orange/25 hover:bg-hero-orange/90 hover:shadow-hero-orange/40 transition-all border-0"
@@ -471,115 +619,135 @@ export function WalletButton() {
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-md bg-card border-border">
-        <DialogHeader>
-          <DialogTitle className="text-lg font-bold text-foreground">
-            Connect to {chain.name}
-          </DialogTitle>
-          <p className="text-sm text-muted-foreground mt-1">
-            Choose your wallet to connect to the HERO Dapp
-          </p>
-        </DialogHeader>
+        {/* ─── Custom WalletConnect QR View ─────────────────────────── */}
+        {showWcQr && wcUri ? (
+          <WcQrModal
+            uri={wcUri}
+            onBack={() => {
+              setShowWcQr(false);
+              setWcUri(null);
+              setConnectingId(null);
+            }}
+            onClose={() => {
+              setIsOpen(false);
+              setShowWcQr(false);
+              setWcUri(null);
+              setConnectingId(null);
+            }}
+          />
+        ) : (
+          <>
+            <DialogHeader>
+              <DialogTitle className="text-lg font-bold text-foreground">
+                Connect to {chain.name}
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Choose your wallet to connect to the HERO Dapp
+              </p>
+            </DialogHeader>
 
-        {/* ─── Hot Wallets ─────────────────────────────────────────── */}
-        <div className="space-y-1.5 py-2">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
-            Hot Wallets
-          </p>
-          {sortedConnectors
-            .filter((c) => c.name !== "Safe")
-            .map((connector) => {
-              const meta = getConnectorMeta(connector.name);
-              const isThisConnecting = connectingId === connector.uid;
-              return (
-                <button
-                  key={connector.uid}
-                  onClick={() => handleConnect(connector)}
-                  disabled={connectingId !== null && connectingId !== connector.uid}
-                  className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-orange/30 hover:shadow-md group disabled:opacity-50"
-                >
-                  {meta.icon}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground group-hover:text-hero-orange transition-colors">
-                      {meta.label}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {meta.description}
-                    </div>
-                  </div>
-                  {isThisConnecting ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-hero-orange flex-shrink-0" />
-                  ) : (
-                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                  )}
-                </button>
-              );
-            })}
-        </div>
-
-        {/* ─── Hardware / Multisig ─────────────────────────────────── */}
-        <div className="space-y-1.5 py-2 border-t border-border/30">
-          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 pt-1">
-            Hardware & Multisig
-          </p>
-
-          <div className="flex items-center gap-3 rounded-xl border border-border/30 bg-background/30 p-3">
-            <Smartphone className="h-6 w-6 text-muted-foreground" />
-            <div className="flex-1">
-              <div className="font-medium text-foreground/70 text-sm">
-                Ledger / Trezor
-              </div>
-              <div className="text-xs text-muted-foreground">
-                {hasWalletConnect
-                  ? "Connect via WalletConnect QR code above"
-                  : "Connect via MetaMask (Ledger/Trezor integration)"}
-              </div>
+            {/* ─── Hot Wallets ─────────────────────────────────────────── */}
+            <div className="space-y-1.5 py-2">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1">
+                Hot Wallets
+              </p>
+              {sortedConnectors
+                .filter((c) => c.name !== "Safe")
+                .map((connector) => {
+                  const meta = getConnectorMeta(connector.name);
+                  const isThisConnecting = connectingId === connector.uid;
+                  return (
+                    <button
+                      key={connector.uid}
+                      onClick={() => handleConnect(connector)}
+                      disabled={connectingId !== null && connectingId !== connector.uid}
+                      className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-orange/30 hover:shadow-md group disabled:opacity-50"
+                    >
+                      {meta.icon}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground group-hover:text-hero-orange transition-colors">
+                          {meta.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {meta.description}
+                        </div>
+                      </div>
+                      {isThisConnecting ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-hero-orange flex-shrink-0" />
+                      ) : (
+                        <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
             </div>
-          </div>
 
-          {sortedConnectors
-            .filter((c) => c.name === "Safe")
-            .map((connector) => {
-              const meta = getConnectorMeta(connector.name);
-              const isThisConnecting = connectingId === connector.uid;
-              return (
-                <button
-                  key={connector.uid}
-                  onClick={() => handleConnect(connector)}
-                  disabled={connectingId !== null && connectingId !== connector.uid}
-                  className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-green/30 hover:shadow-md group disabled:opacity-50"
-                >
-                  {meta.icon}
-                  <div className="flex-1 min-w-0">
-                    <div className="font-medium text-foreground group-hover:text-hero-green transition-colors">
-                      {meta.label}
-                    </div>
-                    <div className="text-xs text-muted-foreground truncate">
-                      {meta.description}
-                    </div>
+            {/* ─── Hardware / Multisig ─────────────────────────────────── */}
+            <div className="space-y-1.5 py-2 border-t border-border/30">
+              <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider px-1 pt-1">
+                Hardware & Multisig
+              </p>
+
+              <div className="flex items-center gap-3 rounded-xl border border-border/30 bg-background/30 p-3">
+                <Smartphone className="h-6 w-6 text-muted-foreground" />
+                <div className="flex-1">
+                  <div className="font-medium text-foreground/70 text-sm">
+                    Ledger / Trezor
                   </div>
-                  {isThisConnecting ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-hero-green flex-shrink-0" />
-                  ) : (
-                    <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
-                  )}
-                </button>
-              );
-            })}
-        </div>
+                  <div className="text-xs text-muted-foreground">
+                    {hasWalletConnect
+                      ? "Connect via WalletConnect QR code above"
+                      : "Connect via MetaMask (Ledger/Trezor integration)"}
+                  </div>
+                </div>
+              </div>
 
-        {/* ─── WalletConnect status ────────────────────────────────── */}
-        {!hasWalletConnect && (
-          <div className="rounded-lg bg-muted/50 p-2.5 text-center">
-            <p className="text-xs text-muted-foreground">
-              <QrCode className="inline h-3 w-3 mr-1" />
-              WalletConnect QR scanning available once Project ID is configured
-            </p>
-          </div>
+              {sortedConnectors
+                .filter((c) => c.name === "Safe")
+                .map((connector) => {
+                  const meta = getConnectorMeta(connector.name);
+                  const isThisConnecting = connectingId === connector.uid;
+                  return (
+                    <button
+                      key={connector.uid}
+                      onClick={() => handleConnect(connector)}
+                      disabled={connectingId !== null && connectingId !== connector.uid}
+                      className="flex items-center gap-3 w-full rounded-xl border border-border/50 bg-background/50 p-3 text-left transition-all hover:bg-card hover:border-hero-green/30 hover:shadow-md group disabled:opacity-50"
+                    >
+                      {meta.icon}
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-foreground group-hover:text-hero-green transition-colors">
+                          {meta.label}
+                        </div>
+                        <div className="text-xs text-muted-foreground truncate">
+                          {meta.description}
+                        </div>
+                      </div>
+                      {isThisConnecting ? (
+                        <Loader2 className="h-4 w-4 animate-spin text-hero-green flex-shrink-0" />
+                      ) : (
+                        <ExternalLink className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+                      )}
+                    </button>
+                  );
+                })}
+            </div>
+
+            {/* ─── WalletConnect status ────────────────────────────────── */}
+            {!hasWalletConnect && (
+              <div className="rounded-lg bg-muted/50 p-2.5 text-center">
+                <p className="text-xs text-muted-foreground">
+                  <QrCode className="inline h-3 w-3 mr-1" />
+                  WalletConnect QR scanning available once Project ID is configured
+                </p>
+              </div>
+            )}
+
+            <div className="text-center text-xs text-muted-foreground pt-1">
+              By connecting, you agree to the Terms of Service
+            </div>
+          </>
         )}
-
-        <div className="text-center text-xs text-muted-foreground pt-1">
-          By connecting, you agree to the Terms of Service
-        </div>
       </DialogContent>
     </Dialog>
   );

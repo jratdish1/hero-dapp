@@ -77,7 +77,7 @@ if (wcProjectId) {
         url: "https://www.herobase.io",
         icons: ["https://www.herobase.io/favicon.ico"],
       },
-      showQrModal: true,
+      showQrModal: false,
     })
   );
 }
