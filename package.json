@@ -151,11 +151,8 @@
     ]
   },
   "overrides": {
-    "ws": "^8.20.1",
-    "qs": ">=6.14.0",
-    "uuid": ">=11.1.0",
-    "fast-xml-parser": ">=5.3.8",
-    "tar": ">=7.5.10",
-    "@walletconnect/ethereum-provider": "2.17.0"
+    "@walletconnect/ethereum-provider": "2.17.0",
+    "@walletconnect/modal": "2.7.0",
+    "@reown/appkit": "npm:empty-npm-package@1.0.0"
   }
 }
