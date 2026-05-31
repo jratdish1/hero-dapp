@@ -158,6 +158,13 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      // Block @reown/appkit - forces WalletConnect to use @walletconnect/modal 2.7.0
+      // which calls explorer-api.walletconnect.com (works with our project ID)
+      "@reown/appkit": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      "@reown/appkit-controllers": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      "@reown/appkit-core": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      "@reown/appkit-utils": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      "@reown/appkit-wallet": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
     },
   },
   envDir: path.resolve(import.meta.dirname),
