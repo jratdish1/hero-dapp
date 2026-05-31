@@ -123,3 +123,6 @@ verification_*.txt
 notes_*.txt
 releases/
 dist/
+artifacts/
+cache/
+.env.dao.local

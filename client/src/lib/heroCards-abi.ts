@@ -8,7 +8,10 @@
  */
 
 // Contract address — UPDATE AFTER DEPLOYMENT
-export const HERO_CARDS_ADDRESS = "0x0000000000000000000000000000000000000000" as const;
+export const HERO_CARDS_ADDRESS = "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE" as const;
+// PulseChain contract address (chain 369)
+export const HERO_CARDS_ADDRESS_PULSE = "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36" as const;
+export const HERO_CARDS_CHAIN_ID_PULSE = 369;
 
 // Base chain ID
 export const HERO_CARDS_CHAIN_ID = 8453;

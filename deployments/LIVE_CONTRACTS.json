@@ -1,0 +1,33 @@
+{
+  "HeroCards": {
+    "base": {
+      "address": "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE",
+      "chainId": 8453,
+      "chainName": "Base Mainnet",
+      "deployer": "0x5F1D1af1EbA90FD4A29e194275c6DfA42f4E7Dba",
+      "deployedAt": "2026-05-31T02:00:00Z",
+      "evmVersion": "cancun",
+      "openzeppelin": "5.6.1",
+      "explorer": "https://basescan.org/address/0x5Fad096af059ff9A2167351A0ffc8b45D71897bE"
+    },
+    "pulsechain": {
+      "address": "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36",
+      "chainId": 369,
+      "chainName": "PulseChain Mainnet",
+      "deployer": "0x5F1D1af1EbA90FD4A29e194275c6DfA42f4E7Dba",
+      "deployedAt": "2026-05-31T01:59:00Z",
+      "evmVersion": "shanghai",
+      "openzeppelin": "5.0.2",
+      "explorer": "https://scan.pulsechain.com/address/0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36"
+    }
+  },
+  "metadata": {
+    "baseURI": "ipfs://QmXTty8QaqP6ToahspVS3oRztpjiTkrAiAmv5ixjbPynDE/",
+    "contractURI": "ipfs://QmXTty8QaqP6ToahspVS3oRztpjiTkrAiAmv5ixjbPynDE/collection.json",
+    "maxSupply": 1500,
+    "mintPrice": "0.005 ETH/PLS",
+    "whitelistPrice": "0.003 ETH/PLS",
+    "feeDiscount": "200 bps (2%)",
+    "royalty": "500 bps (5%)"
+  }
+}

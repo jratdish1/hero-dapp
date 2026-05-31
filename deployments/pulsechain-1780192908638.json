@@ -1,0 +1,18 @@
+{
+  "network": "pulsechain",
+  "chainId": 369,
+  "contractAddress": "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36",
+  "deployer": "0x5F1D1af1EbA90FD4A29e194275c6DfA42f4E7Dba",
+  "baseURI": "ipfs://QmXTty8QaqP6ToahspVS3oRztpjiTkrAiAmv5ixjbPynDE/",
+  "contractURI": "ipfs://QmXTty8QaqP6ToahspVS3oRztpjiTkrAiAmv5ixjbPynDE/collection.json",
+  "royaltyReceiver": "0x5F1D1af1EbA90FD4A29e194275c6DfA42f4E7Dba",
+  "royaltyBps": 500,
+  "mintPrice": "0.005",
+  "whitelistPrice": "0.003",
+  "feeDiscountBps": 200,
+  "maxSupply": 1500,
+  "maxPerWallet": 20,
+  "reservedForTeam": 50,
+  "timestamp": "2026-05-31T02:01:48.637Z",
+  "txHash": "0x8a235a10e2bb996b84e8fe5d76d298db56c9694a7c6aa2d596717ed72c0272df"
+}

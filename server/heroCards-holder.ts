@@ -14,7 +14,9 @@ import { createPublicClient, http } from "viem";
 
 // ─── Contract Config ─────────────────────────────────────────────
 // UPDATE THIS AFTER DEPLOYMENT
-const HERO_CARDS_ADDRESS = "0x0000000000000000000000000000000000000000" as `0x${string}`;
+const HERO_CARDS_ADDRESS = "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE" as `0x${string}`;
+// PulseChain contract (same code, different chain)
+const HERO_CARDS_ADDRESS_PULSE = "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36" as `0x${string}`;
 
 const HERO_CARDS_ABI = [
   {
@@ -75,7 +77,7 @@ const TIER_MAP: Record<number, 'bronze' | 'silver' | 'gold'> = {
  */
 export async function getHeroCardsTier(wallet: string): Promise<'bronze' | 'silver' | 'gold'> {
   if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return 'bronze';
-  if (HERO_CARDS_ADDRESS === "0x0000000000000000000000000000000000000000") {
+  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") {
     // Contract not deployed yet — default to bronze
     return 'bronze';
   }
@@ -103,7 +105,7 @@ export async function getHeroCardsTier(wallet: string): Promise<'bronze' | 'silv
  */
 export async function canAccessHeroSpinWheel(wallet: string): Promise<boolean> {
   if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return false;
-  if (HERO_CARDS_ADDRESS === "0x0000000000000000000000000000000000000000") {
+  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") {
     // Contract not deployed yet — allow access (beta mode)
     return true;
   }
@@ -131,7 +133,7 @@ export async function canAccessHeroSpinWheel(wallet: string): Promise<boolean> {
  */
 export async function getHeroFeeDiscount(wallet: string): Promise<number> {
   if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return 0;
-  if (HERO_CARDS_ADDRESS === "0x0000000000000000000000000000000000000000") return 0;
+  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") return 0;
   
   try {
     const discount = await Promise.race([
