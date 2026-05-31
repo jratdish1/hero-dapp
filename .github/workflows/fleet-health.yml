@@ -1,0 +1,127 @@
+name: Fleet Health Check
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: 'Action to perform'
+        required: true
+        default: 'status'
+        type: choice
+        options:
+          - status
+          - restart-all
+          - fix-regen-valor
+
+jobs:
+  health-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: VPS1 Health Check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: root
+          key: ${{ secrets.VDS_SSH_KEY }}
+          script: |
+            ssh root@${{ secrets.VPS1_HOST }} << 'HEALTHCHECK'
+              echo "========================================="
+              echo "  VPS1 FLEET HEALTH CHECK"
+              echo "========================================="
+              echo ""
+              echo "--- PM2 Status ---"
+              pm2 list
+              echo ""
+              echo "--- Disk Usage ---"
+              df -h / | tail -1
+              echo ""
+              echo "--- Memory ---"
+              free -h | head -2
+              echo ""
+              echo "--- Nginx Status ---"
+              systemctl is-active nginx
+              echo ""
+              echo "--- Git Repos Status ---"
+              for dir in /var/www/hero-dapp /var/www/regen-valor; do
+                if [ -d "$dir/.git" ]; then
+                  echo "$dir: $(cd $dir && git log --oneline -1)"
+                else
+                  echo "$dir: NOT A GIT REPO"
+                fi
+              done
+              echo ""
+              echo "--- Port Check ---"
+              ss -tlnp | grep -E ":(3000|3100|80|443)" | head -10
+              echo ""
+              echo "========================================="
+
+              # Action-specific commands
+              ACTION="${{ inputs.action }}"
+              if [ "$ACTION" = "restart-all" ]; then
+                echo ">>> Restarting all PM2 processes..."
+                pm2 restart all
+                pm2 save
+                echo ">>> Done!"
+              elif [ "$ACTION" = "fix-regen-valor" ]; then
+                echo ">>> Fixing regen-valor..."
+                cd /var/www/regen-valor 2>/dev/null || {
+                  echo "ERROR: /var/www/regen-valor does not exist!"
+                  exit 1
+                }
+                pm2 delete regen-valor 2>/dev/null || true
+                pm2 start ecosystem.config.cjs
+                pm2 save
+                echo ">>> regen-valor restarted!"
+                sleep 2
+                curl -s -o /dev/null -w "Health: %{http_code}\n" http://localhost:3100/ || echo "Port 3100 not responding"
+              fi
+            HEALTHCHECK
+
+      - name: VPS2 Health Check (if accessible)
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: true
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: root
+          key: ${{ secrets.VDS_SSH_KEY }}
+          script: |
+            ssh root@62.146.179.233 << 'VPS2CHECK' 2>/dev/null || echo "VPS2 not accessible from VDS"
+              echo "========================================="
+              echo "  VPS2 HEALTH CHECK"
+              echo "========================================="
+              pm2 list 2>/dev/null || echo "PM2 not installed"
+              echo ""
+              echo "--- Git Repos ---"
+              for dir in /var/www/*; do
+                if [ -d "$dir/.git" ]; then
+                  echo "$dir: $(cd $dir && git log --oneline -1)"
+                fi
+              done
+            VPS2CHECK
+
+      - name: VDS Health Check
+        if: always()
+        uses: appleboy/ssh-action@v1.0.3
+        continue-on-error: true
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: root
+          key: ${{ secrets.VDS_SSH_KEY }}
+          script: |
+            echo "========================================="
+            echo "  VDS HEALTH CHECK"
+            echo "========================================="
+            echo ""
+            echo "--- PM2 Status ---"
+            pm2 list 2>/dev/null || echo "PM2 not running"
+            echo ""
+            echo "--- Docker Status ---"
+            docker ps --format "table {{.Names}}\t{{.Status}}\t{{.Ports}}" 2>/dev/null | head -20 || echo "Docker not running"
+            echo ""
+            echo "--- Disk Usage ---"
+            df -h / | tail -1
+            echo ""
+            echo "--- Memory ---"
+            free -h | head -2
+            echo "========================================="
