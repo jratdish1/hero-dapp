@@ -1,6 +1,6 @@
 import { Card } from "@/components/ui/card";
 import {
-  ArrowLeftRight, Zap, ExternalLink, Shield, Clock, TrendingUp, Layers,
+  ArrowLeftRight, Zap, ExternalLink, Shield, Clock, TrendingUp, Layers, Sprout,
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useMarketOverview, formatPrice, formatChange } from "../hooks/usePrices";
@@ -77,6 +77,34 @@ export default function Swap() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
+
+      {/* ═══ 0. HERO STAKING CTA — PROMINENT TOP BANNER ═══ */}
+      <a
+        href="https://herobase.io/stake/dai"
+        target="_blank"
+        rel="noopener noreferrer"
+        className="block group"
+      >
+        <Card className="bg-gradient-to-r from-[var(--hero-orange)]/10 via-card to-[var(--hero-green)]/10 border-[var(--hero-orange)]/30 hover:border-[var(--hero-orange)]/60 transition-all overflow-hidden">
+          <div className="flex items-center gap-4 p-4">
+            <div className="w-12 h-12 rounded-full bg-gradient-to-br from-[var(--hero-orange)] to-[var(--hero-green)] flex items-center justify-center shadow-lg shadow-[var(--hero-orange)]/30 shrink-0">
+              <Sprout className="w-6 h-6 text-black" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2">
+                <h2 className="text-lg font-bold text-foreground">HERO Staking</h2>
+                <span className="text-xs px-2 py-0.5 rounded-full bg-[var(--hero-orange)]/10 text-[var(--hero-orange)] border border-[var(--hero-orange)]/20 font-medium animate-pulse">
+                  Earn DAI
+                </span>
+              </div>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                Stake your HERO tokens and earn DAI rewards on PulseChain
+              </p>
+            </div>
+            <ExternalLink className="w-5 h-5 text-muted-foreground group-hover:text-[var(--hero-orange)] transition-colors shrink-0" />
+          </div>
+        </Card>
+      </a>
 
       {/* ═══ 1. SWITCH AGGREGATOR — TOP ═══ */}
       <div>

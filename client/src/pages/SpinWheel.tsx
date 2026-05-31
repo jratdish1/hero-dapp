@@ -368,6 +368,17 @@ export default function SpinWheel() {
           <h1 className="text-3xl font-bold text-white mb-2">Daily Spin Wheel</h1>
           <p className="text-gray-400 text-sm">Spin once per day. Build your streak. Earn HERO.</p>
           {walletConnected && <TierBadge tier={stats.nftTier} />}
+          {/* HERO Staking CTA */}
+          <a
+            href="https://herobase.io/stake/dai"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 mt-3 px-5 py-2.5 rounded-xl bg-gradient-to-r from-amber-500/20 to-green-500/20 border border-amber-500/30 hover:border-amber-500/60 text-amber-400 hover:text-amber-300 font-semibold text-sm transition-all hover:scale-105"
+          >
+            <span className="text-base">🌱</span>
+            HERO Staking — Earn DAI
+            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="opacity-60"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>
+          </a>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
