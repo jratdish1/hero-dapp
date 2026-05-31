@@ -12,6 +12,7 @@ on:
           - status
           - restart-all
           - fix-regen-valor
+          - diagnose-regen-valor
 
 jobs:
   health-check:
@@ -46,12 +47,15 @@ jobs:
                 if [ -d "$dir/.git" ]; then
                   echo "$dir: $(cd $dir && git log --oneline -1)"
                 else
-                  echo "$dir: NOT A GIT REPO"
+                  echo "$dir: NOT A GIT REPO (checking if dir exists: $(ls $dir 2>/dev/null | head -5))"
                 fi
               done
               echo ""
               echo "--- Port Check ---"
               ss -tlnp | grep -E ":(3000|3100|80|443)" | head -10
+              echo ""
+              echo "--- Nginx Sites ---"
+              ls /etc/nginx/sites-enabled/ 2>/dev/null || ls /etc/nginx/conf.d/ 2>/dev/null
               echo ""
               echo "========================================="
 
@@ -72,8 +76,28 @@ jobs:
                 pm2 start ecosystem.config.cjs
                 pm2 save
                 echo ">>> regen-valor restarted!"
-                sleep 2
+                sleep 3
                 curl -s -o /dev/null -w "Health: %{http_code}\n" http://localhost:3100/ || echo "Port 3100 not responding"
+              elif [ "$ACTION" = "diagnose-regen-valor" ]; then
+                echo ">>> Diagnosing regen-valor..."
+                echo ""
+                echo "--- Directory contents ---"
+                ls -la /var/www/regen-valor/ 2>/dev/null || echo "DIR NOT FOUND"
+                echo ""
+                echo "--- dist/ folder ---"
+                ls /var/www/regen-valor/dist/ 2>/dev/null | head -10 || echo "NO dist/ FOLDER"
+                echo ""
+                echo "--- dist-server/ folder ---"
+                ls /var/www/regen-valor/dist-server/ 2>/dev/null | head -10 || echo "NO dist-server/ FOLDER"
+                echo ""
+                echo "--- PM2 logs (last 20 lines) ---"
+                pm2 logs regen-valor --nostream --lines 20 2>&1 || echo "No logs available"
+                echo ""
+                echo "--- Nginx config for regenvalor ---"
+                cat /etc/nginx/sites-enabled/regenvalor* 2>/dev/null || cat /etc/nginx/conf.d/regenvalor* 2>/dev/null || echo "NO NGINX CONFIG FOUND"
+                echo ""
+                echo "--- Test localhost:3100 ---"
+                curl -sv http://localhost:3100/ 2>&1 | head -20
               fi
             HEALTHCHECK
 
