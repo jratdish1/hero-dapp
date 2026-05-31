@@ -1,3 +1,4 @@
+import { getHeroCardsTier, canAccessHeroSpinWheel } from "./heroCards-holder";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -1166,7 +1167,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
         const eligible = canSpinTodayV2(record);
         const streak = record?.currentStreak || 0;
         const bonus = getStreakBonusV2(streak);
-        const nftTier = record?.nftTier || 'bronze';
+        const nftTier = await getHeroCardsTier(input.wallet) || record?.nftTier || 'bronze';
         const canBurn = !eligible && record !== null;
         const burnCost = canBurn ? getBurnCostV2(1) : '0';
         return {
@@ -1209,7 +1210,7 @@ IMPORTANT: If a user asks for help, support, has questions you cannot answer, or
           createStandardError("TOO_MANY_REQUESTS", "Already spun today. Come back tomorrow or burn HERO for another spin!");
         }
 
-        const nftTier = record?.nftTier || 'bronze';
+        const nftTier = await getHeroCardsTier(input.wallet) || record?.nftTier || 'bronze';
         routerLogger.info("Spin V2 execute", { wallet: key, tier: nftTier, streak: record?.currentStreak || 0 });
 
         let result;

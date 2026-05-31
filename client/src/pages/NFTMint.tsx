@@ -1,235 +1,168 @@
 /**
- * HERO NFT — Mint Page with Live Trait Preview
+ * HERO Cards — NFT Mint Page (Production)
  * 
+ * Connects to the HeroCards ERC-721 contract on Base chain.
  * Features:
- * - Live trait preview with card flip animation
- * - Rarity indicators with color coding
- * - Trait reveal animation (holographic effect)
- * - Provably fair verification links
- * - Rarity score display
+ * - Real on-chain minting via wagmi/viem
+ * - Live supply counter
+ * - Mint phase awareness (Closed/Whitelist/Public)
+ * - Holder utility display (tier, fee discount, spin access)
+ * - Quantity selector (1-20 per wallet)
+ * - IPFS artwork preview from Lighthouse
+ * - Transaction status tracking
  */
+import React, { useState, useEffect, useCallback } from 'react';
+import { useHeroCards, MintPhase, HolderTier, TIER_NAMES, TIER_COLORS } from '../lib/useHeroCards';
+import { HERO_CARDS_BASE_URI, HERO_CARDS_MAX_SUPPLY } from '../lib/heroCards-abi';
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+// ─── IPFS Gateway for artwork preview ────────────────────────────
+const IPFS_GATEWAY = "https://gateway.lighthouse.storage/ipfs/";
 
-// Import shared trait data from engine (DRY — single source of truth)
-import { HERO_TRAIT_CATEGORIES, RARITY_WEIGHTS as ENGINE_RARITY_WEIGHTS } from '../lib/nft-trait-constants';
-import type { RarityTier, TraitCategory } from '../lib/nft-trait-constants';
-
-// ─── Types ───────────────────────────────────────────────────────
-// RarityTier and TraitCategory imported from nft-trait-engine (single source of truth)
-
-interface PreviewTrait {
-  category: string;
-  trait: string;
-  rarity: RarityTier;
-  isPreview: boolean; // Always true for preview — actual mint uses on-chain RNG
-}
-
-interface MintedNFT {
-  tokenId: number;
-  traits: PreviewTrait[];
-  rarityScore: number;
-  proofHash?: string;
-  blockNumber?: number;
-  mintTxHash?: string;
-}
-
-// ─── Constants ───────────────────────────────────────────────────
-
-const RARITY_COLORS: Record<RarityTier, { bg: string; text: string; border: string; glow: string }> = {
-  Common: { bg: 'bg-gray-700/30', text: 'text-gray-400', border: 'border-gray-600', glow: '' },
-  Uncommon: { bg: 'bg-green-900/30', text: 'text-green-400', border: 'border-green-700', glow: '' },
-  Rare: { bg: 'bg-blue-900/30', text: 'text-blue-400', border: 'border-blue-600', glow: 'shadow-blue-500/20' },
-  Epic: { bg: 'bg-purple-900/30', text: 'text-purple-400', border: 'border-purple-600', glow: 'shadow-purple-500/30' },
-  Legendary: { bg: 'bg-yellow-900/30', text: 'text-yellow-400', border: 'border-yellow-500', glow: 'shadow-yellow-500/40' },
-};
-
-// Use shared RARITY_WEIGHTS from engine (DRY)
-const RARITY_WEIGHTS = ENGINE_RARITY_WEIGHTS;
-
-const CATEGORY_ICONS: Record<string, string> = {
-  Background: '🌄',
-  Outfit: '🎖️',
-  Weapon: '⚔️',
-  Rank: '🏅',
-  Badge: '🎗️',
-  Special: '✨',
-};
-
-// ─── Deterministic Preview RNG (client-side only) ────────────────
-
-function simpleHash(str: string): number {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash |= 0;
+function resolveIPFS(uri: string): string {
+  if (uri.startsWith("ipfs://")) {
+    return IPFS_GATEWAY + uri.replace("ipfs://", "");
   }
-  return Math.abs(hash);
+  return uri;
 }
 
-/**
- * Generate preview traits using CLIENT-SIDE deterministic hash.
- * ⚠️ PREVIEW ONLY — NOT the actual mint result.
- * Uses HERO_TRAIT_CATEGORIES from shared engine (single source of truth).
- */
-function getPreviewTraits(tokenId: number): PreviewTrait[] {
-  return HERO_TRAIT_CATEGORIES.map(cat => {
-    if (!cat.options || cat.options.length === 0) {
-      throw new Error(`Category "${cat.name}" has no options`);
-    }
-    const totalWeight = cat.options.reduce((sum, opt) => sum + opt.weight, 0);
-    if (totalWeight <= 0) {
-      throw new Error(`Category "${cat.name}" has zero total weight — cannot generate preview`);
-    }
-    const roll = simpleHash(`preview-${tokenId}-${cat.name}`) % totalWeight;
-
-    let cumulative = 0;
-    for (const option of cat.options) {
-      cumulative += option.weight;
-      if (roll < cumulative) {
-        return { category: cat.name, trait: option.name, rarity: option.rarity as RarityTier, isPreview: true };
-      }
-    }
-    // Throw instead of silently returning last item
-    throw new Error(`Preview selection failed for category ${cat.name}`);
-  });
-}
-
-// ─── Trait Card Component ────────────────────────────────────────
-
-function TraitCard({ trait, revealed, index }: { trait: PreviewTrait; revealed: boolean; index: number }) {
-  const colors = RARITY_COLORS[trait.rarity];
-  const icon = CATEGORY_ICONS[trait.category] || '🔹';
-
+// ─── Phase Badge Component ───────────────────────────────────────
+function PhaseBadge({ phase }: { phase: MintPhase }) {
+  const config = {
+    [MintPhase.CLOSED]: { label: 'CLOSED', bg: 'bg-red-900/50', text: 'text-red-400', border: 'border-red-700' },
+    [MintPhase.WHITELIST]: { label: 'WHITELIST', bg: 'bg-purple-900/50', text: 'text-purple-400', border: 'border-purple-700' },
+    [MintPhase.PUBLIC]: { label: 'PUBLIC MINT LIVE', bg: 'bg-green-900/50', text: 'text-green-400', border: 'border-green-700' },
+  };
+  const c = config[phase];
   return (
-    <div
-      className={`
-        relative overflow-hidden rounded-lg border p-4 transition-all duration-500
-        ${revealed ? `${colors.bg} ${colors.border}` : 'bg-gray-900 border-gray-800'}
-        ${revealed && trait.rarity === 'Legendary' ? 'ring-2 ring-yellow-500/50 shadow-lg shadow-yellow-500/20' : ''}
-        ${revealed && trait.rarity === 'Epic' ? 'ring-1 ring-purple-500/30 shadow-md shadow-purple-500/10' : ''}
-      `}
-      style={{ animationDelay: `${index * 150}ms` }}
-    >
-      {/* Holographic shimmer for Epic/Legendary */}
-      {revealed && (trait.rarity === 'Legendary' || trait.rarity === 'Epic') && (
-        <div
-          className="absolute inset-0 opacity-10 pointer-events-none"
-          style={{
-            background: 'linear-gradient(135deg, transparent 30%, rgba(255,255,255,0.3) 50%, transparent 70%)',
-            animation: 'shimmer 3s ease-in-out infinite',
-          }}
-        />
-      )}
-
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-500 uppercase tracking-wider">{icon} {trait.category}</span>
-        {revealed && (
-          <span className={`text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text} border ${colors.border}`}>
-            {trait.rarity}
-          </span>
-        )}
-      </div>
-
-      {revealed ? (
-        <p className="text-white font-bold text-sm">{trait.trait}</p>
-      ) : (
-        <div className="h-5 bg-gray-800 rounded animate-pulse" />
-      )}
-    </div>
+    <span className={`px-3 py-1 rounded-full text-xs font-bold ${c.bg} ${c.text} border ${c.border}`}>
+      {c.label}
+    </span>
   );
 }
 
-// ─── Rarity Score Display ────────────────────────────────────────
-
-function RarityScoreDisplay({ traits }: { traits: PreviewTrait[] }) {
-  const score = traits.reduce((s, t) => s + (100 - RARITY_WEIGHTS[t.rarity]), 0);
-  const maxScore = traits.length * 97; // All Legendary
-  const percentage = (score / maxScore) * 100;
-
-  let tier = 'Common';
-  let tierColor = 'text-gray-400';
-  if (percentage > 80) { tier = 'Legendary'; tierColor = 'text-yellow-400'; }
-  else if (percentage > 60) { tier = 'Epic'; tierColor = 'text-purple-400'; }
-  else if (percentage > 40) { tier = 'Rare'; tierColor = 'text-blue-400'; }
-  else if (percentage > 20) { tier = 'Uncommon'; tierColor = 'text-green-400'; }
-
+// ─── Holder Utility Card ─────────────────────────────────────────
+function HolderUtilityCard({ 
+  isHolder, holderTier, tierName, tierColor, feeDiscount, canSpin 
+}: {
+  isHolder: boolean;
+  holderTier: HolderTier;
+  tierName: string;
+  tierColor: string;
+  feeDiscount: number;
+  canSpin: boolean;
+}) {
+  if (!isHolder) return null;
   return (
-    <div className="text-center py-4">
-      <p className="text-xs text-gray-500 uppercase tracking-wider mb-1">Rarity Score</p>
-      <p className={`text-3xl font-bold font-mono ${tierColor}`}>{score}</p>
-      <p className={`text-sm ${tierColor}`}>{tier} Tier</p>
+    <div className="bg-gradient-to-r from-green-900/30 to-emerald-900/30 border border-green-700/50 rounded-xl p-4 mb-6">
+      <h3 className="text-sm font-bold text-green-400 mb-3 flex items-center gap-2">
+        <span>🎖️</span> Your HERO Card Holder Benefits
+      </h3>
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="bg-black/30 rounded-lg p-3">
+          <p className="text-xs text-gray-400">Tier</p>
+          <p className={`font-bold ${tierColor}`}>{tierName}</p>
+        </div>
+        <div className="bg-black/30 rounded-lg p-3">
+          <p className="text-xs text-gray-400">Fee Discount</p>
+          <p className="font-bold text-green-400">{feeDiscount}%</p>
+        </div>
+        <div className="bg-black/30 rounded-lg p-3">
+          <p className="text-xs text-gray-400">Spin Wheel</p>
+          <p className={`font-bold ${canSpin ? 'text-green-400' : 'text-red-400'}`}>
+            {canSpin ? '✓ Access' : '✗ Locked'}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
 
 // ─── Main Component ──────────────────────────────────────────────
-
 export default function NFTMint() {
+  const {
+    // Collection
+    totalMinted, maxSupply, remaining, mintPhase, mintPrice, whitelistPrice,
+    // User
+    isConnected, address, userBalance, userMinted, maxMintable, canMint,
+    // Holder Utility
+    isHolder, holderTier, tierName, tierColor, feeDiscount, canSpin,
+    // Mint Actions
+    mint, isMinting, isConfirming, mintSuccess, mintError, mintTxHash, refetchMinted,
+  } = useHeroCards();
+
+  const [quantity, setQuantity] = useState(1);
   const [previewId, setPreviewId] = useState(1);
-  const [traits, setTraits] = useState<PreviewTrait[]>([]);
-  const [revealed, setRevealed] = useState(false);
-  const [minting, setMinting] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [mintedNFTs, setMintedNFTs] = useState<MintedNFT[]>([]);
+  const [showSuccess, setShowSuccess] = useState(false);
 
-  // Generate preview traits when ID changes
+  // Show success toast when mint confirms
   useEffect(() => {
-    setRevealed(false);
-    const newTraits = getPreviewTraits(previewId);
-    setTraits(newTraits);
+    if (mintSuccess) {
+      setShowSuccess(true);
+      refetchMinted();
+      const timer = setTimeout(() => setShowSuccess(false), 8000);
+      return () => clearTimeout(timer);
+    }
+  }, [mintSuccess, refetchMinted]);
 
-    // Auto-reveal after a short delay
-    const timer = setTimeout(() => setRevealed(true), 500);
-    return () => clearTimeout(timer);
-  }, [previewId]);
-
+  // Random preview
   const handleRandomize = useCallback(() => {
-    // Use CSPRNG instead of Math.random() for preview ID generation
     const arr = new Uint32Array(1);
     crypto.getRandomValues(arr);
-    setPreviewId((arr[0] % 10000) + 1);
+    setPreviewId((arr[0] % HERO_CARDS_MAX_SUPPLY) + 1);
   }, []);
 
-  const handleMint = useCallback(async () => {
-    if (!walletConnected) return;
-    setMinting(true);
+  const handleMint = useCallback(() => {
+    if (!canMint) return;
+    mint(quantity);
+  }, [canMint, mint, quantity]);
 
-    // Simulate mint process
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    const newNFT: MintedNFT = {
-      tokenId: previewId,
-      traits,
-      rarityScore: traits.reduce((s, t) => s + (100 - RARITY_WEIGHTS[t.rarity]), 0),
-    };
-
-    setMintedNFTs(prev => [...prev, newNFT]);
-    setMinting(false);
-  }, [walletConnected, previewId, traits]);
+  const currentPrice = mintPhase === MintPhase.WHITELIST ? whitelistPrice : mintPrice;
+  const totalCost = (parseFloat(currentPrice) * quantity).toFixed(4);
 
   return (
-    <div className="max-w-4xl mx-auto px-4 py-8">
+    <div className="max-w-6xl mx-auto px-4 py-8">
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-          <span>🎨</span> HERO NFT Mint
+      <div className="text-center mb-8">
+        <h1 className="text-4xl font-bold text-white mb-2">
+          HERO Cards <span className="text-green-400">NFT Mint</span>
         </h1>
-          <p className="text-gray-400 mt-1">
-          Provably fair trait generation — every trait is determined by on-chain randomness.
-          <span className="text-yellow-500 text-xs ml-1">(Preview uses client-side simulation. Actual mint uses on-chain block hash.)</span>
+        <p className="text-gray-400 mb-4">
+          1,500 Unique Military Trading Cards on Base Chain
         </p>
+        <PhaseBadge phase={mintPhase} />
       </div>
 
-      {/* Preview Card */}
+      {/* Supply Progress Bar */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 mb-6">
+        <div className="flex justify-between text-sm mb-2">
+          <span className="text-gray-400">Minted</span>
+          <span className="text-white font-mono">{totalMinted} / {maxSupply}</span>
+        </div>
+        <div className="w-full bg-gray-800 rounded-full h-3 overflow-hidden">
+          <div 
+            className="h-full bg-gradient-to-r from-green-500 to-emerald-400 rounded-full transition-all duration-1000"
+            style={{ width: `${(totalMinted / maxSupply) * 100}%` }}
+          />
+        </div>
+        <p className="text-xs text-gray-500 mt-1">{remaining} remaining</p>
+      </div>
+
+      {/* Holder Utility Card (only shows if holder) */}
+      <HolderUtilityCard 
+        isHolder={isHolder}
+        holderTier={holderTier}
+        tierName={tierName}
+        tierColor={tierColor}
+        feeDiscount={feeDiscount}
+        canSpin={canSpin}
+      />
+
+      {/* Main Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
         {/* NFT Preview */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-bold text-white">Preview #{previewId}
-              <span className="ml-2 text-xs bg-yellow-900/50 text-yellow-400 border border-yellow-700 px-2 py-0.5 rounded-full">PREVIEW ONLY</span>
-            </h2>
+            <h2 className="text-lg font-bold text-white">Preview #{previewId}</h2>
             <button
               onClick={handleRandomize}
               className="text-sm px-3 py-1 bg-gray-800 text-gray-400 rounded-lg hover:bg-gray-700 transition-colors"
@@ -237,109 +170,213 @@ export default function NFTMint() {
               🎲 Randomize
             </button>
           </div>
+          {/* NFT Artwork from IPFS */}
+          <div className="aspect-square bg-gray-800 rounded-lg mb-4 overflow-hidden border border-gray-700">
+            <img
+              src={resolveIPFS(`${HERO_CARDS_BASE_URI}${previewId}`)}
+              alt={`HERO Card #${previewId}`}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                (e.target as HTMLImageElement).src = '/hero-logo-200.webp';
+              }}
+            />
+          </div>
+          <p className="text-xs text-gray-500 text-center mb-4">
+            Actual card assigned randomly at mint via on-chain randomization
+          </p>
+        </div>
 
-          {/* NFT Image Placeholder */}
-          <div className="aspect-square bg-gray-800 rounded-lg mb-4 flex items-center justify-center border border-gray-700">
-            <div className="text-center">
-              <span className="text-6xl">🦸</span>
-              <p className="text-xs text-gray-600 mt-2">Image generated at mint</p>
+        {/* Mint Panel */}
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+          <h2 className="text-lg font-bold text-white mb-6">Mint Your HERO Card</h2>
+
+          {/* Price Info */}
+          <div className="bg-black/30 rounded-lg p-4 mb-4">
+            <div className="flex justify-between mb-2">
+              <span className="text-gray-400">Price per NFT</span>
+              <span className="text-white font-mono">{currentPrice} ETH</span>
+            </div>
+            <div className="flex justify-between mb-2">
+              <span className="text-gray-400">Your mints</span>
+              <span className="text-white font-mono">{userMinted} / 20</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-400">Your balance</span>
+              <span className="text-green-400 font-mono">{userBalance} NFTs held</span>
             </div>
           </div>
 
-          <RarityScoreDisplay traits={traits} />
+          {/* Quantity Selector */}
+          <div className="mb-4">
+            <label className="text-sm text-gray-400 mb-2 block">Quantity</label>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => setQuantity(Math.max(1, quantity - 1))}
+                className="w-10 h-10 bg-gray-800 text-white rounded-lg hover:bg-gray-700 font-bold"
+                disabled={quantity <= 1}
+              >
+                -
+              </button>
+              <span className="text-2xl font-bold text-white font-mono w-12 text-center">{quantity}</span>
+              <button
+                onClick={() => setQuantity(Math.min(maxMintable, quantity + 1))}
+                className="w-10 h-10 bg-gray-800 text-white rounded-lg hover:bg-gray-700 font-bold"
+                disabled={quantity >= maxMintable}
+              >
+                +
+              </button>
+              <button
+                onClick={() => setQuantity(maxMintable)}
+                className="ml-auto text-xs px-3 py-1 bg-gray-800 text-gray-400 rounded hover:bg-gray-700"
+              >
+                MAX
+              </button>
+            </div>
+          </div>
+
+          {/* Total Cost */}
+          <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 mb-6">
+            <div className="flex justify-between">
+              <span className="text-green-400 font-medium">Total Cost</span>
+              <span className="text-green-400 font-bold font-mono">{totalCost} ETH</span>
+            </div>
+          </div>
 
           {/* Mint Button */}
-          {!walletConnected ? (
+          {!isConnected ? (
             <button
-              onClick={() => setWalletConnected(true)}
-              className="w-full py-3 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
+              className="w-full py-4 bg-gray-700 text-gray-400 font-bold rounded-lg cursor-not-allowed"
+              disabled
             >
-              Connect Wallet to Mint
+              Connect Wallet First
+            </button>
+          ) : mintPhase === MintPhase.CLOSED ? (
+            <button
+              className="w-full py-4 bg-red-900/50 text-red-400 font-bold rounded-lg cursor-not-allowed border border-red-700"
+              disabled
+            >
+              Minting Not Yet Open
+            </button>
+          ) : !canMint ? (
+            <button
+              className="w-full py-4 bg-gray-700 text-gray-400 font-bold rounded-lg cursor-not-allowed"
+              disabled
+            >
+              {remaining === 0 ? 'SOLD OUT' : 'Wallet Limit Reached'}
             </button>
           ) : (
             <button
               onClick={handleMint}
-              disabled={minting}
-              className={`w-full py-3 font-bold rounded-lg transition-colors ${
-                minting
+              disabled={isMinting || isConfirming}
+              className={`w-full py-4 font-bold rounded-lg transition-all duration-200 ${
+                isMinting || isConfirming
                   ? 'bg-gray-700 text-gray-500 cursor-not-allowed'
-                  : 'bg-green-500 text-black hover:bg-green-400'
+                  : 'bg-gradient-to-r from-green-500 to-emerald-400 text-black hover:from-green-400 hover:to-emerald-300 shadow-lg shadow-green-500/20'
               }`}
             >
-              {minting ? (
+              {isMinting ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⏳</span> Minting...
+                  <span className="animate-spin">⏳</span> Confirm in Wallet...
+                </span>
+              ) : isConfirming ? (
+                <span className="flex items-center justify-center gap-2">
+                  <span className="animate-spin">⏳</span> Confirming on Base...
                 </span>
               ) : (
-                'Mint HERO NFT'
+                `Mint ${quantity} HERO Card${quantity > 1 ? 's' : ''}`
               )}
             </button>
           )}
-        </div>
 
-        {/* Trait List */}
-        <div>
-          <h2 className="text-lg font-bold text-white mb-4">Traits</h2>
-          <div className="grid grid-cols-1 gap-3">
-            {traits.map((trait, i) => (
-              <TraitCard key={trait.category} trait={trait} revealed={revealed} index={i} />
-            ))}
-          </div>
+          {/* Error Display */}
+          {mintError && (
+            <div className="mt-3 p-3 bg-red-900/30 border border-red-700 rounded-lg">
+              <p className="text-red-400 text-sm">
+                {mintError.message?.includes('InsufficientPayment') && 'Insufficient ETH for mint'}
+                {mintError.message?.includes('ExceedsWalletLimit') && 'Wallet limit reached (20 max)'}
+                {mintError.message?.includes('ExceedsMaxSupply') && 'Collection sold out!'}
+                {mintError.message?.includes('MintClosed') && 'Minting is currently closed'}
+                {!mintError.message?.includes('Insufficient') && 
+                 !mintError.message?.includes('Exceeds') && 
+                 !mintError.message?.includes('MintClosed') && 
+                 (mintError.message?.slice(0, 100) || 'Transaction failed')}
+              </p>
+            </div>
+          )}
+
+          {/* Success Toast */}
+          {showSuccess && mintTxHash && (
+            <div className="mt-3 p-3 bg-green-900/30 border border-green-700 rounded-lg">
+              <p className="text-green-400 text-sm font-medium mb-1">
+                🎉 Successfully minted {quantity} HERO Card{quantity > 1 ? 's' : ''}!
+              </p>
+              <a
+                href={`https://basescan.org/tx/${mintTxHash}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-green-500 hover:text-green-300 underline"
+              >
+                View on BaseScan →
+              </a>
+            </div>
+          )}
         </div>
       </div>
 
-      {/* Rarity Distribution */}
+      {/* Utility Info Section */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6 mb-8">
-        <h2 className="text-lg font-bold text-white mb-4">Rarity Distribution</h2>
-        <div className="grid grid-cols-5 gap-4">
-          {(['Common', 'Uncommon', 'Rare', 'Epic', 'Legendary'] as RarityTier[]).map(rarity => {
-            const colors = RARITY_COLORS[rarity];
-            const weight = RARITY_WEIGHTS[rarity];
-            return (
-              <div key={rarity} className={`text-center p-3 rounded-lg ${colors.bg} border ${colors.border}`}>
-                <p className={`text-xs ${colors.text} font-medium`}>{rarity}</p>
-                <p className="text-white font-bold text-lg">{weight}%</p>
-              </div>
-            );
-          })}
+        <h2 className="text-lg font-bold text-green-400 mb-4">NFT Holder Utility</h2>
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="bg-black/30 rounded-lg p-4 text-center border border-gray-800">
+            <div className="text-2xl mb-2">💰</div>
+            <h3 className="font-bold text-white text-sm mb-1">2% Fee Discount</h3>
+            <p className="text-xs text-gray-400">Reduced swap fees on HeroBase DEX for all holders</p>
+          </div>
+          <div className="bg-black/30 rounded-lg p-4 text-center border border-gray-800">
+            <div className="text-2xl mb-2">🎡</div>
+            <h3 className="font-bold text-white text-sm mb-1">Spin Wheel Access</h3>
+            <p className="text-xs text-gray-400">Must hold at least 1 HERO Card to access the prize wheel</p>
+          </div>
+          <div className="bg-black/30 rounded-lg p-4 text-center border border-gray-800">
+            <div className="text-2xl mb-2">🏅</div>
+            <h3 className="font-bold text-white text-sm mb-1">Tiered Rewards</h3>
+            <p className="text-xs text-gray-400">Bronze (1), Silver (3+), Gold (10+) — higher tiers = better prizes</p>
+          </div>
+          <div className="bg-black/30 rounded-lg p-4 text-center border border-gray-800">
+            <div className="text-2xl mb-2">🎲</div>
+            <h3 className="font-bold text-white text-sm mb-1">Provably Fair</h3>
+            <p className="text-xs text-gray-400">On-chain randomization ensures fair card distribution</p>
+          </div>
         </div>
       </div>
 
       {/* How It Works */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
-        <h2 className="text-lg font-bold text-green-400 mb-4">How Provably Fair Minting Works</h2>
+        <h2 className="text-lg font-bold text-green-400 mb-4">How Minting Works</h2>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-sm">
           <div>
             <div className="text-2xl mb-2">1️⃣</div>
-            <h3 className="font-bold text-white mb-1">On-Chain Seed</h3>
+            <h3 className="font-bold text-white mb-1">Connect & Mint</h3>
             <p className="text-gray-400">
-              When you mint, the current PulseChain block hash is used as the random seed. Nobody can predict or manipulate it.
+              Connect your wallet on Base chain. Choose quantity (1-20) and confirm the transaction.
             </p>
           </div>
           <div>
             <div className="text-2xl mb-2">2️⃣</div>
-            <h3 className="font-bold text-white mb-1">Trait Generation</h3>
+            <h3 className="font-bold text-white mb-1">Random Assignment</h3>
             <p className="text-gray-400">
-              The seed is hashed with your token ID and each trait category to produce unique, independent random values.
+              After all 1,500 cards are minted, the collection owner triggers on-chain randomization using a future block hash.
             </p>
           </div>
           <div>
             <div className="text-2xl mb-2">3️⃣</div>
-            <h3 className="font-bold text-white mb-1">Verification</h3>
+            <h3 className="font-bold text-white mb-1">Reveal & Utility</h3>
             <p className="text-gray-400">
-              Every trait comes with a proof hash. Anyone can verify the randomness was fair by checking the block hash and seed.
+              Your card is revealed with its unique artwork from IPFS. Holding unlocks fee discounts, spin wheel, and tiered rewards.
             </p>
           </div>
         </div>
       </div>
-
-      {/* CSS for shimmer animation */}
-      <style>{`
-        @keyframes shimmer {
-          0% { transform: translateX(-100%); }
-          100% { transform: translateX(100%); }
-        }
-      `}</style>
     </div>
   );
 }
