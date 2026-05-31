@@ -8,9 +8,67 @@ import { z } from "zod";
 import { createPublicClient, http, erc20Abi } from "viem";
 import { pulsechain } from "viem/chains";
 
+// ─── RPC Monitoring Logger ─────────────────────────────────────────────────
+const rpcMetrics = {
+  pulsechain: { calls: 0, timeouts: 0, errors: 0, lastError: null as string | null, avgMs: 0 },
+  base: { calls: 0, timeouts: 0, errors: 0, lastError: null as string | null, avgMs: 0 },
+};
+
+function logRpcEvent(chain: "pulsechain" | "base", event: "call" | "timeout" | "error", durationMs?: number, errorMsg?: string) {
+  const m = rpcMetrics[chain];
+  m.calls++;
+  if (event === "timeout") {
+    m.timeouts++;
+    m.lastError = `RPC timeout after ${durationMs}ms`;
+    console.warn(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "warn",
+      module: "rpc-monitor",
+      event: "rpc_timeout",
+      chain,
+      durationMs,
+      totalTimeouts: m.timeouts,
+      totalCalls: m.calls,
+      timeoutRate: `${((m.timeouts / m.calls) * 100).toFixed(1)}%`,
+    }));
+  } else if (event === "error") {
+    m.errors++;
+    m.lastError = errorMsg || "unknown";
+    console.error(JSON.stringify({
+      timestamp: new Date().toISOString(),
+      level: "error",
+      module: "rpc-monitor",
+      event: "rpc_error",
+      chain,
+      durationMs,
+      error: errorMsg,
+      totalErrors: m.errors,
+      totalCalls: m.calls,
+    }));
+  } else if (durationMs) {
+    // Track average response time (rolling)
+    m.avgMs = m.avgMs === 0 ? durationMs : (m.avgMs * 0.9 + durationMs * 0.1);
+    // Log slow RPC calls (>5s) for tuning
+    if (durationMs > 5000) {
+      console.warn(JSON.stringify({
+        timestamp: new Date().toISOString(),
+        level: "warn",
+        module: "rpc-monitor",
+        event: "rpc_slow",
+        chain,
+        durationMs,
+        avgMs: Math.round(m.avgMs),
+      }));
+    }
+  }
+}
+
+// Export for health check endpoint
+export function getRpcMetrics() { return rpcMetrics; }
+
 // ─── On-Chain Verification Clients ──────────────────────────────────────
-const pulsechainClient = createPublicClient({ chain: pulsechain, transport: http("https://rpc.pulsechain.com") });
-const baseClient = createPublicClient({ chain: { id: 8453, name: "Base", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: ["https://mainnet.base.org"] } } } as any, transport: http("https://mainnet.base.org") });
+const pulsechainClient = createPublicClient({ chain: pulsechain, transport: http("https://rpc.pulsechain.com", { timeout: 10_000 }) });
+const baseClient = createPublicClient({ chain: { id: 8453, name: "Base", nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 }, rpcUrls: { default: { http: ["https://mainnet.base.org"] } } } as any, transport: http("https://mainnet.base.org", { timeout: 10_000 }) });
 
 const HERO_TOKENS: Record<string, `0x${string}`> = {
   pulsechain: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
@@ -20,8 +78,8 @@ const HERO_TOKENS: Record<string, `0x${string}`> = {
 async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
   const client = chain === "pulsechain" ? pulsechainClient : baseClient;
   const tokenAddress = HERO_TOKENS[chain];
-  // AUDIT FIX 2.2: Add timeout to RPC calls to prevent hanging
   const RPC_TIMEOUT_MS = 10_000;
+  const startTime = Date.now();
   try {
     const balancePromise = client.readContract({
       address: tokenAddress,
@@ -33,8 +91,13 @@ async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "ba
       setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)
     );
     const balance = await Promise.race([balancePromise, timeoutPromise]);
+    const durationMs = Date.now() - startTime;
+    logRpcEvent(chain, "call", durationMs);
     return Math.floor(Number(balance) / 1e18);
-  } catch {
+  } catch (err: any) {
+    const durationMs = Date.now() - startTime;
+    const isTimeout = err?.message?.includes("timeout") || durationMs >= RPC_TIMEOUT_MS;
+    logRpcEvent(chain, isTimeout ? "timeout" : "error", durationMs, err?.message);
     return 0;
   }
 }

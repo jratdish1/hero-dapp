@@ -3,6 +3,7 @@ import { execSync } from "child_process";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { TRPCError } from "@trpc/server";
+import { getRpcMetrics } from "../routers";
 
 export const systemRouter = router({
   health: publicProcedure
@@ -15,6 +16,7 @@ export const systemRouter = router({
       ok: true,
       version: process.env.npm_package_version || "unknown",
       uptime: process.uptime(),
+      rpc: getRpcMetrics(),
     })),
 
   /**
