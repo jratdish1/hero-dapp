@@ -18,18 +18,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WalletIdentity } from "./WalletIdentity";
-
-// ─── Contract Addresses ─────────────────────────────────────────────────
-const CONTRACTS = {
-  base: {
-    hero: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" as const,
-    staking: "0x54063f7dbc9e70061d6E4ac052B5bf41bF3303ba" as const,
-  },
-  pulsechain: {
-    hero: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" as const,
-    staking: "0x10315dC9a381AF756aA9ca7c46d55ee4f679a0B4" as const,
-  },
-};
+import { getHeroAddress, getStakingAddress } from "@/lib/config";
 
 // ─── ABIs (minimal) ─────────────────────────────────────────────────────
 const ERC20_ABI = [
@@ -108,7 +97,9 @@ export default function PortfolioDashboard() {
   const chainId = useChainId();
 
   const isBase = chainId === 8453;
-  const contracts = isBase ? CONTRACTS.base : CONTRACTS.pulsechain;
+  // Get contracts from centralized config
+  const heroCA = getHeroAddress(chainId);
+  const stakingCA = getStakingAddress(chainId);
   const chainName = isBase ? "BASE" : "PulseChain";
 
   // Read HERO balance
@@ -117,11 +108,11 @@ export default function PortfolioDashboard() {
     error: heroBalanceError,
     isLoading: heroBalanceLoading,
   } = useReadContract({
-    address: contracts.hero,
+    address: heroCA,
     abi: ERC20_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address, refetchInterval: 30000 },
+    query: { enabled: isConnected && !!address && !!heroCA, refetchInterval: 30000 },
   });
 
   // Read staking position
@@ -130,11 +121,11 @@ export default function PortfolioDashboard() {
     error: stakeError,
     isLoading: stakeLoading,
   } = useReadContract({
-    address: contracts.staking,
+    address: stakingCA,
     abi: STAKING_ABI,
     functionName: "stakes",
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address, refetchInterval: 30000 },
+    query: { enabled: isConnected && !!address && !!stakingCA, refetchInterval: 30000 },
   });
 
   // Read earned rewards
@@ -143,11 +134,11 @@ export default function PortfolioDashboard() {
     error: earnedError,
     isLoading: earnedLoading,
   } = useReadContract({
-    address: contracts.staking,
+    address: stakingCA,
     abi: STAKING_ABI,
     functionName: "earned",
     args: address ? [address] : undefined,
-    query: { enabled: isConnected && !!address, refetchInterval: 30000 },
+    query: { enabled: isConnected && !!address && !!stakingCA, refetchInterval: 30000 },
   });
 
   // Read total staked
@@ -156,10 +147,10 @@ export default function PortfolioDashboard() {
     error: totalStakedError,
     isLoading: totalStakedLoading,
   } = useReadContract({
-    address: contracts.staking,
+    address: stakingCA,
     abi: STAKING_ABI,
     functionName: "totalStaked",
-    query: { enabled: true, refetchInterval: 60000 },
+    query: { enabled: !!stakingCA, refetchInterval: 60000 },
   });
 
   // ─── Handle loading state ─────────────────────────────────────────────
