@@ -19,6 +19,7 @@ import { createPublicClient, http, fallback, erc20Abi, formatUnits, isAddress } 
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
+import { getChainConfig, type SupportedChainId } from "@/lib/config";
 
 // ─── Error Boundary ─────────────────────────────────────────────────────────
 import { Component, type ReactNode, type ErrorInfo } from "react";
@@ -121,40 +122,26 @@ function useFetchBalances(address: string | undefined) {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
-    const BALANCE_CHAINS = {
-      pulsechain: {
-        rpcs: ["https://rpc-pulsechain.g4mm4.io", "https://rpc.pulsechain.com", "https://pulsechain-rpc.publicnode.com"],
-        nativeSymbol: "PLS",
-        nativeName: "Pulse",
-        tokens: [
-          { address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27", symbol: "HERO", name: "HERO Token", decimals: 18 },
-          { address: "0x4013abBf94A745EfA7cc848989Ee83424A770060", symbol: "VETS", name: "VETERANS", decimals: 18 },
-        ],
-      },
-      base: {
-        rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://1rpc.io/base"],
-        nativeSymbol: "ETH",
-        nativeName: "Ether",
-        tokens: [
-          { address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", symbol: "HERO", name: "HERO Token", decimals: 18 },
-        ],
-      },
-    };
-
     const allBalances: TokenBalance[] = [];
 
     try {
-      for (const [chainKey, chain] of Object.entries(BALANCE_CHAINS)) {
+      // Use centralized chain config
+      const chainIds: SupportedChainId[] = [8453, 369];
+      for (const chainId of chainIds) {
         if (abortController.signal.aborted) break;
-        const client = getRpcClient(chainKey, (chain as any).rpcs);
+        const config = getChainConfig(chainId);
+        if (!config) continue;
+        
+        const chainKey = config.name;
+        const client = getRpcClient(chainKey, config.rpcs);
 
         // Native balance
         try {
           const nativeBal = await client.getBalance({ address: address as `0x${string}` });
           if (nativeBal > 0n) {
             allBalances.push({
-              symbol: chain.nativeSymbol,
-              name: chain.nativeName,
+              symbol: config.nativeSymbol,
+              name: config.nativeName,
               balance: formatUnits(nativeBal, 18),
               valueUsd: "0",
               address: "0x0000000000000000000000000000000000000000",
@@ -168,8 +155,8 @@ function useFetchBalances(address: string | undefined) {
 
         // ERC20 balances with multicall and error handling
         try {
-          const calls = chain.tokens.map((t: any) => ({
-            address: t.address as `0x${string}`,
+          const calls = config.tokens.filter(t => t.symbol !== config.nativeSymbol).map((t) => ({
+            address: t.ca as `0x${string}`,
             abi: erc20Abi,
             functionName: "balanceOf" as const,
             args: [address as `0x${string}`],
@@ -180,28 +167,27 @@ function useFetchBalances(address: string | undefined) {
             continue;
           }
           results.forEach((result: any, i: number) => {
-            const token = chain.tokens[i];
-            // Check if result is an object with status and result properties
+            const token = config.tokens.filter(t => t.symbol !== config.nativeSymbol)[i];
+            if (!token) return;
             if (result && typeof result === "object" && "status" in result && "result" in result) {
               if (result.status === "success" && result.result > 0n) {
                 allBalances.push({
                   symbol: token.symbol,
-                  name: token.name,
+                  name: token.symbol,
                   balance: formatUnits(result.result as bigint, token.decimals),
                   valueUsd: "0",
-                  address: token.address,
+                  address: token.ca,
                   decimals: token.decimals,
                   chain: chainKey,
                 });
               }
             } else if (typeof result === "bigint" && result > 0n) {
-              // Fallback if multicall returns array of bigints directly
               allBalances.push({
                 symbol: token.symbol,
-                name: token.name,
+                name: token.symbol,
                 balance: formatUnits(result, token.decimals),
                 valueUsd: "0",
-                address: token.address,
+                address: token.ca,
                 decimals: token.decimals,
                 chain: chainKey,
               });

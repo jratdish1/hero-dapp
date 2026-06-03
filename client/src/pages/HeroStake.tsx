@@ -34,27 +34,15 @@ import {
   formatAPY,
   formatLockPeriod,
   useCountdown,
-  HERO_STAKING_ADDRESS,
   getStakingAddress,
 } from "@/hooks/useStaking";
+import { getChainConfig, getExplorer, type SupportedChainId } from "@/lib/config";
 
-// ─── Chain Config ────────────────────────────────────────────────────
-const CHAIN_CONFIG = {
-  8453: {
-    name: "Base",
-    heroCA: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
-    explorer: "https://basescan.org",
-    color: "#0052FF",
-  },
-  369: {
-    name: "PulseChain",
-    heroCA: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
-    explorer: "https://scan.pulsechain.com",
-    color: "#00FF88",
-  },
-} as const;
-
-type SupportedChainId = 369 | 8453;
+// ─── Chain Config (re-exported for backward compatibility) ──────────────────
+const CHAIN_CONFIG: Record<SupportedChainId, { name: string; heroCA: `0x${string}`; explorer: string; color: string }> = {
+  8453: { name: "Base", heroCA: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", explorer: "https://basescan.org", color: "#0052FF" },
+  369: { name: "PulseChain", heroCA: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27", explorer: "https://scan.pulsechain.com", color: "#00FF88" },
+};
 
 
 // ─── Stat Card Component ─────────────────────────────────────────────
