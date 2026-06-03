@@ -1,6 +1,6 @@
 {
-  "include": ["client/src/**/*", "shared/**/*", "server/**/*"],
-  "exclude": ["node_modules", "build", "dist", "**/*.test.ts"],
+  "include": ["client/src/**/*", "shared/**/*"],
+  "exclude": ["node_modules", "build", "dist", "**/*.test.ts", "client/src/lib/rng/**/*", "client/src/lib/wagmi.ts", "server/**/*", "client/src/pages/dao/Proposals.tsx"],
   "compilerOptions": {
     "target": "ES2020",
     "incremental": true,

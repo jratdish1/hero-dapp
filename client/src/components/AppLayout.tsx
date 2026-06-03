@@ -101,7 +101,7 @@ const NAV_GROUPS: NavGroup[] = [
     label: "Earn",
     icon: Coins,
     items: [
-      { path: "/stake", label: "Stake HERO", icon: Sprout, dynamic: true },
+      { path: "/stake", label: "Stake HERO", icon: Sprout },
       { path: "/stake/dai", label: "Stake HERO → DAI", icon: Coins },
       { path: "/bots", label: "ABLE Bots", icon: Bot },
       { path: "/holder-rewards", label: "Holder Rewards", icon: Award },

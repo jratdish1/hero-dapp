@@ -31,7 +31,9 @@ export default function PriceImpactWarning({ fromToken = "PLS", toToken = "HERO"
   const impactData = useMemo(() => {
     if (!market?.heroPrice) return null;
 
-    const heroLiquidity = market.heroPrice.liquidity?.usd || 150000;
+    const heroLiquidity = typeof market.heroPrice.liquidity === 'object' && market.heroPrice.liquidity !== null
+      ? (market.heroPrice.liquidity as { usd?: number }).usd || 150000
+      : (market.heroPrice.liquidity as number) || 150000;
     if (heroLiquidity <= 0) return null; // Guard
 
     const parsedAmount = parseFloat(amount ?? "0");

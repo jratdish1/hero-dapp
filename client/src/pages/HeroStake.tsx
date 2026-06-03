@@ -341,7 +341,7 @@ export default function HeroStake() {
       )}
 
       {/* Unlock Countdown */}
-      {isConnected && hasStake && !user.isUnlocked && countdown.remaining > 0 && (
+      {isConnected && hasStake && !user.isUnlocked && countdown.seconds > 0 && (
         <div
           className="rounded-xl p-3 mb-4 flex items-center gap-3"
           style={{
@@ -677,7 +677,7 @@ export default function HeroStake() {
               className="hover:underline"
               style={{ color: "#C8A84B", fontFamily: "monospace" }}
             >
-              {getStakingAddress(chainId).slice(0, 10)}...{getStakingAddress(chainId).slice(-6)}
+              {getStakingAddress(chainId)?.slice(0, 10)}...{getStakingAddress(chainId)?.slice(-6)}
             </a>
           </span>
           <ExternalLink className="w-3 h-3" />

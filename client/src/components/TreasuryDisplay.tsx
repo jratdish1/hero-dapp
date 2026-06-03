@@ -4,7 +4,7 @@
  * Displays native token balance (PLS / ETH) side by side
  * Note: Funds donated to quarterly DAO vote winner
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { Wallet, RefreshCw, Vote } from "lucide-react";
 
@@ -88,6 +88,7 @@ export default function TreasuryDisplay() {
     error: null,
   });
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
 
   const fetchBalances = useCallback(async () => {
     setRefreshing(true);

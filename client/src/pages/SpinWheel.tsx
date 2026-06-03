@@ -353,7 +353,8 @@ export default function SpinWheel() {
       });
       toast.success(`Claim authorized! ${claimResult.amount} HERO ready for distribution.`);
     } catch (err: unknown) {
-      toast.error("Claim failed", { description: err.message });
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error("Claim failed", { description: message });
     } finally {
       setClaiming(false);
     }

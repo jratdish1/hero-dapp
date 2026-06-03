@@ -269,7 +269,7 @@ interface PrivacyBalance {
 
 export default function HeroWallet() {
   const { address, isConnected } = useAccount();
-  const { selectedNetwork } = useNetwork();
+  const { chain } = useNetwork();
   const [activeTab, setActiveTab] = useState("overview");
   const [gasData, setGasData] = useState<GasPrice[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -292,6 +292,7 @@ export default function HeroWallet() {
   const [bridgeTo, setBridgeTo] = useState("pulsechain");
   const [bridgeAmount, setBridgeAmount] = useState("");
   const [bridgeToken, setBridgeToken] = useState("HERO");
+  const [slippage, setSlippage] = useState(0.5);
 
   // Use reusable balances hook
   const { balances, loading, refetch: fetchBalances } = useFetchBalances(address);
@@ -459,7 +460,7 @@ export default function HeroWallet() {
           address,
           amount: shieldAmount,
           token: sanitizedToken,
-          chain: selectedNetwork
+          chain: chain.id
         })
       });
       if (res.ok) {
@@ -485,7 +486,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/privacy/unshield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, amount, token, chain: selectedNetwork })
+        body: JSON.stringify({ address, amount, token, chain: chain.id })
       });
       if (res.ok) {
         toast.success("Tokens unshielded");
@@ -520,7 +521,7 @@ export default function HeroWallet() {
           toChain: bridgeTo,
           amount: bridgeAmount,
           token: sanitizedToken,
-          slippage
+          slippage: slippage
         })
       });
       if (res.ok) {
@@ -541,7 +542,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, token, spender, chain: selectedNetwork })
+        body: JSON.stringify({ address, token, spender, chain: chain.id })
       });
       if (res.ok) {
         toast.success("Approval revoked");
@@ -794,7 +795,7 @@ export default function HeroWallet() {
                   <Input
                     id="shieldAmount"
                     value={shieldAmount}
-                    onChange={setShieldAmount}
+                    onChange={(e) => setShieldAmount(e.target.value)}
                     placeholder="0.0"
                     inputMode="decimal"
                     min="0"
@@ -914,7 +915,7 @@ export default function HeroWallet() {
                 <Input
                   id="bridgeAmount"
                   value={bridgeAmount}
-                  onChange={setBridgeAmount}
+                  onChange={(e) => setBridgeAmount(e.target.value)}
                   placeholder="0.0"
                   inputMode="decimal"
                   min="0"

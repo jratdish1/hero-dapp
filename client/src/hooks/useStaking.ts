@@ -47,20 +47,51 @@ export function useStakingStats(overrideChainId?: number) {
   const chainId = overrideChainId ?? networkChainId;
   const stakingAddress = STAKING_ADDRESSES[chainId];
 
+  // Validated chainId for wagmi (only 8453 or 369 allowed)
+  const validChainId = (chainId === 8453 || chainId === 369) ? chainId : undefined;
+
   const baseArgs = {
     address: stakingAddress,
     abi: STAKING_ABI,
-    chainId,
+    chainId: validChainId,
   };
 
-  // V2 Synthetix-style reads
-  const { data: totalSupply } = useReadContract({ ...baseArgs, functionName: "totalSupply" });
-  const { data: rewardRateRaw } = useReadContract({ ...baseArgs, functionName: "rewardRate" });
-  const { data: rewardsDuration } = useReadContract({ ...baseArgs, functionName: "rewardsDuration" });
-  const { data: periodFinish } = useReadContract({ ...baseArgs, functionName: "periodFinish" });
-  const { data: isPaused } = useReadContract({ ...baseArgs, functionName: "paused" });
-  const { data: stakingToken } = useReadContract({ ...baseArgs, functionName: "stakingToken" });
-  const { data: rewardsToken } = useReadContract({ ...baseArgs, functionName: "rewardsToken" });
+  // V2 Synthetix-style reads - conditionally enabled based on valid chainId
+  const { data: totalSupply } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "totalSupply" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "totalSupply", query: { enabled: false } }
+  );
+  const { data: rewardRateRaw } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "rewardRate" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "rewardRate", query: { enabled: false } }
+  );
+  const { data: rewardsDuration } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "rewardsDuration" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "rewardsDuration", query: { enabled: false } }
+  );
+  const { data: periodFinish } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "periodFinish" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "periodFinish", query: { enabled: false } }
+  );
+  const { data: isPaused } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "paused" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "paused", query: { enabled: false } }
+  );
+  const { data: stakingToken } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "stakingToken" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "stakingToken", query: { enabled: false } }
+  );
+  const { data: rewardsToken } = useReadContract(
+    validChainId
+      ? { address: stakingAddress, abi: STAKING_ABI, chainId: validChainId, functionName: "rewardsToken" }
+      : { address: stakingAddress, abi: STAKING_ABI, functionName: "rewardsToken", query: { enabled: false } }
+  );
 
   // Compute APY from rewardRate and totalSupply
   const computedAPY = useMemo(() => {
@@ -106,31 +137,32 @@ export function useUserStaking(overrideChainId?: number) {
   const { address } = useAccount();
   const stakingAddress = STAKING_ADDRESSES[chainId];
 
-  const baseArgs = {
-    address: stakingAddress,
-    abi: STAKING_ABI,
-    chainId,
-  };
+  // Validated chainId for wagmi (only 8453 or 369 allowed)
+  const validChainId = (chainId === 8453 || chainId === 369) ? chainId : undefined;
 
   // User-specific reads
   const { data: userStaked } = useReadContract({
-    ...baseArgs,
+    address: stakingAddress,
+    abi: STAKING_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    chainId: validChainId,
   });
 
   const { data: pendingRewards } = useReadContract({
-    ...baseArgs,
+    address: stakingAddress,
+    abi: STAKING_ABI,
     functionName: "earned",
     args: address ? [address] : undefined,
-    query: { enabled: !!address },
+    chainId: validChainId,
   });
 
   // Token balance (for staking)
   const { data: stakingToken } = useReadContract({
-    ...baseArgs,
+    address: stakingAddress,
+    abi: STAKING_ABI,
     functionName: "stakingToken",
+    chainId: validChainId,
   });
 
   const { data: tokenBalance } = useReadContract({
@@ -138,8 +170,7 @@ export function useUserStaking(overrideChainId?: number) {
     abi: ERC20_ABI,
     functionName: "balanceOf",
     args: address ? [address] : undefined,
-    chainId,
-    query: { enabled: !!address && !!stakingToken },
+    chainId: validChainId,
   });
 
   const { data: allowance } = useReadContract({
@@ -147,8 +178,7 @@ export function useUserStaking(overrideChainId?: number) {
     abi: ERC20_ABI,
     functionName: "allowance",
     args: address && stakingAddress ? [address, stakingAddress] : undefined,
-    chainId,
-    query: { enabled: !!address && !!stakingToken },
+    chainId: validChainId,
   });
 
   return {
@@ -158,12 +188,20 @@ export function useUserStaking(overrideChainId?: number) {
     allowance: allowance as bigint | undefined,
     isUnlocked: true, // V2 has no lock period for withdrawals
     unlockTime: BigInt(0),
+    // Aliases for HeroStake.tsx compatibility
+    heroBalance: tokenBalance as bigint | undefined,
+    stakedAmount: userStaked as bigint | undefined,
+    heroAllowance: allowance as bigint | undefined,
+    // Placeholder refetch (real implementation would use useQueryClient)
+    refetchAll: () => {},
   };
 }
 
 export function useStakingActions(overrideChainId?: number) {
   const { chainId: networkChainId } = useNetwork();
   const chainId = overrideChainId ?? networkChainId;
+  // Validated chainId for wagmi
+  const validChainId = (chainId === 8453 || chainId === 369) ? chainId : undefined;
   const stakingAddress = STAKING_ADDRESSES[chainId];
   const { writeContract, data: hash, isPending } = useWriteContract({
     mutation: {
@@ -178,7 +216,8 @@ export function useStakingActions(overrideChainId?: number) {
     address: stakingAddress,
     abi: STAKING_ABI,
     functionName: "stakingToken",
-    chainId,
+    chainId: validChainId,
+    query: { enabled: !!validChainId },
   });
 
   const approve = (amount: string) => {
@@ -263,6 +302,11 @@ export function useStakingActions(overrideChainId?: number) {
     isConfirming,
     isSuccess,
     hash,
+    // Legacy aliases (V2 has atomic txs so these all map to isPending)
+    isApproving: isPending,
+    isStaking: isPending,
+    isUnstaking: isPending,
+    isClaiming: isPending,
   };
 }
 
@@ -306,7 +350,7 @@ export function formatLockPeriod(seconds: bigint | undefined | null): string {
 }
 
 // Countdown hook for lock period display
-export function useCountdown(targetTimestamp: bigint | undefined): string {
+export function useCountdown(targetTimestamp: bigint | undefined): { days: number; hours: number; minutes: number; seconds: number } {
   const [now, setNow] = useState(Math.floor(Date.now() / 1000));
 
   useEffect(() => {
@@ -314,15 +358,15 @@ export function useCountdown(targetTimestamp: bigint | undefined): string {
     return () => clearInterval(interval);
   }, []);
 
-  if (!targetTimestamp || targetTimestamp === BigInt(0)) return "";
-  const remaining = Number(targetTimestamp) - now;
-  if (remaining <= 0) return "Unlocked";
+  if (!targetTimestamp || targetTimestamp === BigInt(0)) {
+    return { days: 0, hours: 0, minutes: 0, seconds: 0 };
+  }
 
-  const days = Math.floor(remaining / 86400);
-  const hours = Math.floor((remaining % 86400) / 3600);
-  const mins = Math.floor((remaining % 3600) / 60);
-
-  if (days > 0) return `${days}d ${hours}h`;
-  if (hours > 0) return `${hours}h ${mins}m`;
-  return `${mins}m`;
+  const remaining = Math.max(0, Number(targetTimestamp) - now);
+  return {
+    days: Math.floor(remaining / 86400),
+    hours: Math.floor((remaining % 86400) / 3600),
+    minutes: Math.floor((remaining % 3600) / 60),
+    seconds: remaining % 60,
+  };
 }
