@@ -1,6 +1,6 @@
 import { isValidAmount, isValidChainId, sanitizeString } from "../lib/validation";
 import { SlippageSelector } from "@/components/SlippageSelector";
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,11 +15,12 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount } from "wagmi";
-import { createPublicClient, http, fallback, erc20Abi, formatUnits, isAddress } from "viem";
+import { isAddress } from "viem";
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
-import { getHeroAddress, getRPCs, getChainName, type SupportedChainId } from "../lib/config";
+import { getChainName } from "../lib/config";
+import { useWalletBalances } from "../hooks/useWalletBalances";
 
 // ─── Error Boundary ─────────────────────────────────────────────────────────
 import { Component, type ReactNode, type ErrorInfo } from "react";
@@ -52,194 +53,52 @@ class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boole
 }
 
 
-// Wallet API base URL (not yet deployed - balance reads use on-chain)
+// Wallet API base URL — used for gas, approvals, privacy, send, bridge, revoke (not yet deployed)
 const WALLET_API = "";
 
-// Cache for RPC clients by chain key
-const rpcClientCache: Record<string, ReturnType<typeof createPublicClient>> = {};
+// ─── Balance fetch hook (delegates to shared useWalletBalances) ───────────────
 
-// Helper to create or get cached RPC client with fallback transport
-function getRpcClient(chainKey: string, rpcs: string[]) {
-  if (rpcClientCache[chainKey]) return rpcClientCache[chainKey];
-  const client = createPublicClient({
-    transport: fallback(rpcs.map((r) => http(r, { timeout: 10000, retryCount: 1 }))),
-  });
-  rpcClientCache[chainKey] = client;
-  return client;
-}
-
-// ─── Retry with exponential backoff ─────────────────────────────────────────
-async function retryWithBackoff<T>(fn: () => Promise<T>, retries = 3, delays = [1000, 2000, 4000]): Promise<T> {
-  let lastError: unknown;
-  for (let i = 0; i < retries; i++) {
-    try {
-      return await fn();
-    } catch (e) {
-      lastError = e;
-      if (i < retries - 1) {
-        await new Promise((res) => setTimeout(res, delays[i]));
-      }
-    }
-  }
-  throw lastError;
-}
-
-// ─── Error differentiation helper ───────────────────────────────────────────
-function handleRpcError(error: unknown) {
-  const err = error as any;
-  if (err?.name === "AbortError") return; // Silently ignore aborts
-  if (!navigator.onLine) {
-    toast.error("Network error — check your connection");
-  } else if (err?.code === 4001 || err?.message?.toLowerCase().includes("user rejected")) {
-    toast.error("Transaction cancelled by user");
-  } else if (err?.message?.toLowerCase().includes("rpc") || err?.message?.toLowerCase().includes("unavailable")) {
-    toast.error("RPC unavailable — trying fallback");
-  } else {
-    toast.error("An unexpected error occurred");
-    console.error("[HeroWallet] Unknown error:", error);
-  }
-}
-
-
-
-// Hook to fetch balances with abort support and error handling
+// Re-export the shared hook. The internal TokenBalance uses chain: string for UI.
 function useFetchBalances(address: string | undefined) {
-  const [balances, setBalances] = useState<TokenBalance[]>([]);
-  const [slippage, setSlippage] = useState(0.5);
-  const [loading, setLoading] = useState(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  // Use the shared wallet balances hook
+  const { chains, isLoading } = useWalletBalances();
 
-  const fetchBalances = useCallback(async () => {
-    if (!address) return;
-    if (!navigator.onLine) {
-      toast.error("Network error — check your connection");
-      return;
-    }
-    setLoading(true);
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    // Build balance chains from shared config
-    const pulseHeroAddr = getHeroAddress(369);
-    const baseHeroAddr = getHeroAddress(8453);
-    
-    const BALANCE_CHAINS = {
-      pulsechain: {
-        rpcs: getRPCs(369),
-        nativeSymbol: "PLS",
-        nativeName: "Pulse",
-        tokens: [
-          ...(pulseHeroAddr ? [{ address: pulseHeroAddr, symbol: "HERO", name: "HERO Token", decimals: 18 }] : []),
-          { address: "0x4013abBf94A745EfA7cc848989Ee83424A770060", symbol: "VETS", name: "VETERANS", decimals: 18 },
-        ],
-      },
-      base: {
-        rpcs: getRPCs(8453),
-        nativeSymbol: "ETH",
-        nativeName: "Ether",
-        tokens: [
-          ...(baseHeroAddr ? [{ address: baseHeroAddr, symbol: "HERO", name: "HERO Token", decimals: 18 }] : []),
-        ],
-      },
-    };
-
-    const allBalances: TokenBalance[] = [];
-
-    try {
-      for (const [chainKey, chain] of Object.entries(BALANCE_CHAINS)) {
-        if (abortController.signal.aborted) break;
-        const client = getRpcClient(chainKey, (chain as any).rpcs);
-
-        // Native balance
-        try {
-          const nativeBal = await client.getBalance({ address: address as `0x${string}` });
-          if (nativeBal > 0n) {
-            allBalances.push({
-              symbol: chain.nativeSymbol,
-              name: chain.nativeName,
-              balance: formatUnits(nativeBal, 18),
-              valueUsd: "0",
-              address: "0x0000000000000000000000000000000000000000",
-              decimals: 18,
-              chain: chainKey,
-            });
-          }
-        } catch (e) {
-          console.warn(`Native balance error on ${chainKey}:`, e);
-        }
-
-        // ERC20 balances with multicall and error handling
-        try {
-          const calls = chain.tokens.map((t: any) => ({
-            address: t.address as `0x${string}`,
-            abi: erc20Abi,
-            functionName: "balanceOf" as const,
-            args: [address as `0x${string}`],
-          }));
-          const results = await client.multicall({ contracts: calls });
-          if (!Array.isArray(results)) {
-            console.warn(`Multicall returned invalid results on ${chainKey}`);
-            continue;
-          }
-          results.forEach((result: any, i: number) => {
-            const token = chain.tokens[i];
-            // Check if result is an object with status and result properties
-            if (result && typeof result === "object" && "status" in result && "result" in result) {
-              if (result.status === "success" && result.result > 0n) {
-                allBalances.push({
-                  symbol: token.symbol,
-                  name: token.name,
-                  balance: formatUnits(result.result as bigint, token.decimals),
-                  valueUsd: "0",
-                  address: token.address,
-                  decimals: token.decimals,
-                  chain: chainKey,
-                });
-              }
-            } else if (typeof result === "bigint" && result > 0n) {
-              // Fallback if multicall returns array of bigints directly
-              allBalances.push({
-                symbol: token.symbol,
-                name: token.name,
-                balance: formatUnits(result, token.decimals),
-                valueUsd: "0",
-                address: token.address,
-                decimals: token.decimals,
-                chain: chainKey,
-              });
-            }
-          });
-        } catch (e) {
-          console.warn(`Token balance error on ${chainKey}:`, e);
-        }
+  // Map from ChainBalances to the legacy TokenBalance[] format used by HeroWallet UI
+  const balances = useMemo<TokenBalance[]>(() => {
+    const result: TokenBalance[] = [];
+    for (const [chainIdStr, state] of Object.entries(chains)) {
+      if (!state || state.status === "loading" || state.status === "unsupported") continue;
+      const chainKey = chainIdStr === "369" ? "pulsechain" : "base";
+      for (const token of state.tokens ?? []) {
+        result.push({
+          symbol: token.symbol,
+          name: token.name,
+          balance: token.balance,
+          valueUsd: "0",
+          address: token.address,
+          decimals: token.decimals,
+          chain: chainKey,
+        });
       }
-      if (!abortController.signal.aborted) {
-        setBalances(allBalances);
-      }
-    } catch (e) {
-      if (!abortController.signal.aborted) {
-        console.error("Failed to fetch balances:", e);
-      }
-    } finally {
-      if (!abortController.signal.aborted) {
-        setLoading(false);
+      if (state.nativeBalance) {
+        result.push({
+          symbol: state.nativeBalance.symbol,
+          name: state.nativeBalance.name,
+          balance: state.nativeBalance.balance,
+          valueUsd: "0",
+          address: "0x0000000000000000000000000000000000000000",
+          decimals: state.nativeBalance.decimals,
+          chain: chainKey,
+        });
       }
     }
-  }, [address]);
+    return result;
+  }, [chains]);
 
-  useEffect(() => {
-    fetchBalances();
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, [fetchBalances]);
-
-  return { balances, loading, refetch: fetchBalances };
+  return { balances, loading: isLoading, refetch: () => {} };
 }
 
+// Re-export TokenBalance for internal use
 interface TokenBalance {
   symbol: string;
   name: string;
@@ -274,13 +133,14 @@ interface PrivacyBalance {
 
 export default function HeroWallet() {
   const { address, isConnected } = useAccount();
-  const { selectedNetwork } = useNetwork();
+  const { } = useNetwork(); // WALLET_API is empty — no backend API calls needed
   const [activeTab, setActiveTab] = useState("overview");
   const [gasData, setGasData] = useState<GasPrice[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
   const [privacyBalances, setPrivacyBalances] = useState<PrivacyBalance[]>([]);
   const [showPrivateBalances, setShowPrivateBalances] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [slippage, setSlippage] = useState(0.5);
 
   // Send form
   const [sendTo, setSendTo] = useState("");
@@ -464,7 +324,7 @@ export default function HeroWallet() {
           address,
           amount: shieldAmount,
           token: sanitizedToken,
-          chain: selectedNetwork
+          chain: "base"
         })
       });
       if (res.ok) {
@@ -490,7 +350,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/privacy/unshield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, amount, token, chain: selectedNetwork })
+        body: JSON.stringify({ address, amount, token, chain: "base" })
       });
       if (res.ok) {
         toast.success("Tokens unshielded");
@@ -546,7 +406,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, token, spender, chain: selectedNetwork })
+        body: JSON.stringify({ address, token, spender, chain: "base" })
       });
       if (res.ok) {
         toast.success("Approval revoked");
@@ -799,7 +659,7 @@ export default function HeroWallet() {
                   <Input
                     id="shieldAmount"
                     value={shieldAmount}
-                    onChange={setShieldAmount}
+                    onChange={(e) => setShieldAmount(e.target.value)}
                     placeholder="0.0"
                     inputMode="decimal"
                     min="0"
@@ -919,7 +779,7 @@ export default function HeroWallet() {
                 <Input
                   id="bridgeAmount"
                   value={bridgeAmount}
-                  onChange={setBridgeAmount}
+                  onChange={(e) => setBridgeAmount(e.target.value)}
                   placeholder="0.0"
                   inputMode="decimal"
                   min="0"
