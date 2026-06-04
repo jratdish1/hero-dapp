@@ -106,7 +106,7 @@ export default function HeroSwapWidget({
   }, [chainId, isBase, isPulseChain]);
 
   const dexes = activeChain === "base" ? buildDEXLinks().base : buildDEXLinks().pulsechain;
-  const heroAddress = getHeroAddress(activeChain === "base" ? 8453 : 369);
+  const heroAddress = getHeroAddress(activeChain === "base" ? 8453 : 369) ?? "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
   const nativeToken = activeChain === "base" ? "ETH" : "PLS";
 
   return (
