@@ -19,6 +19,7 @@ import { createPublicClient, http, fallback, erc20Abi, formatUnits, isAddress } 
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
+import { getHeroAddress, getRPCs, getChainName, type SupportedChainId } from "../lib/config";
 
 // ─── Error Boundary ─────────────────────────────────────────────────────────
 import { Component, type ReactNode, type ErrorInfo } from "react";
@@ -121,22 +122,26 @@ function useFetchBalances(address: string | undefined) {
     const abortController = new AbortController();
     abortControllerRef.current = abortController;
 
+    // Build balance chains from shared config
+    const pulseHeroAddr = getHeroAddress(369);
+    const baseHeroAddr = getHeroAddress(8453);
+    
     const BALANCE_CHAINS = {
       pulsechain: {
-        rpcs: ["https://rpc-pulsechain.g4mm4.io", "https://rpc.pulsechain.com", "https://pulsechain-rpc.publicnode.com"],
+        rpcs: getRPCs(369),
         nativeSymbol: "PLS",
         nativeName: "Pulse",
         tokens: [
-          { address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27", symbol: "HERO", name: "HERO Token", decimals: 18 },
+          ...(pulseHeroAddr ? [{ address: pulseHeroAddr, symbol: "HERO", name: "HERO Token", decimals: 18 }] : []),
           { address: "0x4013abBf94A745EfA7cc848989Ee83424A770060", symbol: "VETS", name: "VETERANS", decimals: 18 },
         ],
       },
       base: {
-        rpcs: ["https://mainnet.base.org", "https://base-rpc.publicnode.com", "https://1rpc.io/base"],
+        rpcs: getRPCs(8453),
         nativeSymbol: "ETH",
         nativeName: "Ether",
         tokens: [
-          { address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", symbol: "HERO", name: "HERO Token", decimals: 18 },
+          ...(baseHeroAddr ? [{ address: baseHeroAddr, symbol: "HERO", name: "HERO Token", decimals: 18 }] : []),
         ],
       },
     };

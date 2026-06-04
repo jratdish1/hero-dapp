@@ -5,6 +5,7 @@ import {
 import { useNetwork } from "../contexts/NetworkContext";
 import { useMarketOverview, formatPrice, formatChange } from "../hooks/usePrices";
 import HeroSwapWidget from "@/components/HeroSwapWidget";
+import { getHeroAddress } from "@/lib/config";
 
 /* ─── Live Price Banner ─── */
 function LivePriceBanner() {
@@ -74,6 +75,7 @@ function QuickTokenRow() {
    ═══════════════════════════════════════════════════ */
 export default function Swap() {
   const { dexSources, chain } = useNetwork();
+  const heroPulse = getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27";
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -169,7 +171,7 @@ export default function Swap() {
 
             {/* CTA Button */}
             <a
-              href="https://switch.win/?network=pulsechain&to=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
+              href="https://switch.win/?network=pulsechain&to={`${heroPulse}`}"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-orange)] to-amber-600 text-black font-bold text-base hover:opacity-90 transition-opacity shadow-lg"
@@ -271,7 +273,7 @@ export default function Swap() {
 
             {/* CTA Button */}
             <a
-              href="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&tokenOut=0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"
+              href="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&tokenOut={`${heroPulse}`}"
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity shadow-lg"

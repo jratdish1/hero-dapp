@@ -34,27 +34,35 @@ import {
   formatAPY,
   formatLockPeriod,
   useCountdown,
-  HERO_STAKING_ADDRESS,
-  getStakingAddress,
 } from "@/hooks/useStaking";
+import { getChainConfig } from "@/lib/config";
 
 // ─── Chain Config ────────────────────────────────────────────────────
-const CHAIN_CONFIG = {
+// Local chain display config (derived from shared config)
+const CHAIN_DISPLAY_CONFIG = {
   8453: {
     name: "Base",
-    heroCA: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
-    explorer: "https://basescan.org",
     color: "#0052FF",
   },
   369: {
     name: "PulseChain",
-    heroCA: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
-    explorer: "https://scan.pulsechain.com",
     color: "#00FF88",
   },
 } as const;
 
 type SupportedChainId = 369 | 8453;
+
+// Get chain config for HeroStake (derived from shared config)
+function getHeroStakeChainConfig(chainId: SupportedChainId) {
+  const shared = getChainConfig(chainId);
+  const display = CHAIN_DISPLAY_CONFIG[chainId];
+  if (!shared) return undefined;
+  return {
+    ...display,
+    heroCA: shared.heroCA,
+    explorer: shared.explorer,
+  };
+}
 
 
 // ─── Stat Card Component ─────────────────────────────────────────────
@@ -104,7 +112,7 @@ export default function HeroStake() {
   const { switchChain } = useSwitchChain();
 
   const activeChainId: SupportedChainId = isValidChainId(chainId) ? chainId : 8453;
-  const chainConfig = CHAIN_CONFIG[activeChainId];
+  const chainConfig = getHeroStakeChainConfig(activeChainId);
 
   // ─── Contract State ──────────────────────────────────────────────
   const stats = useStakingStats(activeChainId);

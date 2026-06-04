@@ -4,12 +4,7 @@ import { parseUnits, formatUnits } from "viem";
 import { STAKING_ABI } from "../lib/staking-abi";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useState, useMemo, useEffect } from "react";
-
-// V2 SSS Contract Addresses (Synthetix-style)
-const STAKING_ADDRESSES: Record<number, `0x${string}`> = {
-  8453: "0xAD7991a61e5d5C242839445EAAFE244500EEC722",   // Base
-  369: "0xD5F173973eC653E6CD1A6B31d742501A1004297E",    // PulseChain
-};
+import { getStakingAddress, getHeroAddress } from "../lib/config";
 
 // ERC20 approve ABI
 const ERC20_ABI = [
@@ -45,7 +40,7 @@ const ERC20_ABI = [
 export function useStakingStats(overrideChainId?: number) {
   const { chainId: networkChainId } = useNetwork();
   const chainId = overrideChainId ?? networkChainId;
-  const stakingAddress = STAKING_ADDRESSES[chainId];
+  const stakingAddress = getStakingAddress(chainId);
 
   const baseArgs = {
     address: stakingAddress,
@@ -104,7 +99,7 @@ export function useUserStaking(overrideChainId?: number) {
   const { chainId: networkChainId } = useNetwork();
   const chainId = overrideChainId ?? networkChainId;
   const { address } = useAccount();
-  const stakingAddress = STAKING_ADDRESSES[chainId];
+  const stakingAddress = getStakingAddress(chainId);
 
   const baseArgs = {
     address: stakingAddress,
@@ -164,7 +159,7 @@ export function useUserStaking(overrideChainId?: number) {
 export function useStakingActions(overrideChainId?: number) {
   const { chainId: networkChainId } = useNetwork();
   const chainId = overrideChainId ?? networkChainId;
-  const stakingAddress = STAKING_ADDRESSES[chainId];
+  const stakingAddress = getStakingAddress(chainId);
   const { writeContract, data: hash, isPending } = useWriteContract({
     mutation: {
       onError: (error: Error) => {
@@ -269,12 +264,6 @@ export function useStakingActions(overrideChainId?: number) {
 
 // --- Compatibility Aliases & Utilities ---
 // These maintain backward compatibility with HeroStake.tsx
-
-// Address exports
-export const HERO_STAKING_ADDRESS = STAKING_ADDRESSES;
-export function getStakingAddress(chainId: number): `0x${string}` | undefined {
-  return STAKING_ADDRESSES[chainId];
-}
 
 // Alias for useUserStaking (HeroStake.tsx imports useUserStake)
 export const useUserStake = useUserStaking;

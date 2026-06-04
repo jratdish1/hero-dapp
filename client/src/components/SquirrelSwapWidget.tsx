@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { ExternalLink, Info, Zap } from "lucide-react";
+import { getHeroAddress } from "@/lib/config";
 
-// HERO token contract addresses
-const HERO_PULSECHAIN = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"; // PulseChain HERO CA
-const HERO_BASE = "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
+// HERO addresses from shared config
 
 // Military HERO theme colors for SquirrelSwap widget
 const HERO_THEME = {
@@ -15,7 +14,7 @@ const HERO_THEME = {
 };
 
 // Li.Fi widget config for BASE network (supports Aerodrome + Uniswap)
-const LIFI_BASE_URL = `https://transferto.xyz/embed?fromChain=8453&toChain=8453&toToken=${HERO_BASE}&theme=dark`;
+const LIFI_BASE_URL = (heroBase: string) => `https://transferto.xyz/embed?fromChain=8453&toChain=8453&toToken=${heroBase}&theme=dark`;
 
 interface SquirrelSwapWidgetProps {
   defaultChain?: "pulsechain" | "base";
@@ -32,10 +31,14 @@ export default function SquirrelSwapWidget({
 }: SquirrelSwapWidgetProps) {
   const [activeChain, setActiveChain] = useState<"pulsechain" | "base">(defaultChain);
 
+  // Get HERO addresses from shared config
+  const heroBase = getHeroAddress(8453) ?? "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
+  const heroPulse = getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27";
+
   const squirrelUrl = [
     `https://app.squirrelswap.pro/#/widget`,
     `?modes=${modes}`,
-    `&tokenOut=${HERO_PULSECHAIN}`,
+    `&tokenOut=${heroPulse}`,
     `&accentColor=${HERO_THEME.accentColor}`,
     `&bgColor=0d1a0d`,
     `&cardColor=${HERO_THEME.cardColor}`,
@@ -122,12 +125,12 @@ export default function SquirrelSwapWidget({
                 Use the aggregator below for best rates.
               </p>
               <p className="text-xs mb-6" style={{ color: "#5a6a5a" }}>
-                HERO CA: <span style={{ color: "#C8A84B", fontFamily: "monospace" }}>0x00Fa69...b5f8</span>
+                HERO CA: <span style={{ color: "#C8A84B", fontFamily: "monospace" }}>{heroBase.slice(0, 10)}...{heroBase.slice(-4)}</span>
               </p>
             </div>
             <div className="flex flex-col gap-3 w-full max-w-xs">
               <a
-                href={`https://aerodrome.finance/swap?from=ETH&to=${HERO_BASE}`}
+                href={`https://aerodrome.finance/swap?from=ETH&to=${heroBase}`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
                 style={{
@@ -139,7 +142,7 @@ export default function SquirrelSwapWidget({
                 Swap on Aerodrome (Best Rates)
               </a>
               <a
-                href={`https://app.uniswap.org/swap?outputCurrency=${HERO_BASE}&chain=base`}
+                href={`https://app.uniswap.org/swap?outputCurrency=${heroBase}&chain=base`}
                 target="_blank" rel="noopener noreferrer"
                 className="flex items-center justify-center gap-2 py-3 px-4 rounded-xl font-semibold text-sm transition-all hover:opacity-90"
                 style={{
