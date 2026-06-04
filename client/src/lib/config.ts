@@ -124,6 +124,12 @@ export function getTokenAddress(chainId: number | undefined, symbol: string): `0
   return getTokenBySymbol(chainId, symbol)?.ca;
 }
 
+// VETS is only on PulseChain (369)
+export function getVETSAddress(): `0x${string}` | undefined {
+  const chainConfig = CHAINS[369];
+  return chainConfig?.tokens.find(t => t.symbol === "VETS")?.ca;
+}
+
 // ─── Address Exports for Backward Compatibility ─────────────────────────
 
 export const HERO_ADDRESSES = {

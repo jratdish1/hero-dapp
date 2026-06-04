@@ -18,6 +18,7 @@ import {
   Flame,
 } from "lucide-react";
 import { useMarketOverview, formatPrice, formatCompact, formatChange } from "@/hooks/usePrices";
+import { getHeroAddress, getVETSAddress } from "@/lib/config";
 import { HERO_TOKEN, VETS_TOKEN, FEATURED_TOKENS } from "@shared/tokens";
 
 export default function Dashboard() {
@@ -31,17 +32,10 @@ export default function Dashboard() {
   const { address, isConnected } = useAccount();
   const currentChainId = useChainId();
   const { data: plsBalance } = useBalance({ address });
-  // HERO token addresses per chain
-  const HERO_ADDRESS: Record<number, `0x${string}`> = {
-    369: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",  // HERO on PulseChain
-    8453: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", // HERO on BASE
-  };
-  const VETS_ADDRESS: Record<number, `0x${string}`> = {
-    369: "0x4013abBf94A745EfA7cc848989Ee83424A770060",  // VETS on PulseChain
-  };
-
-  const heroAddr = HERO_ADDRESS[currentChainId];
-  const vetsAddr = VETS_ADDRESS[currentChainId];
+  
+  // Use shared config for token addresses
+  const heroAddr = getHeroAddress(currentChainId);
+  const vetsAddr = currentChainId === 369 ? getVETSAddress() : undefined;
   const isSupportedChain = currentChainId === 369 || currentChainId === 8453;
 
   const balanceContracts = address && isSupportedChain ? [

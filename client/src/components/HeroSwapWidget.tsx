@@ -6,6 +6,7 @@
 import { useState, useEffect } from "react";
 import { useAccount, useChainId } from "wagmi";
 import { useNetwork } from "@/contexts/NetworkContext";
+import { getHeroAddress, getChainConfig } from "@/lib/config";
 import {
   ArrowDownUp,
   Settings,
@@ -18,63 +19,61 @@ import {
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 
-// ─── Token Addresses ────────────────────────────────────────────────────
-const TOKENS = {
-  HERO_BASE: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
-  HERO_PULSE: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27",
-  ETH: "0x0000000000000000000000000000000000000000",
-  USDC_BASE: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
-};
+// ─── DEX Links (dynamic based on shared config) ─────────────────────────
 
-// ─── DEX Links ──────────────────────────────────────────────────────────
-const DEX_LINKS = {
-  base: {
-    aerodrome: {
-      name: "Aerodrome",
-      url: `https://aerodrome.finance/swap?from=eth&to=${TOKENS.HERO_BASE}`,
-      color: "blue",
-      icon: Zap,
-      desc: "Top BASE DEX · Deep liquidity",
+function buildDEXLinks() {
+  const heroBase = getHeroAddress(8453);
+  const heroPulse = getHeroAddress(369);
+  
+  return {
+    base: {
+      aerodrome: {
+        name: "Aerodrome",
+        url: `https://aerodrome.finance/swap?from=eth&to=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}`,
+        color: "blue",
+        icon: Zap,
+        desc: "Top BASE DEX · Deep liquidity",
+      },
+      uniswap: {
+        name: "Uniswap",
+        url: `https://app.uniswap.org/swap?outputCurrency=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}&chain=base`,
+        color: "pink",
+        icon: TrendingUp,
+        desc: "Universal swap · Multi-chain",
+      },
+      jumper: {
+        name: "Jumper (Li.Fi)",
+        url: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}`,
+        color: "purple",
+        icon: Globe,
+        desc: "Cross-chain aggregator",
+      },
     },
-    uniswap: {
-      name: "Uniswap",
-      url: `https://app.uniswap.org/swap?outputCurrency=${TOKENS.HERO_BASE}&chain=base`,
-      color: "pink",
-      icon: TrendingUp,
-      desc: "Universal swap · Multi-chain",
+    pulsechain: {
+      pulsex: {
+        name: "PulseX",
+        url: `https://app.pulsex.com/swap?outputCurrency=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        color: "green",
+        icon: Zap,
+        desc: "Native PulseChain DEX",
+      },
+      nines: {
+        name: "9mm DEX",
+        url: `https://9mm.pro/swap?outputCurrency=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        color: "purple",
+        icon: TrendingUp,
+        desc: "Concentrated liquidity",
+      },
+      switch: {
+        name: "Switch.win",
+        url: `https://switch.win/?network=pulsechain&to=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        color: "orange",
+        icon: Layers,
+        desc: "Multi-DEX aggregator",
+      },
     },
-    jumper: {
-      name: "Jumper (Li.Fi)",
-      url: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${TOKENS.HERO_BASE}`,
-      color: "purple",
-      icon: Globe,
-      desc: "Cross-chain aggregator",
-    },
-  },
-  pulsechain: {
-    pulsex: {
-      name: "PulseX",
-      url: `https://app.pulsex.com/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
-      color: "green",
-      icon: Zap,
-      desc: "Native PulseChain DEX",
-    },
-    nines: {
-      name: "9mm DEX",
-      url: `https://9mm.pro/swap?outputCurrency=${TOKENS.HERO_PULSE}`,
-      color: "purple",
-      icon: TrendingUp,
-      desc: "Concentrated liquidity",
-    },
-    switch: {
-      name: "Switch.win",
-      url: `https://switch.win/?network=pulsechain&to=${TOKENS.HERO_PULSE}`,
-      color: "orange",
-      icon: Layers,
-      desc: "Multi-DEX aggregator",
-    },
-  },
-};
+  };
+}
 
 interface HeroSwapWidgetProps {
   defaultChain?: "base" | "pulsechain";
@@ -106,8 +105,8 @@ export default function HeroSwapWidget({
     else if (isPulseChain || chainId === 369) setActiveChain("pulsechain");
   }, [chainId, isBase, isPulseChain]);
 
-  const dexes = activeChain === "base" ? DEX_LINKS.base : DEX_LINKS.pulsechain;
-  const heroAddress = activeChain === "base" ? TOKENS.HERO_BASE : TOKENS.HERO_PULSE;
+  const dexes = activeChain === "base" ? buildDEXLinks().base : buildDEXLinks().pulsechain;
+  const heroAddress = getHeroAddress(activeChain === "base" ? 8453 : 369);
   const nativeToken = activeChain === "base" ? "ETH" : "PLS";
 
   return (
