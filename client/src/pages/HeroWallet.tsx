@@ -19,6 +19,7 @@ import { isAddress } from "viem";
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
+import { getChainName } from "../lib/config";
 import { useWalletBalances } from "../hooks/useWalletBalances";
 
 // ─── Error Boundary ─────────────────────────────────────────────────────────
@@ -57,18 +58,10 @@ const WALLET_API = "";
 
 // ─── Balance fetch hook (delegates to shared useWalletBalances) ───────────────
 
-type WalletApiChain = "base" | "pulsechain";
-
-function getWalletApiChain(chainId: number | undefined): WalletApiChain {
-  if (chainId === 369) return "pulsechain";
-  if (chainId === 8453) return "base";
-  return "base";
-}
-
 // Re-export the shared hook. The internal TokenBalance uses chain: string for UI.
-function useFetchBalances() {
+function useFetchBalances(address: string | undefined) {
   // Use the shared wallet balances hook
-  const { chains, isLoading, refetch } = useWalletBalances();
+  const { chains, isLoading } = useWalletBalances();
 
   // Map from ChainBalances to the legacy TokenBalance[] format used by HeroWallet UI
   const balances = useMemo<TokenBalance[]>(() => {
@@ -102,7 +95,7 @@ function useFetchBalances() {
     return result;
   }, [chains]);
 
-  return { balances, loading: isLoading, refetch };
+  return { balances, loading: isLoading, refetch: () => {} };
 }
 
 // Re-export TokenBalance for internal use
@@ -140,8 +133,7 @@ interface PrivacyBalance {
 
 export default function HeroWallet() {
   const { address, isConnected } = useAccount();
-  const { chainId } = useNetwork();
-  const walletApiChain = getWalletApiChain(chainId);
+  const { } = useNetwork(); // WALLET_API is empty — no backend API calls needed
   const [activeTab, setActiveTab] = useState("overview");
   const [gasData, setGasData] = useState<GasPrice[]>([]);
   const [approvals, setApprovals] = useState<Approval[]>([]);
@@ -167,7 +159,7 @@ export default function HeroWallet() {
   const [bridgeToken, setBridgeToken] = useState("HERO");
 
   // Use reusable balances hook
-  const { balances, loading, refetch: fetchBalances } = useFetchBalances();
+  const { balances, loading, refetch: fetchBalances } = useFetchBalances(address);
 
   // AbortControllers for fetches
   const gasAbortController = useRef<AbortController | null>(null);
@@ -332,7 +324,7 @@ export default function HeroWallet() {
           address,
           amount: shieldAmount,
           token: sanitizedToken,
-          chain: walletApiChain
+          chain: "base"
         })
       });
       if (res.ok) {
@@ -358,7 +350,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/privacy/unshield`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, amount, token, chain: walletApiChain })
+        body: JSON.stringify({ address, amount, token, chain: "base" })
       });
       if (res.ok) {
         toast.success("Tokens unshielded");
@@ -414,7 +406,7 @@ export default function HeroWallet() {
       const res = await fetch(`${WALLET_API}/api/wallet/revoke`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address, token, spender, chain: walletApiChain })
+        body: JSON.stringify({ address, token, spender, chain: "base" })
       });
       if (res.ok) {
         toast.success("Approval revoked");
