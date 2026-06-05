@@ -18,17 +18,17 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { WalletIdentity } from "./WalletIdentity";
-import { getHeroAddress } from "@/lib/config";
+import { getHeroAddress, getStakingAddress } from "@/lib/config";
 
 // ─── Contract Addresses (from shared config) ────────────────────────────
 const CONTRACTS = {
   base: {
     hero: getHeroAddress(8453) ?? "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
-    staking: "0x54063f7dbc9e70061d6E4ac052B5bf41bF3303ba" as const,
+    staking: getStakingAddress(8453) ?? "0xAD7991a61e5d5C242839445EAAFE244500EEC722",
   },
   pulsechain: {
     hero: getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27",
-    staking: "0x10315dC9a381AF756aA9ca7c46d55ee4f679a0B4" as const,
+    staking: getStakingAddress(369) ?? "0xD5F173973eC653E6CD1A6B31d742501A1004297E",
   },
 };
 
