@@ -179,8 +179,8 @@ interface UseWalletBalancesOptions {
  */
 export function useWalletBalances(options: UseWalletBalancesOptions = {}): WalletBalances {
   const { readUnconnected = false } = options;
-  const { address, isConnected } = useAccountFromWagmi();
-  const wagmiChainId = useCurrentChainId();
+  const { address, isConnected } = useAccount();
+  const wagmiChainId = useChainId();
 
   const [chainStates, setChainStates] = useState<Partial<Record<8453 | 369, ChainBalances>>>({});
   const [isLoading, setIsLoading] = useState(false);
@@ -235,11 +235,10 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
     );
 
     // Only apply if this fetch is still the current one
-    if (fetchId !== fetchCountRef.current) return;
+    if (fetchId !== fetchCountRef.current || abortController.signal.aborted) return;
 
     const newStates: Partial<Record<8453 | 369, ChainBalances>> = {};
     let hasError = false;
-    let hasLoading = false;
 
     results.forEach((result, i) => {
       const chainId = chainIds[i];
@@ -253,7 +252,6 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
           nativeBalance: r.native,
         };
         if (r.status === "error") hasError = true;
-        if (r.status === "loading") hasLoading = true;
       } else {
         newStates[chainId] = {
           chainId,
@@ -266,7 +264,7 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
     });
 
     setChainStates(newStates);
-    setIsLoading(hasLoading);
+    setIsLoading(false);
     setIsError(hasError);
     if (hasError) {
       const errors = Object.values(newStates)
@@ -286,11 +284,22 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
     } else if (readUnconnected && address) {
       fetchBalances();
     } else {
+      fetchCountRef.current += 1;
+      abortControllerRef.current?.abort();
+      abortControllerRef.current = null;
       setChainStates({});
       setIsLoading(false);
       setIsError(false);
+      setGlobalError(undefined);
     }
   }, [address, wagmiChainId, isConnected, readUnconnected, fetchBalances]);
+
+  useEffect(() => {
+    return () => {
+      fetchCountRef.current += 1;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
 
   return {
     chains: chainStates,
@@ -298,21 +307,10 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
     isError,
     isUnsupported,
     error: globalError,
-    refetch: fetchBalances,
+    refetch: () => {
+      void fetchBalances();
+    },
   };
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-function useAccountFromWagmi() {
-  // Lazy import to avoid circular dep issues
-  const { useAccount } = require("wagmi");
-  return useAccount();
-}
-
-function useCurrentChainId() {
-  const { useChainId } = require("wagmi");
-  return useChainId();
 }
 
 /**
