@@ -49,13 +49,25 @@ export function useStakingStats(overrideChainId?: number) {
   };
 
   // V2 Synthetix-style reads
-  const { data: totalSupply } = useReadContract({ ...baseArgs, functionName: "totalSupply" });
-  const { data: rewardRateRaw } = useReadContract({ ...baseArgs, functionName: "rewardRate" });
-  const { data: rewardsDuration } = useReadContract({ ...baseArgs, functionName: "rewardsDuration" });
-  const { data: periodFinish } = useReadContract({ ...baseArgs, functionName: "periodFinish" });
-  const { data: isPaused } = useReadContract({ ...baseArgs, functionName: "paused" });
-  const { data: stakingToken } = useReadContract({ ...baseArgs, functionName: "stakingToken" });
-  const { data: rewardsToken } = useReadContract({ ...baseArgs, functionName: "rewardsToken" });
+  const { data: totalSupply } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "totalSupply", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: rewardRateRaw } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "rewardRate", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: rewardsDuration } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "rewardsDuration", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: periodFinish } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "periodFinish", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: isPaused } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "paused", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: stakingToken } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "stakingToken", chainId: chainId as 369 | 8453 }) : { data: undefined };
+  const { data: rewardsToken } = stakingAddress ? useReadContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "rewardsToken", chainId: chainId as 369 | 8453 }) : { data: undefined };
+
+
+  // Read actual reward token balance held by staking contract
+  const { data: actualRewardPoolBalance } = rewardsToken && stakingAddress && (chainId === 8453 || chainId === 369) ? useReadContract({
+    address: rewardsToken as `0x${string}`,
+    abi: ERC20_ABI,
+    functionName: "balanceOf",
+    args: [stakingAddress],
+    chainId: chainId as 369 | 8453,
+  }) : { data: undefined };
+
+
 
   // Compute APY from rewardRate and totalSupply
   const computedAPY = useMemo(() => {
@@ -69,8 +81,8 @@ export function useStakingStats(overrideChainId?: number) {
     return apyBps;
   }, [totalSupply, rewardRateRaw]);
 
-  // Compute reward pool balance (remaining rewards in current period)
-  const rewardPoolBalance = useMemo(() => {
+  // Compute scheduled rewards remaining (reward emissions left in period)
+  const scheduledRewardsRemaining = useMemo(() => {
     if (!rewardRateRaw || !periodFinish) return BigInt(0);
     const rr = rewardRateRaw as bigint;
     const pf = periodFinish as bigint;
@@ -82,7 +94,8 @@ export function useStakingStats(overrideChainId?: number) {
   return {
     totalStaked: totalSupply as bigint | undefined,
     currentAPY: computedAPY,
-    rewardPoolBalance,
+    actualRewardPoolBalance: (!rewardsToken || !stakingAddress || !(chainId === 8453 || chainId === 369)) ? undefined : actualRewardPoolBalance as bigint | undefined,
+    scheduledRewardsRemaining,
     lockPeriod: rewardsDuration as bigint | undefined,
     lockPeriodSeconds: rewardsDuration as bigint | undefined,
     penaltyBps: BigInt(0), // V2 has no penalty
@@ -92,6 +105,7 @@ export function useStakingStats(overrideChainId?: number) {
     stakingToken: stakingToken as `0x${string}` | undefined,
     rewardsToken: rewardsToken as `0x${string}` | undefined,
     stakingAddress,
+    rewardPoolError: (!rewardsToken || !stakingAddress) ? 'Missing contract address' : undefined,
   };
 }
 
@@ -104,7 +118,7 @@ export function useUserStaking(overrideChainId?: number) {
   const baseArgs = {
     address: stakingAddress,
     abi: STAKING_ABI,
-    chainId,
+    chainId: chainId as 369 | 8453,
   };
 
   // User-specific reads
@@ -128,31 +142,40 @@ export function useUserStaking(overrideChainId?: number) {
     functionName: "stakingToken",
   });
 
-  const { data: tokenBalance } = useReadContract({
-    address: stakingToken as `0x${string}` | undefined,
-    abi: ERC20_ABI,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId,
-    query: { enabled: !!address && !!stakingToken },
-  });
+  // Staking token balanceOf: only query if valid address and chainId
+  const { data: tokenBalance } = stakingToken && address && (chainId === 8453 || chainId === 369)
+    ? useReadContract({
+        address: stakingToken as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "balanceOf",
+        args: [address],
+        chainId: chainId as 369 | 8453,
+        query: { enabled: true },
+      })
+    : { data: undefined };
 
-  const { data: allowance } = useReadContract({
-    address: stakingToken as `0x${string}` | undefined,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address && stakingAddress ? [address, stakingAddress] : undefined,
-    chainId,
-    query: { enabled: !!address && !!stakingToken },
-  });
+  // Staking token allowance: only query if valid addresses and chainId
+  const { data: allowance } = stakingToken && address && stakingAddress && (chainId === 8453 || chainId === 369)
+    ? useReadContract({
+        address: stakingToken as `0x${string}`,
+        abi: ERC20_ABI,
+        functionName: "allowance",
+        args: [address, stakingAddress],
+        chainId: chainId as 369 | 8453,
+        query: { enabled: true },
+      })
+    : { data: undefined };
 
+
+  // Legacy compatibility: export keys as expected in HeroStake
   return {
-    userStaked: userStaked as bigint | undefined,
+    stakedAmount: userStaked as bigint | undefined,
     pendingRewards: pendingRewards as bigint | undefined,
-    tokenBalance: tokenBalance as bigint | undefined,
-    allowance: allowance as bigint | undefined,
+    heroBalance: tokenBalance as bigint | undefined,
+    heroAllowance: allowance as bigint | undefined,
     isUnlocked: true, // V2 has no lock period for withdrawals
     unlockTime: BigInt(0),
+    refetchAll: () => {}, // stub, update as needed
   };
 }
 
@@ -169,12 +192,13 @@ export function useStakingActions(overrideChainId?: number) {
   });
   const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
 
-  const { data: stakingToken } = useReadContract({
+  const { data: stakingToken } = (stakingAddress && (chainId === 8453 || chainId === 369)) ? useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
     functionName: "stakingToken",
-    chainId,
-  });
+    chainId: chainId as 369 | 8453,
+  }) : { data: undefined };
+
 
   const approve = (amount: string) => {
     if (!stakingToken || !stakingAddress) return;
@@ -187,7 +211,7 @@ export function useStakingActions(overrideChainId?: number) {
         abi: ERC20_ABI,
         functionName: "approve",
         args: [stakingAddress, parsedAmount],
-        chainId,
+        chainId: chainId as 369 | 8453,
       });
     } catch (e) {
       console.error("Error in approve:", e);
@@ -200,11 +224,11 @@ export function useStakingActions(overrideChainId?: number) {
     try {
       const parsedAmount = parseUnits(amount, 18);
       writeContract({
-        address: stakingAddress,
+        address: stakingAddress as `0x${string}`,
         abi: STAKING_ABI,
         functionName: "stake",
         args: [parsedAmount],
-        chainId,
+        chainId: chainId as 369 | 8453,
       });
     } catch (e) {
       console.error("Error in stake:", e);
@@ -217,11 +241,11 @@ export function useStakingActions(overrideChainId?: number) {
     try {
       const parsedAmount = parseUnits(amount, 18);
       writeContract({
-        address: stakingAddress,
+        address: stakingAddress as `0x${string}`,
         abi: STAKING_ABI,
         functionName: "withdraw",
         args: [parsedAmount],
-        chainId,
+        chainId: chainId as 369 | 8453,
       });
     } catch (e) {
       console.error("Error in withdraw:", e);
@@ -231,20 +255,20 @@ export function useStakingActions(overrideChainId?: number) {
   const claimRewards = () => {
     if (!isValidChainId(chainId) || !stakingAddress) { console.error("Unsupported chain:", chainId); return; }
     writeContract({
-      address: stakingAddress,
+      address: stakingAddress as `0x${string}`,
       abi: STAKING_ABI,
       functionName: "getReward",
-      chainId,
+      chainId: chainId as 369 | 8453,
     });
   };
 
   const exitAll = () => {
     if (!isValidChainId(chainId) || !stakingAddress) { console.error("Unsupported chain:", chainId); return; }
     writeContract({
-      address: stakingAddress,
+      address: stakingAddress as `0x${string}`,
       abi: STAKING_ABI,
       functionName: "exit",
-      chainId,
+      chainId: chainId as 369 | 8453,
     });
   };
 
