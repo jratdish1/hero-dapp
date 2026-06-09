@@ -1,0 +1,31 @@
+name: Security and Quality
+
+on:
+  pull_request:
+  push:
+    branches: [main, master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  repository-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Hidden Unicode scan
+        shell: bash
+        run: |
+          ! grep -RInP '[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}\x{202A}-\x{202E}]' -- . || (echo 'Hidden Unicode found' && exit 1)
+
+      - name: Secret pattern scan
+        shell: bash
+        run: |
+          ! grep -RInE '(-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' -- . || (echo 'Potential secret found' && exit 1)
