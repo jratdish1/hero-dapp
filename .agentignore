@@ -1,0 +1,23 @@
+# Files and paths agents should not read or modify without explicit human approval
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.keystore
+*.wallet
+mnemonic*
+seed*
+secrets*
+private-key*
+id_rsa
+id_ed25519
+.ssh/
+.aws/
+.gcloud/
+.azure/
+.vercel/
+.netlify/
+.npmrc
+.pypirc

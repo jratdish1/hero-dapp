@@ -1,3 +1,30 @@
+# Secrets and credentials
+.env
+.env.*
+*.pem
+*.key
+*.p12
+*.wallet
+mnemonic*
+private-key*
+
+# IDE and OS
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# Dependencies
+node_modules/
+__pycache__/
+venv/
+.venv/
+
+# Build
+dist/
+build/
+coverage/
+
 # Dependencies
 **/node_modules
 .pnpm-store/
