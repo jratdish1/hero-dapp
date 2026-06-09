@@ -94,6 +94,10 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
     error ExecutionFailed();
     error PayloadAlreadyExecuted();
     error InvalidInput();              // AUDIT FIX #9: For zero-value checks
+    error VotingPeriodNotEnded();       // CODEX FIX #1: Prevent premature finalization
+    error InvalidExecutor();            // CODEX FIX #2: Explicit executor error
+    error InvalidCall();                // CODEX FIX #5: Custom error for fallback
+    error InvalidVoteTally();           // CODEX FIX #6: Zero-vote sanity check
 
     // ─── Modifiers ──────────────────────────────────────────────────
 
@@ -106,7 +110,8 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
 
     // AUDIT FIX #8: Ownable() takes initial owner as parameter in OZ v5
     constructor(address _executor) Ownable(msg.sender) {
-        require(_executor != address(0), "Invalid executor");
+        // CODEX FIX #2: Use custom error instead of require string
+        if (_executor == address(0)) revert InvalidExecutor();
         executor = _executor;
     }
 
@@ -121,18 +126,23 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
     function anchorProposal(
         bytes32 proposalIdHash,
         bytes32 contentHash,
-        uint256 votingEndsAt
+        uint256 votingEndsAt,
+        address proposer_          // CODEX FIX #3: Accept actual proposer address
     ) external onlyExecutor nonReentrant {
         // AUDIT FIX #9: Validate non-zero inputs
         if (proposalIdHash == bytes32(0)) revert InvalidInput();
         if (contentHash == bytes32(0)) revert InvalidInput();
+        // CODEX FIX #3: Validate actual proposer address
+        if (proposer_ == address(0)) revert InvalidInput();
         if (proposals[proposalIdHash].startBlock != 0) revert ProposalAlreadyExists();
+        // CODEX FIX #7: Explicit future-timestamp check for clarity
+        if (votingEndsAt <= block.timestamp) revert InvalidVotingPeriod();
         if (votingEndsAt < block.timestamp + MIN_VOTING_PERIOD) revert InvalidVotingPeriod();
         if (votingEndsAt > block.timestamp + MAX_VOTING_PERIOD) revert InvalidVotingPeriod();
 
         proposals[proposalIdHash] = ProposalAnchor({
             contentHash: contentHash,
-            proposer: msg.sender,
+            proposer: proposer_,   // CODEX FIX #3: Store actual proposer
             startBlock: block.number,
             votingEndsAt: votingEndsAt,
             finalizedAt: 0,
@@ -144,7 +154,7 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
             votesAbstain: 0
         });
 
-        emit ProposalAnchored(proposalIdHash, contentHash, msg.sender, block.number, votingEndsAt);
+        emit ProposalAnchored(proposalIdHash, contentHash, proposer_, block.number, votingEndsAt);
     }
 
     /**
@@ -165,6 +175,11 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
         if (p.startBlock == 0) revert ProposalNotFound();
         // AUDIT FIX #6: Use correct error for already-finalized proposals
         if (p.finalized) revert ProposalAlreadyFinalized();
+        // CODEX FIX #1: Prevent premature finalization before voting period ends
+        if (block.timestamp < p.votingEndsAt) revert VotingPeriodNotEnded();
+
+        // CODEX FIX #6: Sanity check — at least one vote must be recorded
+        if (votesFor + votesAgainst + votesAbstain == 0) revert InvalidVoteTally();
 
         // Checks-Effects-Interactions: update state before any external calls
         p.finalized = true;
@@ -195,6 +210,8 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
         if (!p.finalized) revert ProposalNotFinalized();
         if (p.executed) revert ProposalAlreadyExecuted();
         if (block.timestamp < p.executionUnlocksAt) revert TimelockNotExpired(p.executionUnlocksAt);
+        // CODEX FIX #4: Validate target address
+        if (target == address(0)) revert InvalidInput();
 
         // Generate execution payload hash for replay protection
         bytes32 payloadHash = keccak256(abi.encode(proposalIdHash, target, value, data));
@@ -217,7 +234,8 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
      * @notice Update the executor address (e.g., to a multisig).
      */
     function setExecutor(address _newExecutor) external onlyOwner {
-        require(_newExecutor != address(0), "Invalid executor");
+        // CODEX FIX #2: Use custom error instead of require string
+        if (_newExecutor == address(0)) revert InvalidExecutor();
         address old = executor;
         executor = _newExecutor;
         emit ExecutorUpdated(old, _newExecutor);
@@ -261,7 +279,8 @@ contract HeroDAOAnchor is Ownable, ReentrancyGuard {
     receive() external payable {}
 
     // AUDIT FIX 1.4: Explicit fallback to reject invalid calls
+    // CODEX FIX #5: Use custom error for consistency
     fallback() external payable {
-        revert("Invalid call");
+        revert InvalidCall();
     }
 }
