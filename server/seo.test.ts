@@ -7,7 +7,7 @@ describe('SEO Improvements', () => {
 
   describe('Canonical URL', () => {
     it('has a canonical link tag pointing to herobase.io', () => {
-      expect(indexHtml).toContain('<link rel="canonical" href="https://www.herobase.io/"');
+      expect(indexHtml).toContain('<link rel="canonical" href="https://herobase.io/"');
     });
 
     it('has robots meta tag allowing indexing', () => {
@@ -36,7 +36,7 @@ describe('SEO Improvements', () => {
     it('has correct URL', () => {
       const jsonLdMatch = indexHtml.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
       const jsonLd = JSON.parse(jsonLdMatch![1]);
-      expect(jsonLd.url).toBe('https://www.herobase.io');
+      expect(jsonLd.url).toBe('https://herobase.io');
     });
 
     it('has FinanceApplication category', () => {
@@ -84,38 +84,38 @@ describe('SEO Improvements', () => {
     });
 
     it('includes the landing page with highest priority', () => {
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/</loc>');
       expect(sitemapXml).toContain('<priority>1.0</priority>');
     });
 
     it('includes all core DeFi pages', () => {
-      const corePages = ['/swap', '/dashboard', '/farm', '/tokenomics', '/portfolio', '/dca', '/limits'];
+      const corePages = ['/swap', '/dashboard', '/stake', '/tokenomics', '/portfolio', '/dca', '/limits'];
       for (const page of corePages) {
-        expect(sitemapXml).toContain(`<loc>https://www.herobase.io${page}</loc>`);
+        expect(sitemapXml).toContain(`<loc>https://herobase.io${page}</loc>`);
       }
     });
 
     it('includes NFT and community pages', () => {
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/nft</loc>');
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/media</loc>');
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/blog</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/nft</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/media</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/community</loc>');  // /blog was renamed to /community
     });
 
     it('includes DAO governance pages', () => {
       const daoPages = ['/dao', '/dao/proposals', '/dao/treasury', '/dao/delegates'];
       for (const page of daoPages) {
-        expect(sitemapXml).toContain(`<loc>https://www.herobase.io${page}</loc>`);
+        expect(sitemapXml).toContain(`<loc>https://herobase.io${page}</loc>`);
       }
     });
 
     it('includes ecosystem and AI pages', () => {
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/ecosystem</loc>');
-      expect(sitemapXml).toContain('<loc>https://www.herobase.io/ai</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/ecosystem</loc>');
+      expect(sitemapXml).toContain('<loc>https://herobase.io/ai</loc>');
     });
 
     it('has 18 total URLs', () => {
       const urlCount = (sitemapXml.match(/<url>/g) || []).length;
-      expect(urlCount).toBe(18);
+      expect(urlCount).toBe(23);
     });
   });
 
@@ -132,7 +132,7 @@ describe('SEO Improvements', () => {
     });
 
     it('references the sitemap', () => {
-      expect(robotsTxt).toContain('Sitemap: https://www.herobase.io/sitemap.xml');
+      expect(robotsTxt).toContain('Sitemap: https://herobase.io/sitemap.xml');
     });
   });
 

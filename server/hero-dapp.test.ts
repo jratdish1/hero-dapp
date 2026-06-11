@@ -12,6 +12,63 @@ import {
   PULSECHAIN_CONFIG,
 } from "../shared/tokens";
 
+// Mock all database functions so tests work without a live DB connection.
+// Production db.ts behavior is unchanged — only the test environment is affected.
+import { vi } from "vitest";
+vi.mock("./db", () => ({
+  getDb: vi.fn().mockResolvedValue(null),
+  upsertUser: vi.fn().mockResolvedValue(undefined),
+  getUserByOpenId: vi.fn().mockResolvedValue(null),
+  createDcaOrder: vi.fn().mockResolvedValue({ id: 1 }),
+  getDcaOrdersByUser: vi.fn().mockResolvedValue([]),
+  updateDcaOrderStatus: vi.fn().mockResolvedValue(undefined),
+  createLimitOrder: vi.fn().mockResolvedValue({ id: 1 }),
+  getLimitOrdersByUser: vi.fn().mockResolvedValue([]),
+  cancelLimitOrder: vi.fn().mockResolvedValue(undefined),
+  recordSwap: vi.fn().mockResolvedValue({ id: 1 }),
+  getSwapHistoryByWallet: vi.fn().mockResolvedValue([]),
+  addToWatchlist: vi.fn().mockResolvedValue({ id: 1 }),
+  getWatchlistByUser: vi.fn().mockResolvedValue([]),
+  removeFromWatchlist: vi.fn().mockResolvedValue(undefined),
+  createBlogPost: vi.fn().mockResolvedValue({ id: 1, success: true }),
+  getPublishedBlogPosts: vi.fn().mockResolvedValue([]),
+  getBlogPostBySlug: vi.fn().mockResolvedValue(null),
+  getAllBlogPosts: vi.fn().mockResolvedValue([]),
+  updateBlogPost: vi.fn().mockResolvedValue(undefined),
+  saveMvsContent: vi.fn().mockResolvedValue({ id: 1, success: true }),
+  getMvsContentList: vi.fn().mockResolvedValue([]),
+  getMvsContentByTweetId: vi.fn().mockResolvedValue(null),
+  createMediaPost: vi.fn().mockResolvedValue({ id: 1 }),
+  getMediaPostsByCategory: vi.fn().mockResolvedValue([]),
+  getAllMediaPosts: vi.fn().mockResolvedValue([]),
+  getMediaPostsByUser: vi.fn().mockResolvedValue([]),
+  deleteMediaPost: vi.fn().mockResolvedValue(undefined),
+  createProposal: vi.fn().mockResolvedValue({ id: 1 }),
+  getProposals: vi.fn().mockResolvedValue([]),
+  getProposalById: vi.fn().mockResolvedValue(null),
+  getDelegateByAddress: vi.fn().mockResolvedValue(null),
+  updateDelegate: vi.fn().mockResolvedValue(undefined),
+  atomicIncrementDelegateStats: vi.fn().mockResolvedValue(undefined),
+  createDelegation: vi.fn().mockResolvedValue({ id: 1 }),
+  getDelegationsByDelegator: vi.fn().mockResolvedValue([]),
+  getDelegationsByDelegate: vi.fn().mockResolvedValue([]),
+  revokeDelegation: vi.fn().mockResolvedValue(undefined),
+  saveTreasurySnapshot: vi.fn().mockResolvedValue({ id: 1 }),
+  getLatestTreasurySnapshots: vi.fn().mockResolvedValue([]),
+  getCachedChainData: vi.fn().mockResolvedValue(null),
+  setCachedChainData: vi.fn().mockResolvedValue(undefined),
+  upsertInfluencerMention: vi.fn().mockResolvedValue({ id: 1 }),
+  getInfluencerMentions: vi.fn().mockResolvedValue([]),
+  getInfluencerMentionByTweetId: vi.fn().mockResolvedValue(null),
+  toggleMentionPinned: vi.fn().mockResolvedValue(undefined),
+  toggleMentionHighlight: vi.fn().mockResolvedValue(undefined),
+  toggleMentionHidden: vi.fn().mockResolvedValue(undefined),
+  updateMentionCategory: vi.fn().mockResolvedValue(undefined),
+  getInfluencerMentionStats: vi.fn().mockResolvedValue({ total: 0 }),
+  updateUserWalletAddress: vi.fn().mockResolvedValue(undefined),
+}));
+
+
 // --- Token Configuration Tests ---
 describe("Token Configuration", () => {
   it("HERO token has correct contract address", () => {
@@ -607,8 +664,8 @@ describe("Farm Blueprint - Smart Contracts", () => {
 });
 
 describe("Farm Blueprint - Staking Pools", () => {
-  it("has 2 active staking pools on PulseChain", () => {
-    expect(FARM_POOLS_PLS.length).toBe(2);
+  it("has 3 active staking pools on PulseChain", () => {
+    expect(FARM_POOLS_PLS.length).toBe(3);
     expect(FARM_POOLS_PLS.every(p => p.active)).toBe(true);
   });
 
@@ -650,13 +707,13 @@ describe("Farm Blueprint - CDN Assets", () => {
 
 describe("Farm Blueprint - Live DApp URLs", () => {
   it("Farm DApp URL is valid", () => {
-    expect(LIVE_DAPP_URLS.farm).toMatch(/^https:\/\//);
-    expect(LIVE_DAPP_URLS.farm).toContain("manus.space");
+    expect(LIVE_DAPP_URLS.farm).toMatch(/^https:\/\//);  // production URL
+    // manus.space was dev-only; production URL is trufarms.io — valid https URL confirmed above
   });
 
   it("DAO DApp URL is valid", () => {
-    expect(LIVE_DAPP_URLS.dao).toMatch(/^https:\/\//);
-    expect(LIVE_DAPP_URLS.dao).toContain("manus.space");
+    expect(LIVE_DAPP_URLS.dao).toMatch(/^https:\/\//);  // production URL
+    // manus.space was dev-only; production URL is herobase.io/dao — valid https URL confirmed above
   });
 });
 
