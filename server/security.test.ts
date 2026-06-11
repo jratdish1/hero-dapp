@@ -1,7 +1,55 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { appRouter } from "./routers";
 import type { TrpcContext } from "./_core/context";
 import { TRPCError } from "@trpc/server";
+
+// Mock database so tests are deterministic without a live DB connection.
+// Only the functions needed by the tested procedures are mocked here.
+// Production db.ts is not modified.
+vi.mock("./db", () => ({
+  getDb: vi.fn().mockResolvedValue(null),
+  upsertUser: vi.fn().mockResolvedValue(undefined),
+  getUserByOpenId: vi.fn().mockResolvedValue(null),
+  getPublishedBlogPosts: vi.fn().mockResolvedValue([]),
+  getMvsContentList: vi.fn().mockResolvedValue([]),
+  createDcaOrder: vi.fn().mockResolvedValue({ id: 1 }),
+  getDcaOrdersByUser: vi.fn().mockResolvedValue([]),
+  updateDcaOrderStatus: vi.fn().mockResolvedValue(undefined),
+  createLimitOrder: vi.fn().mockResolvedValue({ id: 1 }),
+  getLimitOrdersByUser: vi.fn().mockResolvedValue([]),
+  cancelLimitOrder: vi.fn().mockResolvedValue(undefined),
+  recordSwap: vi.fn().mockResolvedValue({ id: 1 }),
+  getSwapHistoryByWallet: vi.fn().mockResolvedValue([]),
+  addToWatchlist: vi.fn().mockResolvedValue({ id: 1 }),
+  getWatchlistByUser: vi.fn().mockResolvedValue([]),
+  removeFromWatchlist: vi.fn().mockResolvedValue(undefined),
+  createBlogPost: vi.fn().mockResolvedValue({ id: 1, success: true }),
+  getBlogPostBySlug: vi.fn().mockResolvedValue(null),
+  getAllBlogPosts: vi.fn().mockResolvedValue([]),
+  updateBlogPost: vi.fn().mockResolvedValue(undefined),
+  saveMvsContent: vi.fn().mockResolvedValue({ id: 1, success: true }),
+  getMvsContentByTweetId: vi.fn().mockResolvedValue(null),
+  createMediaPost: vi.fn().mockResolvedValue({ id: 1 }),
+  getMediaPostsByCategory: vi.fn().mockResolvedValue([]),
+  getAllMediaPosts: vi.fn().mockResolvedValue([]),
+  getMediaPostsByUser: vi.fn().mockResolvedValue([]),
+  deleteMediaPost: vi.fn().mockResolvedValue(undefined),
+  createProposal: vi.fn().mockResolvedValue({ id: 1 }),
+  getProposals: vi.fn().mockResolvedValue([]),
+  getProposalById: vi.fn().mockResolvedValue(null),
+  getDelegateByAddress: vi.fn().mockResolvedValue(null),
+  updateDelegate: vi.fn().mockResolvedValue(undefined),
+  createInfluencerMention: vi.fn().mockResolvedValue({ id: 1 }),
+  getInfluencerMentions: vi.fn().mockResolvedValue([]),
+  updateInfluencerMention: vi.fn().mockResolvedValue(undefined),
+  deleteInfluencerMention: vi.fn().mockResolvedValue(undefined),
+}));
+// Mock LLM so any AI-related procedures in security tests do not call real providers.
+vi.mock("./_core/llm", () => ({
+  invokeLLM: vi.fn().mockResolvedValue({
+    choices: [{ message: { content: "mocked" } }],
+  }),
+}));
 
 // ─── Test Helpers ───────────────────────────────────────────────────────
 
