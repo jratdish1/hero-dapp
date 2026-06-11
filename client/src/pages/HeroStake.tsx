@@ -292,11 +292,16 @@ export default function HeroStake() {
           }}
         >
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
-          <div>
-            <p className="text-sm font-semibold text-red-400">Staking is temporarily paused</p>
-            <p className="text-xs text-red-400/70">
-              New stakes and claims are disabled. Emergency withdrawals are available.
+          <div className="flex-1">
+            <p className="text-sm font-semibold text-red-400">⚠️ Reward Pool Paused — Pending Funding</p>
+            <p className="text-xs text-red-400/70 mb-2">
+              New stakes and reward claims are temporarily disabled. Emergency withdrawals remain available.
             </p>
+            <div className="bg-black/30 rounded-lg p-2 border border-red-500/20">
+              <p className="text-xs text-yellow-400 font-semibold mb-1">To restart the reward pool, fund the contract owner wallet:</p>
+              <p className="text-xs font-mono text-white/80 break-all">0xeb2C36C1804A8D4c68a2033dEe5ACc1294bD24e6</p>
+              <p className="text-xs text-yellow-400/80 mt-1">Required: ~750 USDC + 0.005 ETH (BASE chain for gas)</p>
+            </div>
           </div>
         </div>
       )}

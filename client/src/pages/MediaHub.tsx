@@ -247,7 +247,41 @@ export default function MediaHub() {
           <p className="text-center text-xs text-muted-foreground mt-3">
             Official VETS music video — Supporting Veterans and First Responders
           </p>
-{/* HERO Global Veterans Music Video */}      <div className="mt-8">        <h3 className="text-xl font-bold text-center mb-2">          <span className="text-green-400">🌍 HERO Global Veterans Music Video</span>        </h3>        <p className="text-muted-foreground text-sm text-center mb-4">Honoring military veterans and first responders worldwide</p>        <div className="aspect-video rounded-lg overflow-hidden border border-green-500/20 shadow-2xl">          <video            controls            preload="metadata"            className="w-full h-full object-cover"            poster=""          >            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/huWiGvNsWyNdFTxB.mp4" type="video/mp4" />          </video>        </div>      </div>      {/* HERO USA Veterans Music Video */}      <div className="mt-8">        <h3 className="text-xl font-bold text-center mb-2">          <span className="text-blue-400">🇺🇸 HERO USA Veterans Music Video</span>        </h3>        <p className="text-muted-foreground text-sm text-center mb-4">Salute to American military veterans and first responders</p>        <div className="aspect-video rounded-lg overflow-hidden border border-blue-500/20 shadow-2xl">          <video            controls            preload="metadata"            className="w-full h-full object-cover"            poster=""          >            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/ksLvgZRExNUgirMD.mp4" type="video/mp4" />          </video>        </div>      </div>
+
+          {/* HERO Global Veterans Music Video */}
+          <div className="mt-8">
+            <h3 className="text-xl font-bold text-center mb-2">
+              <span className="text-green-400">🌍 HERO Global Veterans Music Video</span>
+            </h3>
+            <p className="text-muted-foreground text-sm text-center mb-4">Honoring military veterans and first responders worldwide</p>
+            <div className="aspect-video rounded-lg overflow-hidden border border-green-500/20 shadow-2xl">
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full object-cover"
+              >
+                <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/huWiGvNsWyNdFTxB.mp4" type="video/mp4" />
+              </video>
+            </div>
+          </div>
+          {/* HERO USA Veterans Music Video */}
+          <div className="mt-8">
+            <h3 className="text-xl font-bold text-center mb-2">
+              <span className="text-blue-400">🇺🇸 HERO USA Veterans Music Video</span>
+            </h3>
+            <p className="text-muted-foreground text-sm text-center mb-4">Salute to American military veterans and first responders</p>
+            <div className="aspect-video rounded-lg overflow-hidden border border-blue-500/20 shadow-2xl">
+              <video
+                controls
+                playsInline
+                preload="metadata"
+                className="w-full h-full object-cover"
+              >
+                <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/ksLvgZRExNUgirMD.mp4" type="video/mp4" />
+              </video>
+            </div>
+          </div>      {/* HERO USA Veterans Music Video */}      <div className="mt-8">        <h3 className="text-xl font-bold text-center mb-2">          <span className="text-blue-400">🇺🇸 HERO USA Veterans Music Video</span>        </h3>        <p className="text-muted-foreground text-sm text-center mb-4">Salute to American military veterans and first responders</p>        <div className="aspect-video rounded-lg overflow-hidden border border-blue-500/20 shadow-2xl">          <video            controls            preload="metadata"            className="w-full h-full object-cover"            poster=""          >            <source src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/ksLvgZRExNUgirMD.mp4" type="video/mp4" />          </video>        </div>      </div>
         </div>
       </div>
 

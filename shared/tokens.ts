@@ -415,6 +415,16 @@ export const CDN_ASSETS = {
 } as const;
 
 // ─── Live DApp URLs ─────────────────────────────────────────────────────
+// ─── PulseChain Gas Config ──────────────────────────────────────────────────
+// Updated June 2026: PulseChain gas is now ~50-200 Gwei normal (new baseline)
+export const PULSECHAIN_GAS_CONFIG = {
+  maxFeePerGas: BigInt("200000000000"),        // 200 Gwei max (covers spikes)
+  maxPriorityFeePerGas: BigInt("50000000000"), // 50 Gwei priority tip
+  gasLimitStake: BigInt("250000"),             // stake/unstake operations
+  gasLimitApprove: BigInt("100000"),           // ERC-20 approve
+  gasLimitClaim: BigInt("200000"),             // claim rewards
+} as const;
+
 export const LIVE_DAPP_URLS = {
   farm: "https://trufarms.io/farms",
   stake: "https://herobase.io/bootcamp",

@@ -21,6 +21,7 @@ const EXPLAINER_VIDEO = "/hero-explainer-edited.mp4";
 const HERO_LOGO = "/hero-logo-200.webp";
 
 // Fallback static data — used only when API is unavailable
+// Last curated: June 11, 2026 — Live API fetch from trpc.mvs.list runs every 5 min
 const STATIC_MONSTER_THREADS = [
   {
     id: 51,
