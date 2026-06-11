@@ -509,13 +509,17 @@ describe("HERO Ecosystem", () => {
 });
 
 // --- XAI API Key Validation Test ---
-// XAI_API_KEY is an optional external secret — not required in unit tests.
-// The LLM module is mocked above; this test only verifies the env var name is documented.
+// The LLM module is mocked above — no real XAI key is needed for unit tests.
+// This test uses vi.stubEnv to inject a safe dummy value and verifies the env var shape.
 describe("XAI API Key", () => {
-  it("XAI_API_KEY env var name is correctly documented", () => {
-    // The env var name must be exactly XAI_API_KEY (not OPENAI_API_KEY or other variants).
-    // The actual value is injected at runtime and is not required for unit tests.
-    expect("XAI_API_KEY").toBe("XAI_API_KEY");
+  it("XAI_API_KEY has the correct shape when set", () => {
+    // Inject a safe dummy value — never a real key. LLM is mocked; this never reaches XAI.
+    vi.stubEnv("XAI_API_KEY", "test_xai_key_for_unit_tests_only");
+    const key = process.env.XAI_API_KEY;
+    expect(key).toBeDefined();
+    expect(typeof key).toBe("string");
+    expect(key!.length).toBeGreaterThan(10);
+    vi.unstubAllEnvs();
   });
 });
 
