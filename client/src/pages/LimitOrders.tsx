@@ -1,9 +1,9 @@
-import { useState, useEffect, useRef } from "react";
+import { useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, ExternalLink, Info } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
-import { HERO_TOKEN_PLS, HERO_TOKEN_BASE } from "@shared/tokens";
+import { HERO_TOKEN_PLS } from "@shared/tokens";
 
 export default function LimitOrders() {
   const { chainId, isPulseChain, isBase } = useNetwork();
@@ -12,7 +12,7 @@ export default function LimitOrders() {
 
   // HERO token addresses per chain
   const HERO_PLS = HERO_TOKEN_PLS.address;
-  const HERO_BASE = HERO_TOKEN_BASE.address;
+
 
   // Theme matching hero-dapp dark UI with HERO green accent
   const widgetTheme = {
@@ -28,7 +28,7 @@ export default function LimitOrders() {
     const baseUrl = "https://app.squirrelswap.pro";
     const params = new URLSearchParams();
 
-    // Enable swap + limit + DCA modes
+    // Enable limit mode
     params.set("modes", "limit");
 
     // Theme params
@@ -45,7 +45,7 @@ export default function LimitOrders() {
     // Note: SquirrelSwap widget is PulseChain only
 
     const widgetUrl = `${baseUrl}/#/widget?${params.toString()}`;
-    console.log("Generated Widget URL:", widgetUrl);
+
     return widgetUrl;
   };
 
@@ -128,6 +128,8 @@ export default function LimitOrders() {
           height="700"
           style={{ border: 0, minHeight: "700px" }}
           allow="clipboard-write"
+          sandbox="allow-scripts allow-same-origin allow-forms"
+          referrerPolicy="strict-origin-when-cross-origin"
           title="SquirrelSwap Limit Orders"
           aria-label="SquirrelSwap limit orders widget"
         />
