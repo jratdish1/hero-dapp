@@ -3,16 +3,16 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Target, ExternalLink, Info } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
+import { HERO_TOKEN_PLS, HERO_TOKEN_BASE } from "@shared/tokens";
 
 export default function LimitOrders() {
   const { chainId, isPulseChain, isBase } = useNetwork();
   const iframeRef = useRef<HTMLIFrameElement>(null);
-  const [iframeHeight, setIframeHeight] = useState(700);
-  const [isLoaded, setIsLoaded] = useState(false);
+
 
   // HERO token addresses per chain
-  const HERO_PLS = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
-  const HERO_BASE = "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
+  const HERO_PLS = HERO_TOKEN_PLS.address;
+  const HERO_BASE = HERO_TOKEN_BASE.address;
 
   // Theme matching hero-dapp dark UI with HERO green accent
   const widgetTheme = {
@@ -25,11 +25,11 @@ export default function LimitOrders() {
 
   // Build widget URL based on active chain
   const buildWidgetUrl = () => {
-    const baseUrl = "https://app.squirrelswap.pro/#/widget";
+    const baseUrl = "https://app.squirrelswap.pro";
     const params = new URLSearchParams();
 
     // Enable swap + limit + DCA modes
-    params.set("modes", "swap,limit,dca");
+    params.set("modes", "limit");
 
     // Theme params
     params.set("accentColor", widgetTheme.accentColor);
@@ -44,39 +44,12 @@ export default function LimitOrders() {
     }
     // Note: SquirrelSwap widget is PulseChain only
 
-    return `${baseUrl}?${params.toString()}`;
+    const widgetUrl = `${baseUrl}/#/widget?${params.toString()}`;
+    console.log("Generated Widget URL:", widgetUrl);
+    return widgetUrl;
   };
 
-  // Listen for auto-resize messages from widget
-  useEffect(() => {
-    const ALLOWED_ORIGIN = "https://app.squirrelswap.pro";
-    const handleMessage = (e: MessageEvent) => {
-      // Security: Only accept messages from SquirrelSwap origin
-      if (e.origin !== ALLOWED_ORIGIN) {
-        console.warn("[Security] Rejected postMessage from unauthorized origin:", e.origin);
-        return;
-      }
-      if (e.data?.type === "squirrelswap:resize") {
-        const height = Number(e.data.height);
-        if (height > 0 && height < 2000) {
-          // Debounce iframe height changes to prevent layout thrashing
-          clearTimeout((window as any).__iframeResizeTimer);
-          (window as any).__iframeResizeTimer = setTimeout(() => {
-            setIframeHeight(height);
-          }, 150);
-        }
-      }
-      if (e.data?.type === "squirrelswap:ready") {
-        setIsLoaded(true);
-      }
-      if (e.data?.type === "squirrelswap:swap") {
-        // console.log("[SquirrelSwap] Swap completed:", e.data);
-      }
-    };
 
-    window.addEventListener("message", handleMessage);
-    return () => window.removeEventListener("message", handleMessage);
-  }, []);
 
   // If user is on BASE chain, show info that SquirrelSwap is PulseChain only
   if (isBase) {
@@ -147,30 +120,16 @@ export default function LimitOrders() {
 
       {/* SquirrelSwap Widget Iframe */}
       <div className="relative rounded-xl overflow-hidden border border-[var(--hero-green)]/10 bg-[rgba(10,12,20,0.95)]">
-        {!isLoaded && (
-          <div className="absolute inset-0 flex items-center justify-center bg-[rgba(10,12,20,0.95)] z-10" role="status" aria-live="polite" aria-label="Loading SquirrelSwap widget">
-            <div className="flex flex-col items-center gap-3">
-              <div className="animate-spin h-8 w-8 border-2 border-[var(--hero-green)] border-t-transparent rounded-full" />
-              <p className="text-sm text-muted-foreground">Loading SquirrelSwap...</p>
-            </div>
-          </div>
-        )}
+
         <iframe
           ref={iframeRef}
           src={buildWidgetUrl()}
           width="100%"
-          height={iframeHeight}
-          style={{ border: "none", borderRadius: "12px", minHeight: "650px" }}
+          height="700"
+          style={{ border: 0, minHeight: "700px" }}
           allow="clipboard-write"
-          // SECURITY: allow-same-origin required for Web3 wallet connection (localStorage, provider).
-          // Mitigated by: CSP frame-src whitelist (server), postMessage origin check, no allow-popups/allow-top-navigation
-          sandbox="allow-scripts allow-same-origin allow-forms"
-          referrerPolicy="strict-origin-when-cross-origin"
-          onLoad={() => setIsLoaded(true)}
           title="SquirrelSwap Limit Orders"
           aria-label="SquirrelSwap limit orders widget"
-          // Content Security Policy for iframe source is recommended to be set on server side or via HTTP headers.
-          // If needed, add meta tag in parent document head or configure server to send CSP headers restricting iframe source.
         />
       </div>
 
