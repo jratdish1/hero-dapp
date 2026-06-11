@@ -23,12 +23,12 @@ import { getHeroAddress, getStakingAddress } from "@/lib/config";
 // ─── Contract Addresses (from shared config) ────────────────────────────
 const CONTRACTS = {
   base: {
-    hero: getHeroAddress(8453) ?? "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
-    staking: getStakingAddress(8453) ?? "0xAD7991a61e5d5C242839445EAAFE244500EEC722",
+    hero: getHeroAddress(8453) ?? "",
+    staking: getStakingAddress(8453) ?? "",
   },
   pulsechain: {
-    hero: getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27",
-    staking: getStakingAddress(369) ?? "0xD5F173973eC653E6CD1A6B31d742501A1004297E",
+    hero: getHeroAddress(369) ?? "",
+    staking: getStakingAddress(369) ?? "",
   },
 };
 

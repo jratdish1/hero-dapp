@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { HERO_TOKEN_BASE } from '@shared/tokens';
 
 interface PairConfig {
   symbol: string;
@@ -18,7 +19,7 @@ const PULSECHAIN_PAIRS: PairConfig[] = [
   { symbol: 'TruFarm', pairAddress: '0x086524a37deba61e08dc948ff677327de4a5150d', chain: 'pulsechain' },
 ];
 const BASE_PAIRS: PairConfig[] = [
-  { symbol: 'HERO', tokenAddress: '0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8', chain: 'base' },
+  { symbol: 'HERO', tokenAddress: HERO_TOKEN_BASE.address, chain: 'base' },
   { symbol: 'BRETT', pairAddress: '0xba3f945812a83471d709bce9c3ca699a19fb46f7', chain: 'base' },
   { symbol: 'AERO', tokenAddress: '0x940181a94A35A4569E4529A3CDfB74e38FD98631', chain: 'base' },
   { symbol: 'jesse', tokenAddress: '0x50f88fe97f72cd3e75b9eb4f747f59bceba80d59', chain: 'base' },

@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { TrendingUp, TrendingDown, BarChart3, RefreshCw, ExternalLink, ArrowUpRight, ArrowDownRight } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
+import { HERO_TOKEN_BASE, HERO_TOKEN_PLS, VETS_TOKEN_PLS } from "@shared/tokens";
 import { useMarketOverview, formatPrice, formatCompact, formatChange } from "../hooks/usePrices";
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -108,8 +109,8 @@ export default function PortfolioPnL() {
 
     // Core tokens from market overview
     const tokenData = [
-      { key: "heroPrice", symbol: "HERO", name: "HERO Token", address: isPulseChain ? "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" : "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
-      { key: "vetsPrice", symbol: "VETS", name: "VETS Token", address: "0x4013abBf94A745EfA7cc848989Ee83424A770060" },
+      { key: "heroPrice", symbol: "HERO", name: "HERO Token", address: isPulseChain ? HERO_TOKEN_PLS.address : HERO_TOKEN_BASE.address },
+      { key: "vetsPrice", symbol: "VETS", name: "VETS Token", address: VETS_TOKEN_PLS.address },
       { key: "plsPrice", symbol: "PLS", name: "PulseChain", address: "0xA1077a294dDE1B09bB078844df40758a5D0f9a27" },
       { key: "plsxPrice", symbol: "PLSX", name: "PulseX", address: "0x95B303987A60C71504D99Aa1b13B4DA07b0790ab" },
       { key: "hexPrice", symbol: "HEX", name: "HEX", address: "0x2b591e99afE9f32eAA6214f7B7629768c40Eeb39" },

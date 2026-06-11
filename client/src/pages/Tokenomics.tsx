@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import {
   FARM_CONTRACTS_PLS, FARM_CONTRACTS_BASE, FARM_POOLS_PLS,
-  HERO_TOKEN_PLS, VETS_TOKEN_PLS, SERVICE_BRANCHES, CDN_ASSETS,
+  HERO_TOKEN_PLS, HERO_TOKEN_BASE, VETS_TOKEN_PLS, SERVICE_BRANCHES, CDN_ASSETS,
 } from "@shared/tokens";
 
 // ─── Flywheel Step Component ─────────────────────────────────────────────
@@ -576,7 +576,7 @@ export default function Tokenomics() {
                 {[
                   { name: "HERO Token (PLS)", address: HERO_TOKEN_PLS.address, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
                   { name: "VETS Token (PLS)", address: VETS_TOKEN_PLS.address, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
-                  { name: "HERO Token (BASE)", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8", chain: "Base", explorer: "https://basescan.org" },
+                  { name: "HERO Token (BASE)", address: HERO_TOKEN_BASE.address, chain: "Base", explorer: "https://basescan.org" },
                   { name: "MasterChef V2", address: FARM_CONTRACTS_PLS.masterChefV2, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
                   { name: "Buy & Burn (PLS)", address: FARM_CONTRACTS_PLS.buyAndBurn, chain: "PulseChain", explorer: "https://scan.pulsechain.com" },
                   { name: "Buy & Burn (BASE)", address: FARM_CONTRACTS_BASE.buyAndBurn, chain: "Base", explorer: "https://basescan.org" },
