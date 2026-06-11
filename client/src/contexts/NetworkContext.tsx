@@ -1,4 +1,11 @@
-import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useCallback,
+  useEffect,
+  type ReactNode,
+} from "react";
 import {
   PULSECHAIN_ID,
   BASE_CHAIN_ID,
@@ -22,42 +29,82 @@ interface NetworkContextValue {
   supportedChains: ChainConfig[];
   isPulseChain: boolean;
   isBase: boolean;
-  switchNetwork: (chainId: SupportedChainId) => void;
+  /** Request a network switch. When connected, waits for wallet confirmation
+   *  before updating UI chain. When disconnected, updates UI immediately for
+   *  preview purposes. */
+  switchNetwork: (chainId: SupportedChainId) => Promise<void>;
   isSwitching: boolean;
+  /** Non-null when the wallet rejected or errored on a switch request. */
+  networkSwitchError: string | null;
+  /** True when the connected wallet is on a chain not in SUPPORTED_CHAINS. */
+  isUnsupportedChain: boolean;
 }
+
+const SUPPORTED_IDS: number[] = [PULSECHAIN_ID, BASE_CHAIN_ID];
 
 const NetworkContext = createContext<NetworkContextValue | null>(null);
 
 export function NetworkProvider({ children }: { children: ReactNode }) {
+  // UI chain — only used as source of truth when disconnected (preview mode).
+  // When connected, walletChainId drives this via the useEffect below.
   const [chainId, setChainId] = useState<SupportedChainId>(PULSECHAIN_ID);
+  const [networkSwitchError, setNetworkSwitchError] = useState<string | null>(null);
 
-  // wagmi hooks — bridge UI state with actual wallet chain
   const { isConnected, chainId: walletChainId } = useAccount();
-  const { switchChain, isPending: isSwitching } = useSwitchChain();
+  const { switchChainAsync, isPending: isSwitching } = useSwitchChain();
 
-  // Sync UI state when wallet reports a chain change
+  // ── Wallet chain is source of truth when connected ──────────────────
+  // This is the ONLY place setChainId is called when a wallet is connected.
   useEffect(() => {
     if (isConnected && walletChainId) {
-      const supported = [PULSECHAIN_ID, BASE_CHAIN_ID] as number[];
-      if (supported.includes(walletChainId)) {
+      if (SUPPORTED_IDS.includes(walletChainId)) {
         setChainId(walletChainId as SupportedChainId);
+        setNetworkSwitchError(null);
       }
+      // If unsupported chain: do NOT change chainId — keep last known good
+      // value so balance reads don't break. isUnsupportedChain flag handles UI.
     }
   }, [isConnected, walletChainId]);
 
-  // Switch both UI state AND wallet chain (if connected)
+  // ── Derived: connected wallet is on an unsupported chain ────────────
+  const isUnsupportedChain =
+    isConnected &&
+    walletChainId !== undefined &&
+    !SUPPORTED_IDS.includes(walletChainId);
+
+  // ── Switch handler ───────────────────────────────────────────────────
+  // Connected: request wallet switch, do NOT update UI chain optimistically.
+  //            UI chain only changes via the useEffect above after wallet confirms.
+  // Disconnected: update UI immediately for preview.
   const switchNetwork = useCallback(
-    (newChainId: SupportedChainId) => {
-      setChainId(newChainId);
-      if (isConnected && switchChain) {
-        try {
-          switchChain({ chainId: newChainId });
-        } catch {
-          // Wallet may reject — UI state already updated for data display
-        }
+    async (newChainId: SupportedChainId): Promise<void> => {
+      setNetworkSwitchError(null);
+
+      if (!isConnected) {
+        // Preview mode — no wallet, safe to flip UI immediately
+        setChainId(newChainId);
+        return;
+      }
+
+      if (!switchChainAsync) return;
+
+      try {
+        await switchChainAsync({ chainId: newChainId });
+        // Success: walletChainId change triggers the useEffect → setChainId
+      } catch (err: unknown) {
+        // Wallet rejected or errored — UI chain stays unchanged (no optimistic flip)
+        const msg =
+          err instanceof Error ? err.message : "Wallet rejected network switch";
+        // Trim wagmi's verbose error messages to something user-readable
+        const clean = msg.includes("User rejected")
+          ? "Switch rejected — wallet kept on current network."
+          : msg.length > 120
+            ? msg.slice(0, 120) + "…"
+            : msg;
+        setNetworkSwitchError(clean);
       }
     },
-    [isConnected, switchChain]
+    [isConnected, switchChainAsync]
   );
 
   const value: NetworkContextValue = {
@@ -70,12 +117,12 @@ export function NetworkProvider({ children }: { children: ReactNode }) {
     isBase: chainId === BASE_CHAIN_ID,
     switchNetwork,
     isSwitching,
+    networkSwitchError,
+    isUnsupportedChain,
   };
 
   return (
-    <NetworkContext.Provider value={value}>
-      {children}
-    </NetworkContext.Provider>
+    <NetworkContext.Provider value={value}>{children}</NetworkContext.Provider>
   );
 }
 

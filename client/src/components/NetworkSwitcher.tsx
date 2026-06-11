@@ -1,13 +1,40 @@
+import { useEffect } from "react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { PULSECHAIN_ID, BASE_CHAIN_ID, type SupportedChainId } from "@shared/tokens";
-import { Loader2 } from "lucide-react";
+import { Loader2, AlertTriangle } from "lucide-react";
+import { toast } from "sonner";
 
 export function NetworkSwitcher({ compact = false }: { compact?: boolean }) {
-  const { chainId, chain, supportedChains, switchNetwork, isSwitching } = useNetwork();
+  const {
+    chainId,
+    chain,
+    supportedChains,
+    switchNetwork,
+    isSwitching,
+    networkSwitchError,
+    isUnsupportedChain,
+  } = useNetwork();
+
+  // Surface wallet rejection as a toast — fires whenever error changes
+  useEffect(() => {
+    if (networkSwitchError) {
+      toast.error(networkSwitchError, { id: "network-switch-error" });
+    }
+  }, [networkSwitchError]);
 
   // DRY helper: toggle between the two chains
   const toggleChain = () =>
     switchNetwork(chainId === PULSECHAIN_ID ? BASE_CHAIN_ID : PULSECHAIN_ID);
+
+  // ── Wrong-chain warning (connected wallet on unsupported network) ────
+  if (isUnsupportedChain) {
+    return (
+      <div className="flex items-center gap-1.5 rounded-lg border border-yellow-500/40 bg-yellow-500/10 px-2.5 py-1.5 text-xs font-medium text-yellow-400">
+        <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+        <span>Wrong network</span>
+      </div>
+    );
+  }
 
   if (compact) {
     return (
@@ -74,7 +101,17 @@ export function NetworkSwitcher({ compact = false }: { compact?: boolean }) {
 }
 
 export function NetworkBadge() {
-  const { chain } = useNetwork();
+  const { chain, isUnsupportedChain } = useNetwork();
+
+  if (isUnsupportedChain) {
+    return (
+      <span className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium border border-yellow-500/40 bg-yellow-500/10 text-yellow-400">
+        <AlertTriangle className="h-3 w-3" />
+        Wrong network
+      </span>
+    );
+  }
+
   return (
     <span
       className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium border"
