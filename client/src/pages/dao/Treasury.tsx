@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { HERO_TOKEN_PLS, VETS_TOKEN_PLS } from "@shared/tokens";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -15,9 +16,9 @@ interface TreasuryToken {
   address: string;
 }
 
-const HERO_PLS = "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
+const HERO_PLS = HERO_TOKEN_PLS.address;
 const HERO_BASE = "0xBe9462Fa2a960d9B14A5a3E2f0Fdb19F93433a43";
-const VETS_PLS = "0x4013abBf94A745EfA7cc848989Ee83424A770060";
+const VETS_PLS = VETS_TOKEN_PLS.address;
 
 // Treasury wallet addresses
 const TREASURY_WALLETS = {

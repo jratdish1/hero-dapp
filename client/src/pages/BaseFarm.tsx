@@ -14,8 +14,9 @@ import {
   ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
+import { HERO_TOKEN_BASE } from "@shared/tokens";
 
-const HERO_BASE_CA = "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
+const HERO_BASE_CA = HERO_TOKEN_BASE.address;
 
 const BASE_FARM_POOLS = [
   {

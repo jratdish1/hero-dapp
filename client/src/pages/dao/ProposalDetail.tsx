@@ -3,6 +3,7 @@ import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
 import { useAccount, useChainId, useReadContract } from "wagmi";
+import { getHeroAddress } from "@/lib/config";
 import { erc20Abi, formatUnits } from "viem";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -35,8 +36,8 @@ export default function ProposalDetail() {
 
   // HERO token addresses per chain
   const heroTokenAddress = chainId === 369
-    ? "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" // PulseChain
-    : "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"; // BASE
+    ? getHeroAddress(369) ?? "" // PulseChain
+    : getHeroAddress(8453) ?? ""; // BASE
 
   // Read user's HERO balance for voting power (1 HERO = 1 vote)
   const { data: heroBalance } = useReadContract({

@@ -4,6 +4,7 @@
  * Falls back to mock data when wallet not connected.
  */
 import { useState, useEffect, useCallback } from "react";
+import { HERO_TOKEN_PLS, HERO_TOKEN_BASE } from "@shared/tokens";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ function getRiskLevel(spenderName: string, isUnlimited: boolean): "low" | "mediu
 
 const MOCK_APPROVALS: ApprovalEntry[] = [
   {
-    id: "1", token: { symbol: "HERO", name: "HERO Token", address: "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27" },
+    id: "1", token: { symbol: "HERO", name: "HERO Token", address: HERO_TOKEN_PLS.address },
     spender: "0x98bf93ebf5c380c0e6ae8e192a7e2ae08edacc02", spenderName: "PulseX V1 Router",
     allowance: "Unlimited", isUnlimited: true, risk: "low", chain: "pulsechain",
   },
@@ -64,7 +65,7 @@ const MOCK_APPROVALS: ApprovalEntry[] = [
     allowance: "Unlimited", isUnlimited: true, risk: "high", chain: "pulsechain",
   },
   {
-    id: "4", token: { symbol: "HERO", name: "HERO Token (BASE)", address: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8" },
+    id: "4", token: { symbol: "HERO", name: "HERO Token (BASE)", address: HERO_TOKEN_BASE.address },
     spender: "0xcf77a3ba9a5ca399b7c97c74d54e5b1beb874e43", spenderName: "Aerodrome Router",
     allowance: "Unlimited", isUnlimited: true, risk: "medium", chain: "base",
   },
