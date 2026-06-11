@@ -128,7 +128,6 @@ export default function LimitOrders() {
           height="700"
           style={{ border: 0, minHeight: "700px" }}
           allow="clipboard-write"
-          sandbox="allow-scripts allow-same-origin allow-forms"
           referrerPolicy="strict-origin-when-cross-origin"
           title="SquirrelSwap Limit Orders"
           aria-label="SquirrelSwap limit orders widget"
