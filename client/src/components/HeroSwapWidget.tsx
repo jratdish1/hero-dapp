@@ -29,21 +29,21 @@ function buildDEXLinks() {
     base: {
       aerodrome: {
         name: "Aerodrome",
-        url: `https://aerodrome.finance/swap?from=eth&to=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}`,
+        url: `https://aerodrome.finance/swap?from=eth&to=${heroBase ?? ""}`,
         color: "blue",
         icon: Zap,
         desc: "Top BASE DEX · Deep liquidity",
       },
       uniswap: {
         name: "Uniswap",
-        url: `https://app.uniswap.org/swap?outputCurrency=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}&chain=base`,
+        url: `https://app.uniswap.org/swap?outputCurrency=${heroBase ?? ""}&chain=base`,
         color: "pink",
         icon: TrendingUp,
         desc: "Universal swap · Multi-chain",
       },
       jumper: {
         name: "Jumper (Li.Fi)",
-        url: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${heroBase || "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8"}`,
+        url: `https://jumper.exchange/?fromChain=8453&fromToken=0x0000000000000000000000000000000000000000&toChain=8453&toToken=${heroBase ?? ""}`,
         color: "purple",
         icon: Globe,
         desc: "Cross-chain aggregator",
@@ -52,21 +52,21 @@ function buildDEXLinks() {
     pulsechain: {
       pulsex: {
         name: "PulseX",
-        url: `https://app.pulsex.com/swap?outputCurrency=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        url: `https://app.pulsex.com/swap?outputCurrency=${heroPulse ?? ""}`,
         color: "green",
         icon: Zap,
         desc: "Native PulseChain DEX",
       },
       nines: {
         name: "9mm DEX",
-        url: `https://9mm.pro/swap?outputCurrency=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        url: `https://9mm.pro/swap?outputCurrency=${heroPulse ?? ""}`,
         color: "purple",
         icon: TrendingUp,
         desc: "Concentrated liquidity",
       },
       switch: {
         name: "Switch.win",
-        url: `https://switch.win/?network=pulsechain&to=${heroPulse || "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27"}`,
+        url: `https://switch.win/?network=pulsechain&to=${heroPulse ?? ""}`,
         color: "orange",
         icon: Layers,
         desc: "Multi-DEX aggregator",

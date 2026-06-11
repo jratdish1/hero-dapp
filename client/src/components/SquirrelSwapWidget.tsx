@@ -32,8 +32,8 @@ export default function SquirrelSwapWidget({
   const [activeChain, setActiveChain] = useState<"pulsechain" | "base">(defaultChain);
 
   // Get HERO addresses from shared config
-  const heroBase = getHeroAddress(8453) ?? "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
-  const heroPulse = getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27";
+  const heroBase = getHeroAddress(8453) ?? "";
+  const heroPulse = getHeroAddress(369) ?? "";
 
   const squirrelUrl = [
     `https://app.squirrelswap.pro/#/widget`,
@@ -122,7 +122,7 @@ export default function SquirrelSwapWidget({
               <h3 className="text-lg font-bold text-white mb-2">Swap HERO on BASE</h3>
               <p className="text-sm mb-4" style={{ color: "#8a9a8a" }}>
                 HERO is available on Aerodrome and Uniswap V3 on BASE network.
-                Use the aggregator below for best rates.
+                Use the aggregator below for routing across available liquidity.
               </p>
               <p className="text-xs mb-6" style={{ color: "#5a6a5a" }}>
                 HERO CA: <span style={{ color: "#C8A84B", fontFamily: "monospace" }}>{heroBase.slice(0, 10)}...{heroBase.slice(-4)}</span>
@@ -139,7 +139,7 @@ export default function SquirrelSwapWidget({
                 }}
               >
                 <ExternalLink className="w-4 h-4" />
-                Swap on Aerodrome (Best Rates)
+                Swap on Aerodrome (Aggregator Routing)
               </a>
               <a
                 href={`https://app.uniswap.org/swap?outputCurrency=${heroBase}&chain=base`}

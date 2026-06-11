@@ -15,7 +15,9 @@ import {
   Star,
 } from "lucide-react";
 
-const HERO_BASE_CA = "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8";
+// HERO_BASE_CA sourced from shared config
+import { HERO_TOKEN_BASE } from "@shared/tokens";
+const HERO_BASE_CA = HERO_TOKEN_BASE.address;
 
 const STEPS = [
   {
