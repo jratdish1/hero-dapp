@@ -1,9 +1,9 @@
-# SquirrelSwap Widget — Vendor Blocker Notice
+# SquirrelSwap Widget — Integration Status
 
 **Date:** 2026-06-11
 **Track:** SQUIRRELS
-**PR:** [#22 — fix: harden SquirrelSwap limit orders iframe](https://github.com/jratdish1/hero-dapp/pull/22)
-**Merge Commit:** `a218a768af006eee137b292a65ae92eda8633532`
+**Latest PR:** [#24 — fix: align SquirrelSwap widget iframe with official docs](https://github.com/jratdish1/hero-dapp/pull/24)
+**Merge Commit:** `1d9bf02`
 **Production Deploy:** NO
 
 ---
@@ -13,75 +13,81 @@
 | Item | Status |
 |---|---|
 | herobase.io repo code | Clean and configured |
-| LimitOrders iframe hardened | Yes |
-| Widget renders on herobase.io/limits | **No** |
-| Root cause | External vendor iframe/embed block (SquirrelSwap side) |
+| LimitOrders iframe aligned with official docs | Yes |
+| Widget renders locally | **Yes** |
+| Widget renders on production herobase.io | **Pending deploy** |
 | Production deploy performed | No |
 
 ---
 
 ## What Was Done (herobase.io Side)
 
-The `client/src/pages/LimitOrders.tsx` file has been patched and merged to `main` with the following security hardening:
+The `client/src/pages/LimitOrders.tsx` file has been patched and merged to `main` across two PRs:
 
-- `sandbox="allow-scripts allow-same-origin allow-forms"` — restrictive iframe sandboxing restored.
-- `referrerPolicy="strict-origin-when-cross-origin"` — strict referrer policy restored.
-- `console.log("Generated Widget URL:", widgetUrl)` — production console leak removed.
-- `title="SquirrelSwap Limit Orders"` — preserved.
-- `aria-label="SquirrelSwap limit orders widget"` — preserved.
-- `allow-top-navigation` — not present (intentionally excluded).
-- `allow-popups` — not present (intentionally excluded unless SquirrelSwap explicitly requires it).
-- Token addresses sourced exclusively from `@shared/tokens` (no hardcoded addresses).
-- No `.env` changes.
-- No Nginx changes.
-- No JWT_SECRET changes.
+### PR #22 — Initial hardening
+- Removed production `console.log` leak.
+- Added `sandbox="allow-scripts allow-same-origin allow-forms"`.
+- Added `referrerPolicy="strict-origin-when-cross-origin"`.
+- Preserved `title` and `aria-label`.
+- Token addresses sourced exclusively from `@shared/tokens`.
 
-Token registry scanner confirms: **0 actionable violations**.
+### PR #24 — Official docs alignment
+- Removed `sandbox` attribute entirely.
+- Reason: Official SquirrelSwap documentation (https://app.squirrelswap.pro/#/docs) does not use or recommend a `sandbox` attribute for their widget embed.
+- The widget does not render with any `sandbox` configuration applied.
+- Risk accepted by repo owner (trusts SquirrelSwap founder/team).
 
----
+### Current iframe attributes on main:
+```
+allow="clipboard-write"
+referrerPolicy="strict-origin-when-cross-origin"
+title="SquirrelSwap Limit Orders"
+aria-label="SquirrelSwap limit orders widget"
+```
 
-## Why the Widget Still Does Not Render
-
-The SquirrelSwap widget at `https://app.squirrelswap.pro/#/widget?...` is not rendering inside the iframe on `herobase.io/limits`. This is **not a herobase.io code issue**. The suspected causes are one or more of the following on the SquirrelSwap vendor side:
-
-1. **`X-Frame-Options: DENY` or `SAMEORIGIN`** — SquirrelSwap's server may be sending a header that blocks all cross-origin iframe embedding.
-2. **`Content-Security-Policy: frame-ancestors 'self'`** — SquirrelSwap's CSP may restrict embedding to their own origin only.
-3. **Widget URL format not confirmed** — The URL format `https://app.squirrelswap.pro/#/widget?modes=limit&...` has not been officially confirmed by SquirrelSwap as a supported embed endpoint.
-4. **Embedding not officially supported** — SquirrelSwap may not have a publicly documented iframe/widget embedding feature.
+No `sandbox` attribute (intentional — per official docs and vendor trust).
 
 ---
 
-## Required Action from SquirrelSwap
+## Why Sandbox Was Removed
 
-To unblock the widget, SquirrelSwap must confirm and/or implement the following:
+Testing confirmed:
+1. `sandbox="allow-scripts allow-same-origin allow-forms"` — widget did NOT render.
+2. `sandbox="allow-scripts allow-same-origin allow-forms allow-popups"` — widget did NOT render.
+3. No `sandbox` attribute — widget renders correctly.
 
-1. **Confirm the supported widget/embed URL format** (e.g., `/#/widget?modes=limit&tokenOut=...`).
-2. **Add `herobase.io` to their `frame-ancestors` CSP allowlist** or remove the `X-Frame-Options` restriction for the widget endpoint.
-3. **Confirm which iframe `sandbox` permissions are required** — if `allow-popups` or `allow-top-navigation` is needed, document the security rationale.
-4. **Provide official widget integration documentation** if available.
+The official SquirrelSwap embed documentation shows no `sandbox` attribute. The repo owner trusts the SquirrelSwap founder. The risk of running the iframe without sandbox is accepted and documented here.
 
 ---
 
-## Vendor Contact Template
+## Security Posture
 
-> Subject: SquirrelSwap Widget Iframe Embedding — herobase.io Integration Request
->
-> We are integrating the SquirrelSwap limit orders widget into herobase.io via an iframe.
-> The widget URL we are using is: `https://app.squirrelswap.pro/#/widget?modes=limit&tokenOut=<HERO_PLS_ADDRESS>&...`
->
-> The widget is not rendering. We suspect this is due to `X-Frame-Options` or `Content-Security-Policy: frame-ancestors` restrictions on your server.
->
-> Could you please:
-> 1. Confirm the supported widget embed URL format.
-> 2. Add `herobase.io` to your `frame-ancestors` allowlist for the widget endpoint.
-> 3. Confirm any required iframe `sandbox` permissions.
->
-> Thank you.
+| Control | Status |
+|---|---|
+| `sandbox` attribute | Removed (intentional, documented) |
+| `allow="clipboard-write"` | Present (per official docs) |
+| `referrerPolicy` | `strict-origin-when-cross-origin` |
+| `title` | Present |
+| `aria-label` | Present |
+| `console.log` | None |
+| Token addresses | From `@shared/tokens` only |
+| Scanner result | 0 actionable violations |
+| `.env` changes | None |
+| Nginx changes | None |
+| JWT_SECRET changes | None |
+
+---
+
+## Next Steps
+
+1. Deploy to production when explicitly approved by repo owner.
+2. Verify widget renders on live `herobase.io/limits`.
+3. Test wallet connection flow through the embedded widget.
 
 ---
 
 ## Notes
 
 - No secrets, API keys, or JWT values are included in this document.
-- Production deploy is blocked until widget renders and security posture is verified end-to-end.
-- This document should be updated when SquirrelSwap responds or the widget begins rendering.
+- Production deploy is blocked until explicitly approved.
+- This document should be updated after production deploy and live verification.
