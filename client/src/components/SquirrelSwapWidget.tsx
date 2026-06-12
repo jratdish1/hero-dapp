@@ -99,13 +99,15 @@ export default function SquirrelSwapWidget({
         }}
       >
         {activeChain === "pulsechain" ? (
-          <iframe sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+          <iframe
             src={squirrelUrl}
             width="100%"
             height={height}
             style={{ border: "none", borderRadius: "16px", display: "block" }}
             allow="clipboard-write"
             title="SquirrelSwap — HERO PulseChain"
+            referrerPolicy="strict-origin-when-cross-origin"
+            aria-label="SquirrelSwap widget"
           />
         ) : (
           <div
