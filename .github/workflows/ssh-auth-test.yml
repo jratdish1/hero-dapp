@@ -1,0 +1,15 @@
+name: SSH Auth Test (no-op)
+on:
+  workflow_dispatch:
+jobs:
+  test-ssh-auth:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Test hop 1 - VDS-M auth only
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VDS_HOST }}
+          username: root
+          key: ${{ secrets.VDS_SSH_KEY }}
+          script: |
+            whoami && hostname && echo "hop1-auth-ok"
