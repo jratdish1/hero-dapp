@@ -1,4 +1,5 @@
 import { getHeroCardsTier, canAccessHeroSpinWheel } from "./heroCards-holder";
+import { osintRouter } from "./routers/osint";
 import { TRPCError } from "@trpc/server";
 import { COOKIE_NAME } from "@shared/const";
 import { getSessionCookieOptions } from "./_core/cookies";
@@ -269,6 +270,7 @@ const routerLogger = createDaoLogger("routers");
 
 export const appRouter = router({
   system: systemRouter,
+  osint: osintRouter,
   auth: router({
     me: publicProcedure.query(opts => opts.ctx.user),
     logout: publicProcedure.mutation(({ ctx }) => {
