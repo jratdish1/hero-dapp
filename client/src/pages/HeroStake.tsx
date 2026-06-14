@@ -300,7 +300,7 @@ export default function HeroStake() {
             <div className="bg-black/30 rounded-lg p-2 border border-red-500/20">
               <p className="text-xs text-yellow-400 font-semibold mb-1">To restart the reward pool, fund the contract owner wallet:</p>
               <p className="text-xs font-mono text-white/80 break-all">0xeb2C36C1804A8D4c68a2033dEe5ACc1294bD24e6</p>
-              <p className="text-xs text-yellow-400/80 mt-1">Required: ~750 USDC + 0.005 ETH (BASE chain for gas)</p>
+              <p className="text-xs text-yellow-400/80 mt-1">Required: ~735 DAI + 0.001 ETH on Base, or ~735 DAI on PulseChain</p>
             </div>
           </div>
         </div>
