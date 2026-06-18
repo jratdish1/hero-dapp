@@ -1,0 +1,31 @@
+
+> hero-dapp@1.0.0 test /home/ubuntu/hero-dapp
+> vitest run
+
+
+[1m[30m[46m RUN [49m[39m[22m [36mv4.1.8 [39m[90m/home/ubuntu/hero-dapp[39m
+
+ [32m✓[39m contracts/v2/v2-stubs.test.ts [2m([22m[2m54 tests[22m[2m)[22m[32m 18[2mms[22m[39m
+[90mstdout[2m | server/scheduler-telegram.test.ts[2m > [22m[2mTelegram Bot[2m > [22m[2malertNewMention skips when Telegram not configured
+[22m[39m[TelegramBot] Not configured — skipping alert
+
+ [32m✓[39m server/priceFeed.test.ts [2m([22m[2m11 tests[22m[2m)[22m[32m 111[2mms[22m[39m
+ [32m✓[39m server/dao.test.ts [2m([22m[2m26 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m server/influencer.test.ts [2m([22m[2m28 tests[22m[2m)[22m[32m 22[2mms[22m[39m
+ [32m✓[39m server/seo.test.ts [2m([22m[2m25 tests[22m[2m)[22m[32m 15[2mms[22m[39m
+[90mstdout[2m | server/scheduler-telegram.test.ts[2m > [22m[2mTelegram Message Formatting[2m > [22m[2mformats mention alert with HTML escaping
+[22m[39m[TelegramBot] Alert sent successfully
+
+ [32m✓[39m server/scheduler-telegram.test.ts [2m([22m[2m15 tests[22m[2m)[22m[33m 656[2mms[22m[39m
+     [33m[2m✓[22m[39m getSchedulerStatus returns inactive by default [33m 466[2mms[22m[39m
+ [32m✓[39m client/src/lib/heroCards-config.test.ts [2m([22m[2m29 tests[22m[2m)[22m[32m 19[2mms[22m[39m
+ [32m✓[39m server/heroCards-holder.test.ts [2m([22m[2m21 tests[22m[2m)[22m[32m 14[2mms[22m[39m
+ [32m✓[39m server/hero-dapp.test.ts [2m([22m[2m65 tests[22m[2m)[22m[32m 31[2mms[22m[39m
+ [32m✓[39m server/security.test.ts [2m([22m[2m62 tests[22m[2m)[22m[32m 42[2mms[22m[39m
+ [32m✓[39m server/auth.logout.test.ts [2m([22m[2m1 test[22m[2m)[22m[32m 9[2mms[22m[39m
+
+[2m Test Files [22m [1m[32m11 passed[39m[22m[90m (11)[39m
+[2m      Tests [22m [1m[32m337 passed[39m[22m[90m (337)[39m
+[2m   Start at [22m 05:27:18
+[2m   Duration [22m 2.35s[2m (transform 1.61s, setup 0ms, import 5.27s, tests 956ms, environment 1ms)[22m
+
