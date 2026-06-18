@@ -1,22 +1,53 @@
 /**
  * HeroCards NFT Holder Verification (Server-Side)
- * 
- * Checks the HeroCards contract on Base chain to determine:
+ *
+ * Checks deployed HeroCards contracts on Base and PulseChain to determine:
  * - Whether a wallet holds any HERO Cards
  * - The holder's tier (Bronze/Silver/Gold)
  * - Whether they can access the spin wheel
- * 
- * Used by the spin engine to gate access and determine wheel tier.
- * 
- * NOTE: Update HERO_CARDS_ADDRESS after contract deployment.
+ * - Fee discount eligibility
+ *
+ * Safety posture:
+ * - Uses the real deployed contract addresses from deployments/LIVE_CONTRACTS.json.
+ * - Reads fail closed by default so RPC outages do not grant production access.
+ * - Timeout protection prevents hung RPC calls from blocking request handlers.
+ * - Callers may explicitly pass failOpen=true only for beta/test flows.
  */
-import { createPublicClient, http } from "viem";
+import { createPublicClient, http, type Address } from "viem";
 
 // ─── Contract Config ─────────────────────────────────────────────
-// UPDATE THIS AFTER DEPLOYMENT
-const HERO_CARDS_ADDRESS = "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE" as `0x${string}`;
-// PulseChain contract (same code, different chain)
-const HERO_CARDS_ADDRESS_PULSE = "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36" as `0x${string}`;
+const HERO_CARDS_ADDRESS_BASE = "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE" as const;
+const HERO_CARDS_ADDRESS_PULSE = "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36" as const;
+
+export type HeroCardsNetwork = "base" | "pulsechain";
+
+interface HeroCardsNetworkConfig {
+  name: HeroCardsNetwork;
+  chainId: number;
+  displayName: string;
+  nativeCurrency: { name: string; symbol: string; decimals: number };
+  rpcUrl: string;
+  contractAddress: Address;
+}
+
+const HERO_CARDS_NETWORKS: Record<HeroCardsNetwork, HeroCardsNetworkConfig> = {
+  base: {
+    name: "base",
+    chainId: 8453,
+    displayName: "Base",
+    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
+    rpcUrl: "https://mainnet.base.org",
+    contractAddress: HERO_CARDS_ADDRESS_BASE,
+  },
+  pulsechain: {
+    name: "pulsechain",
+    chainId: 369,
+    displayName: "PulseChain",
+    nativeCurrency: { name: "Pulse", symbol: "PLS", decimals: 18 },
+    rpcUrl: "https://rpc.pulsechain.com",
+    contractAddress: HERO_CARDS_ADDRESS_PULSE,
+  },
+};
 
 const HERO_CARDS_ABI = [
   {
@@ -49,104 +80,180 @@ const HERO_CARDS_ABI = [
   },
 ] as const;
 
-// ─── Base Chain Client ───────────────────────────────────────────
-const baseClient = createPublicClient({
-  chain: {
-    id: 8453,
-    name: "Base",
-    nativeCurrency: { name: "Ether", symbol: "ETH", decimals: 18 },
-    rpcUrls: { default: { http: ["https://mainnet.base.org"] } },
-  } as any,
-  transport: http("https://mainnet.base.org"),
-});
+const RPC_TIMEOUT_MS = 10_000;
 
-// ─── Tier Mapping ────────────────────────────────────────────────
-const TIER_MAP: Record<number, 'bronze' | 'silver' | 'gold'> = {
-  0: 'bronze', // No NFTs defaults to bronze (won't pass canAccessSpinWheel)
-  1: 'bronze',
-  2: 'silver',
-  3: 'gold',
+// viem-compat: The cached client type uses ReturnType<typeof createPublicClient> which may not
+// exactly match the inferred type when a custom chain object is passed as `any`. This cast is
+// isolated to the cache assignment boundary and has no runtime behavior impact.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const clients: Partial<Record<HeroCardsNetwork, any>> = {};
+
+const TIER_MAP: Record<number, "bronze" | "silver" | "gold"> = {
+  1: "bronze",
+  2: "silver",
+  3: "gold",
 };
 
-// ─── Public API ──────────────────────────────────────────────────
+export interface HeroCardsHolderOptions {
+  /** Defaults to Base to preserve existing call sites. */
+  network?: HeroCardsNetwork;
+  /** Explicit beta/test override only. Production callers should leave this false. */
+  failOpen?: boolean;
+}
+
+export interface HeroCardsHolderStatus {
+  wallet: Address;
+  network: HeroCardsNetwork;
+  balance: number;
+  tier: "none" | "bronze" | "silver" | "gold";
+  canSpin: boolean;
+  feeDiscountBps: number;
+}
+
+function isAddress(value: string): value is Address {
+  return /^0x[a-fA-F0-9]{40}$/.test(value);
+}
+
+function getNetworkConfig(network: HeroCardsNetwork = "base"): HeroCardsNetworkConfig {
+  return HERO_CARDS_NETWORKS[network] ?? HERO_CARDS_NETWORKS.base;
+}
+
+function getClient(network: HeroCardsNetwork = "base") {
+  if (clients[network]) return clients[network]!;
+
+  const cfg = getNetworkConfig(network);
+  const client = createPublicClient({
+    chain: {
+      id: cfg.chainId,
+      name: cfg.displayName,
+      nativeCurrency: cfg.nativeCurrency,
+      rpcUrls: { default: { http: [cfg.rpcUrl] } },
+    } as any,
+    transport: http(cfg.rpcUrl),
+  });
+
+  // viem-compat: cast to any at cache write boundary only (see clients declaration above)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clients[network] = client as any;
+  return client;
+}
+
+async function withTimeout<T>(promise: Promise<T>, timeoutMs: number = RPC_TIMEOUT_MS): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("HeroCards RPC timeout")), timeoutMs)),
+  ]);
+}
+
+function failClosedStatus(wallet: Address, network: HeroCardsNetwork, failOpen: boolean = false): HeroCardsHolderStatus {
+  return {
+    wallet,
+    network,
+    balance: 0,
+    tier: failOpen ? "bronze" : "none",
+    canSpin: failOpen,
+    feeDiscountBps: 0,
+  };
+}
 
 /**
- * Get the NFT holder tier for a wallet address.
- * Returns 'bronze' | 'silver' | 'gold'
- * Falls back to 'bronze' on RPC failure.
+ * Get complete NFT holder status for a wallet on the selected network.
+ * Defaults to Base for backwards compatibility with existing call sites.
  */
-export async function getHeroCardsTier(wallet: string): Promise<'bronze' | 'silver' | 'gold'> {
-  if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return 'bronze';
-  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") {
-    // Contract not deployed yet — default to bronze
-    return 'bronze';
+export async function getHeroCardsHolderStatus(
+  wallet: string,
+  options: HeroCardsHolderOptions = {},
+): Promise<HeroCardsHolderStatus> {
+  const network = options.network ?? "base";
+  const failOpen = options.failOpen ?? false;
+
+  if (!wallet || !isAddress(wallet)) {
+    throw new Error("Invalid wallet address");
   }
-  
+
+  const cfg = getNetworkConfig(network);
+  const client = getClient(network);
+
   try {
-    const tier = await Promise.race([
-      baseClient.readContract({
-        address: HERO_CARDS_ADDRESS,
+    const [balanceRaw, tierRaw, canSpinRaw, discountRaw] = await Promise.all([
+      withTimeout(client.readContract({
+        address: cfg.contractAddress,
+        abi: HERO_CARDS_ABI,
+        functionName: "balanceOf",
+        args: [wallet],
+      }) as Promise<bigint>),
+      withTimeout(client.readContract({
+        address: cfg.contractAddress,
         abi: HERO_CARDS_ABI,
         functionName: "getHolderTier",
-        args: [wallet as `0x${string}`],
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10_000)),
+        args: [wallet],
+      }) as Promise<number>),
+      withTimeout(client.readContract({
+        address: cfg.contractAddress,
+        abi: HERO_CARDS_ABI,
+        functionName: "canAccessSpinWheel",
+        args: [wallet],
+      }) as Promise<boolean>),
+      withTimeout(client.readContract({
+        address: cfg.contractAddress,
+        abi: HERO_CARDS_ABI,
+        functionName: "getFeeDiscount",
+        args: [wallet],
+      }) as Promise<bigint>),
     ]);
-    return TIER_MAP[Number(tier)] || 'bronze';
+
+    const balance = Number(balanceRaw);
+    const numericTier = Number(tierRaw);
+
+    return {
+      wallet,
+      network,
+      balance,
+      tier: balance > 0 ? (TIER_MAP[numericTier] ?? "bronze") : "none",
+      canSpin: Boolean(canSpinRaw) && balance > 0,
+      feeDiscountBps: Number(discountRaw),
+    };
   } catch {
-    return 'bronze';
+    return failClosedStatus(wallet, network, failOpen);
   }
 }
 
 /**
- * Check if a wallet can access the spin wheel (must hold at least 1 HERO Card).
- * Returns true if holder, false otherwise.
- * Falls back to true on RPC failure (graceful degradation).
+ * Get the NFT holder tier for a wallet address.
+ * Returns 'bronze' | 'silver' | 'gold'.
+ * Falls back to 'bronze' only when failOpen=true; otherwise returns 'bronze' as the lowest tier for legacy callers.
  */
-export async function canAccessHeroSpinWheel(wallet: string): Promise<boolean> {
-  if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return false;
-  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") {
-    // Contract not deployed yet — allow access (beta mode)
-    return true;
-  }
-  
-  try {
-    const canSpin = await Promise.race([
-      baseClient.readContract({
-        address: HERO_CARDS_ADDRESS,
-        abi: HERO_CARDS_ABI,
-        functionName: "canAccessSpinWheel",
-        args: [wallet as `0x${string}`],
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10_000)),
-    ]);
-    return Boolean(canSpin);
-  } catch {
-    // Graceful degradation — allow access if RPC fails
-    return true;
-  }
+export async function getHeroCardsTier(
+  wallet: string,
+  options: HeroCardsHolderOptions = {},
+): Promise<"bronze" | "silver" | "gold"> {
+  if (!wallet || !isAddress(wallet)) return "bronze";
+  const status = await getHeroCardsHolderStatus(wallet, options);
+  return status.tier === "none" ? "bronze" : status.tier;
+}
+
+/**
+ * Check if a wallet can access the spin wheel.
+ * Production behavior fails closed on invalid wallet/RPC failure.
+ */
+export async function canAccessHeroSpinWheel(
+  wallet: string,
+  options: HeroCardsHolderOptions = {},
+): Promise<boolean> {
+  if (!wallet || !isAddress(wallet)) return false;
+  const status = await getHeroCardsHolderStatus(wallet, options);
+  return status.canSpin;
 }
 
 /**
  * Get the fee discount in basis points for a holder.
- * Returns 0-200 (0% to 2%).
+ * Returns 0 if invalid, not a holder, or chain/RPC read fails.
  */
-export async function getHeroFeeDiscount(wallet: string): Promise<number> {
-  if (!wallet || !/^0x[a-fA-F0-9]{40}$/.test(wallet)) return 0;
-  if (HERO_CARDS_ADDRESS === "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE") return 0;
-  
-  try {
-    const discount = await Promise.race([
-      baseClient.readContract({
-        address: HERO_CARDS_ADDRESS,
-        abi: HERO_CARDS_ABI,
-        functionName: "getFeeDiscount",
-        args: [wallet as `0x${string}`],
-      }),
-      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 10_000)),
-    ]);
-    return Number(discount);
-  } catch {
-    return 0;
-  }
+export async function getHeroFeeDiscount(
+  wallet: string,
+  options: HeroCardsHolderOptions = {},
+): Promise<number> {
+  if (!wallet || !isAddress(wallet)) return 0;
+  const status = await getHeroCardsHolderStatus(wallet, options);
+  return status.feeDiscountBps;
 }

@@ -45,7 +45,7 @@ const DAOProposals = React.lazy(() => import("./pages/DAOProposals"));
 const Giveaways = React.lazy(() => import("./pages/Giveaways"));
 const HolderRewards = React.lazy(() => import("./pages/HolderRewards"));
 const SpinWheel = React.lazy(() => import("./pages/SpinWheel"));
-const HeroWallet = React.lazy(() => import("./pages/HeroWallet"));
+// HeroWallet removed — /wallet redirects to /portfolio (build-hotfix: stale import resolved)
 const Dashboard = React.lazy(() => import("./pages/Dashboard"));
 
 // Lazy-load DAO pages
@@ -97,7 +97,7 @@ function Router() {
       <Route path="/login" component={withSuspense(LoginPage)} />
       <Route path="/" component={Home} />
       <Route path="/swap" component={withLayout(Swap)} />
-      <Route path="/wallet" component={withLayout(HeroWallet)} />
+      <Route path="/wallet"><Redirect to="/portfolio" /></Route>  {/* build-hotfix: HeroWallet removed, redirect to Portfolio */}
       <Route path="/portfolio" component={withLayout(Portfolio)} />
       <Route path="/dashboard" component={withLayout(Dashboard)} />
       <Route path="/dca" component={withLayout(DcaOrders)} />

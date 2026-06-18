@@ -1,0 +1,13 @@
+
+> hero-dapp@1.0.0 build /home/ubuntu/hero-dapp
+> npm run prebuild && vite build && esbuild server/_core/index.ts --platform=node --packages=external --bundle --format=esm --outdir=dist
+
+
+> hero-dapp@1.0.0 prebuild
+> node scripts/ensure-deps.mjs
+
+✅ Dependencies verified — all correct versions
+vite v7.3.3 building client environment for production...
+transforming...
+✓ 73 modules transformed.
+ ELIFECYCLE  Command failed with exit code 1.

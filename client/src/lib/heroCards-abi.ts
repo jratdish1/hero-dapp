@@ -1,29 +1,22 @@
 /**
- * HeroCards ERC-721 Contract ABI (Base Chain)
- * Contract: HERO Cards — 1,500 Military Trading Cards
- * Chain: Base (8453)
- * 
- * NOTE: Contract address will be set after deployment.
- * Update HERO_CARDS_ADDRESS after deploying to Base mainnet.
+ * HeroCards ERC-721 Contract ABI
+ * Contract: HERO Cards — 1,500 max supply Military Trading Cards
+ * Deployed on Base (8453) and PulseChain (369).
+ *
+ * Chain config and addresses are centralized in heroCards-config.ts.
+ * Import from there instead of duplicating addresses here.
  */
-
-// Contract address — UPDATE AFTER DEPLOYMENT
-export const HERO_CARDS_ADDRESS = "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE" as const;
-// PulseChain contract address (chain 369)
-export const HERO_CARDS_ADDRESS_PULSE = "0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36" as const;
-export const HERO_CARDS_CHAIN_ID_PULSE = 369;
-
-// Base chain ID
-export const HERO_CARDS_CHAIN_ID = 8453;
-
-// IPFS metadata base URI
-export const HERO_CARDS_BASE_URI = "ipfs://QmXTty8QaqP6ToahspVS3oRztpjiTkrAiAmv5ixjbPynDE/";
-
-// Mint prices (in ETH)
-export const HERO_CARDS_MINT_PRICE = "0.005";
-export const HERO_CARDS_WL_PRICE = "0.003";
-export const HERO_CARDS_MAX_PER_WALLET = 20;
-export const HERO_CARDS_MAX_SUPPLY = 1500;
+export {
+  HERO_CARDS_ADDRESS_BASE as HERO_CARDS_ADDRESS,
+  HERO_CARDS_ADDRESS_PULSECHAIN as HERO_CARDS_ADDRESS_PULSE,
+  CHAIN_ID_BASE as HERO_CARDS_CHAIN_ID,
+  CHAIN_ID_PULSECHAIN as HERO_CARDS_CHAIN_ID_PULSE,
+  HERO_CARDS_METADATA_BASE_URI as HERO_CARDS_BASE_URI,
+  HERO_CARDS_MINT_PRICE_ETH as HERO_CARDS_MINT_PRICE,
+  HERO_CARDS_WHITELIST_PRICE_ETH as HERO_CARDS_WL_PRICE,
+  HERO_CARDS_MAX_PER_WALLET,
+  HERO_CARDS_MAX_SUPPLY,
+} from "./heroCards-config";
 
 export const HERO_CARDS_ABI = [
   // ─── Read Functions ───────────────────────────────────────────────

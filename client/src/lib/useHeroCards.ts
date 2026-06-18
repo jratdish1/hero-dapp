@@ -1,25 +1,30 @@
 /**
  * useHeroCards — React hook for HeroCards NFT contract interactions
- * 
- * Provides:
- * - Mint (public + whitelist)
- * - Holder verification (isHolder, tier, fee discount, spin access)
- * - Collection stats (totalMinted, mintPhase, price)
- * - User stats (balance, minted count)
+ *
+ * Dual-chain aware: detects connected chain via wagmi and uses the correct
+ * contract address, native symbol, and explorer link for Base or PulseChain.
+ *
+ * Supported chains:
+ *   - Base (8453)      — native currency: ETH
+ *   - PulseChain (369) — native currency: PLS
+ *
+ * Unsupported chains: canMint = false, chainSupported = false.
  */
-import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount } from 'wagmi';
+import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
 import { parseEther } from 'viem';
-import { 
-  HERO_CARDS_ABI, 
-  HERO_CARDS_ADDRESS, 
-  HERO_CARDS_CHAIN_ID,
-  HERO_CARDS_MINT_PRICE,
-  HERO_CARDS_WL_PRICE,
-  HERO_CARDS_MAX_PER_WALLET,
+import { HERO_CARDS_ABI } from './heroCards-abi';
+import {
+  getHeroCardsConfig,
+  isSupportedHeroCardsChain,
+  getHeroCardsExplorerTxUrl,
   HERO_CARDS_MAX_SUPPLY,
-} from './heroCards-abi';
+  HERO_CARDS_MAX_PER_WALLET,
+  HERO_CARDS_MINT_PRICE_ETH,
+  HERO_CARDS_WHITELIST_PRICE_ETH,
+  type HeroCardsChainConfig,
+} from './heroCards-config';
 
-// ─── Types ───────────────────────────────────────────────────────
+// ─── Types ───────────────────────────────────────────────────────────────────
 export enum MintPhase {
   CLOSED = 0,
   WHITELIST = 1,
@@ -47,89 +52,103 @@ export const TIER_COLORS: Record<HolderTier, string> = {
   [HolderTier.GOLD]: 'text-yellow-400',
 };
 
-// ─── Hook ────────────────────────────────────────────────────────
+// ─── Hook ─────────────────────────────────────────────────────────────────────
 export function useHeroCards() {
   const { address, isConnected } = useAccount();
+  const chainId = useChainId();
 
-  // ─── Collection Stats ──────────────────────────────────────────
+  // Resolve chain config — undefined if unsupported
+  const chainConfig: HeroCardsChainConfig | undefined = isSupportedHeroCardsChain(chainId)
+    ? getHeroCardsConfig(chainId)
+    : undefined;
+
+  const chainSupported = !!chainConfig;
+  const contractAddress = chainConfig?.contractAddress;
+  const nativeSymbol = chainConfig?.nativeSymbol ?? 'ETH';
+  const chainName = chainConfig?.name ?? 'Unsupported Network';
+
+  // ─── Collection Stats ─────────────────────────────────────────────────────
   const { data: totalMinted, refetch: refetchMinted } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'totalMinted',
-    chainId: HERO_CARDS_CHAIN_ID,
+    chainId: chainId,
+    query: { enabled: chainSupported },
   });
 
   const { data: mintPhaseRaw } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'mintPhase',
-    chainId: HERO_CARDS_CHAIN_ID,
+    chainId: chainId,
+    query: { enabled: chainSupported },
   });
 
   const { data: mintPriceRaw } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'mintPrice',
-    chainId: HERO_CARDS_CHAIN_ID,
+    chainId: chainId,
+    query: { enabled: chainSupported },
   });
 
-  // ─── User Stats ───────────────────────────────────────────────
+  // ─── User Stats ───────────────────────────────────────────────────────────
   const { data: userBalance } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'balanceOf',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
   const { data: userMinted } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'mintedPerWallet',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
-  // ─── Holder Utility ───────────────────────────────────────────
+  // ─── Holder Utility ───────────────────────────────────────────────────────
   const { data: isHolder } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'isHolder',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
   const { data: holderTierRaw } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'getHolderTier',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
   const { data: feeDiscountRaw } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'getFeeDiscount',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
   const { data: canSpin } = useReadContract({
-    address: HERO_CARDS_ADDRESS,
+    address: contractAddress,
     abi: HERO_CARDS_ABI,
     functionName: 'canAccessSpinWheel',
     args: address ? [address] : undefined,
-    chainId: HERO_CARDS_CHAIN_ID,
-    query: { enabled: !!address },
+    chainId: chainId,
+    query: { enabled: chainSupported && !!address },
   });
 
-  // ─── Mint Function ────────────────────────────────────────────
+  // ─── Mint Functions ───────────────────────────────────────────────────────
   const { writeContract, data: mintTxHash, isPending: isMinting, error: mintError } = useWriteContract();
 
   const { isLoading: isConfirming, isSuccess: mintSuccess } = useWaitForTransactionReceipt({
@@ -137,61 +156,74 @@ export function useHeroCards() {
   });
 
   function mint(quantity: number) {
-    if (!address) return;
+    if (!address || !contractAddress || !chainSupported) return;
     const phase = Number(mintPhaseRaw ?? 0) as MintPhase;
     if (phase === MintPhase.CLOSED) {
       throw new Error('Minting is currently closed');
     }
-    const price = phase === MintPhase.WHITELIST 
-      ? parseEther(HERO_CARDS_WL_PRICE) 
-      : parseEther(HERO_CARDS_MINT_PRICE);
+    const price = phase === MintPhase.WHITELIST
+      ? parseEther(HERO_CARDS_WHITELIST_PRICE_ETH)
+      : parseEther(HERO_CARDS_MINT_PRICE_ETH);
     const totalValue = price * BigInt(quantity);
 
     writeContract({
-      address: HERO_CARDS_ADDRESS,
+      address: contractAddress,
       abi: HERO_CARDS_ABI,
       functionName: 'mint',
       args: [BigInt(quantity)],
       value: totalValue,
-      chainId: HERO_CARDS_CHAIN_ID,
+      chainId: chainId,
     });
   }
 
   function whitelistMint(quantity: number, proof: `0x${string}`[]) {
-    if (!address) return;
-    const totalValue = parseEther(HERO_CARDS_WL_PRICE) * BigInt(quantity);
+    if (!address || !contractAddress || !chainSupported) return;
+    const totalValue = parseEther(HERO_CARDS_WHITELIST_PRICE_ETH) * BigInt(quantity);
 
     writeContract({
-      address: HERO_CARDS_ADDRESS,
+      address: contractAddress,
       abi: HERO_CARDS_ABI,
       functionName: 'whitelistMint',
       args: [BigInt(quantity), proof],
       value: totalValue,
-      chainId: HERO_CARDS_CHAIN_ID,
+      chainId: chainId,
     });
   }
 
-  // ─── Computed Values ──────────────────────────────────────────
+  // ─── Explorer Link ────────────────────────────────────────────────────────
+  const mintTxExplorerUrl = mintTxHash
+    ? getHeroCardsExplorerTxUrl(chainId, mintTxHash)
+    : undefined;
+
+  // ─── Computed Values ──────────────────────────────────────────────────────
   const mintPhase = Number(mintPhaseRaw ?? 0) as MintPhase;
   const holderTier = Number(holderTierRaw ?? 0) as HolderTier;
-  const feeDiscount = Number(feeDiscountRaw ?? 0) / 100; // Convert bps to %
+  const feeDiscount = Number(feeDiscountRaw ?? 0) / 100; // bps → %
   const remaining = HERO_CARDS_MAX_SUPPLY - Number(totalMinted ?? 0);
-  const canMint = mintPhase !== MintPhase.CLOSED && 
-                  Number(userMinted ?? 0) < HERO_CARDS_MAX_PER_WALLET &&
-                  remaining > 0;
+  const canMint = chainSupported &&
+    mintPhase !== MintPhase.CLOSED &&
+    Number(userMinted ?? 0) < HERO_CARDS_MAX_PER_WALLET &&
+    remaining > 0;
   const maxMintable = Math.min(
     HERO_CARDS_MAX_PER_WALLET - Number(userMinted ?? 0),
-    remaining
+    remaining,
   );
 
   return {
+    // Chain
+    chainId,
+    chainName,
+    chainSupported,
+    nativeSymbol,
+    contractAddress,
+
     // Collection
     totalMinted: Number(totalMinted ?? 0),
     maxSupply: HERO_CARDS_MAX_SUPPLY,
     remaining,
     mintPhase,
-    mintPrice: HERO_CARDS_MINT_PRICE,
-    whitelistPrice: HERO_CARDS_WL_PRICE,
+    mintPrice: HERO_CARDS_MINT_PRICE_ETH,
+    whitelistPrice: HERO_CARDS_WHITELIST_PRICE_ETH,
 
     // User
     isConnected,
@@ -217,6 +249,7 @@ export function useHeroCards() {
     mintSuccess,
     mintError,
     mintTxHash,
+    mintTxExplorerUrl,
     refetchMinted,
   };
 }
