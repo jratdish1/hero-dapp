@@ -242,6 +242,85 @@ describe("HeroCardsRewardsDistributor", function () {
     });
   });
 
+
+  // ─── Merkle Encoding Regression ────────────────────────────────────────────
+  // SOP REQUIREMENT: Prove that a StandardMerkleTree proof FAILS against this
+  // contract, while the custom packed-leaf proof PASSES.
+  // This prevents future operators from reintroducing the StandardMerkleTree
+  // incompatibility (ABI encoding + double keccak256 vs single packed keccak256).
+  describe("Merkle Encoding Regression", function () {
+    it("custom packed-leaf proof passes; StandardMerkleTree proof fails (regression guard)", async function () {
+      const { StandardMerkleTree } = await import("@openzeppelin/merkle-tree");
+
+      const nativeAmt = ethers.parseEther("0.1");
+      const tokenAmt = ethers.parseEther("100");
+
+      // ── Custom tree (matches contract) ──────────────────────────────────────
+      const customTree = buildMerkleTree(ethers, [
+        [addr1.address, nativeAmt, tokenAmt],
+        [addr2.address, ethers.parseEther("0.05"), ethers.parseEther("50")],
+      ]);
+      const customProof = customTree.getProof([addr1.address, nativeAmt, tokenAmt]);
+
+      // Local verification MUST pass before submitting to contract
+      function hashPair(a, b) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        return ethers.keccak256(ethers.concat([lo, hi]));
+      }
+      function verifyProof(leaf, proof, root) {
+        let computed = leaf;
+        for (const sibling of proof) computed = hashPair(computed, sibling);
+        return computed.toLowerCase() === root.toLowerCase();
+      }
+      const customLeaf = ethers.keccak256(
+        ethers.solidityPacked(["address", "uint256", "uint256"], [addr1.address, nativeAmt, tokenAmt])
+      );
+      expect(verifyProof(customLeaf, customProof, customTree.root)).to.equal(true,
+        "Custom tree local verification must pass");
+
+      // ── StandardMerkleTree (INCOMPATIBLE with contract) ─────────────────────
+      const stdTree = StandardMerkleTree.of(
+        [[addr1.address, nativeAmt, tokenAmt], [addr2.address, ethers.parseEther("0.05"), ethers.parseEther("50")]],
+        ["address", "uint256", "uint256"]
+      );
+      const stdProof = stdTree.getProof([addr1.address, nativeAmt, tokenAmt]);
+
+      // The two roots MUST differ — confirming encoding incompatibility
+      expect(customTree.root).to.not.equal(stdTree.root,
+        "Custom tree root and StandardMerkleTree root must differ (different leaf encoding)");
+
+      // ── Deploy fresh distributor with custom root ────────────────────────────
+      const MockERC20 = await ethers.getContractFactory("MockERC20ForTesting");
+      const token = await MockERC20.deploy("HERO", "HERO", ethers.parseEther("1000000"));
+      await token.waitForDeployment();
+      const Distributor = await ethers.getContractFactory("HeroCardsRewardsDistributor");
+      const dist = await Distributor.deploy(await token.getAddress());
+      await dist.waitForDeployment();
+      await token.approve(await dist.getAddress(), tokenAmt * 2n);
+      await dist.createEpoch(customTree.root, tokenAmt * 2n, 86400n, { value: nativeAmt * 2n });
+      await dist.finalizeEpoch(1n);
+
+      // Custom proof MUST succeed
+      await expect(
+        dist.connect(addr1).claim(1n, nativeAmt, tokenAmt, customProof)
+      ).to.emit(dist, "Claimed");
+
+      // ── Deploy fresh distributor with StandardMerkleTree root ────────────────
+      const token2 = await MockERC20.deploy("HERO2", "HERO2", ethers.parseEther("1000000"));
+      await token2.waitForDeployment();
+      const dist2 = await Distributor.deploy(await token2.getAddress());
+      await dist2.waitForDeployment();
+      await token2.approve(await dist2.getAddress(), tokenAmt * 2n);
+      await dist2.createEpoch(stdTree.root, tokenAmt * 2n, 86400n, { value: nativeAmt * 2n });
+      await dist2.finalizeEpoch(1n);
+
+      // StandardMerkleTree proof against contract MUST fail with InvalidProof
+      await expect(
+        dist2.connect(addr1).claim(1n, nativeAmt, tokenAmt, stdProof)
+      ).to.be.revertedWithCustomError(dist2, "InvalidProof");
+    });
+  });
+
   // ─── Pause / Unpause ───────────────────────────────────────────────────────
   describe("Pause / Unpause", function () {
     it("should allow owner to pause", async function () {
