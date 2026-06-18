@@ -386,6 +386,36 @@ export default function Home() {
         </div>
       </section>
 
+      {/* Verified Donation Review — Mission Strip */}
+      <section className="max-w-7xl mx-auto px-4 py-16">
+        <div className="rounded-2xl border border-border bg-card/50 backdrop-blur-sm p-8 md:p-12 text-center">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <Heart className="w-6 h-6 text-[var(--hero-orange)]" />
+            <h2 className="text-2xl md:text-3xl font-bold text-foreground">
+              Verified Donation Review
+            </h2>
+          </div>
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-4 text-sm md:text-base leading-relaxed">
+            HERO's charitable donation and donor-compliance workflows are handled through VIC Foundation, the mission layer supporting veterans, first responders, and their families.
+          </p>
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-6 text-sm md:text-base leading-relaxed">
+            Most supporters do not need identity verification. Large crypto gifts, international donations, entity/foundation gifts, restricted-jurisdiction donations, or donations requiring AML/KYC documentation may need a verified donation review.
+          </p>
+          <p className="text-muted-foreground max-w-2xl mx-auto mb-8 text-xs">
+            Start your verified donation review through VIC Foundation before sending funds.
+          </p>
+          <a
+            href="https://vicfoundation.com/verified-donation?source=herobase&flow=verified-donation"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            <Button size="lg" className="bg-gradient-to-r from-[var(--hero-orange)] to-[var(--hero-green)] text-foreground border-0 h-12 px-10 text-base">
+              Start Verified Donation Review <ExternalLink className="w-4 h-4 ml-2" />
+            </Button>
+          </a>
+        </div>
+      </section>
+
       {/* CTA section */}
       <section className="max-w-7xl mx-auto px-4 py-20 text-center">
         <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-4">
@@ -483,6 +513,17 @@ export default function Home() {
               >
                 Whitepaper <ExternalLink className="w-3 h-3" />
               </a>
+              <a
+                href="https://vicfoundation.com/verified-donation?source=herobase&flow=verified-donation"
+                target="_blank" rel="noopener noreferrer"
+                
+                className="hover:text-[var(--hero-orange)] flex items-center gap-1"
+              >
+                Verified Donation Review <ExternalLink className="w-3 h-3" />
+              </a>
+            </div>
+            <div className="text-center mt-4 md:mt-0">
+              <span className="text-[10px] text-white/50">For large, international, crypto, entity, or compliance-sensitive donations.</span>
             </div>
           </div>
         </div>
