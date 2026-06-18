@@ -21,7 +21,7 @@ import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 error EpochNotActive();
 error AlreadyClaimed();
 error InvalidProof();
-error EpochFinalized();
+error EpochAlreadyFinalized();
 error RecoveryTooEarly();
 error TransferFailed();
 
@@ -91,7 +91,7 @@ contract HeroCardsRewardsDistributor is Ownable2Step, Pausable, ReentrancyGuard 
     /** @notice Finalize an epoch — root becomes immutable after this. */
     function finalizeEpoch(uint256 epochId) external onlyOwner {
         Epoch storage epoch = epochs[epochId];
-        if (epoch.finalized) revert EpochFinalized();
+        if (epoch.finalized) revert EpochAlreadyFinalized();
         epoch.finalized = true;
         emit EpochFinalized(epochId);
     }
