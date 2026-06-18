@@ -14,7 +14,8 @@ const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/n6wZKBCrhC
 const HERO_LOGO = "/hero-logo-200.webp";
 
 const COLLECTION_STATS = [
-  { label: "Total Cards", value: "555", color: "text-orange-400", icon: Gem },
+  { label: "Max Supply", value: "1,500", color: "text-orange-400", icon: Gem },
+  { label: "Artwork Subset", value: "555", color: "text-yellow-500", icon: Gem },
   { label: "Rarity Tiers", value: "5", color: "text-yellow-400", icon: Star },
   { label: "Categories", value: "10", color: "text-blue-400", icon: Shield },
   { label: "Nations", value: "50+", color: "text-green-400", icon: Globe },
@@ -300,7 +301,7 @@ export default function NftCollection() {
         <img src={HERO_LOGO} alt="HERO" className="w-10 h-10 rounded-full object-cover border-2 border-orange-500/40" />
         <div>
           <h1 className="text-foreground font-bold text-2xl">{t("$HERO NFT Collection")}</h1>
-          <p className="text-muted-foreground text-sm">{t("555 unique cards honoring military, first responders & historical warriors worldwide")}</p>
+          <p className="text-muted-foreground text-sm">{t("Up to 1,500 HeroCards honoring military, first responders & historical warriors worldwide. 555-card artwork subset currently available.")}</p>
         </div>
       </div>
 
@@ -327,7 +328,7 @@ export default function NftCollection() {
                 <Sparkles className="w-4 h-4 text-orange-400" />
                 {t("Dual-Chain Deployment")}
               </h3>
-              <p className="text-muted-foreground text-xs mt-0.5">{t("555 cards split across PulseChain (~185), BASE (~185), and Shared (~185)")}</p>
+              <p className="text-muted-foreground text-xs mt-0.5">{t("555-card artwork subset split across PulseChain (~185), BASE (~185), and Shared (~185). Contract max supply: 1,500.")}</p>
             </div>
             <div className="flex gap-2">
               <Badge variant="outline" className="border-orange-500/40 text-orange-400 text-xs">{t("PulseChain Primary")}</Badge>
@@ -366,7 +367,7 @@ export default function NftCollection() {
               <div className="flex items-start gap-3">
                 <Wallet className="w-6 h-6 text-orange-400 shrink-0 mt-0.5" />
                 <div>
-                  <h4 className="text-orange-400 font-semibold text-sm">555-Card Collection — Minting Coming Soon</h4>
+                  <h4 className="text-orange-400 font-semibold text-sm">HeroCards Collection (555 Artwork Subset) — Minting Coming Soon</h4>
                   <p className="text-muted-foreground text-sm mt-1">{t("85% of NFT earnings go straight into the treasury wallet for charity donations. The remaining 15% is allocated towards operations, overhead, and future development of the HERO protocol.")}</p>
                   <a href="https://x.com/hero501c3" target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-orange-400 text-xs mt-2 hover:text-orange-300">Follow @HERO501c3 for mint updates <ExternalLink className="w-3 h-3" /></a>
                 </div>
@@ -547,7 +548,7 @@ export default function NftCollection() {
             <CardHeader><CardTitle className="text-foreground flex items-center gap-2"><Target className="w-5 h-5 text-orange-400" />{t("NFT Development Roadmap")}</CardTitle></CardHeader>
             <CardContent className="space-y-6">
               {[
-                { phase: t("Phase 1"), title: t("Artwork & Minting"), status: t("In Progress"), statusColor: "text-yellow-400 border-yellow-500/40", items: ["555 unique steampunk-military trading cards complete", "4 animated video NFTs complete (UK, South Korea, US Marine, Mexico)", "ERC-721 smart contract blueprint ready", "Dual-chain deployment: PulseChain + BASE", "Mint event: 85% to treasury for charity, 15% to operations"] },
+                { phase: t("Phase 1"), title: t("Artwork & Minting"), status: t("In Progress"), statusColor: "text-yellow-400 border-yellow-500/40", items: ["555-card artwork subset complete (contract max supply: 1,500)", "4 animated video NFTs complete (UK, South Korea, US Marine, Mexico)", "ERC-721 smart contract blueprint ready", "Dual-chain deployment: PulseChain + BASE", "Mint event: 85% to treasury for charity, 15% to operations"] },
                 { phase: t("Phase 2"), title: t("Utility Activation"), status: t("Planned"), statusColor: "text-blue-400 border-blue-500/40", items: ["Automatic fee reduction for NFT holders", "Diamond hands time-weighted staking multiplier", "Governance voting power boost", "Exclusive airdrop eligibility for holders"] },
                 { phase: t("Phase 3"), title: t("Advanced Features"), status: t("Future"), statusColor: "text-muted-foreground border-muted-foreground/40", items: ["Rank promotion system (upgrade NFT as holdings grow)", "Staking APY boost based on NFT rank", "Cross-chain NFT bridging (PulseChain to BASE)", "Community marketplace for trading", "Custom animated NFT for Legendary holders"] },
               ].map((phase) => (

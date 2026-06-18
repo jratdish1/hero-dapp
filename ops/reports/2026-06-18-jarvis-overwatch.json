@@ -1,0 +1,244 @@
+{
+  "runAt": "2026-06-18T04:27:17.022Z",
+  "runBy": "jarvis-overwatch-phase1",
+  "verdict": "YELLOW",
+  "websiteResults": [
+    {
+      "url": "https://herobase.io/",
+      "status": 200,
+      "responseTimeMs": 1247,
+      "tlsExpiryDays": 77,
+      "tlsValid": true,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/",
+          "message": "Route healthy (HTTP 200, 1247ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/nft",
+      "status": 200,
+      "responseTimeMs": 1039,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/nft",
+          "message": "Route healthy (HTTP 200, 1039ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/nft-mint",
+      "status": 200,
+      "responseTimeMs": 642,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/nft-mint",
+          "message": "Route healthy (HTTP 200, 642ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/swap",
+      "status": 200,
+      "responseTimeMs": 742,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/swap",
+          "message": "Route healthy (HTTP 200, 742ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/spin",
+      "status": 200,
+      "responseTimeMs": 1020,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/spin",
+          "message": "Route healthy (HTTP 200, 1020ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/stake",
+      "status": 200,
+      "responseTimeMs": 1069,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/stake",
+          "message": "Route healthy (HTTP 200, 1069ms)"
+        }
+      ]
+    },
+    {
+      "url": "https://herobase.io/wallet",
+      "status": 200,
+      "responseTimeMs": 1893,
+      "tlsExpiryDays": null,
+      "tlsValid": null,
+      "dnsResolved": true,
+      "bodyEmpty": false,
+      "errorString": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "website",
+          "target": "https://herobase.io/wallet",
+          "message": "Route healthy (HTTP 200, 1893ms)"
+        }
+      ]
+    }
+  ],
+  "contractResults": [
+    {
+      "network": "base",
+      "address": "0x5Fad096af059ff9A2167351A0ffc8b45D71897bE",
+      "maxSupply": null,
+      "totalMinted": null,
+      "mintPhase": null,
+      "feeDiscountBps": null,
+      "startIndexSet": null,
+      "rpcUsed": null,
+      "responseTimeMs": null,
+      "severity": "INFO",
+      "findings": [
+        {
+          "severity": "INFO",
+          "category": "contract",
+          "target": "base",
+          "message": "DRY RUN — skipped"
+        }
+      ]
+    }
+  ],
+  "repoResult": {
+    "latestCommit": "9753d2233a8d1965dc75562c02311c3215ff9670 Merge remote-tracking branch 'origin/nft-v2-foundation-fix' into hero-nft-v2-foundation-jarvis-p1",
+    "openPRCount": null,
+    "draftPRCount": null,
+    "recentContractChanges": [],
+    "recentDeploymentChanges": [],
+    "recentWorkflowChanges": [
+      ".github/SETUP_SECRETS.md",
+      ".github/workflows/ci.yml"
+    ],
+    "severity": "WARNING",
+    "findings": [
+      {
+        "severity": "WARNING",
+        "category": "repo",
+        "target": ".github/",
+        "message": "2 workflow file(s) changed in last 7 days",
+        "detail": ".github/SETUP_SECRETS.md, .github/workflows/ci.yml"
+      }
+    ]
+  },
+  "allFindings": [
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/",
+      "message": "Route healthy (HTTP 200, 1247ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/nft",
+      "message": "Route healthy (HTTP 200, 1039ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/nft-mint",
+      "message": "Route healthy (HTTP 200, 642ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/swap",
+      "message": "Route healthy (HTTP 200, 742ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/spin",
+      "message": "Route healthy (HTTP 200, 1020ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/stake",
+      "message": "Route healthy (HTTP 200, 1069ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "website",
+      "target": "https://herobase.io/wallet",
+      "message": "Route healthy (HTTP 200, 1893ms)"
+    },
+    {
+      "severity": "INFO",
+      "category": "contract",
+      "target": "base",
+      "message": "DRY RUN — skipped"
+    },
+    {
+      "severity": "WARNING",
+      "category": "repo",
+      "target": ".github/",
+      "message": "2 workflow file(s) changed in last 7 days",
+      "detail": ".github/SETUP_SECRETS.md, .github/workflows/ci.yml"
+    }
+  ],
+  "humanActionsRequired": [
+    "[WARNING] REPO: 2 workflow file(s) changed in last 7 days — Target: .github/"
+  ],
+  "rawArtifactPath": "/home/ubuntu/hero-dapp/ops/reports/2026-06-18-jarvis-overwatch.json"
+}

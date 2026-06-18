@@ -80,6 +80,8 @@ function HolderUtilityCard({
 // ─── Main Component ──────────────────────────────────────────────
 export default function NFTMint() {
   const {
+    // Chain
+    chainName, chainSupported, nativeSymbol,
     // Collection
     totalMinted, maxSupply, remaining, mintPhase, mintPrice, whitelistPrice,
     // User
@@ -87,7 +89,7 @@ export default function NFTMint() {
     // Holder Utility
     isHolder, holderTier, tierName, tierColor, feeDiscount, canSpin,
     // Mint Actions
-    mint, isMinting, isConfirming, mintSuccess, mintError, mintTxHash, refetchMinted,
+    mint, isMinting, isConfirming, mintSuccess, mintError, mintTxHash, mintTxExplorerUrl, refetchMinted,
   } = useHeroCards();
 
   const [quantity, setQuantity] = useState(1);
@@ -127,8 +129,16 @@ export default function NFTMint() {
           HERO Cards <span className="text-green-400">NFT Mint</span>
         </h1>
         <p className="text-gray-400 mb-4">
-          1,500 Unique Military Trading Cards on Base Chain
+          1,500 Unique Military Trading Cards — Base &amp; PulseChain
         </p>
+        {isConnected && (
+          <p className="text-xs mt-1 mb-2">
+            {chainSupported
+              ? <span className="text-green-400">Connected: {chainName} ({nativeSymbol})</span>
+              : <span className="text-red-400">Unsupported chain. Please switch to Base or PulseChain.</span>
+            }
+          </p>
+        )}
         <PhaseBadge phase={mintPhase} />
       </div>
 
@@ -194,7 +204,7 @@ export default function NFTMint() {
           <div className="bg-black/30 rounded-lg p-4 mb-4">
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">Price per NFT</span>
-              <span className="text-white font-mono">{currentPrice} ETH</span>
+              <span className="text-white font-mono">{currentPrice} {nativeSymbol}</span>
             </div>
             <div className="flex justify-between mb-2">
               <span className="text-gray-400">Your mints</span>
@@ -238,7 +248,7 @@ export default function NFTMint() {
           <div className="bg-green-900/20 border border-green-700/30 rounded-lg p-3 mb-6">
             <div className="flex justify-between">
               <span className="text-green-400 font-medium">Total Cost</span>
-              <span className="text-green-400 font-bold font-mono">{totalCost} ETH</span>
+              <span className="text-green-400 font-bold font-mono">{totalCost} {nativeSymbol}</span>
             </div>
           </div>
 
@@ -280,7 +290,7 @@ export default function NFTMint() {
                 </span>
               ) : isConfirming ? (
                 <span className="flex items-center justify-center gap-2">
-                  <span className="animate-spin">⏳</span> Confirming on Base...
+                  <span className="animate-spin">⏳</span> Confirming on {chainName}...
                 </span>
               ) : (
                 `Mint ${quantity} HERO Card${quantity > 1 ? 's' : ''}`
@@ -311,12 +321,12 @@ export default function NFTMint() {
                 🎉 Successfully minted {quantity} HERO Card{quantity > 1 ? 's' : ''}!
               </p>
               <a
-                href={`https://basescan.org/tx/${mintTxHash}`}
+                href={mintTxExplorerUrl ?? `https://basescan.org/tx/${mintTxHash}`}
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-green-500 hover:text-green-300 underline"
               >
-                View on BaseScan →
+                View on {chainName} Explorer →
               </a>
             </div>
           )}
@@ -358,7 +368,7 @@ export default function NFTMint() {
             <div className="text-2xl mb-2">1️⃣</div>
             <h3 className="font-bold text-white mb-1">Connect & Mint</h3>
             <p className="text-gray-400">
-              Connect your wallet on Base chain. Choose quantity (1-20) and confirm the transaction.
+              Connect your wallet on Base or PulseChain. Choose quantity (1-20) and confirm the transaction.
             </p>
           </div>
           <div>
