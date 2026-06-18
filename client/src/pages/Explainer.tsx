@@ -55,7 +55,7 @@ const ECOSYSTEM_PILLARS = [
     color: "text-purple-400",
     bg: "bg-purple-500/10",
     border: "border-purple-500/30",
-    desc: "555 unique steampunk-military trading cards across 10 categories and 5 rarity tiers. Holders get fee reductions, governance power, and exclusive airdrops.",
+    desc: "Up to 1,500 steampunk-military trading cards across 10 categories and 5 rarity tiers, featuring 555 unique artwork designs. Holders get fee reductions, governance power, and exclusive airdrops.",
     link: "/nft",
     badge: "Minting Soon",
     badgeColor: "text-yellow-400 border-yellow-500/40",
@@ -103,7 +103,7 @@ const HOW_IT_WORKS = [
   { step: "01", title: "Connect Your Wallet", desc: "Connect MetaMask, Coinbase Wallet, or any Web3 wallet. Switch between PulseChain (369) and BASE (8453) with one click.", icon: Wallet, color: "text-orange-400", bg: "bg-orange-500/10" },
   { step: "02", title: "Get HERO Tokens", desc: "Swap any token for HERO using the built-in DEX aggregator. Best rates across PulseX, 9inch, and all major DEXes.", icon: Repeat, color: "text-green-400", bg: "bg-green-500/10" },
   { step: "03", title: "Farm & Earn", desc: "Add liquidity to HERO pools and stake your LP tokens. Earn HERO rewards with boosted APY for long-term holders.", icon: Leaf, color: "text-blue-400", bg: "bg-blue-500/10" },
-  { step: "04", title: "Mint an NFT", desc: "Mint one of 555 unique military trading cards. Your NFT rank unlocks fee reductions, governance power, and exclusive airdrops.", icon: Crown, color: "text-purple-400", bg: "bg-purple-500/10" },
+  { step: "04", title: "Mint an NFT", desc: "Mint one of up to 1,500 military trading cards (555 unique artwork designs). Your NFT rank unlocks fee reductions, governance power, and exclusive airdrops.", icon: Crown, color: "text-purple-400", bg: "bg-purple-500/10" },
   { step: "05", title: "Vote in the DAO", desc: "Use your HERO tokens and NFT to vote on protocol proposals. Shape the future of the ecosystem.", icon: Users, color: "text-yellow-400", bg: "bg-yellow-500/10" },
   { step: "06", title: "Support Veterans", desc: "Every transaction, every mint, every farm contributes to veteran support through the VIC Foundation 501(c)(3).", icon: Heart, color: "text-red-400", bg: "bg-red-500/10" },
 ];
@@ -114,7 +114,7 @@ const TOKEN_FACTS = [
   { label: "VETS on PulseChain", value: "PRC-20", sub: "PulseChain (369)", color: "text-green-400", icon: Coins },
   { label: "NFT Standard", value: "ERC-721", sub: "Dual-chain deployment", color: "text-purple-400", icon: Award },
   { label: "Charity Allocation", value: "25%", sub: "Of all NFT mint revenue", color: "text-red-400", icon: Heart },
-  { label: "NFT Collection Size", value: "555", sub: "Unique military cards", color: "text-yellow-400", icon: Star },
+  { label: "NFT Collection Size", value: "1,500", sub: "Max supply · 555 unique artworks", color: "text-yellow-400", icon: Star },
 ];
 
 export default function Explainer() {
