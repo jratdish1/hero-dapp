@@ -82,7 +82,11 @@ const HERO_CARDS_ABI = [
 
 const RPC_TIMEOUT_MS = 10_000;
 
-const clients: Partial<Record<HeroCardsNetwork, ReturnType<typeof createPublicClient>>> = {};
+// viem-compat: The cached client type uses ReturnType<typeof createPublicClient> which may not
+// exactly match the inferred type when a custom chain object is passed as `any`. This cast is
+// isolated to the cache assignment boundary and has no runtime behavior impact.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const clients: Partial<Record<HeroCardsNetwork, any>> = {};
 
 const TIER_MAP: Record<number, "bronze" | "silver" | "gold"> = {
   1: "bronze",
@@ -128,7 +132,9 @@ function getClient(network: HeroCardsNetwork = "base") {
     transport: http(cfg.rpcUrl),
   });
 
-  clients[network] = client;
+  // viem-compat: cast to any at cache write boundary only (see clients declaration above)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  clients[network] = client as any;
   return client;
 }
 

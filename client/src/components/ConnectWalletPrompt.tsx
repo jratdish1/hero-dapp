@@ -11,6 +11,7 @@
  * NO new API calls.
  *
  * build-hotfix: stale ConnectWalletPrompt source restored as minimal stub.
+ * fu-02: added optional subMessage, icon, variant props for caller compatibility.
  */
 import { Link } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -18,12 +19,22 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Wallet } from "lucide-react";
 import { getLoginUrl } from "@/const";
 
-interface ConnectWalletPromptProps {
+export interface ConnectWalletPromptProps {
   message?: string;
+  /** Optional secondary message shown below the primary message. */
+  subMessage?: string;
+  /** Optional icon override (emoji or short string). Accepted for caller compatibility. */
+  icon?: string;
+  /** Optional visual variant. Accepted for caller compatibility but not visually differentiated in stub. */
+  variant?: string;
 }
 
 export function ConnectWalletPrompt({
   message = "Connect your wallet to continue",
+  subMessage,
+  // icon and variant are accepted for caller compatibility but not rendered differently in this stub
+  icon: _icon,
+  variant: _variant,
 }: ConnectWalletPromptProps) {
   return (
     <Card className="border-amber-500/20 bg-amber-500/5">
@@ -32,6 +43,9 @@ export function ConnectWalletPrompt({
           <Wallet className="w-6 h-6 text-amber-400" />
         </div>
         <p className="text-muted-foreground text-sm max-w-xs">{message}</p>
+        {subMessage && (
+          <p className="text-muted-foreground text-xs max-w-xs opacity-75">{subMessage}</p>
+        )}
         <Link href={getLoginUrl()}>
           <Button
             variant="outline"

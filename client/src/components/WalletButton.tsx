@@ -27,7 +27,7 @@ export function WalletButton() {
       <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-400 text-xs font-mono">
         <Wallet className="w-3.5 h-3.5" />
         <span className="hidden sm:inline max-w-[80px] truncate">
-          {user.username ?? "Connected"}
+          {user.name ?? "Connected"}
         </span>
       </div>
     );

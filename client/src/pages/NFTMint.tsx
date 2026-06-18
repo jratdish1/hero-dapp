@@ -1,7 +1,7 @@
 /**
  * HERO Cards — NFT Mint Page (Production)
  * 
- * Connects to the HeroCards ERC-721 contract on Base chain.
+ * Connects to the HeroCards ERC-721 contract on supported chains (currently Base and PulseChain).
  * Features:
  * - Real on-chain minting via wagmi/viem
  * - Live supply counter
