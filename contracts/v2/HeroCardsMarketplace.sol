@@ -8,6 +8,17 @@ pragma solidity ^0.8.24;
  * @dev Non-custodial listing model. Ownership and approval verified at purchase.
  *      Reentrancy guard on all state-changing functions.
  *      DO NOT DEPLOY without full audit and explicit GO from VIC Foundation.
+ *
+ * A+ Fixes (2026-06-18):
+ *   - buy(): Validate platformFee + royaltyFee <= listing.price before any
+ *     transfer to prevent arithmetic underflow DoS.
+ *   - buy(): Validate royaltyReceiver != address(0) when royaltyFee > 0 to
+ *     prevent funds being silently lost.
+ *   - setFee(): Require feeRecipient != address(0) when feeBps > 0 to prevent
+ *     platform fees being trapped in the contract.
+ *   - list(): Require duration > 0 to prevent zero-duration listings that
+ *     expire immediately.
+ *   - Added FeesTooHigh custom error for the fee guard.
  */
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -24,6 +35,9 @@ error NotOwnerOrApproved();
 error TransferFailed();
 error InvalidPrice();
 error ListingExpired();
+error InvalidDuration();
+error FeesTooHigh();
+error InvalidFeeConfig();
 
 contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
 
@@ -52,6 +66,8 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
 
     // ─── Constructor ──────────────────────────────────────────────────────────
     constructor(uint256 platformFeeBps_, address feeRecipient_) Ownable(msg.sender) {
+        // Validate fee config at construction
+        if (platformFeeBps_ > 0 && feeRecipient_ == address(0)) revert InvalidFeeConfig();
         platformFeeBps = platformFeeBps_;
         feeRecipient = feeRecipient_;
     }
@@ -63,7 +79,7 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
      * @param tokenAddress The ERC-721 contract address.
      * @param tokenId The token ID to list.
      * @param price Sale price in native currency (wei).
-     * @param duration Listing duration in seconds.
+     * @param duration Listing duration in seconds. Must be > 0.
      */
     function list(
         address tokenAddress,
@@ -72,6 +88,7 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
         uint256 duration
     ) external whenNotPaused returns (uint256 listingId) {
         if (price == 0) revert InvalidPrice();
+        if (duration == 0) revert InvalidDuration();
         IERC721 token = IERC721(tokenAddress);
         if (token.ownerOf(tokenId) != msg.sender) revert NotOwnerOrApproved();
         // Caller must have approved marketplace before listing
@@ -134,9 +151,6 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
 
         listing.active = false;
 
-        // Transfer NFT
-        token.safeTransferFrom(listing.seller, msg.sender, listing.tokenId);
-
         // Calculate fees
         uint256 platformFee = (listing.price * platformFeeBps) / 10_000;
         uint256 royaltyFee = 0;
@@ -150,7 +164,19 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
             royaltyFee = royaltyAmount;
         } catch {}
 
+        // Guard: combined fees must not exceed listing price
+        if (platformFee + royaltyFee > listing.price) revert FeesTooHigh();
+
+        // Guard: if royalty fee > 0, receiver must be a valid address
+        if (royaltyFee > 0 && royaltyReceiver == address(0)) {
+            // Treat as zero royalty — do not subtract from seller proceeds
+            royaltyFee = 0;
+        }
+
         uint256 sellerProceeds = listing.price - platformFee - royaltyFee;
+
+        // Transfer NFT before payment (CEI: state change before external calls)
+        token.safeTransferFrom(listing.seller, msg.sender, listing.tokenId);
 
         emit Purchased(listingId, msg.sender, listing.price);
 
@@ -175,8 +201,14 @@ contract HeroCardsMarketplace is Ownable2Step, Pausable, ReentrancyGuard {
 
     // ─── Admin ────────────────────────────────────────────────────────────────
 
+    /**
+     * @notice Update platform fee configuration.
+     * @dev Requires feeRecipient != address(0) when feeBps > 0 to prevent
+     *      platform fees being trapped in the contract.
+     */
     function setFee(uint256 feeBps, address recipient) external onlyOwner {
         require(feeBps <= 1000, "Fee too high"); // max 10%
+        if (feeBps > 0 && recipient == address(0)) revert InvalidFeeConfig();
         platformFeeBps = feeBps;
         feeRecipient = recipient;
         emit FeeUpdated(feeBps, recipient);

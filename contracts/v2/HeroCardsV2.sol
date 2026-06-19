@@ -17,6 +17,13 @@ pragma solidity ^0.8.24;
  *  - Contract URI for OpenSea/marketplace metadata
  *  - No unbounded holder loops
  *
+ * A+ Fixes (2026-06-18):
+ *  - setProvenanceHash(): Reverts if mint has already started (mintPhase != CLOSED).
+ *    Provenance must be committed before any minting begins.
+ *  - mint() / whitelistMint(): Refund excess payment (msg.value > required).
+ *    Exact payment is not required, but overpayment is returned.
+ *  - Added ProvenanceHashSet and BaseURIUpdated events for off-chain indexing.
+ *
  * Deployed V1 contracts remain the live/current collection:
  *   Base:       0x5Fad096af059ff9A2167351A0ffc8b45D71897bE
  *   PulseChain: 0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36
@@ -40,6 +47,7 @@ error InvalidAmount();
 error RouterNotSet();
 error WithdrawFailed();
 error AlreadyRevealed();
+error ProvenanceLocked();
 
 // ─── Enums ────────────────────────────────────────────────────────────────────
 enum MintPhase {
@@ -85,6 +93,8 @@ contract HeroCardsV2 is
     event RouterUpdated(address indexed newRouter);
     event RandomStartIndexSet(uint256 index);
     event EmergencyWithdraw(address indexed to, uint256 amount);
+    event ProvenanceHashSet(string hash);
+    event BaseURIUpdated(string newURI);
 
     // ─── Constructor ──────────────────────────────────────────────────────────
     constructor(
@@ -108,6 +118,7 @@ contract HeroCardsV2 is
 
     /**
      * @notice Public mint. Requires PUBLIC phase and correct payment.
+     *         Overpayment is refunded.
      * @param quantity Number of tokens to mint (1–MAX_PER_WALLET).
      */
     function mint(uint256 quantity) external payable nonReentrant whenNotPaused {
@@ -115,14 +126,22 @@ contract HeroCardsV2 is
         if (quantity == 0 || quantity > MAX_PER_WALLET) revert InvalidAmount();
         if (totalSupply() + quantity > MAX_SUPPLY) revert ExceedsMaxSupply();
         if (mintedPerWallet[msg.sender] + quantity > MAX_PER_WALLET) revert ExceedsWalletLimit();
-        if (msg.value < mintPrice * quantity) revert InsufficientPayment();
+        uint256 required = mintPrice * quantity;
+        if (msg.value < required) revert InsufficientPayment();
 
         _executeMint(msg.sender, quantity);
-        _routeFunds();
+        _routeFunds(required);
+
+        // Refund overpayment
+        if (msg.value > required) {
+            (bool ok, ) = msg.sender.call{value: msg.value - required}("");
+            if (!ok) revert WithdrawFailed();
+        }
     }
 
     /**
      * @notice Whitelist mint. Requires WHITELIST phase, valid Merkle proof, and correct payment.
+     *         Overpayment is refunded.
      * @param quantity Number of tokens to mint.
      * @param proof Merkle proof for the caller's address.
      */
@@ -136,13 +155,20 @@ contract HeroCardsV2 is
         if (quantity == 0 || quantity > MAX_PER_WALLET) revert InvalidAmount();
         if (totalSupply() + quantity > MAX_SUPPLY) revert ExceedsMaxSupply();
         if (mintedPerWallet[msg.sender] + quantity > MAX_PER_WALLET) revert ExceedsWalletLimit();
-        if (msg.value < whitelistPrice * quantity) revert InsufficientPayment();
+        uint256 required = whitelistPrice * quantity;
+        if (msg.value < required) revert InsufficientPayment();
 
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender));
         if (!MerkleProof.verify(proof, merkleRoot, leaf)) revert NotWhitelisted();
 
         _executeMint(msg.sender, quantity);
-        _routeFunds();
+        _routeFunds(required);
+
+        // Refund overpayment
+        if (msg.value > required) {
+            (bool ok, ) = msg.sender.call{value: msg.value - required}("");
+            if (!ok) revert WithdrawFailed();
+        }
     }
 
     // ─── Internal Helpers ─────────────────────────────────────────────────────
@@ -156,11 +182,13 @@ contract HeroCardsV2 is
         }
     }
 
-    function _routeFunds() internal {
+    /**
+     * @notice Route exactly `amount` to the buy/burn router.
+     *         If router is unset, funds remain in the contract for emergency withdrawal.
+     */
+    function _routeFunds(uint256 amount) internal {
         if (buyBurnRouter == address(0)) return;
-        // Forward all msg.value to the router for fee splitting.
-        // Router is responsible for treasury/burn/rewards split.
-        (bool ok, ) = buyBurnRouter.call{value: msg.value}("");
+        (bool ok, ) = buyBurnRouter.call{value: amount}("");
         if (!ok) revert WithdrawFailed();
     }
 
@@ -208,9 +236,15 @@ contract HeroCardsV2 is
         emit RandomStartIndexSet(randomStartIndex);
     }
 
-    /** @notice Set the provenance hash before mint begins. */
+    /**
+     * @notice Set the provenance hash. Must be called before mint begins.
+     * @dev Reverts if mintPhase != CLOSED to enforce pre-commitment discipline.
+     *      Once minting starts, the provenance hash is immutable.
+     */
     function setProvenanceHash(string calldata hash) external onlyOwner {
+        if (mintPhase != MintPhase.CLOSED) revert ProvenanceLocked();
         provenanceHash = hash;
+        emit ProvenanceHashSet(hash);
     }
 
     // ─── Admin ────────────────────────────────────────────────────────────────
@@ -235,6 +269,7 @@ contract HeroCardsV2 is
 
     function setBaseURI(string calldata uri) external onlyOwner {
         _baseTokenURI = uri;
+        emit BaseURIUpdated(uri);
     }
 
     function setContractURI(string calldata uri) external onlyOwner {

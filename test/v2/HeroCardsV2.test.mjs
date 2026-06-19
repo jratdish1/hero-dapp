@@ -270,7 +270,7 @@ describe("HeroCardsV2", function () {
     });
   });
 
-  // ─── ERC-2981 Royalty ──────────────────────────────────────────────────────
+  // ─── ERC-2981 Royalty ─────────────────────────────────────────────────────────
   describe("ERC-2981 Royalty", function () {
     it("should support ERC-2981 interface", async function () {
       expect(await heroCardsV2.supportsInterface("0x2a55205a")).to.equal(true);
@@ -282,6 +282,142 @@ describe("HeroCardsV2", function () {
       const [receiver, amount] = await heroCardsV2.royaltyInfo(1n, ethers.parseEther("1"));
       expect(receiver).to.equal(royaltyReceiver.address);
       expect(amount).to.equal(ethers.parseEther("0.05")); // 5% of 1 ETH
+    });
+  });
+
+  // ─── A+ Fix: Whitelist Mint ────────────────────────────────────────────────────
+  describe("A+ Fix: Whitelist Mint", function () {
+    let wlTree;
+
+    // Simple single-leaf Merkle tree for whitelist (leaf = keccak256(abi.encodePacked(addr)))
+    function buildWLTree(ethers, addresses) {
+      const leaves = addresses.map(addr =>
+        ethers.keccak256(ethers.solidityPacked(["address"], [addr]))
+      );
+      if (leaves.length === 1) return { root: leaves[0], getProof: () => [] };
+      function hashPair(a, b) {
+        const [lo, hi] = a < b ? [a, b] : [b, a];
+        return ethers.keccak256(ethers.concat([lo, hi]));
+      }
+      const layers = [leaves.slice()];
+      let current = leaves.slice();
+      while (current.length > 1) {
+        const next = [];
+        for (let i = 0; i < current.length; i += 2) {
+          if (i + 1 < current.length) next.push(hashPair(current[i], current[i + 1]));
+          else next.push(current[i]);
+        }
+        layers.push(next);
+        current = next;
+      }
+      const root = current[0];
+      function getProof(addr) {
+        const targetLeaf = ethers.keccak256(ethers.solidityPacked(["address"], [addr]));
+        let idx = layers[0].indexOf(targetLeaf);
+        if (idx === -1) throw new Error("Leaf not found");
+        const proof = [];
+        for (let li = 0; li < layers.length - 1; li++) {
+          const layer = layers[li];
+          const sibIdx = idx % 2 === 0 ? idx + 1 : idx - 1;
+          if (sibIdx < layer.length) proof.push(layer[sibIdx]);
+          idx = Math.floor(idx / 2);
+        }
+        return proof;
+      }
+      return { root, getProof };
+    }
+
+    beforeEach(async function () {
+      wlTree = buildWLTree(ethers, [addr1.address, addr2.address]);
+      await heroCardsV2.setMerkleRoot(wlTree.root);
+      await heroCardsV2.setMintPhase(MintPhase.WHITELIST);
+    });
+
+    it("should allow whitelisted address to mint with valid proof", async function () {
+      const proof = wlTree.getProof(addr1.address);
+      await heroCardsV2.connect(addr1).whitelistMint(1n, proof, { value: WL_PRICE });
+      expect(await heroCardsV2.balanceOf(addr1.address)).to.equal(1n);
+    });
+
+    it("should emit Minted on whitelistMint", async function () {
+      const proof = wlTree.getProof(addr1.address);
+      await expect(
+        heroCardsV2.connect(addr1).whitelistMint(1n, proof, { value: WL_PRICE })
+      ).to.emit(heroCardsV2, "Minted").withArgs(addr1.address, 1n);
+    });
+
+    it("should revert whitelistMint with invalid proof", async function () {
+      const badProof = [ethers.keccak256(ethers.toUtf8Bytes("bad"))];
+      await expect(
+        heroCardsV2.connect(addr1).whitelistMint(1n, badProof, { value: WL_PRICE })
+      ).to.be.revertedWithCustomError(heroCardsV2, "NotWhitelisted");
+    });
+
+    it("should revert whitelistMint for non-whitelisted address", async function () {
+      // addr3 is not in the tree
+      const [,,, addr3] = await ethers.getSigners();
+      const proof = wlTree.getProof(addr1.address); // proof for addr1, used by addr3
+      await expect(
+        heroCardsV2.connect(addr3).whitelistMint(1n, proof, { value: WL_PRICE })
+      ).to.be.revertedWithCustomError(heroCardsV2, "NotWhitelisted");
+    });
+
+    it("should revert whitelistMint with insufficient payment", async function () {
+      const proof = wlTree.getProof(addr1.address);
+      await expect(
+        heroCardsV2.connect(addr1).whitelistMint(1n, proof, { value: WL_PRICE - 1n })
+      ).to.be.revertedWithCustomError(heroCardsV2, "InsufficientPayment");
+    });
+
+    it("should revert whitelistMint when phase is not WHITELIST", async function () {
+      await heroCardsV2.setMintPhase(MintPhase.CLOSED);
+      const proof = wlTree.getProof(addr1.address);
+      await expect(
+        heroCardsV2.connect(addr1).whitelistMint(1n, proof, { value: WL_PRICE })
+      ).to.be.revertedWithCustomError(heroCardsV2, "MintClosed");
+    });
+  });
+
+  // ─── A+ Fix: Overpayment Refund ────────────────────────────────────────────────
+  describe("A+ Fix: Overpayment Refund", function () {
+    it("should refund overpayment on public mint (A+ fix)", async function () {
+      await heroCardsV2.setMintPhase(MintPhase.PUBLIC);
+      const overpayment = MINT_PRICE + ethers.parseEther("0.1");
+      const balanceBefore = await ethers.provider.getBalance(addr1.address);
+      const tx = await heroCardsV2.connect(addr1).mint(1n, { value: overpayment });
+      const receipt = await tx.wait();
+      const gasUsed = receipt.gasUsed * receipt.gasPrice;
+      const balanceAfter = await ethers.provider.getBalance(addr1.address);
+      // Net cost should be exactly MINT_PRICE + gas (overpayment refunded)
+      expect(balanceBefore - balanceAfter - gasUsed).to.equal(MINT_PRICE);
+    });
+  });
+
+  // ─── A+ Fix: Provenance Hash Pre-Commit Lock ────────────────────────────────
+  describe("A+ Fix: Provenance Hash Pre-Commit Lock", function () {
+    it("should allow setProvenanceHash when phase is CLOSED", async function () {
+      await heroCardsV2.setProvenanceHash("abc123provenance");
+      expect(await heroCardsV2.provenanceHash()).to.equal("abc123provenance");
+    });
+
+    it("should emit ProvenanceHashSet event", async function () {
+      await expect(
+        heroCardsV2.setProvenanceHash("abc123provenance")
+      ).to.emit(heroCardsV2, "ProvenanceHashSet").withArgs("abc123provenance");
+    });
+
+    it("should revert setProvenanceHash when phase is PUBLIC (A+ fix)", async function () {
+      await heroCardsV2.setMintPhase(MintPhase.PUBLIC);
+      await expect(
+        heroCardsV2.setProvenanceHash("changed-after-mint")
+      ).to.be.revertedWithCustomError(heroCardsV2, "ProvenanceLocked");
+    });
+
+    it("should revert setProvenanceHash when phase is WHITELIST (A+ fix)", async function () {
+      await heroCardsV2.setMintPhase(MintPhase.WHITELIST);
+      await expect(
+        heroCardsV2.setProvenanceHash("changed-during-wl")
+      ).to.be.revertedWithCustomError(heroCardsV2, "ProvenanceLocked");
     });
   });
 });

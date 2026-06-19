@@ -8,6 +8,12 @@ pragma solidity ^0.8.24;
  * @dev Merkle-root-per-epoch model. No unbounded loops over holders.
  *      Supports native token and/or ERC-20 (HERO) rewards.
  *      DO NOT DEPLOY without full audit and explicit GO from VIC Foundation.
+ *
+ * A+ Fix (2026-06-18):
+ *   - recoverFunds() now uses claimedNative/claimedToken tracking so it only
+ *     transfers the remaining (unclaimed) balance and cannot revert due to
+ *     prior claims draining the epoch allocation.
+ *   - Added EpochRecovered event for off-chain indexing.
  */
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -31,8 +37,10 @@ contract HeroCardsRewardsDistributor is Ownable2Step, Pausable, ReentrancyGuard 
     // ─── Types ────────────────────────────────────────────────────────────────
     struct Epoch {
         bytes32 merkleRoot;
-        uint256 nativeAmount;   // Native token (ETH/PLS) allocated
-        uint256 tokenAmount;    // ERC-20 (HERO) allocated
+        uint256 nativeAmount;       // Total native token (ETH/PLS) allocated
+        uint256 tokenAmount;        // Total ERC-20 (HERO) allocated
+        uint256 claimedNative;      // Running total of native claimed so far
+        uint256 claimedToken;       // Running total of ERC-20 claimed so far
         uint256 startTime;
         uint256 endTime;
         bool finalized;
@@ -76,6 +84,8 @@ contract HeroCardsRewardsDistributor is Ownable2Step, Pausable, ReentrancyGuard 
             merkleRoot: merkleRoot_,
             nativeAmount: msg.value,
             tokenAmount: tokenAmount_,
+            claimedNative: 0,
+            claimedToken: 0,
             startTime: block.timestamp,
             endTime: block.timestamp + duration_,
             finalized: false
@@ -119,7 +129,10 @@ contract HeroCardsRewardsDistributor is Ownable2Step, Pausable, ReentrancyGuard 
         bytes32 leaf = keccak256(abi.encodePacked(msg.sender, nativeAmount, tokenAmount));
         if (!MerkleProof.verify(proof, epoch.merkleRoot, leaf)) revert InvalidProof();
 
+        // Mark claimed and update running totals before transfers (CEI pattern)
         claimed[epochId][msg.sender] = true;
+        epoch.claimedNative += nativeAmount;
+        epoch.claimedToken += tokenAmount;
         emit Claimed(epochId, msg.sender, nativeAmount, tokenAmount);
 
         if (nativeAmount > 0) {
@@ -136,25 +149,32 @@ contract HeroCardsRewardsDistributor is Ownable2Step, Pausable, ReentrancyGuard 
     /**
      * @notice Recover unclaimed funds from a finalized, expired epoch.
      * Can only be called RECOVERY_DELAY after epoch end.
+     *
+     * @dev Uses claimedNative/claimedToken to compute the remaining balance,
+     *      so this cannot revert due to prior claims. If all funds were claimed,
+     *      the remaining amounts are zero and no transfer is attempted.
      */
     function recoverFunds(uint256 epochId, address to) external onlyOwner {
         Epoch storage epoch = epochs[epochId];
         if (!epoch.finalized) revert EpochNotActive();
         if (block.timestamp < epoch.endTime + RECOVERY_DELAY) revert RecoveryTooEarly();
 
-        uint256 native = epoch.nativeAmount;
-        uint256 tokens = epoch.tokenAmount;
-        epoch.nativeAmount = 0;
-        epoch.tokenAmount = 0;
+        // Compute remaining (unclaimed) balances
+        uint256 remainingNative = epoch.nativeAmount - epoch.claimedNative;
+        uint256 remainingTokens = epoch.tokenAmount - epoch.claimedToken;
 
-        emit FundsRecovered(epochId, to, native, tokens);
+        // Zero out to prevent double-recovery
+        epoch.claimedNative = epoch.nativeAmount;
+        epoch.claimedToken = epoch.tokenAmount;
 
-        if (native > 0) {
-            (bool ok, ) = to.call{value: native}("");
+        emit FundsRecovered(epochId, to, remainingNative, remainingTokens);
+
+        if (remainingNative > 0) {
+            (bool ok, ) = to.call{value: remainingNative}("");
             if (!ok) revert TransferFailed();
         }
-        if (tokens > 0) {
-            heroToken.safeTransfer(to, tokens);
+        if (remainingTokens > 0) {
+            heroToken.safeTransfer(to, remainingTokens);
         }
     }
 

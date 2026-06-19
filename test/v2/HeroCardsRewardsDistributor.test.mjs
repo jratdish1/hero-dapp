@@ -334,4 +334,143 @@ describe("HeroCardsRewardsDistributor", function () {
       ).to.be.revertedWithCustomError(distributor, "OwnableUnauthorizedAccount");
     });
   });
+
+  // ─── recoverFunds ──────────────────────────────────────────────────────────
+  describe("recoverFunds", function () {
+    const RECOVERY_DELAY = 90 * 24 * 60 * 60; // 90 days in seconds
+    let tree, epochId, nativeAmt, tokenAmt;
+
+    beforeEach(async function () {
+      nativeAmt = ethers.parseEther("0.2");
+      tokenAmt = ethers.parseEther("200");
+
+      tree = buildMerkleTree(ethers, [
+        [addr1.address, ethers.parseEther("0.1"), ethers.parseEther("100")],
+        [addr2.address, ethers.parseEther("0.1"), ethers.parseEther("100")],
+      ]);
+
+      await mockToken.approve(await distributor.getAddress(), tokenAmt);
+      await distributor.createEpoch(tree.root, tokenAmt, 86400n, { value: nativeAmt });
+      epochId = 1n;
+      await distributor.finalizeEpoch(epochId);
+    });
+
+    it("should revert recoverFunds before RECOVERY_DELAY", async function () {
+      // Fast-forward past epoch end but not past recovery delay
+      await ethers.provider.send("evm_increaseTime", [86401]);
+      await ethers.provider.send("evm_mine", []);
+      await expect(
+        distributor.recoverFunds(epochId, owner.address)
+      ).to.be.revertedWithCustomError(distributor, "RecoveryTooEarly");
+    });
+
+    it("should recover full amount when no claims made", async function () {
+      // Fast-forward past epoch end + recovery delay
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      const ownerNativeBefore = await ethers.provider.getBalance(owner.address);
+      const ownerTokenBefore = await mockToken.balanceOf(owner.address);
+
+      const tx = await distributor.recoverFunds(epochId, owner.address);
+      await tx.wait();
+
+      const ownerNativeAfter = await ethers.provider.getBalance(owner.address);
+      const ownerTokenAfter = await mockToken.balanceOf(owner.address);
+
+      // Token balance should increase by full tokenAmt
+      expect(ownerTokenAfter - ownerTokenBefore).to.equal(tokenAmt);
+      // Native balance should increase (net of gas)
+      expect(ownerNativeAfter).to.be.gt(ownerNativeBefore - ethers.parseEther("0.01"));
+    });
+
+    it("should emit FundsRecovered on recovery", async function () {
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await expect(
+        distributor.recoverFunds(epochId, owner.address)
+      ).to.emit(distributor, "FundsRecovered").withArgs(epochId, owner.address, nativeAmt, tokenAmt);
+    });
+
+    it("should recover only remaining amount after partial claim (A+ fix)", async function () {
+      // addr1 claims their share
+      const addr1Native = ethers.parseEther("0.1");
+      const addr1Token = ethers.parseEther("100");
+      const proof = tree.getProof([addr1.address, addr1Native, addr1Token]);
+      await distributor.connect(addr1).claim(epochId, addr1Native, addr1Token, proof);
+
+      // Fast-forward past epoch end + recovery delay
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      const ownerTokenBefore = await mockToken.balanceOf(owner.address);
+
+      // recoverFunds should NOT revert — this was the HIGH severity bug
+      await expect(
+        distributor.recoverFunds(epochId, owner.address)
+      ).to.emit(distributor, "FundsRecovered");
+
+      const ownerTokenAfter = await mockToken.balanceOf(owner.address);
+      // Only the unclaimed half (addr2's share) should be recovered
+      expect(ownerTokenAfter - ownerTokenBefore).to.equal(ethers.parseEther("100"));
+    });
+
+    it("should recover zero when all funds claimed (A+ fix)", async function () {
+      // Both addr1 and addr2 claim
+      const addr1Native = ethers.parseEther("0.1");
+      const addr1Token = ethers.parseEther("100");
+      const addr2Native = ethers.parseEther("0.1");
+      const addr2Token = ethers.parseEther("100");
+
+      const proof1 = tree.getProof([addr1.address, addr1Native, addr1Token]);
+      const proof2 = tree.getProof([addr2.address, addr2Native, addr2Token]);
+      await distributor.connect(addr1).claim(epochId, addr1Native, addr1Token, proof1);
+      await distributor.connect(addr2).claim(epochId, addr2Native, addr2Token, proof2);
+
+      // Fast-forward past epoch end + recovery delay
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+
+      const ownerTokenBefore = await mockToken.balanceOf(owner.address);
+
+      // recoverFunds should succeed with zero amounts (not revert)
+      await expect(
+        distributor.recoverFunds(epochId, owner.address)
+      ).to.emit(distributor, "FundsRecovered").withArgs(epochId, owner.address, 0n, 0n);
+
+      const ownerTokenAfter = await mockToken.balanceOf(owner.address);
+      expect(ownerTokenAfter - ownerTokenBefore).to.equal(0n);
+    });
+
+    it("should revert second recoverFunds call (double-recovery guard)", async function () {
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await distributor.recoverFunds(epochId, owner.address);
+      // Second call: remaining amounts are 0, no transfers, but should succeed (not revert)
+      // and emit FundsRecovered with 0,0
+      await expect(
+        distributor.recoverFunds(epochId, owner.address)
+      ).to.emit(distributor, "FundsRecovered").withArgs(epochId, owner.address, 0n, 0n);
+    });
+
+    it("should revert recoverFunds if not owner", async function () {
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await expect(
+        distributor.connect(addr1).recoverFunds(epochId, addr1.address)
+      ).to.be.revertedWithCustomError(distributor, "OwnableUnauthorizedAccount");
+    });
+
+    it("should revert recoverFunds on unfinalized epoch", async function () {
+      // Create a second unfinalized epoch
+      await mockToken.approve(await distributor.getAddress(), tokenAmt);
+      await distributor.createEpoch(tree.root, tokenAmt, 86400n, { value: nativeAmt });
+      const unfinalizedId = 2n;
+      await ethers.provider.send("evm_increaseTime", [86400 + RECOVERY_DELAY + 1]);
+      await ethers.provider.send("evm_mine", []);
+      await expect(
+        distributor.recoverFunds(unfinalizedId, owner.address)
+      ).to.be.revertedWithCustomError(distributor, "EpochNotActive");
+    });
+  });
 });

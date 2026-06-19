@@ -174,13 +174,78 @@ describe("HeroBuyBurnRouter", function () {
     });
   });
 
-  // ─── Pause Blocks Distribution ─────────────────────────────────────────────
-  describe("Pause Blocks Distribution", function () {
-    it("should revert fund distribution when paused", async function () {
+  // ─── A+ Fix: Paused Receive Behavior (Option B — RouterPaused) ──────────────
+  describe("A+ Fix: Paused Receive Behavior (Option B)", function () {
+    it("should revert with RouterPaused when paused (A+ fix)", async function () {
       await router.pause();
       await expect(
         owner.sendTransaction({ to: await router.getAddress(), value: ethers.parseEther("0.1") })
-      ).to.be.revertedWithCustomError(router, "EnforcedPause");
+      ).to.be.revertedWithCustomError(router, "RouterPaused");
+    });
+
+    it("should distribute normally when unpaused after pause", async function () {
+      await router.pause();
+      await router.unpause();
+      await expect(
+        owner.sendTransaction({ to: await router.getAddress(), value: ethers.parseEther("0.1") })
+      ).to.emit(router, "FundsDistributed");
+    });
+  });
+
+  // ─── A+ Fix: Rounding Remainder to Last Recipient ─────────────────────────
+  describe("A+ Fix: Rounding Remainder to Last Recipient", function () {
+    it("should send all funds with no dust (last recipient gets remainder)", async function () {
+      const [,,,, r1, r2, r3] = await ethers.getSigners();
+      const HeroBuyBurnRouter = await ethers.getContractFactory("HeroBuyBurnRouter");
+      const testRouter = await HeroBuyBurnRouter.deploy(
+        [r1.address, r2.address, r3.address],
+        [3334n, 3333n, 3333n],
+        ["A", "B", "C"]
+      );
+      await testRouter.waitForDeployment();
+
+      const amount = ethers.parseEther("0.001");
+      const r1Before = await ethers.provider.getBalance(r1.address);
+      const r2Before = await ethers.provider.getBalance(r2.address);
+      const r3Before = await ethers.provider.getBalance(r3.address);
+
+      await owner.sendTransaction({ to: await testRouter.getAddress(), value: amount });
+
+      const r1After = await ethers.provider.getBalance(r1.address);
+      const r2After = await ethers.provider.getBalance(r2.address);
+      const r3After = await ethers.provider.getBalance(r3.address);
+
+      const r1Share = r1After - r1Before;
+      const r2Share = r2After - r2Before;
+      const r3Share = r3After - r3Before;
+
+      expect(r1Share + r2Share + r3Share).to.equal(amount);
+      expect(r3Share).to.equal(amount - r1Share - r2Share);
+    });
+  });
+
+  // ─── A+ Fix: updateSplits Length Mismatch ─────────────────────────────────
+  describe("A+ Fix: updateSplits Length Mismatch", function () {
+    it("should revert updateSplits with mismatched array lengths (A+ fix)", async function () {
+      const [,,,, r1, r2] = await ethers.getSigners();
+      await expect(
+        router.updateSplits(
+          [r1.address, r2.address],
+          [5000n, 5000n],
+          ["A"]
+        )
+      ).to.be.revertedWithCustomError(router, "LengthMismatch");
+    });
+
+    it("should revert updateSplits when bps do not sum to 10000", async function () {
+      const [,,,, r1, r2] = await ethers.getSigners();
+      await expect(
+        router.updateSplits(
+          [r1.address, r2.address],
+          [5000n, 4999n],
+          ["A", "B"]
+        )
+      ).to.be.revertedWithCustomError(router, "BpsNotSumTo10000");
     });
   });
 });
