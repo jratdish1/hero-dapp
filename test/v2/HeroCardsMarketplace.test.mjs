@@ -200,5 +200,117 @@ describe("HeroCardsMarketplace", function () {
         marketplace.setFee(1001n, feeRecipient.address)
       ).to.be.revertedWith("Fee too high");
     });
+
+    it("should revert setFee with non-zero feeBps and zero feeRecipient (A+ fix)", async function () {
+      await expect(
+        marketplace.setFee(250n, ethers.ZeroAddress)
+      ).to.be.revertedWithCustomError(marketplace, "InvalidFeeConfig");
+    });
+
+    it("should allow setFee with zero feeBps and zero feeRecipient", async function () {
+      await marketplace.setFee(0n, ethers.ZeroAddress);
+      expect(await marketplace.platformFeeBps()).to.equal(0n);
+    });
+  });
+
+  // ─── A+ Fix: Zero-Duration Listing Guard ───────────────────────────────────
+  describe("A+ Fix: Zero-Duration Listing Guard", function () {
+    it("should revert list with zero duration (A+ fix)", async function () {
+      await nftContract.connect(seller).approve(await marketplace.getAddress(), 1n);
+      await expect(
+        marketplace.connect(seller).list(await nftContract.getAddress(), 1n, LISTING_PRICE, 0n)
+      ).to.be.revertedWithCustomError(marketplace, "InvalidDuration");
+    });
+  });
+
+  // ─── A+ Fix: Constructor Fee Config Guard ─────────────────────────────────
+  describe("A+ Fix: Constructor Fee Config Guard", function () {
+    it("should revert constructor with non-zero feeBps and zero feeRecipient (A+ fix)", async function () {
+      const Marketplace = await ethers.getContractFactory("HeroCardsMarketplace");
+      // Deploy with non-zero feeBps and zero feeRecipient — must revert with InvalidFeeConfig
+      let reverted = false;
+      try {
+        await Marketplace.deploy(250n, ethers.ZeroAddress);
+      } catch (err) {
+        reverted = true;
+        expect(err.message).to.include("InvalidFeeConfig");
+      }
+      expect(reverted).to.equal(true, "Expected constructor to revert with InvalidFeeConfig");
+    });
+  });
+
+  // ─── A+ Fix: ERC-2981 Royalty Path ─────────────────────────────────────────
+  describe("A+ Fix: ERC-2981 Royalty Path", function () {
+    let royaltyReceiver;
+
+    beforeEach(async function () {
+      [,,,, royaltyReceiver] = await ethers.getSigners();
+    });
+
+    it("should distribute royalty to ERC-2981 receiver on buy", async function () {
+      // The MockERC721ForTesting supports ERC-2981 via setRoyalty
+      // Set 5% royalty on token #1 to royaltyReceiver
+      await nftContract.setRoyalty(royaltyReceiver.address, 500n); // 5%
+
+      await nftContract.connect(seller).approve(await marketplace.getAddress(), 1n);
+      await marketplace.connect(seller).list(
+        await nftContract.getAddress(), 1n, LISTING_PRICE, LISTING_DURATION
+      );
+
+      const royaltyBefore = await ethers.provider.getBalance(royaltyReceiver.address);
+      const sellerBefore = await ethers.provider.getBalance(seller.address);
+
+      await marketplace.connect(buyer).buy(1n, { value: LISTING_PRICE });
+
+      const royaltyAfter = await ethers.provider.getBalance(royaltyReceiver.address);
+      const sellerAfter = await ethers.provider.getBalance(seller.address);
+
+      // royalty = 5% of 0.5 ETH = 0.025 ETH
+      const expectedRoyalty = LISTING_PRICE * 500n / 10000n;
+      expect(royaltyAfter - royaltyBefore).to.equal(expectedRoyalty);
+
+      // platform fee = 2.5% of 0.5 ETH = 0.0125 ETH
+      const expectedPlatformFee = LISTING_PRICE * FEE_BPS / 10000n;
+      const expectedSellerProceeds = LISTING_PRICE - expectedPlatformFee - expectedRoyalty;
+      expect(sellerAfter - sellerBefore).to.equal(expectedSellerProceeds);
+    });
+
+    it("should revert buy when platformFee + royaltyFee > price (A+ fix)", async function () {
+      // Set royalty to 98% — combined with 2.5% platform fee this exceeds 100%
+      await nftContract.setRoyalty(royaltyReceiver.address, 9800n); // 98%
+
+      await nftContract.connect(seller).approve(await marketplace.getAddress(), 1n);
+      await marketplace.connect(seller).list(
+        await nftContract.getAddress(), 1n, LISTING_PRICE, LISTING_DURATION
+      );
+
+      await expect(
+        marketplace.connect(buyer).buy(1n, { value: LISTING_PRICE })
+      ).to.be.revertedWithCustomError(marketplace, "FeesTooHigh");
+    });
+
+    it("should treat royalty as zero when no royalty is configured (A+ fix)", async function () {
+      // OZ ERC2981 rejects setDefaultRoyalty(address(0), ...) at the contract level.
+      // The equivalent coverage scenario is: no royalty configured at all (deleteDefaultRoyalty).
+      // The marketplace contract guards royaltyReceiver == address(0) and treats it as zero royalty.
+      await nftContract.deleteRoyalty(); // removes any default royalty
+
+      await nftContract.connect(seller).approve(await marketplace.getAddress(), 1n);
+      await marketplace.connect(seller).list(
+        await nftContract.getAddress(), 1n, LISTING_PRICE, LISTING_DURATION
+      );
+
+      const sellerBefore = await ethers.provider.getBalance(seller.address);
+
+      // Should succeed — royalty is zero (no royalty configured)
+      await marketplace.connect(buyer).buy(1n, { value: LISTING_PRICE });
+
+      const sellerAfter = await ethers.provider.getBalance(seller.address);
+
+      // Seller gets price minus platform fee only (royalty is zero)
+      const expectedPlatformFee = LISTING_PRICE * FEE_BPS / 10000n;
+      const expectedSellerProceeds = LISTING_PRICE - expectedPlatformFee;
+      expect(sellerAfter - sellerBefore).to.equal(expectedSellerProceeds);
+    });
   });
 });

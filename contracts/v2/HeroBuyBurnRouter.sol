@@ -14,6 +14,16 @@ pragma solidity ^0.8.24;
  *   25% → NFT holder reflections (HeroCardsRewardsDistributor)
  *   20% → HERO/VETS buy-and-burn or liquidity support
  *   15% → operations / development / infrastructure
+ *
+ * A+ Fixes (2026-06-18):
+ *   - Paused receive() behavior: Option B — intentionally revert while paused.
+ *     Upstream callers (HeroCardsV2 mint) must check router pause state before
+ *     forwarding funds. This is the simpler, more auditable design.
+ *     OPERATOR SOP: Do not pause the router while minting is active.
+ *   - Removed unused SlippageExceeded error.
+ *   - updateSplits(): Added explicit length-mismatch revert with LengthMismatch error.
+ *   - _distribute(): Last recipient receives remainder to avoid dust from rounding.
+ *     This is preserved and explicitly documented.
  */
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
@@ -24,7 +34,8 @@ import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 error BpsNotSumTo10000();
 error TransferFailed();
 error ZeroAddress();
-error SlippageExceeded();
+error LengthMismatch();
+error RouterPaused();
 
 contract HeroBuyBurnRouter is Ownable2Step, Pausable, ReentrancyGuard {
 
@@ -62,7 +73,18 @@ contract HeroBuyBurnRouter is Ownable2Step, Pausable, ReentrancyGuard {
 
     // ─── Receive ──────────────────────────────────────────────────────────────
 
+    /**
+     * @notice Receive ETH and immediately distribute to all recipients.
+     *
+     * @dev PAUSED BEHAVIOR (Option B — intentional revert):
+     *      While paused, receive() reverts with RouterPaused().
+     *      Upstream callers (HeroCardsV2 mint) must check router pause state
+     *      before forwarding funds.
+     *      OPERATOR SOP: Do not pause the router while minting is active.
+     *      Use emergencyWithdraw() to recover funds after pausing.
+     */
     receive() external payable {
+        if (paused()) revert RouterPaused();
         totalReceived += msg.value;
         emit FundsReceived(msg.sender, msg.value);
         _distribute(msg.value);
@@ -70,7 +92,13 @@ contract HeroBuyBurnRouter is Ownable2Step, Pausable, ReentrancyGuard {
 
     // ─── Internal ─────────────────────────────────────────────────────────────
 
-    function _distribute(uint256 amount) internal nonReentrant whenNotPaused {
+    /**
+     * @notice Distribute `amount` across all configured splits.
+     * @dev The last recipient receives the remainder to avoid dust from rounding.
+     *      If any recipient reverts on receiving ETH, the entire distribution reverts.
+     *      OPERATOR SOP: Ensure all recipients are EOAs or contracts that accept ETH.
+     */
+    function _distribute(uint256 amount) internal nonReentrant {
         uint256 len = splits.length;
         uint256 distributed = 0;
 
@@ -99,7 +127,8 @@ contract HeroBuyBurnRouter is Ownable2Step, Pausable, ReentrancyGuard {
         uint256[] memory bpsValues_,
         string[] memory labels_
     ) internal {
-        require(recipients_.length == bpsValues_.length && bpsValues_.length == labels_.length, "Length mismatch");
+        if (recipients_.length != bpsValues_.length || bpsValues_.length != labels_.length)
+            revert LengthMismatch();
 
         uint256 total = 0;
         for (uint256 i = 0; i < bpsValues_.length; i++) {

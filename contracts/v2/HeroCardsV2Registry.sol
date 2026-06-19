@@ -9,6 +9,18 @@ pragma solidity ^0.8.24;
  *      Lets the UI discover current addresses without hardcoding every module.
  *      Only owner/multisig can update. All changes emit events for audit trail.
  *      DO NOT DEPLOY without full audit and explicit GO from VIC Foundation.
+ *
+ * A+ Fix (2026-06-18) — Canonical Module Naming SOP:
+ *   Module names are free-form strings used as keys. To prevent duplicate entries
+ *   from casing or typo variations, all module names MUST follow this convention:
+ *
+ *     SCREAMING_SNAKE_CASE  e.g. "HERO_CARDS_V2", "REWARDS_DISTRIBUTOR",
+ *                                "MARKETPLACE", "BUY_BURN_ROUTER"
+ *
+ *   Enforcement is operational (off-chain SOP), not on-chain, to keep gas costs low.
+ *   The registerModule() function is owner-only; the owner is responsible for
+ *   ensuring canonical naming before calling. Names are append-only and cannot
+ *   be deleted or renamed once registered.
  */
 
 import "@openzeppelin/contracts/access/Ownable2Step.sol";
