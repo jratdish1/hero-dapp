@@ -1,9 +1,19 @@
 import { z } from "zod";
 import { execSync } from "child_process";
+import crypto from "crypto";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { TRPCError } from "@trpc/server";
 import { getRpcMetrics } from "../routers";
+
+// P1 FIX (2026-06-25 — Codex Remediation Phase 1.1):
+// Constant-time comparison for deploy token to prevent timing-based brute-force.
+// Hashes both values before comparing so length differences don't leak information.
+function safeCompareToken(a: string, b: string): boolean {
+  const hashA = crypto.createHash('sha256').update(a).digest();
+  const hashB = crypto.createHash('sha256').update(b).digest();
+  return crypto.timingSafeEqual(hashA, hashB);
+}
 
 export const systemRouter = router({
   health: publicProcedure
@@ -32,7 +42,8 @@ export const systemRouter = router({
     )
     .mutation(async ({ input }) => {
       const deploySecret = process.env.DEPLOY_SECRET;
-      if (!deploySecret || input.token !== deploySecret) {
+      // P1 FIX: Use constant-time comparison to prevent timing attacks on deploy token
+      if (!deploySecret || !safeCompareToken(input.token, deploySecret)) {
         throw new TRPCError({
           code: "UNAUTHORIZED",
           message: "Invalid deploy token",
@@ -84,9 +95,14 @@ export const systemRouter = router({
           timestamp: new Date().toISOString(),
         };
       } catch (err: any) {
+        // P1 FIX: Log full error server-side but suppress stack trace from client response
+        console.error('[deploy] Deploy action failed:', err);
         throw new TRPCError({
           code: "INTERNAL_SERVER_ERROR",
-          message: `Deploy failed: ${err.message}`,
+          // Only expose a generic message to the client — never err.stack or full err.message
+          message: process.env.NODE_ENV === 'production'
+            ? 'Deploy action failed. Check server logs.'
+            : `Deploy failed: ${err.message}`,
         });
       }
     }),
