@@ -123,7 +123,7 @@
     "ethers": "^6.16.0",
     "hardhat": "^3.9.0",
     "mocha": "^11.7.6",
-    "pnpm": "^10.15.1",
+    "pnpm": "^10.34.4",
     "postcss": "^8.5.15",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.1.14",
@@ -133,7 +133,7 @@
     "vite": "^7.3.5",
     "vitest": "^4.1.8"
   },
-  "packageManager": "pnpm@10.27.0",
+  "packageManager": "pnpm@10.34.4",
   "pnpm": {
     "patchedDependencies": {
       "wouter@3.7.1": "patches/wouter@3.7.1.patch"
@@ -147,14 +147,16 @@
       "rollup": ">=4.59.0",
       "picomatch": ">=4.0.4",
       "lodash": ">=4.17.23",
-      "lodash-es": ">=4.17.23",
-      "ws": ">=8.20.1",
+      "lodash-es": ">=4.17.24",
+      "ws": ">=8.21.0",
       "ip-address": ">=10.1.1",
       "dompurify": ">=3.4.0",
       "mdast-util-to-hast": ">=13.2.1",
       "mermaid": ">=11.15.0",
       "esbuild": ">=0.25.0",
-      "path-to-regexp": "0.1.13"
+      "path-to-regexp": "0.1.13",
+      "form-data": ">=4.0.6",
+      "serialize-javascript": ">=7.0.5"
     },
     "ignoredBuiltDependencies": [
       "@tailwindcss/oxide",
@@ -164,6 +166,10 @@
   "overrides": {
     "@walletconnect/ethereum-provider": "2.17.0",
     "@walletconnect/modal": "2.7.0",
-    "@reown/appkit": "npm:empty-npm-package@1.0.0"
+    "@reown/appkit": "npm:empty-npm-package@1.0.0",
+    "form-data": ">=4.0.6",
+    "ws": ">=8.21.0",
+    "serialize-javascript": ">=7.0.5",
+    "lodash-es": ">=4.17.24"
   }
 }
