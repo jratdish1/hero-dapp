@@ -37,6 +37,16 @@ jobs:
           scope = sys.argv[2] if len(sys.argv) > 2 else "all"
           broad_prefixes = (".github/", "client/", "docs/", "tests/")
           client_prefixes = ("client/src/", "client/public/assets/")
+          asset_prefix = "client/public/assets/"
+          asset_scopes = {
+              "asset-cytoscape": asset_prefix + "cytoscape.esm-DtBltrT8.js",
+              "asset-html": asset_prefix + "html-GMplVEZG.js",
+              "asset-index": asset_prefix + "index-C_ediWZk.js",
+              "asset-less": asset_prefix + "less-B1dDrJ26.js",
+              "asset-mermaid": asset_prefix + "mermaid.core-Bxgwn2-U.js",
+              "asset-treemap": asset_prefix + "treemap-KMMF4GRG-qornxmMx.js",
+          }
+          suspect_assets = set(asset_scopes.values())
 
           def in_scope(path):
               if scope == "all":
@@ -47,10 +57,12 @@ jobs:
                   return path.startswith(scope + "/")
               if scope == "client-source":
                   return path.startswith("client/src/")
-              if scope == "client-assets":
-                  return path.startswith("client/public/assets/")
               if scope == "client-other":
                   return path.startswith("client/") and not path.startswith(client_prefixes)
+              if scope in asset_scopes:
+                  return path == asset_scopes[scope]
+              if scope == "assets-other":
+                  return path.startswith(asset_prefix) and path not in suspect_assets
               if scope == "other":
                   return not path.startswith(broad_prefixes)
               raise SystemExit(f"FAIL-CLOSED: unsupported path scope {scope}")
@@ -155,8 +167,26 @@ jobs:
       - name: OpenAI-style tokens — client source
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-source
 
-      - name: OpenAI-style tokens — generated client assets
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-assets
+      - name: OpenAI-style tokens — cytoscape asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-cytoscape
+
+      - name: OpenAI-style tokens — html asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-html
+
+      - name: OpenAI-style tokens — index asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-index
+
+      - name: OpenAI-style tokens — less asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-less
+
+      - name: OpenAI-style tokens — mermaid asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-mermaid
+
+      - name: OpenAI-style tokens — treemap asset
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-treemap
+
+      - name: OpenAI-style tokens — other generated assets
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token assets-other
 
       - name: OpenAI-style tokens — other client files
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-other
