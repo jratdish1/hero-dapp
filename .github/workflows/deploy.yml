@@ -53,14 +53,17 @@ jobs:
             "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/check-runs?per_page=100")"
 
           for required_check in test-build-scan repository-safety; do
-            jq -e --arg name "$required_check" '
+            jq -e --arg name "$required_check" --arg sha "$DEPLOY_SHA" '
               [.check_runs[] | select(
                 .name == $name and
-                .status == "completed" and
-                .conclusion == "success"
-              )] | length > 0
+                .head_sha == $sha and
+                .app.slug == "github-actions"
+              )]
+              | if length == 0 then false
+                else (max_by(.id) | .status == "completed" and .conclusion == "success")
+                end
             ' <<<"$response" >/dev/null || {
-              echo "Required successful check missing for $DEPLOY_SHA: $required_check" >&2
+              echo "Latest trusted check is absent or unsuccessful for $DEPLOY_SHA: $required_check" >&2
               exit 1
             }
           done
@@ -113,6 +116,7 @@ jobs:
               corepack prepare pnpm@10.34.4 --activate
               test "$(pnpm --version)" = "10.34.4"
               pnpm install --frozen-lockfile
+              rm -rf dist
               pnpm build
               pm2 reload hero-dapp --update-env
             fi
@@ -120,7 +124,7 @@ jobs:
           }
           trap rollback ERR
 
-          git fetch --no-tags origin main
+          git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${DEPLOY_SHA}^{commit}"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
           git reset --hard "$DEPLOY_SHA"
@@ -130,6 +134,7 @@ jobs:
           test "$(pnpm --version)" = "10.34.4"
           test ! -e package-lock.json
           pnpm install --frozen-lockfile
+          rm -rf dist
           pnpm build
           pm2 reload hero-dapp --update-env
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
