@@ -139,7 +139,7 @@ jobs:
           rollback() {
             original_status="$?"
             trap - ERR
-            if [ "$MUTATION_STARTED" = true ] && [ "$PREVIOUS_SHA" != "$DEPLOY_SHA" ]; then
+            if [ "$MUTATION_STARTED" = true ]; then
               echo "Deployment failed; restoring previous SHA $PREVIOUS_SHA" >&2
               git reset --hard "$PREVIOUS_SHA"
               corepack enable
