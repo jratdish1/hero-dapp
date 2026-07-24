@@ -1,8 +1,8 @@
 diff --git a/vite.config.ts b/vite.config.ts
-index d6d7408d74eec7231853e3deff250566bdf939a7..a9859b9a5e9560ea4c78bb693e569564ad545933 100644
+index d6d7408d74eec7231853e3deff250566bdf939a7..a3a58b9b3852f163d4d588594583e677907c1cb9 100644
 --- a/vite.config.ts
 +++ b/vite.config.ts
-@@ -175,11 +175,13 @@ export default defineConfig({
+@@ -175,11 +175,14 @@ export default defineConfig({
      emptyOutDir: true,
      cssCodeSplit: true,
      modulePreload: false,
@@ -16,3 +16,23 @@ index d6d7408d74eec7231853e3deff250566bdf939a7..a9859b9a5e9560ea4c78bb693e569564
          manualChunks(id) {
            // React core — cached separately, rarely changes
            if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
+@@ -187,19 +190,9 @@ export default defineConfig({
+-          // Separate wagmi/viem/web3 into its own chunk
+-          if (id.includes('node_modules/wagmi') || 
+-              id.includes('node_modules/viem') || 
+-              id.includes('node_modules/@wagmi') ||
+-              id.includes('node_modules/@walletconnect') ||
+-              id.includes('node_modules/@reown')) {
+-            return 'web3';
+-          }
+-          // TanStack/tRPC — data layer
+-          if (id.includes('node_modules/@tanstack') || id.includes('node_modules/@trpc')) {
+-            return 'data-layer';
+-          }
++          // Do not manually group web3 or data-layer dependencies here.
++          // They belong to the dynamic DappBootstrap graph. Forcing them into
++          // global manual chunks creates a Rollup cycle that makes the public
++          // landing entry statically import the full DApp runtime.
+           // Separate heavy UI libraries
+           if (id.includes('node_modules/framer-motion')) {
+             return 'framer';
