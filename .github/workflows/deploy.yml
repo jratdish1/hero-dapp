@@ -1,39 +1,95 @@
 name: Deploy to VPS1
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact 40-character commit SHA already merged to main
+        required: true
+        type: string
+      confirmation:
+        description: Type DEPLOY to authorize this protected production run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: production-vps1
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Protected production deployment
     runs-on: ubuntu-latest
-    steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VDS_HOST }}
-          username: root
-          key: ${{ secrets.VDS_SSH_KEY }}
-          script: |
-            ssh root@${{ secrets.VPS1_HOST }} << 'DEPLOY'
-              set -e
-              cd /var/www/hero-dapp
-              git fetch origin main
-              git reset --hard origin/main
-              npm run build
-              pm2 reload hero-dapp
-            DEPLOY
+    timeout-minutes: 30
+    environment: production
+    env:
+      DEPLOY_SHA: ${{ inputs.commit_sha }}
+      VPS1_HOST: ${{ secrets.VPS1_HOST }}
+      VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
+      VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
 
-      - name: Purge Cloudflare Cache
-        if: success()
+    steps:
+      - name: Validate release authorization
+        shell: bash
         run: |
-          curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
-            -H "X-Auth-Email: ${{ secrets.CF_EMAIL }}" \
-            -H "X-Auth-Key: ${{ secrets.CF_API_KEY }}" \
+          set -euo pipefail
+          test "${{ inputs.confirmation }}" = "DEPLOY"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          test -n "$VPS1_HOST"
+          test -n "$VPS1_SSH_KEY"
+          test -n "$VPS1_KNOWN_HOSTS"
+
+      - name: Configure strict SSH trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Deploy exact merged commit with frozen pnpm dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VPS1_HOST" \
+            bash -s -- "$DEPLOY_SHA" <<'REMOTE'
+          set -euo pipefail
+          DEPLOY_SHA="$1"
+          cd /var/www/hero-dapp
+          git fetch --no-tags origin main
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+          git reset --hard "$DEPLOY_SHA"
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+          pnpm install --frozen-lockfile
+          pnpm build
+          pm2 reload hero-dapp --update-env
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          REMOTE
+
+      - name: Purge Cloudflare cache
+        if: success()
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CF_API_TOKEN"
+          test -n "$CF_ZONE_ID"
+          curl --fail-with-body --silent --show-error \
+            -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}'
-
-      - name: Notify Success
-        if: success()
-        run: echo "✅ Deployed to VPS1 and Cloudflare purged"
