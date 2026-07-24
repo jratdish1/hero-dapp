@@ -108,11 +108,28 @@ jobs:
           cd "$APP_DIR"
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           git cat-file -e "${PREVIOUS_SHA}^{commit}"
+          test -z "$(git status --porcelain --untracked-files=no)"
+          MUTATION_STARTED=false
+
+          wait_for_health() {
+            local healthy=false
+            local response=""
+            local attempt
+            for attempt in $(seq 1 10); do
+              response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
+              if printf '%s' "$response" | grep -q '"ok":true'; then
+                healthy=true
+                break
+              fi
+              sleep 3
+            done
+            test "$healthy" = true
+          }
 
           rollback() {
             original_status="$?"
             trap - ERR
-            if [ "$PREVIOUS_SHA" != "$DEPLOY_SHA" ]; then
+            if [ "$MUTATION_STARTED" = true ] && [ "$PREVIOUS_SHA" != "$DEPLOY_SHA" ]; then
               echo "Deployment failed; restoring previous SHA $PREVIOUS_SHA" >&2
               git reset --hard "$PREVIOUS_SHA"
               corepack enable
@@ -122,6 +139,10 @@ jobs:
               rm -rf dist
               pnpm build
               pm2 reload hero-dapp --update-env
+              wait_for_health || {
+                echo "Rollback completed but health verification failed" >&2
+                exit 70
+              }
             fi
             exit "$original_status"
           }
@@ -130,6 +151,7 @@ jobs:
           git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${DEPLOY_SHA}^{commit}"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+          MUTATION_STARTED=true
           git reset --hard "$DEPLOY_SHA"
 
           corepack enable
@@ -141,18 +163,9 @@ jobs:
           pnpm build
           pm2 reload hero-dapp --update-env
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          wait_for_health
 
-          healthy=false
-          for attempt in $(seq 1 10); do
-            response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
-            if printf '%s' "$response" | grep -q '"ok":true'; then
-              healthy=true
-              break
-            fi
-            sleep 3
-          done
-          test "$healthy" = true
-
+          MUTATION_STARTED=false
           trap - ERR
           REMOTE
 
