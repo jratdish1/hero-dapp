@@ -46,7 +46,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "perf/herobase-public-bootstrap-20260724"
-          test "$(git rev-parse HEAD^)" = "8f4100e823471136d7c530bef463fe60a6de8dd0"
+          test "$(git rev-parse HEAD^)" = "804d6330d82b2eccf9a6dfc1b31c810844aa6516"
           test "$(git log -1 --pretty=%s)" = "chore: stage performance remediation"
           test -z "$(git status --porcelain)"
 
