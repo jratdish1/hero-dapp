@@ -123,26 +123,31 @@ jobs:
           pnpm install --lockfile-only --ignore-scripts
           test ! -e package-lock.json
 
-      - name: Validate frozen dependency graph and application
-        shell: bash
+      - name: Frozen dependency installation
+        run: pnpm install --frozen-lockfile
+
+      - name: Test suite
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+        run: pnpm test
+
+      - name: Production build
+        run: pnpm build
+
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level=high
+
+      - name: Token registry scanner
+        run: node scripts/check-token-registry.mjs
+
+      - name: Verify canonical graph and bounded generated diff
+        shell: bash
         run: |
           set -euo pipefail
-          pnpm install --frozen-lockfile
-          pnpm test
-          pnpm build
-          pnpm audit --prod --audit-level=high
-          node scripts/check-token-registry.mjs
           git diff --check
           node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
           grep -q "wouter@3.7.1" pnpm-lock.yaml
           grep -q "axios@1.18.0" pnpm-lock.yaml
-
-      - name: Verify bounded generated diff
-        shell: bash
-        run: |
-          set -euo pipefail
           test -n "$(git status --short)"
           python3 - <<'PY'
           import subprocess
