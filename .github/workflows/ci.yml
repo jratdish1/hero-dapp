@@ -95,6 +95,26 @@ jobs:
               "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff",
               "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
           )
+
+          def clean_text(text):
+              output = []
+              changed = False
+              for line in text.splitlines(keepends=True):
+                  if line.endswith("\r\n"):
+                      body, ending = line[:-2], "\r\n"
+                  elif line.endswith("\n"):
+                      body, ending = line[:-1], "\n"
+                  else:
+                      body, ending = line, ""
+                  cleaned = body
+                  for character in forbidden:
+                      cleaned = cleaned.replace(character, "")
+                  if cleaned != body:
+                      cleaned = cleaned.rstrip(" \t")
+                      changed = True
+                  output.append(cleaned + ending)
+              return "".join(output), changed
+
           sanitized = []
           entries = subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0")
           for entry in entries:
@@ -112,10 +132,8 @@ jobs:
                   text = data.decode("utf-8")
               except UnicodeDecodeError:
                   continue
-              cleaned = text
-              for character in forbidden:
-                  cleaned = cleaned.replace(character, "")
-              if cleaned != text:
+              cleaned, changed = clean_text(text)
+              if changed:
                   sanitized.append(str(path))
                   path.write_text(cleaned, encoding="utf-8")
           Path("/tmp/pr40-sanitized-files.txt").write_text("\n".join(sanitized), encoding="utf-8")
@@ -224,6 +242,26 @@ jobs:
               "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff",
               "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
           )
+
+          def clean_text(text):
+              output = []
+              changed = False
+              for line in text.splitlines(keepends=True):
+                  if line.endswith("\r\n"):
+                      body, ending = line[:-2], "\r\n"
+                  elif line.endswith("\n"):
+                      body, ending = line[:-1], "\n"
+                  else:
+                      body, ending = line, ""
+                  cleaned = body
+                  for character in forbidden:
+                      cleaned = cleaned.replace(character, "")
+                  if cleaned != body:
+                      cleaned = cleaned.rstrip(" \t")
+                      changed = True
+                  output.append(cleaned + ending)
+              return "".join(output), changed
+
           entries = subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0")
           for entry in entries:
               if not entry:
@@ -240,10 +278,8 @@ jobs:
                   text = data.decode("utf-8")
               except UnicodeDecodeError:
                   continue
-              cleaned = text
-              for character in forbidden:
-                  cleaned = cleaned.replace(character, "")
-              if cleaned != text:
+              cleaned, changed = clean_text(text)
+              if changed:
                   path.write_text(cleaned, encoding="utf-8")
           PY
           pnpm install --lockfile-only --ignore-scripts
