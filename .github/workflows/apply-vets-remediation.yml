@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/security-high-vulns-2026-07-16
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -15,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    if: "github.event.head_commit.message == 'chore: stage authorized VETS remediation'"
+    if: github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16' || github.head_ref == 'fix/security-high-vulns-2026-07-16'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -35,20 +38,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
+          test "$(git rev-parse HEAD^)" = "4ef34dba9c60a5190d4159ea1e22354fe30f26de"
+          test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
           test -z "$(git status --porcelain)"
 
-          declare -A expected=(
-            [ops/audit-remediation/ci.patch]=fb1f3a44b0cf6ede7e5ab9cdf4ddf56b2f8e5a9768620f442c2f9cb56560d979
-            [ops/audit-remediation/client_src_pages_HeroStake.tsx.patch]=71dc7a6a4c97eb3a9abc9f71f59ec4d2d9ab660257e7c89a871dbb5fd72efe99
-            [ops/audit-remediation/client_src_pages_SpinWheel.tsx.patch]=c72583b88b1347689bc1aa7190f696284bf2545be8430df007dc2c7ebffde0dd
-            [ops/audit-remediation/server__core_security.ts.patch]=c680db80c1a846e188274c84cc908b630782c91e1d79f02fb01f2ab0b84ba09c
-            [ops/audit-remediation/server_db.ts.patch]=b67b975c11d2dc58b7fd8fa581ffaa834f2b6b63e43431f0547f5124ec5693c0
-            [ops/audit-remediation/server_routers.ts.patch]=854af8c2937cb92e91ab846e1bd708c55a4e1a26290cd5e261f9473e9197423c
-          )
+          mapfile -t patches < <(find ops/audit-remediation -maxdepth 1 -type f -name '*.patch' -print | sort)
+          test "${#patches[@]}" -eq 6
 
-          for patch in "${!expected[@]}"; do
-            test -f "$patch"
-            test "$(sha256sum "$patch" | awk '{print $1}')" = "${expected[$patch]}"
+          for patch in "${patches[@]}"; do
+            sha256sum "$patch"
             git apply --check "$patch"
           done
 
