@@ -35,17 +35,24 @@ jobs:
 
           scan_kind = sys.argv[1]
           scope = sys.argv[2] if len(sys.argv) > 2 else "all"
-          scoped_prefixes = (".github/", "client/", "docs/", "tests/")
+          broad_prefixes = (".github/", "client/", "docs/", "tests/")
+          client_prefixes = ("client/src/", "client/public/assets/")
 
           def in_scope(path):
               if scope == "all":
                   return True
               if scope == "github":
                   return path.startswith(".github/")
-              if scope in {"client", "docs", "tests"}:
+              if scope in {"docs", "tests"}:
                   return path.startswith(scope + "/")
+              if scope == "client-source":
+                  return path.startswith("client/src/")
+              if scope == "client-assets":
+                  return path.startswith("client/public/assets/")
+              if scope == "client-other":
+                  return path.startswith("client/") and not path.startswith(client_prefixes)
               if scope == "other":
-                  return not path.startswith(scoped_prefixes)
+                  return not path.startswith(broad_prefixes)
               raise SystemExit(f"FAIL-CLOSED: unsupported path scope {scope}")
 
           hidden_patterns = {
@@ -145,8 +152,14 @@ jobs:
       - name: OpenAI-style tokens — workflows
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token github
 
-      - name: OpenAI-style tokens — client
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client
+      - name: OpenAI-style tokens — client source
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-source
+
+      - name: OpenAI-style tokens — generated client assets
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-assets
+
+      - name: OpenAI-style tokens — other client files
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-other
 
       - name: OpenAI-style tokens — docs
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token docs
