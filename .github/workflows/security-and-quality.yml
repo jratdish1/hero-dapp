@@ -58,14 +58,9 @@ jobs:
               "aws-key": re.compile(rb"AKIA[0-9A-Z]{16}"),
           }
 
-          try:
-              raw_entries = subprocess.check_output(
-                  ["git", "ls-files", "-z", "--stage"], stderr=subprocess.STDOUT
-              )
-          except subprocess.CalledProcessError as error:
-              sys.stderr.buffer.write(error.output)
-              raise SystemExit("FAIL-CLOSED: unable to enumerate Git index")
-
+          raw_entries = subprocess.check_output(
+              ["git", "ls-files", "-z", "--stage"], stderr=subprocess.STDOUT
+          )
           findings = []
           scanned_blobs = 0
 
@@ -77,7 +72,6 @@ jobs:
                   mode, object_id, stage = metadata.split(b" ")
               except ValueError:
                   raise SystemExit(f"FAIL-CLOSED: malformed index entry: {entry!r}")
-
               path = raw_path.decode("utf-8", "surrogateescape")
               if stage != b"0":
                   raise SystemExit(f"FAIL-CLOSED: unmerged index entry at {path}")
@@ -85,20 +79,13 @@ jobs:
                   continue
               if mode not in {b"100644", b"100755", b"120000"}:
                   raise SystemExit(f"FAIL-CLOSED: unsupported Git mode {mode.decode()} at {path}")
-
-              try:
-                  data = subprocess.check_output(
-                      ["git", "cat-file", "blob", object_id.decode("ascii")],
-                      stderr=subprocess.STDOUT,
-                  )
-              except subprocess.CalledProcessError as error:
-                  sys.stderr.buffer.write(error.output)
-                  raise SystemExit(f"FAIL-CLOSED: cannot read indexed blob for {path}")
-
+              data = subprocess.check_output(
+                  ["git", "cat-file", "blob", object_id.decode("ascii")],
+                  stderr=subprocess.STDOUT,
+              )
               scanned_blobs += 1
               if b"\0" in data:
                   continue
-
               if scan_kind == "hidden-unicode":
                   for needle, label in hidden_patterns.items():
                       for line_number, line in enumerate(data.splitlines(), 1):
@@ -125,12 +112,8 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           import re
-
           pattern = re.compile(
-              rb"(?<![A-Za-z0-9])(?:"
-              rb"sk-[A-Za-z0-9]{20,}"
-              rb"|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}"
-              rb")(?![A-Za-z0-9_-])"
+              rb"(?<![A-Za-z0-9])(?:sk-[A-Za-z0-9]{20,}|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,})(?![A-Za-z0-9_-])"
           )
           must_match = (
               b"sk-AbCdEf0123456789GhIjKlMnOpQrStUv",
@@ -144,13 +127,8 @@ jobs:
               b"task-e2e-smri-001-2026-07-10",
               b"textsk-AbCdEf0123456789GhIjKlMnOpQrStUv",
           )
-          for fixture in must_match:
-              if not pattern.search(fixture):
-                  raise SystemExit(f"FAIL-CLOSED: detector missed synthetic fixture {fixture!r}")
-          for fixture in must_not_match:
-              if pattern.search(fixture):
-                  raise SystemExit(f"FAIL-CLOSED: detector matched benign fixture {fixture!r}")
-          print("OpenAI-style key regression fixtures passed")
+          assert all(pattern.search(value) for value in must_match)
+          assert not any(pattern.search(value) for value in must_not_match)
           PY
 
       - name: Git index structure
@@ -164,6 +142,56 @@ jobs:
 
       - name: GitHub token patterns
         run: python3 "$RUNNER_TEMP/scan_index.py" github-token
+
+      - name: Create redacted context diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import re
+          import subprocess
+          from pathlib import Path
+
+          pattern = re.compile(
+              rb"(?<![A-Za-z0-9])(?:sk-[A-Za-z0-9]{20,}|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,})(?![A-Za-z0-9_-])"
+          )
+          rows = []
+          for entry in subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0"):
+              if not entry:
+                  continue
+              metadata, raw_path = entry.split(b"\t", 1)
+              mode, object_id, stage = metadata.split(b" ")
+              if stage != b"0" or mode not in {b"100644", b"100755", b"120000"}:
+                  continue
+              path = raw_path.decode("utf-8", "surrogateescape")
+              data = subprocess.check_output(["git", "cat-file", "blob", object_id.decode("ascii")])
+              if b"\0" in data:
+                  continue
+              for match in pattern.finditer(data):
+                  before = data[max(0, match.start() - 80):match.start()].decode("utf-8", "backslashreplace")
+                  after = data[match.end():match.end() + 80].decode("utf-8", "backslashreplace")
+                  rows.append({
+                      "path": path,
+                      "line": data.count(b"\n", 0, match.start()) + 1,
+                      "match_length": match.end() - match.start(),
+                      "before": before,
+                      "after": after,
+                  })
+          if not rows:
+              raise SystemExit("FAIL-CLOSED: expected finding not reproduced")
+          Path("/tmp/openai-context-diagnostic.json").write_text(
+              json.dumps(rows, indent=2, ensure_ascii=True) + "\n", encoding="utf-8"
+          )
+          PY
+
+      - name: Upload redacted context diagnostic
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr40-openai-context-diagnostic
+          path: /tmp/openai-context-diagnostic.json
+          retention-days: 1
+          if-no-files-found: error
 
       - name: OpenAI-style token patterns
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token
