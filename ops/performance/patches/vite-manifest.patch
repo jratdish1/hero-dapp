@@ -1,8 +1,8 @@
 diff --git a/vite.config.ts b/vite.config.ts
-index d6d7408d74eec7231853e3deff250566bdf939a7..d2442e9a24fe641c8a71b26ea556c066b7c6e5e0 100644
+index d6d7408d74eec7231853e3deff250566bdf939a7..a9859b9a5e9560ea4c78bb693e569564ad545933 100644
 --- a/vite.config.ts
 +++ b/vite.config.ts
-@@ -175,6 +175,7 @@ export default defineConfig({
+@@ -175,11 +175,13 @@ export default defineConfig({
      emptyOutDir: true,
      cssCodeSplit: true,
      modulePreload: false,
@@ -10,3 +10,9 @@ index d6d7408d74eec7231853e3deff250566bdf939a7..d2442e9a24fe641c8a71b26ea556c066
      rollupOptions: {
        // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
        // even if Vite alias fails to intercept a dynamic import
+       external: (id) => id.includes('@reown/appkit'),
+       output: {
++        onlyExplicitManualChunks: true,
+         manualChunks(id) {
+           // React core — cached separately, rarely changes
+           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
