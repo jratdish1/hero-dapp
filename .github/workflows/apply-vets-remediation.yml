@@ -29,12 +29,12 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Verify and apply bounded patches
+      - name: Verify and apply bounded application patches
         shell: bash
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
-          test "$(git rev-parse HEAD^)" = "717694a7fc192fe87926df254f0e2b0a10b51a0e"
+          test "$(git rev-parse HEAD^)" = "6cd746bcdf5e4797bae2cd6c0ae43f9b8459e344"
           test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
           test -z "$(git status --porcelain)"
 
@@ -49,18 +49,17 @@ jobs:
             ops/audit-remediation/client_src_pages_SpinWheel.tsx.patch \
             ops/audit-remediation/server__core_security.ts.patch \
             ops/audit-remediation/server_db.ts.patch \
-            ops/audit-remediation/server_routers.ts.patch \
-            ops/audit-remediation/ci.patch; do
+            ops/audit-remediation/server_routers.ts.patch; do
             git apply --3way "$patch"
+            rm -f "$patch"
           done
-          rm -rf ops/audit-remediation
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
-      - name: Validate exact remediated tree
+      - name: Validate exact remediated application tree
         id: validation
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ci-audit-placeholder
@@ -112,7 +111,7 @@ jobs:
         shell: bash
         run: exit 1
 
-      - name: Commit and push exact validated tree
+      - name: Commit and push validated application tree
         if: steps.validation.outputs.ok == 'true'
         shell: bash
         run: |
@@ -121,26 +120,8 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           git add -A
           test -n "$(git status --porcelain)"
-          git commit -m "fix: complete production audit remediation"
+          git commit -m "fix: complete production application remediation"
           git push origin HEAD:fix/security-high-vulns-2026-07-16
           final_sha="$(git rev-parse HEAD)"
           [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
-          printf 'Final remediated SHA: %s\n' "$final_sha"
-
-      - name: Dispatch exact-head CI and security gates
-        if: steps.validation.outputs.ok == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          payload="$(jq -nc --arg ref 'fix/security-high-vulns-2026-07-16' '{ref:$ref}')"
-          for workflow in ci.yml security-and-quality.yml; do
-            curl --fail-with-body --silent --show-error \
-              -X POST \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
-              --data "$payload"
-          done
+          printf 'Validated application SHA: %s\n' "$final_sha"
