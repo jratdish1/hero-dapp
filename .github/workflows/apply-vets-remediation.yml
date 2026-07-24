@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - fix/security-high-vulns-2026-07-16
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -15,7 +18,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16'
+    if: github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16' || github.head_ref == 'fix/security-high-vulns-2026-07-16'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -31,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
-          test "$(git rev-parse HEAD^)" = "36d5232d0486add3c7a359fc5071151813f8051c"
+          test "$(git rev-parse HEAD^)" = "0cb7dc84b82268753528df789a7e94eb6f3f7b89"
           test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
           test -z "$(git status --porcelain)"
 
