@@ -85,17 +85,20 @@ jobs:
       - name: Deploy exact merged commit with frozen pnpm dependencies
         env:
           VPS1_HOST: ${{ secrets.VPS1_HOST }}
+          VPS1_USER: ${{ secrets.VPS1_USER }}
         shell: bash
         run: |
           set -euo pipefail
           test -n "$VPS1_HOST"
+          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+          test "$VPS1_USER" != "root"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
             -o ConnectTimeout=15 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
-            "root@$VPS1_HOST" \
+            "$VPS1_USER@$VPS1_HOST" \
             bash -s -- "$DEPLOY_SHA" <<'REMOTE'
           set -Eeuo pipefail
           DEPLOY_SHA="$1"
