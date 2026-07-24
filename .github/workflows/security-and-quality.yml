@@ -16,73 +16,101 @@ jobs:
   repository-safety:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
 
-      - name: Hidden Unicode scan
+      - name: Scan exact Git index blobs
         shell: bash
         run: |
           set -euo pipefail
           python3 - <<'PY'
+          import re
           import subprocess
           import sys
-          from pathlib import Path
 
-          forbidden = {
-              "\u200b": "ZERO WIDTH SPACE",
-              "\u200c": "ZERO WIDTH NON-JOINER",
-              "\u200d": "ZERO WIDTH JOINER",
-              "\u2060": "WORD JOINER",
-              "\ufeff": "BYTE ORDER MARK",
-              "\u202a": "LEFT-TO-RIGHT EMBEDDING",
-              "\u202b": "RIGHT-TO-LEFT EMBEDDING",
-              "\u202c": "POP DIRECTIONAL FORMATTING",
-              "\u202d": "LEFT-TO-RIGHT OVERRIDE",
-              "\u202e": "RIGHT-TO-LEFT OVERRIDE",
+          forbidden_unicode = {
+              "\u200b".encode(): "U+200B ZERO WIDTH SPACE",
+              "\u200c".encode(): "U+200C ZERO WIDTH NON-JOINER",
+              "\u200d".encode(): "U+200D ZERO WIDTH JOINER",
+              "\u2060".encode(): "U+2060 WORD JOINER",
+              "\ufeff".encode(): "U+FEFF BYTE ORDER MARK",
+              "\u202a".encode(): "U+202A LEFT-TO-RIGHT EMBEDDING",
+              "\u202b".encode(): "U+202B RIGHT-TO-LEFT EMBEDDING",
+              "\u202c".encode(): "U+202C POP DIRECTIONAL FORMATTING",
+              "\u202d".encode(): "U+202D LEFT-TO-RIGHT OVERRIDE",
+              "\u202e".encode(): "U+202E RIGHT-TO-LEFT OVERRIDE",
           }
 
-          tracked = subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0")
-          found = False
+          secret_pattern = re.compile(
+              rb"(?:-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
+              rb"|gh[pousr]_[A-Za-z0-9_]{30,}"
+              rb"|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"
+              rb"|AKIA[0-9A-Z]{16})"
+          )
 
-          for raw_path in tracked:
-              if not raw_path:
+          try:
+              raw_entries = subprocess.check_output(
+                  ["git", "ls-files", "-z", "--stage"], stderr=subprocess.STDOUT
+              )
+          except subprocess.CalledProcessError as error:
+              sys.stderr.buffer.write(error.output)
+              raise SystemExit("FAIL-CLOSED: unable to enumerate Git index")
+
+          findings = []
+          entries = raw_entries.split(b"\0")
+
+          for entry in entries:
+              if not entry:
                   continue
-              path = Path(raw_path.decode("utf-8", "surrogateescape"))
+
               try:
-                  data = path.read_bytes()
-              except OSError as error:
-                  print(f"FAIL-CLOSED: cannot read {path}: {error}", file=sys.stderr)
-                  sys.exit(2)
+                  metadata, raw_path = entry.split(b"\t", 1)
+                  mode, object_id, stage = metadata.split(b" ")
+              except ValueError:
+                  raise SystemExit(f"FAIL-CLOSED: malformed index entry: {entry!r}")
+
+              path = raw_path.decode("utf-8", "surrogateescape")
+              if stage != b"0":
+                  raise SystemExit(f"FAIL-CLOSED: unmerged index entry at {path}")
+
+              if mode == b"160000":
+                  print(f"gitlink skipped as non-text index entry: {path}")
+                  continue
+
+              if mode not in {b"100644", b"100755", b"120000"}:
+                  raise SystemExit(f"FAIL-CLOSED: unsupported Git mode {mode.decode()} at {path}")
+
+              try:
+                  data = subprocess.check_output(
+                      ["git", "cat-file", "blob", object_id.decode("ascii")],
+                      stderr=subprocess.STDOUT,
+                  )
+              except subprocess.CalledProcessError as error:
+                  sys.stderr.buffer.write(error.output)
+                  raise SystemExit(f"FAIL-CLOSED: cannot read indexed blob for {path}")
 
               if b"\0" in data:
                   continue
 
-              for character, label in forbidden.items():
-                  needle = character.encode("utf-8")
+              for needle, label in forbidden_unicode.items():
                   if needle not in data:
                       continue
-                  found = True
                   for line_number, line in enumerate(data.splitlines(), 1):
                       if needle in line:
-                          print(f"{path}:{line_number}: forbidden {label}", file=sys.stderr)
+                          findings.append(f"{path}:{line_number}: forbidden {label}")
 
-          if found:
-              sys.exit(1)
+              for match in secret_pattern.finditer(data):
+                  line_number = data.count(b"\n", 0, match.start()) + 1
+                  findings.append(f"{path}:{line_number}: potential secret pattern")
+
+          if findings:
+              print("\n".join(findings), file=sys.stderr)
+              raise SystemExit(1)
+
+          print("Exact-index hidden Unicode and secret scans passed.")
           PY
-
-      - name: Secret pattern scan
-        shell: bash
-        run: |
-          set +e
-          grep -aRInP --exclude-dir=.git '(-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{30,}|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' -- .
-          status=$?
-          set -e
-          if [ "$status" -eq 0 ]; then
-            echo 'Potential secret found'
-            exit 1
-          fi
-          if [ "$status" -ne 1 ]; then
-            echo "Secret scanner failed with status $status"
-            exit "$status"
-          fi
