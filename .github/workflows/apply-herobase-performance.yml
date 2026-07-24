@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - perf/herobase-public-bootstrap-20260724
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,7 +17,6 @@ concurrency:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: stage performance remediation'
     runs-on: ubuntu-latest
     timeout-minutes: 35
 
@@ -26,12 +28,25 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
+      - name: Detect staged patch scope
+        id: scope
+        shell: bash
+        run: |
+          set -euo pipefail
+          count="$(find ops/performance/patches -maxdepth 1 -type f -name '*.patch' 2>/dev/null | wc -l)"
+          if [ "$count" = "6" ]; then
+            echo "apply=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "apply=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Verify and apply bounded performance patches
+        if: steps.scope.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "perf/herobase-public-bootstrap-20260724"
-          test "$(git rev-parse HEAD^)" = "b89b238e57da4e2783395ee5f22072eb21fd6bab"
+          test "$(git rev-parse HEAD^)" = "37e15e4fd9eaa71eff2f26ed1a778bcf019cc897"
           test "$(git log -1 --pretty=%s)" = "chore: stage performance remediation"
           test -z "$(git status --porcelain)"
 
@@ -52,11 +67,13 @@ jobs:
           test -z "$(git diff --name-only | grep '^.github/workflows/' || true)"
 
       - name: Setup Node
+        if: steps.scope.outputs.apply == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
       - name: Activate repository-pinned pnpm
+        if: steps.scope.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -66,32 +83,38 @@ jobs:
           test ! -e package-lock.json
 
       - name: Install frozen dependencies
+        if: steps.scope.outputs.apply == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Type check
+        if: steps.scope.outputs.apply == 'true'
         run: pnpm check
 
       - name: Test
+        if: steps.scope.outputs.apply == 'true'
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ci-audit-placeholder
         run: pnpm test
 
       - name: Production build
+        if: steps.scope.outputs.apply == 'true'
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ci-audit-placeholder
         run: pnpm build
 
       - name: Verify public landing critical path
+        if: steps.scope.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
           node scripts/check-landing-bundle.mjs | tee "$RUNNER_TEMP/landing-bundle-report.txt"
 
       - name: Production dependency audit
+        if: steps.scope.outputs.apply == 'true'
         run: pnpm audit --prod --audit-level=high
 
       - name: Upload performance evidence
-        if: always()
+        if: always() && steps.scope.outputs.apply == 'true'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: herobase-public-bootstrap-${{ github.sha }}
@@ -102,6 +125,7 @@ jobs:
           if-no-files-found: warn
 
       - name: Commit and push validated application tree
+        if: steps.scope.outputs.apply == 'true'
         shell: bash
         run: |
           set -euo pipefail
