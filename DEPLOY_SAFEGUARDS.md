@@ -35,19 +35,21 @@ Before changing runtime state, the workflow:
 3. selects the latest check-run ID for each required name;
 4. requires those checks to originate from GitHub Actions;
 5. requires successful completed `test-build-scan` and `repository-safety` checks;
-6. fetches `origin/main` on the server;
-7. resolves the requested object as a commit;
-8. verifies it is an ancestor of `origin/main`;
-9. records the previously active SHA;
-10. resets the server checkout to the exact requested SHA;
-11. verifies the active checkout still equals the requested SHA after build and reload.
+6. validates remote host and username formats;
+7. verifies required server commands, application ownership, non-symlink path, accepted GitHub origin URL, and clean tracked tree;
+8. fetches `origin/main` on the server;
+9. resolves the requested object as a commit;
+10. verifies it is an ancestor of `origin/main`;
+11. records the previously active SHA;
+12. resets the server checkout to the exact requested SHA;
+13. verifies the active checkout still equals the requested SHA after build and reload.
 
-The workflow never deploys an ambiguous branch tip, an unmerged commit, a stale earlier successful check superseded by a newer failure, or an exact SHA without both required trusted repository checks.
+The workflow never deploys an ambiguous branch tip, an unmerged commit, a stale earlier successful check superseded by a newer failure, an unexpected remote, a dirty checkout, a misowned/symlinked application path, or an exact SHA without both required trusted repository checks.
 
 ### 4. Least-privilege SSH and credential controls
 
 - `VPS1_USER` is environment-scoped, must match a restricted Unix username pattern, and must not equal `root`.
-- Before deployment activation, the non-root account must be independently provisioned with narrowly scoped access to `/var/www/hero-dapp`, the repository, the Node/Corepack toolchain, and only the `hero-dapp` PM2 process.
+- Before deployment activation, the non-root account must independently be verified as owner of the real `/var/www/hero-dapp` directory, able to fetch the accepted GitHub repository, able to use Git/Node/Corepack/PM2/curl, and able to manage only the `hero-dapp` PM2 process.
 - The deployment account must not have unrestricted passwordless sudo or permissions over unrelated services, users, firewall rules, DNS, or credentials.
 - Strict host-key verification is mandatory.
 - `VPS1_KNOWN_HOSTS` is environment-scoped.
@@ -86,15 +88,17 @@ The deployment workflow independently verifies the latest trusted successful exa
 
 ### 7. Clean build, health gate, and bounded rollback
 
-For both deployment and rollback builds, the workflow removes stale `dist` output before running `pnpm build`.
+The workflow requires a clean tracked tree before mutation and removes stale `dist` output before every deployment or rollback build.
 
 After PM2 reload, the workflow:
 
 - verifies the server checkout still equals the approved SHA;
 - retries the public tRPC health endpoint;
 - requires an `ok: true` response before declaring the release healthy;
-- restores the previously active SHA if installation, clean build, reload, SHA verification, or health verification fails;
-- reinstalls from the previous SHA's frozen pnpm lock, removes stale output, rebuilds, and reloads PM2 during rollback;
+- restores the previously active SHA after every post-mutation installation, build, reload, SHA-verification, or health failure, including same-SHA redeploy failures;
+- reinstalls from the previous SHA's frozen pnpm lock;
+- rebuilds the previous SHA through direct Vite and esbuild commands so historical package lifecycle hooks cannot re-enter npm or deployment mutations;
+- reloads PM2 and requires restored service health before reporting the original deployment failure;
 - purges Cloudflare only after the deployment and health gate succeed.
 
 A failed purge does not silently report a successful workflow.
@@ -105,6 +109,7 @@ A failed purge does not silently report a successful workflow.
 - No production workflow execution from a non-`main` ref.
 - No root SSH deployment.
 - No unrestricted sudo for the deployment principal.
+- No deployment from an unexpected Git remote, symlinked/misowned app path, or dirty tracked tree.
 - No direct server edits.
 - No `git pull` on production.
 - No npm install/build path.
@@ -118,7 +123,7 @@ A failed purge does not silently report a successful workflow.
 
 ## Rollback discipline
 
-A failed approved deployment automatically attempts restoration to the SHA active when that workflow began. An intentional rollback uses the same protected workflow from `main` with a previously verified commit that remains in `main` history.
+A failed approved deployment automatically attempts restoration to the SHA active when that workflow began, including health verification of the restored service. An intentional rollback uses the same protected workflow from `main` with a previously verified commit that remains in `main` history.
 
 Every intentional rollback record must include:
 
@@ -138,4 +143,5 @@ Repository administrators must:
 - restrict its deployment branches to `main`;
 - restrict environment secrets to the deployment workflow;
 - provision and validate the non-root `VPS1_USER` account and its narrow permissions;
+- verify `/var/www/hero-dapp` ownership, accepted origin URL, required tools, and PM2 ownership;
 - require the CI and Security and Quality jobs through branch protection or a ruleset before merge.
