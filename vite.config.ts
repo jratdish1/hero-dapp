@@ -175,28 +175,19 @@ export default defineConfig({
     emptyOutDir: true,
     cssCodeSplit: true,
     modulePreload: false,
+    manifest: true,
     rollupOptions: {
       // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
       // even if Vite alias fails to intercept a dynamic import
       external: (id) => id.includes('@reown/appkit'),
       output: {
+        onlyExplicitManualChunks: true,
         manualChunks(id) {
           // React core — cached separately, rarely changes
           if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
             return 'react-vendor';
           }
-          // Separate wagmi/viem/web3 into its own chunk
-          if (id.includes('node_modules/wagmi') || 
-              id.includes('node_modules/viem') || 
-              id.includes('node_modules/@wagmi') ||
-              id.includes('node_modules/@walletconnect') ||
-              id.includes('node_modules/@reown')) {
-            return 'web3';
-          }
-          // TanStack/tRPC — data layer
-          if (id.includes('node_modules/@tanstack') || id.includes('node_modules/@trpc')) {
-            return 'data-layer';
-          }
+          // Web3 and data-layer dependencies stay inside the dynamic DApp graph.
           // Separate heavy UI libraries
           if (id.includes('node_modules/framer-motion')) {
             return 'framer';

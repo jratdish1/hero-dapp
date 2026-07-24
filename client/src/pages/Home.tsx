@@ -112,22 +112,42 @@ const FEATURES = [
   },
 ];
 
-// Deferred background video - doesn't load until 3s after page load
-// This prevents the 16MB video from blocking initial page render
+type NavigatorWithConnection = Navigator & {
+  connection?: {
+    saveData?: boolean;
+    effectiveType?: string;
+  };
+};
+
+// Decorative 16 MB video: never compete with initial content, reduced-motion
+// users, data-saver users, or visitors on 2G-class connections.
 function DeferredBackgroundVideo({ src }: { src: string }) {
   const [shouldLoad, setShouldLoad] = useState(false);
+
   useEffect(() => {
-    const timer = setTimeout(() => setShouldLoad(true), 8000);
-    return () => clearTimeout(timer);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const connection = (navigator as NavigatorWithConnection).connection;
+    const constrainedConnection =
+      connection?.saveData === true ||
+      connection?.effectiveType === "slow-2g" ||
+      connection?.effectiveType === "2g";
+
+    if (reducedMotion || constrainedConnection) return;
+
+    const timer = window.setTimeout(() => setShouldLoad(true), 12_000);
+    return () => window.clearTimeout(timer);
   }, []);
+
   if (!shouldLoad) return null;
   return (
     <video
+      aria-hidden="true"
       preload="none"
       autoPlay
       loop
       muted
       playsInline
+      poster="/hero-banner-sm.webp"
       className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
       src={src}
     />

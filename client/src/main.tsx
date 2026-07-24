@@ -1,85 +1,36 @@
-import { isValidChainId } from "@/lib/validation";
-import { trpc } from "@/lib/trpc";
-import { UNAUTHED_ERR_MSG } from "@shared/const";
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
-import superjson from "superjson";
-import App from "./App";
-import { getLoginUrl } from "./const";
-import { WagmiAppProvider } from "./contexts/WagmiContext";
+import { useLocation } from "wouter";
+import LandingApp from "./LandingApp";
 import "./index.css";
 
-const queryClient = new QueryClient();
+const DappBootstrap = lazy(() => import("./DappBootstrap"));
 
-const redirectToLoginIfUnauthorized = (error: unknown) => {
-  if (!(error instanceof TRPCClientError)) return;
-  if (typeof window === "undefined") return;
-
-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
-
-  if (!isUnauthorized) return;
-
-  window.location.href = getLoginUrl();
-};
-
-queryClient.getQueryCache().subscribe((event) => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.query.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Query Error]", error);
-  }
-});
-
-queryClient.getMutationCache().subscribe((event) => {
-  if (event.type === "updated" && event.action.type === "error") {
-    const error = event.mutation.state.error;
-    redirectToLoginIfUnauthorized(error);
-    console.error("[API Mutation Error]", error);
-  }
-});
-
-// CSRF double-submit token helper (Audit Fix: May 29, 2026)
-function getCsrfToken(): string | null {
-  const match = document.cookie.match(/csrf_token=([^;]+)/);
-  return match ? match[1] : null;
+function DappLoader() {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-black">
+      <div className="flex flex-col items-center gap-4">
+        <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+        <span className="font-mono text-sm text-amber-500/70">Loading secure DApp...</span>
+      </div>
+    </div>
+  );
 }
 
-const trpcClient = trpc.createClient({
-  links: [
-    httpBatchLink({
-      url: "/api/trpc",
-      transformer: superjson,
-      fetch(input, init) {
-        const csrfToken = getCsrfToken();
-        const headers = new Headers((init as RequestInit)?.headers || {});
-        if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
-        return globalThis.fetch(input, {
-          ...(init ?? {}),
-          credentials: "include",
-          headers,
-        });
-      },
-    }),
-  ],
-});
+function BootstrapRouter() {
+  const [location] = useLocation();
 
-createRoot(document.getElementById("root")!).render(
-  <WagmiAppProvider>
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </trpc.Provider>
-  </WagmiAppProvider>
-);
+  if (location === "/") {
+    return <LandingApp />;
+  }
 
-// Early chain validation — warn if user is on unsupported network
-if (typeof window !== "undefined" && (window as any).ethereum) {
-  (window as any).ethereum.request?.({ method: "eth_chainId" }).then((chainHex: string) => {
-    const chainId = parseInt(chainHex, 16);
-    if (!isValidChainId(chainId)) {
-      console.warn("[HERO DApp] Unsupported chain detected:", chainId, "— Please switch to PulseChain (369) or BASE (8453)");
-    }
-  }).catch(() => { /* No wallet connected — that's fine */ });
+  return (
+    <Suspense fallback={<DappLoader />}>
+      <DappBootstrap />
+    </Suspense>
+  );
 }
+
+const root = document.getElementById("root");
+if (!root) throw new Error("Missing #root application mount");
+createRoot(root).render(<BootstrapRouter />);
