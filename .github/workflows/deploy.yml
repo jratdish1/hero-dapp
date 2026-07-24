@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       commit_sha:
-        description: Exact 40-character commit SHA already merged to main
+        description: Exact lowercase 40-character commit SHA already merged to main
         required: true
         type: string
       confirmation:
@@ -14,6 +14,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
 
 concurrency:
   group: production-vps1
@@ -27,6 +28,7 @@ jobs:
     environment: production
     env:
       DEPLOY_SHA: ${{ inputs.commit_sha }}
+      DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
       VPS1_HOST: ${{ secrets.VPS1_HOST }}
       VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
       VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
@@ -36,11 +38,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "${{ inputs.confirmation }}" = "DEPLOY"
-          [[ "$DEPLOY_SHA" =~ ^[0-9a-fA-F]{40}$ ]]
+          test "$DEPLOY_CONFIRMATION" = "DEPLOY"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           test -n "$VPS1_HOST"
           test -n "$VPS1_SSH_KEY"
           test -n "$VPS1_KNOWN_HOSTS"
+
+      - name: Require successful exact-SHA repository checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/check-runs?per_page=100")"
+
+          for required_check in test-build-scan repository-safety; do
+            jq -e --arg name "$required_check" '
+              [.check_runs[] | select(
+                .name == $name and
+                .status == "completed" and
+                .conclusion == "success"
+              )] | length > 0
+            ' <<<"$response" >/dev/null || {
+              echo "Required successful check missing for $DEPLOY_SHA: $required_check" >&2
+              exit 1
+            }
+          done
 
       - name: Configure strict SSH trust
         shell: bash
@@ -58,24 +85,63 @@ jobs:
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
+            -o ConnectTimeout=15 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "root@$VPS1_HOST" \
             bash -s -- "$DEPLOY_SHA" <<'REMOTE'
-          set -euo pipefail
+          set -Eeuo pipefail
           DEPLOY_SHA="$1"
-          cd /var/www/hero-dapp
+          APP_DIR="/var/www/hero-dapp"
+          HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+
+          cd "$APP_DIR"
+          PREVIOUS_SHA="$(git rev-parse HEAD)"
+          git cat-file -e "${PREVIOUS_SHA}^{commit}"
+
+          rollback() {
+            original_status="$?"
+            trap - ERR
+            if [ "$PREVIOUS_SHA" != "$DEPLOY_SHA" ]; then
+              echo "Deployment failed; restoring previous SHA $PREVIOUS_SHA" >&2
+              git reset --hard "$PREVIOUS_SHA"
+              corepack enable
+              corepack prepare pnpm@10.34.4 --activate
+              test "$(pnpm --version)" = "10.34.4"
+              pnpm install --frozen-lockfile
+              pnpm build
+              pm2 reload hero-dapp --update-env
+            fi
+            exit "$original_status"
+          }
+          trap rollback ERR
+
           git fetch --no-tags origin main
           git cat-file -e "${DEPLOY_SHA}^{commit}"
           git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
           git reset --hard "$DEPLOY_SHA"
+
           corepack enable
           corepack prepare pnpm@10.34.4 --activate
           test "$(pnpm --version)" = "10.34.4"
+          test ! -e package-lock.json
           pnpm install --frozen-lockfile
           pnpm build
           pm2 reload hero-dapp --update-env
           test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+
+          healthy=false
+          for attempt in $(seq 1 10); do
+            response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
+            if printf '%s' "$response" | grep -q '"ok":true'; then
+              healthy=true
+              break
+            fi
+            sleep 3
+          done
+          test "$healthy" = true
+
+          trap - ERR
           REMOTE
 
       - name: Purge Cloudflare cache
@@ -93,3 +159,9 @@ jobs:
             -H "Authorization: Bearer $CF_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data '{"purge_everything":true}'
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
