@@ -1,0 +1,398 @@
+diff --git a/client/src/DappBootstrap.tsx b/client/src/DappBootstrap.tsx
+new file mode 100644
+index 0000000000000000000000000000000000000000..3193d4919979802c8e3eecead7013ca0b3f668f4
+--- /dev/null
++++ b/client/src/DappBootstrap.tsx
+@@ -0,0 +1,97 @@
++import { isValidChainId } from "@/lib/validation";
++import { trpc } from "@/lib/trpc";
++import { UNAUTHED_ERR_MSG } from "@shared/const";
++import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
++import { httpBatchLink, TRPCClientError } from "@trpc/client";
++import { useEffect } from "react";
++import superjson from "superjson";
++import App from "./App";
++import { getLoginUrl } from "./const";
++import { WagmiAppProvider } from "./contexts/WagmiContext";
++
++const queryClient = new QueryClient();
++
++const redirectToLoginIfUnauthorized = (error: unknown) => {
++  if (!(error instanceof TRPCClientError)) return;
++  if (typeof window === "undefined") return;
++  if (error.message !== UNAUTHED_ERR_MSG) return;
++  window.location.href = getLoginUrl();
++};
++
++queryClient.getQueryCache().subscribe((event) => {
++  if (event.type === "updated" && event.action.type === "error") {
++    const error = event.query.state.error;
++    redirectToLoginIfUnauthorized(error);
++    console.error("[API Query Error]", error);
++  }
++});
++
++queryClient.getMutationCache().subscribe((event) => {
++  if (event.type === "updated" && event.action.type === "error") {
++    const error = event.mutation.state.error;
++    redirectToLoginIfUnauthorized(error);
++    console.error("[API Mutation Error]", error);
++  }
++});
++
++function getCsrfToken(): string | null {
++  const match = document.cookie.match(/csrf_token=([^;]+)/);
++  return match ? match[1] : null;
++}
++
++const trpcClient = trpc.createClient({
++  links: [
++    httpBatchLink({
++      url: "/api/trpc",
++      transformer: superjson,
++      fetch(input, init) {
++        const csrfToken = getCsrfToken();
++        const headers = new Headers((init as RequestInit)?.headers || {});
++        if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
++        return globalThis.fetch(input, {
++          ...(init ?? {}),
++          credentials: "include",
++          headers,
++        });
++      },
++    }),
++  ],
++});
++
++export default function DappBootstrap() {
++  useEffect(() => {
++    const ethereum = (window as Window & {
++      ethereum?: {
++        request?: (request: { method: string }) => Promise<string>;
++      };
++    }).ethereum;
++
++    if (!ethereum?.request) return;
++
++    ethereum
++      .request({ method: "eth_chainId" })
++      .then((chainHex) => {
++        const chainId = Number.parseInt(chainHex, 16);
++        if (!isValidChainId(chainId)) {
++          console.warn(
++            "[HERO DApp] Unsupported chain detected:",
++            chainId,
++            "— Please switch to PulseChain (369) or BASE (8453)",
++          );
++        }
++      })
++      .catch(() => {
++        // No wallet connected — normal for public visitors.
++      });
++  }, []);
++
++  return (
++    <WagmiAppProvider>
++      <trpc.Provider client={trpcClient} queryClient={queryClient}>
++        <QueryClientProvider client={queryClient}>
++          <App />
++        </QueryClientProvider>
++      </trpc.Provider>
++    </WagmiAppProvider>
++  );
++}
++diff --git a/client/src/LandingApp.tsx b/client/src/LandingApp.tsx
++new file mode 100644
++index 0000000000000000000000000000000000000000..fe5dd6662127153d774f1587db7fda11a67376a7
++--- /dev/null
+++++ b/client/src/LandingApp.tsx
++@@ -0,0 +1,21 @@
+++import ErrorBoundary from "./components/ErrorBoundary";
+++import FloatingSocial from "./components/FloatingSocial";
+++import { ThemeProvider } from "./contexts/ThemeContext";
+++import Home from "./pages/Home";
+++
+++/**
+++ * Lightweight public bootstrap for the unauthenticated landing page.
+++ *
+++ * Keep wallet, RPC, tRPC, and query-client providers out of this module so the
+++ * public homepage can render without downloading the full DApp runtime.
+++ */
+++export default function LandingApp() {
+++  return (
+++    <ErrorBoundary>
+++      <ThemeProvider defaultTheme="dark" switchable>
+++        <FloatingSocial />
+++        <Home />
+++      </ThemeProvider>
+++    </ErrorBoundary>
+++  );
+++}
++diff --git a/client/src/main.tsx b/client/src/main.tsx
++index f184cc7202199ef43c85e6c30882089bc1cb4208..ba222801fb40c7b4ab69b04505157ac9193775b7 100644
++--- a/client/src/main.tsx
+++++ b/client/src/main.tsx
++@@ -1,85 +1,36 @@
++-import { isValidChainId } from "@/lib/validation";
++-import { trpc } from "@/lib/trpc";
++-import { UNAUTHED_ERR_MSG } from "@shared/const";
++-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
++-import { httpBatchLink, TRPCClientError } from "@trpc/client";
+++import { lazy, Suspense } from "react";
++ import { createRoot } from "react-dom/client";
++-import superjson from "superjson";
++-import App from "./App";
++-import { getLoginUrl } from "./const";
++-import { WagmiAppProvider } from "./contexts/WagmiContext";
+++import { useLocation } from "wouter";
+++import LandingApp from "./LandingApp";
++ import "./index.css";
++ 
++-const queryClient = new QueryClient();
++-
++-const redirectToLoginIfUnauthorized = (error: unknown) => {
++-  if (!(error instanceof TRPCClientError)) return;
++-  if (typeof window === "undefined") return;
++-
++-  const isUnauthorized = error.message === UNAUTHED_ERR_MSG;
++-
++-  if (!isUnauthorized) return;
+++const DappBootstrap = lazy(() => import("./DappBootstrap"));
+++
+++function DappLoader() {
+++  return (
+++    <div className="flex min-h-screen items-center justify-center bg-black">
+++      <div className="flex flex-col items-center gap-4">
+++        <div className="h-10 w-10 animate-spin rounded-full border-2 border-amber-500 border-t-transparent" />
+++        <span className="font-mono text-sm text-amber-500/70">Loading secure DApp...</span>
+++      </div>
+++    </div>
+++  );
+++}
++ 
++-  window.location.href = getLoginUrl();
++-};
+++function BootstrapRouter() {
+++  const [location] = useLocation();
++ 
++-queryClient.getQueryCache().subscribe((event) => {
++-  if (event.type === "updated" && event.action.type === "error") {
++-    const error = event.query.state.error;
++-    redirectToLoginIfUnauthorized(error);
++-    console.error("[API Query Error]", error);
+++  if (location === "/") {
+++    return <LandingApp />;
++   }
++-});
++ 
++-queryClient.getMutationCache().subscribe((event) => {
++-  if (event.type === "updated" && event.action.type === "error") {
++-    const error = event.mutation.state.error;
++-    redirectToLoginIfUnauthorized(error);
++-    console.error("[API Mutation Error]", error);
++-  }
++-});
++-
++-// CSRF double-submit token helper (Audit Fix: May 29, 2026)
++-function getCsrfToken(): string | null {
++-  const match = document.cookie.match(/csrf_token=([^;]+)/);
++-  return match ? match[1] : null;
+++  return (
+++    <Suspense fallback={<DappLoader />}>
+++      <DappBootstrap />
+++    </Suspense>
+++  );
++ }
++ 
++-const trpcClient = trpc.createClient({
++-  links: [
++-    httpBatchLink({
++-      url: "/api/trpc",
++-      transformer: superjson,
++-      fetch(input, init) {
++-        const csrfToken = getCsrfToken();
++-        const headers = new Headers((init as RequestInit)?.headers || {});
++-        if (csrfToken) headers.set("X-CSRF-Token", csrfToken);
++-        return globalThis.fetch(input, {
++-          ...(init ?? {}),
++-          credentials: "include",
++-          headers,
++-        });
++-      },
++-    }),
++-  ],
++-});
++-
++-createRoot(document.getElementById("root")!).render(
++-  <WagmiAppProvider>
++-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
++-      <QueryClientProvider client={queryClient}>
++-        <App />
++-      </QueryClientProvider>
++-    </trpc.Provider>
++-  </WagmiAppProvider>
++-);
++-
++-// Early chain validation — warn if user is on unsupported network
++-if (typeof window !== "undefined" && (window as any).ethereum) {
++-  (window as any).ethereum.request?.({ method: "eth_chainId" }).then((chainHex: string) => {
++-    const chainId = parseInt(chainHex, 16);
++-    if (!isValidChainId(chainId)) {
++-      console.warn("[HERO DApp] Unsupported chain detected:", chainId, "— Please switch to PulseChain (369) or BASE (8453)");
++-    }
++-  }).catch(() => { /* No wallet connected — that's fine */ });
++-}
+++const root = document.getElementById("root");
+++if (!root) throw new Error("Missing #root application mount");
+++createRoot(root).render(<BootstrapRouter />);
++diff --git a/client/src/pages/Home.tsx b/client/src/pages/Home.tsx
++index db43121a7c3ec999231dda1d115147edc8d23cc8..bd91c0dfb3f8b4c4fe58d5d2b254d0837f7128f0 100644
++--- a/client/src/pages/Home.tsx
+++++ b/client/src/pages/Home.tsx
++@@ -112,22 +112,42 @@ const FEATURES = [
++   },
++ ];
++ 
++-// Deferred background video - doesn't load until 3s after page load
++-// This prevents the 16MB video from blocking initial page render
+++type NavigatorWithConnection = Navigator & {
+++  connection?: {
+++    saveData?: boolean;
+++    effectiveType?: string;
+++  };
+++};
+++
+++// Decorative 16 MB video: never compete with initial content, reduced-motion
+++// users, data-saver users, or visitors on 2G-class connections.
++ function DeferredBackgroundVideo({ src }: { src: string }) {
++   const [shouldLoad, setShouldLoad] = useState(false);
+++
++   useEffect(() => {
++-    const timer = setTimeout(() => setShouldLoad(true), 8000);
++-    return () => clearTimeout(timer);
+++    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+++    const connection = (navigator as NavigatorWithConnection).connection;
+++    const constrainedConnection =
+++      connection?.saveData === true ||
+++      connection?.effectiveType === "slow-2g" ||
+++      connection?.effectiveType === "2g";
+++
+++    if (reducedMotion || constrainedConnection) return;
+++
+++    const timer = window.setTimeout(() => setShouldLoad(true), 12_000);
+++    return () => window.clearTimeout(timer);
++   }, []);
+++
++   if (!shouldLoad) return null;
++   return (
++     <video
+++      aria-hidden="true"
++       preload="none"
++       autoPlay
++       loop
++       muted
++       playsInline
+++      poster="/hero-banner-sm.webp"
++       className="absolute inset-0 w-full h-full object-cover opacity-20 pointer-events-none"
++       src={src}
++     />
++diff --git a/scripts/check-landing-bundle.mjs b/scripts/check-landing-bundle.mjs
++new file mode 100644
++index 0000000000000000000000000000000000000000..213889a0781e53d7bea4b5740acb2d616a80fd37
++--- /dev/null
+++++ b/scripts/check-landing-bundle.mjs
++@@ -0,0 +1,82 @@
+++import fs from "node:fs";
+++import path from "node:path";
+++import { gzipSync } from "node:zlib";
+++
+++const outputRoot = path.resolve(process.cwd(), "dist/public");
+++const manifestPath = path.join(outputRoot, ".vite/manifest.json");
+++const budgetBytes = Number.parseInt(
+++  process.env.LANDING_GZIP_BUDGET_BYTES || "400000",
+++  10,
+++);
+++
+++if (!Number.isFinite(budgetBytes) || budgetBytes <= 0) {
+++  throw new Error("LANDING_GZIP_BUDGET_BYTES must be a positive integer");
+++}
+++if (!fs.existsSync(manifestPath)) {
+++  throw new Error(`Vite manifest not found: ${manifestPath}`);
+++}
+++
+++const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
+++const entryRecord =
+++  Object.entries(manifest).find(
+++    ([, chunk]) =>
+++      chunk?.isEntry &&
+++      (chunk.src === "src/main.tsx" || chunk.src === "client/src/main.tsx"),
+++  ) || Object.entries(manifest).find(([, chunk]) => chunk?.isEntry);
+++
+++if (!entryRecord) throw new Error("Unable to identify the Vite entry chunk");
+++
+++const [entryKey] = entryRecord;
+++const visitedChunks = new Set();
+++const outputFiles = new Set();
+++
+++function visitStaticChunk(key) {
+++  if (visitedChunks.has(key)) return;
+++  const chunk = manifest[key];
+++  if (!chunk) throw new Error(`Manifest references missing static chunk: ${key}`);
+++  visitedChunks.add(key);
+++  if (chunk.file) outputFiles.add(chunk.file);
+++  for (const cssFile of chunk.css || []) outputFiles.add(cssFile);
+++  for (const importedKey of chunk.imports || []) visitStaticChunk(importedKey);
+++}
+++
+++visitStaticChunk(entryKey);
+++
+++const forbiddenPattern = /(web3|connect-evm|wagmi|walletconnect|reown|data-layer)/i;
+++const forbiddenFiles = [...outputFiles].filter((file) => forbiddenPattern.test(file));
+++if (forbiddenFiles.length > 0) {
+++  throw new Error(
+++    `Landing static graph includes prohibited DApp chunks: ${forbiddenFiles.join(", ")}`,
+++  );
+++}
+++
+++const details = [...outputFiles]
+++  .sort()
+++  .map((relativeFile) => {
+++    const absoluteFile = path.join(outputRoot, relativeFile);
+++    if (!fs.existsSync(absoluteFile)) {
+++      throw new Error(`Landing graph output is missing: ${relativeFile}`);
+++    }
+++    const source = fs.readFileSync(absoluteFile);
+++    return {
+++      file: relativeFile,
+++      rawBytes: source.byteLength,
+++      gzipBytes: gzipSync(source, { level: 9 }).byteLength,
+++    };
+++  });
+++
+++const totalGzipBytes = details.reduce((sum, item) => sum + item.gzipBytes, 0);
+++console.log(`Landing entry: ${entryKey}`);
+++for (const item of details) {
+++  console.log(`${item.file}: raw=${item.rawBytes} gzip=${item.gzipBytes}`);
+++}
+++console.log(`Landing static gzip total: ${totalGzipBytes} bytes`);
+++console.log(`Landing static gzip budget: ${budgetBytes} bytes`);
+++
+++if (totalGzipBytes > budgetBytes) {
+++  throw new Error(
+++    `Landing static graph exceeds gzip budget by ${totalGzipBytes - budgetBytes} bytes`,
+++  );
+++}
+++
+++console.log("Landing bundle gate: PASS");
++diff --git a/vite.config.ts b/vite.config.ts
++index d6d7408d74eec7231853e3deff250566bdf939a7..d2442e9a24fe641c8a71b26ea556c066b7c6e5e0 100644
++--- a/vite.config.ts
+++++ b/vite.config.ts
++@@ -175,6 +175,7 @@ export default defineConfig({
++     emptyOutDir: true,
++     cssCodeSplit: true,
++     modulePreload: false,
+++    manifest: true,
++     rollupOptions: {
++       // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
++       // even if Vite alias fails to intercept a dynamic import
