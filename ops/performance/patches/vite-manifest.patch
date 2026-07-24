@@ -1,0 +1,12 @@
+diff --git a/vite.config.ts b/vite.config.ts
+index d6d7408d74eec7231853e3deff250566bdf939a7..d2442e9a24fe641c8a71b26ea556c066b7c6e5e0 100644
+--- a/vite.config.ts
++++ b/vite.config.ts
+@@ -175,6 +175,7 @@ export default defineConfig({
+     emptyOutDir: true,
+     cssCodeSplit: true,
+     modulePreload: false,
++    manifest: true,
+     rollupOptions: {
+       // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
+       // even if Vite alias fails to intercept a dynamic import
