@@ -8,7 +8,7 @@ Direct SSH deployment, runtime API deployment, package lifecycle deployment, `gi
 
 ## Required GitHub configuration
 
-The `production` environment must require designated human reviewers and must expose only these environment-scoped secrets:
+The `production` environment must require designated human reviewers, allow deployment only from `main`, and expose only these environment-scoped secrets:
 
 - `VPS1_HOST`
 - `VPS1_SSH_KEY`
@@ -21,8 +21,8 @@ The Cloudflare credential must be a scoped API token, not a global API key. Bran
 ## Release procedure
 
 1. Confirm the target commit is already merged to `main`.
-2. Confirm CI and Security and Quality checks pass on that exact commit.
-3. Open **Actions → Deploy to VPS1 → Run workflow**.
+2. Confirm the latest CI and Security and Quality checks pass on that exact commit.
+3. Open **Actions → Deploy to VPS1 → Run workflow** from the `main` ref.
 4. Enter the exact lowercase 40-character commit SHA.
 5. Enter the confirmation value `DEPLOY`.
 6. Submit the run and obtain `production` environment approval.
@@ -34,13 +34,16 @@ Workflow inputs are passed to shell commands through environment variables, not 
 
 Before opening an SSH session, the workflow:
 
+- refuses to run unless the workflow ref is `refs/heads/main`;
 - validates the exact SHA and explicit confirmation;
 - queries GitHub check runs for the requested SHA;
+- selects the latest trusted GitHub Actions run for each required check name;
 - requires completed successful `test-build-scan` and `repository-safety` checks;
-- refuses the release when either required exact-SHA check is absent or unsuccessful.
+- refuses the release when either latest exact-SHA check is absent, external, incomplete, or unsuccessful.
 
 The deployment then:
 
+- exposes SSH secrets only to the steps that need them;
 - uses strict SSH known-host verification, batch mode, a single explicit identity, and a connection timeout;
 - confirms the SHA is an ancestor of `origin/main`;
 - records the previously active SHA for bounded rollback;
@@ -48,24 +51,26 @@ The deployment then:
 - activates repository-pinned pnpm `10.34.4`;
 - confirms `package-lock.json` is absent;
 - runs `pnpm install --frozen-lockfile`;
+- removes stale `dist` output before rebuilding;
 - runs `pnpm build`;
 - reloads `hero-dapp` through PM2;
 - verifies the server checkout still equals the requested SHA;
 - retries the public health endpoint and requires an `ok: true` response;
-- restores, rebuilds, and reloads the previously active SHA if the approved deployment fails before health verification;
+- restores, reinstalls, clean-builds, and reloads the previously active SHA if the approved deployment fails before health verification;
 - purges Cloudflare through a scoped bearer token only after the deployment and health gate succeed;
 - removes ephemeral SSH key and known-host files from the runner on every outcome.
 
 ## Prohibited paths
 
 - Do not deploy merely by merging or pushing to `main`.
+- Do not launch the production workflow from a non-`main` ref.
 - Do not invoke `deploy.sh` or `deploy-production.sh`; both intentionally fail closed.
 - Do not call a web or tRPC deployment endpoint; the runtime endpoint has been removed.
 - Do not add package lifecycle hooks that edit or reload nginx, PM2, Git, or Cloudflare.
 - Do not run `npm install`, `npm ci`, or `npm run build` for this repository.
 - Do not restore `package-lock.json`.
 - Do not use `git pull` on production.
-- Do not bypass strict host-key checking or exact-SHA successful-check verification.
+- Do not bypass strict host-key checking, exact-SHA validation, or latest trusted check verification.
 - Do not use Cloudflare global API keys.
 
 ## Post-release verification
@@ -85,6 +90,6 @@ curl --fail --silent --show-error \
 
 ## Rollback
 
-A failure before health verification triggers an in-run rollback to the SHA that was active when the approved workflow began. The workflow rebuilds that previous SHA with its frozen pnpm lock and reloads PM2 before reporting failure.
+A failure before health verification triggers an in-run rollback to the SHA that was active when the approved workflow began. The workflow restores that SHA, installs its frozen pnpm graph, removes stale build output, rebuilds, and reloads PM2 before reporting failure.
 
-An intentional rollback is a separate protected workflow run using a previously verified commit that remains an ancestor of `main`. Record the reason, target SHA, approving reviewer, workflow run, health result, and final active SHA. Never perform an undocumented manual rollback on the server.
+An intentional rollback is a separate protected workflow run from `main` using a previously verified commit that remains an ancestor of `main`. Record the reason, target SHA, approving reviewer, workflow run, health result, and final active SHA. Never perform an undocumented manual rollback on the server.
