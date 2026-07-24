@@ -19,8 +19,9 @@ The `production` environment must require designated human reviewers, allow depl
 
 `VPS1_USER` must be a validated non-root account. Before deployment activation, an administrator must independently provision and verify that this account:
 
-- owns or has narrowly scoped write access to `/var/www/hero-dapp`;
-- can fetch the repository and use the installed Node/Corepack toolchain;
+- owns `/var/www/hero-dapp` as a real directory rather than a symlink;
+- can fetch the exact repository from an accepted GitHub origin URL;
+- can use Git, Node, Corepack, curl, and the installed pnpm toolchain;
 - owns or can manage only the `hero-dapp` PM2 process;
 - does not have unrestricted passwordless sudo;
 - cannot modify unrelated services, users, firewall rules, DNS, or credentials.
@@ -51,23 +52,30 @@ Before opening an SSH session, the workflow:
 - requires completed successful `test-build-scan` and `repository-safety` checks;
 - refuses the release when either latest exact-SHA check is absent, external, incomplete, or unsuccessful.
 
+The remote preflight then:
+
+- validates the host and non-root username formats;
+- exposes SSH secrets only to the steps that need them;
+- uses strict SSH known-host verification, batch mode, a single explicit identity, and a connection timeout;
+- requires Git, Node, Corepack, PM2, and curl before mutation;
+- requires `/var/www/hero-dapp` to be a non-symlink directory owned by the deployment account;
+- requires a normal Git checkout with an accepted exact GitHub origin URL;
+- requires the tracked working tree to be clean;
+- confirms the requested SHA is an ancestor of `origin/main`.
+
 The deployment then:
 
-- exposes SSH secrets only to the steps that need them;
-- validates the deployment username and refuses `root`;
-- uses strict SSH known-host verification, batch mode, a single explicit identity, and a connection timeout;
-- confirms the SHA is an ancestor of `origin/main`;
 - records the previously active SHA for bounded rollback;
-- resets the deployment checkout to the exact requested SHA;
+- resets the checkout to the exact requested SHA;
 - activates repository-pinned pnpm `10.34.4`;
 - confirms `package-lock.json` is absent;
 - runs `pnpm install --frozen-lockfile`;
 - removes stale `dist` output before rebuilding;
-- runs `pnpm build`;
+- runs the current read-only dependency validator and production build;
 - reloads `hero-dapp` through PM2;
 - verifies the server checkout still equals the requested SHA;
 - retries the public health endpoint and requires an `ok: true` response;
-- restores, reinstalls, clean-builds, and reloads the previously active SHA if the approved deployment fails before health verification;
+- restores, reinstalls, clean-builds without historical lifecycle hooks, reloads, and health-checks the previously active SHA after any post-mutation failure;
 - purges Cloudflare through a scoped bearer token only after the deployment and health gate succeed;
 - removes ephemeral SSH key and known-host files from the runner on every outcome.
 
@@ -77,6 +85,7 @@ The deployment then:
 - Do not launch the production workflow from a non-`main` ref.
 - Do not use `root` as the production SSH principal.
 - Do not grant the deployment account unrestricted sudo.
+- Do not deploy from a symlinked or misowned application path, dirty tracked tree, or unexpected Git remote.
 - Do not invoke `deploy.sh` or `deploy-production.sh`; both intentionally fail closed.
 - Do not call a web or tRPC deployment endpoint; the runtime endpoint has been removed.
 - Do not add package lifecycle hooks that edit or reload nginx, PM2, Git, or Cloudflare.
@@ -103,6 +112,6 @@ curl --fail --silent --show-error \
 
 ## Rollback
 
-A failure before health verification triggers an in-run rollback to the SHA that was active when the approved workflow began. The workflow restores that SHA, installs its frozen pnpm graph, removes stale build output, rebuilds, and reloads PM2 before reporting failure.
+After mutation begins, any installation, build, reload, SHA-verification, or health failure triggers an in-run rollback to the SHA active when the approved workflow began. The rollback restores that SHA, installs its frozen pnpm graph, removes stale build output, invokes Vite and esbuild directly without historical package lifecycle hooks, reloads PM2, and requires restored service health before reporting the original deployment failure.
 
 An intentional rollback is a separate protected workflow run from `main` using a previously verified commit that remains an ancestor of `main`. Record the reason, target SHA, approving reviewer, workflow run, health result, and final active SHA. Never perform an undocumented manual rollback on the server.
