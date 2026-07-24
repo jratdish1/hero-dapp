@@ -38,17 +38,22 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
-          test "$(git rev-parse HEAD^)" = "4ef34dba9c60a5190d4159ea1e22354fe30f26de"
+          test "$(git rev-parse HEAD^)" = "b587472bc6788c16c27b49f7b2a0de862acda47d"
           test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
           test -z "$(git status --porcelain)"
 
           mapfile -t patches < <(find ops/audit-remediation -maxdepth 1 -type f -name '*.patch' -print | sort)
           test "${#patches[@]}" -eq 6
 
+          failed=0
           for patch in "${patches[@]}"; do
             sha256sum "$patch"
-            git apply --check "$patch"
+            if ! git apply --3way --check "$patch"; then
+              printf 'PATCH_CHECK_FAILED=%s\n' "$patch" >&2
+              failed=1
+            fi
           done
+          test "$failed" -eq 0
 
           for patch in \
             ops/audit-remediation/client_src_pages_HeroStake.tsx.patch \
@@ -57,7 +62,7 @@ jobs:
             ops/audit-remediation/server_db.ts.patch \
             ops/audit-remediation/server_routers.ts.patch \
             ops/audit-remediation/ci.patch; do
-            git apply "$patch"
+            git apply --3way "$patch"
           done
 
           rm -rf ops/audit-remediation
