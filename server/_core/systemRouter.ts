@@ -3,6 +3,13 @@ import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { getRpcMetrics } from "../routers";
 
+const RELEASE_SHA_PATTERN = /^[0-9a-f]{40}$/;
+
+function getReleaseSha(): string {
+  const releaseSha = process.env.HERO_RELEASE_SHA?.trim();
+  return releaseSha && RELEASE_SHA_PATTERN.test(releaseSha) ? releaseSha : "unknown";
+}
+
 export const systemRouter = router({
   health: publicProcedure
     .input(
@@ -13,6 +20,7 @@ export const systemRouter = router({
     .query(() => ({
       ok: true,
       version: process.env.npm_package_version || "unknown",
+      releaseSha: getReleaseSha(),
       uptime: process.uptime(),
       rpc: getRpcMetrics(),
     })),
