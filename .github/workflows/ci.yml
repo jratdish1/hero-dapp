@@ -17,7 +17,6 @@ jobs:
   test-build-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 20
-
     steps:
       - name: Checkout
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
@@ -68,7 +67,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-          fetch-depth: 0
+          fetch-depth: 1
           persist-credentials: false
 
       - name: Setup Node
@@ -97,8 +96,13 @@ jobs:
               "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
           )
           sanitized = []
-          for raw_path in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0"):
-              if not raw_path:
+          entries = subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0")
+          for entry in entries:
+              if not entry:
+                  continue
+              metadata, raw_path = entry.split(b"\t", 1)
+              mode = metadata.split(b" ", 1)[0]
+              if mode not in {b"100644", b"100755"}:
                   continue
               path = Path(raw_path.decode("utf-8", "surrogateescape"))
               data = path.read_bytes()
@@ -146,8 +150,7 @@ jobs:
 
           changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
           allowed = {"pnpm-lock.yaml"}
-          report = Path("/tmp/pr40-sanitized-files.txt").read_text(encoding="utf-8")
-          allowed.update(line for line in report.splitlines() if line)
+          allowed.update(Path("/tmp/pr40-sanitized-files.txt").read_text(encoding="utf-8").splitlines())
           unexpected = changed - allowed
           if unexpected:
               raise SystemExit(f"Unexpected generated files: {sorted(unexpected)}")
@@ -171,7 +174,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: fix/security-high-vulns-2026-07-16
-          fetch-depth: 0
+          fetch-depth: 1
 
       - name: Reject branch movement
         env:
@@ -206,8 +209,13 @@ jobs:
               "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff",
               "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
           )
-          for raw_path in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0"):
-              if not raw_path:
+          entries = subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0")
+          for entry in entries:
+              if not entry:
+                  continue
+              metadata, raw_path = entry.split(b"\t", 1)
+              mode = metadata.split(b" ", 1)[0]
+              if mode not in {b"100644", b"100755"}:
                   continue
               path = Path(raw_path.decode("utf-8", "surrogateescape"))
               data = path.read_bytes()
