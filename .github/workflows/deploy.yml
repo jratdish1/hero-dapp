@@ -89,7 +89,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$VPS1_HOST"
+          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
           [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
           test "$VPS1_USER" != "root"
           ssh \
@@ -105,7 +105,28 @@ jobs:
           APP_DIR="/var/www/hero-dapp"
           HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
 
+          for required_command in git node corepack pm2 curl; do
+            command -v "$required_command" >/dev/null || {
+              echo "Missing required command: $required_command" >&2
+              exit 1
+            }
+          done
+          test -d "$APP_DIR"
+          test ! -L "$APP_DIR"
+          test "$(stat -c '%U' "$APP_DIR")" = "$(id -un)"
           cd "$APP_DIR"
+          test -d .git
+
+          ORIGIN_URL="$(git remote get-url origin)"
+          case "$ORIGIN_URL" in
+            https://github.com/jratdish1/hero-dapp.git|git@github.com:jratdish1/hero-dapp.git)
+              ;;
+            *)
+              echo "Unexpected origin URL" >&2
+              exit 1
+              ;;
+          esac
+
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           git cat-file -e "${PREVIOUS_SHA}^{commit}"
           test -z "$(git status --porcelain --untracked-files=no)"
