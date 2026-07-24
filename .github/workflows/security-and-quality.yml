@@ -24,16 +24,17 @@ jobs:
           fetch-depth: 1
           persist-credentials: false
 
-      - name: Scan exact Git index blobs
+      - name: Prepare exact-index scanner
         shell: bash
         run: |
           set -euo pipefail
-          python3 - <<'PY'
+          cat > "$RUNNER_TEMP/scan_index.py" <<'PY'
           import re
           import subprocess
           import sys
 
-          forbidden_unicode = {
+          scan_kind = sys.argv[1]
+          hidden_patterns = {
               "\u200b".encode(): "U+200B ZERO WIDTH SPACE",
               "\u200c".encode(): "U+200C ZERO WIDTH NON-JOINER",
               "\u200d".encode(): "U+200D ZERO WIDTH JOINER",
@@ -45,13 +46,12 @@ jobs:
               "\u202d".encode(): "U+202D LEFT-TO-RIGHT OVERRIDE",
               "\u202e".encode(): "U+202E RIGHT-TO-LEFT OVERRIDE",
           }
-
-          secret_pattern = re.compile(
-              rb"(?:-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"
-              rb"|gh[pousr]_[A-Za-z0-9_]{30,}"
-              rb"|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"
-              rb"|AKIA[0-9A-Z]{16})"
-          )
+          regex_patterns = {
+              "private-key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
+              "github-token": re.compile(rb"gh[pousr]_[A-Za-z0-9_]{30,}"),
+              "openai-token": re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+              "aws-key": re.compile(rb"AKIA[0-9A-Z]{16}"),
+          }
 
           try:
               raw_entries = subprocess.check_output(
@@ -62,12 +62,11 @@ jobs:
               raise SystemExit("FAIL-CLOSED: unable to enumerate Git index")
 
           findings = []
-          entries = raw_entries.split(b"\0")
+          scanned_blobs = 0
 
-          for entry in entries:
+          for entry in raw_entries.split(b"\0"):
               if not entry:
                   continue
-
               try:
                   metadata, raw_path = entry.split(b"\t", 1)
                   mode, object_id, stage = metadata.split(b" ")
@@ -77,11 +76,8 @@ jobs:
               path = raw_path.decode("utf-8", "surrogateescape")
               if stage != b"0":
                   raise SystemExit(f"FAIL-CLOSED: unmerged index entry at {path}")
-
               if mode == b"160000":
-                  print(f"gitlink skipped as non-text index entry: {path}")
                   continue
-
               if mode not in {b"100644", b"100755", b"120000"}:
                   raise SystemExit(f"FAIL-CLOSED: unsupported Git mode {mode.decode()} at {path}")
 
@@ -94,23 +90,44 @@ jobs:
                   sys.stderr.buffer.write(error.output)
                   raise SystemExit(f"FAIL-CLOSED: cannot read indexed blob for {path}")
 
+              scanned_blobs += 1
               if b"\0" in data:
                   continue
 
-              for needle, label in forbidden_unicode.items():
-                  if needle not in data:
-                      continue
-                  for line_number, line in enumerate(data.splitlines(), 1):
-                      if needle in line:
-                          findings.append(f"{path}:{line_number}: forbidden {label}")
+              if scan_kind == "hidden-unicode":
+                  for needle, label in hidden_patterns.items():
+                      for line_number, line in enumerate(data.splitlines(), 1):
+                          if needle in line:
+                              findings.append(f"{path}:{line_number}: forbidden {label}")
+              elif scan_kind in regex_patterns:
+                  for match in regex_patterns[scan_kind].finditer(data):
+                      line_number = data.count(b"\n", 0, match.start()) + 1
+                      findings.append(f"{path}:{line_number}: {scan_kind} pattern")
+              elif scan_kind != "structure":
+                  raise SystemExit(f"FAIL-CLOSED: unsupported scan kind {scan_kind}")
 
-              for match in secret_pattern.finditer(data):
-                  line_number = data.count(b"\n", 0, match.start()) + 1
-                  findings.append(f"{path}:{line_number}: potential secret pattern")
-
+          if scanned_blobs == 0:
+              raise SystemExit("FAIL-CLOSED: no indexed blobs were scanned")
           if findings:
               print("\n".join(findings), file=sys.stderr)
               raise SystemExit(1)
-
-          print("Exact-index hidden Unicode and secret scans passed.")
+          print(f"{scan_kind} scan passed across {scanned_blobs} indexed blobs")
           PY
+
+      - name: Git index structure
+        run: python3 "$RUNNER_TEMP/scan_index.py" structure
+
+      - name: Hidden Unicode
+        run: python3 "$RUNNER_TEMP/scan_index.py" hidden-unicode
+
+      - name: Private-key headers
+        run: python3 "$RUNNER_TEMP/scan_index.py" private-key
+
+      - name: GitHub token patterns
+        run: python3 "$RUNNER_TEMP/scan_index.py" github-token
+
+      - name: OpenAI-style token patterns
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token
+
+      - name: AWS access-key patterns
+        run: python3 "$RUNNER_TEMP/scan_index.py" aws-key
