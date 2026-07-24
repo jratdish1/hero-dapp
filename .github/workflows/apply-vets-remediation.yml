@@ -4,9 +4,6 @@ on:
   push:
     branches:
       - fix/security-high-vulns-2026-07-16
-  pull_request:
-    branches:
-      - main
 
 permissions:
   contents: write
@@ -18,7 +15,7 @@ concurrency:
 
 jobs:
   apply:
-    if: github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16' || github.head_ref == 'fix/security-high-vulns-2026-07-16'
+    if: github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
@@ -29,65 +26,21 @@ jobs:
           fetch-depth: 0
           show-progress: false
 
-      - name: Diagnose bounded patch set
-        id: patch_gate
-        shell: bash
-        run: |
-          set -uo pipefail
-          diagnostics="$RUNNER_TEMP/patch-diagnostics.txt"
-          : > "$diagnostics"
-          ok=true
-
-          {
-            printf 'HEAD=%s\n' "$(git rev-parse HEAD)"
-            printf 'PARENT=%s\n' "$(git rev-parse HEAD^)"
-            printf 'MESSAGE=%s\n' "$(git log -1 --pretty=%s)"
-            printf 'BRANCH=%s\n' "$(git branch --show-current)"
-            printf 'STATUS=%s\n' "$(git status --porcelain | wc -l)"
-          } >> "$diagnostics"
-
-          if [ "$(git branch --show-current)" != "fix/security-high-vulns-2026-07-16" ]; then ok=false; fi
-          if [ "$(git rev-parse HEAD^)" != "049a2b5bf05f49fe7d00366a2f1b0cddc9cdbe82" ]; then ok=false; fi
-          if [ "$(git log -1 --pretty=%s)" != "chore: stage authorized VETS remediation" ]; then ok=false; fi
-          if [ -n "$(git status --porcelain)" ]; then ok=false; fi
-
-          mapfile -t patches < <(find ops/audit-remediation -maxdepth 1 -type f -name '*.patch' -print | sort)
-          printf 'PATCH_COUNT=%s\n' "${#patches[@]}" >> "$diagnostics"
-          if [ "${#patches[@]}" -ne 6 ]; then ok=false; fi
-
-          for patch in "${patches[@]}"; do
-            printf '\n=== %s ===\n' "$patch" >> "$diagnostics"
-            sha256sum "$patch" >> "$diagnostics" 2>&1 || ok=false
-            if git apply --3way --check "$patch" >> "$diagnostics" 2>&1; then
-              printf 'CHECK=PASS\n' >> "$diagnostics"
-            else
-              printf 'CHECK=FAIL\n' >> "$diagnostics"
-              ok=false
-            fi
-          done
-
-          cat "$diagnostics"
-          printf 'ok=%s\n' "$ok" >> "$GITHUB_OUTPUT"
-
-      - name: Upload patch diagnostics
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: patch-diagnostics-${{ github.sha }}
-          path: ${{ runner.temp }}/patch-diagnostics.txt
-          retention-days: 7
-          if-no-files-found: error
-
-      - name: Enforce patch gate
-        if: steps.patch_gate.outputs.ok != 'true'
-        shell: bash
-        run: exit 1
-
-      - name: Apply bounded patches
-        if: steps.patch_gate.outputs.ok == 'true'
+      - name: Verify and apply bounded patches
         shell: bash
         run: |
           set -euo pipefail
+          test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
+          test "$(git rev-parse HEAD^)" = "36d5232d0486add3c7a359fc5071151813f8051c"
+          test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
+          test -z "$(git status --porcelain)"
+
+          mapfile -t patches < <(find ops/audit-remediation -maxdepth 1 -type f -name '*.patch' -print | sort)
+          test "${#patches[@]}" -eq 6
+          for patch in "${patches[@]}"; do
+            sha256sum "$patch"
+            git apply --3way --check "$patch"
+          done
           for patch in \
             ops/audit-remediation/client_src_pages_HeroStake.tsx.patch \
             ops/audit-remediation/client_src_pages_SpinWheel.tsx.patch \
@@ -101,14 +54,12 @@ jobs:
           rm -f .github/workflows/apply-vets-remediation.yml
 
       - name: Setup Node
-        if: steps.patch_gate.outputs.ok == 'true'
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 22
 
       - name: Validate exact remediated tree
-        id: validation_gate
-        if: steps.patch_gate.outputs.ok == 'true'
+        id: validation
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ci-audit-placeholder
         shell: bash
@@ -146,7 +97,7 @@ jobs:
           printf 'ok=%s\n' "$ok" >> "$GITHUB_OUTPUT"
 
       - name: Upload validation diagnostics
-        if: always() && steps.patch_gate.outputs.ok == 'true'
+        if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: validation-diagnostics-${{ github.sha }}
@@ -155,12 +106,12 @@ jobs:
           if-no-files-found: error
 
       - name: Enforce validation gate
-        if: steps.patch_gate.outputs.ok == 'true' && steps.validation_gate.outputs.ok != 'true'
+        if: steps.validation.outputs.ok != 'true'
         shell: bash
         run: exit 1
 
       - name: Commit and push exact validated tree
-        if: steps.patch_gate.outputs.ok == 'true' && steps.validation_gate.outputs.ok == 'true'
+        if: steps.validation.outputs.ok == 'true'
         shell: bash
         run: |
           set -euo pipefail
@@ -175,7 +126,7 @@ jobs:
           printf 'Final remediated SHA: %s\n' "$final_sha"
 
       - name: Dispatch exact-head CI and security gates
-        if: steps.patch_gate.outputs.ok == 'true' && steps.validation_gate.outputs.ok == 'true'
+        if: steps.validation.outputs.ok == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
         shell: bash
