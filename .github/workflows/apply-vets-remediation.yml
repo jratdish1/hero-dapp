@@ -47,7 +47,7 @@ jobs:
           } >> "$diagnostics"
 
           if [ "$(git branch --show-current)" != "fix/security-high-vulns-2026-07-16" ]; then ok=false; fi
-          if [ "$(git rev-parse HEAD^)" != "465fe8f277f19375e4fc9c4fb408b960ad9db8f1" ]; then ok=false; fi
+          if [ "$(git rev-parse HEAD^)" != "1c239448e1399f672ea7c838697008e6456b5bea" ]; then ok=false; fi
           if [ "$(git log -1 --pretty=%s)" != "chore: stage authorized VETS remediation" ]; then ok=false; fi
           if [ -n "$(git status --porcelain)" ]; then ok=false; fi
 

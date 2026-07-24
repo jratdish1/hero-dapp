@@ -44,7 +44,7 @@ index 6feef61..a8b96e6 100644
    // ─── Render ──────────────────────────────────────────────────────
 @@ -684,13 +685,13 @@ export default function HeroStake() {
            <span>
-             Staking Contract: {" "}
+             Staking Contract:{" "}
              <a
 -              href={`${chainConfig.explorer}/address/${getStakingAddress(chainId)}`}
 +              href={`${chainConfig.explorer}/address/${chainConfig.stakingCA}`}
