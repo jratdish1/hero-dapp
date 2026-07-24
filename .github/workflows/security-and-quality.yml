@@ -18,14 +18,36 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
 
       - name: Hidden Unicode scan
         shell: bash
         run: |
-          ! grep -RInP '[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}\x{202A}-\x{202E}]' -- . || (echo 'Hidden Unicode found' && exit 1)
+          set +e
+          grep -aRInP --exclude-dir=.git '[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}\x{202A}-\x{202E}]' -- .
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Hidden Unicode found'
+            exit 1
+          fi
+          if [ "$status" -ne 1 ]; then
+            echo "Hidden Unicode scanner failed with status $status"
+            exit "$status"
+          fi
 
       - name: Secret pattern scan
         shell: bash
         run: |
-          ! grep -RInE '(-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' -- . || (echo 'Potential secret found' && exit 1)
+          set +e
+          grep -aRInP --exclude-dir=.git '(-----BEGIN (RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|gh[pousr]_[A-Za-z0-9_]{30,}|(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' -- .
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            echo 'Potential secret found'
+            exit 1
+          fi
+          if [ "$status" -ne 1 ]; then
+            echo "Secret scanner failed with status $status"
+            exit "$status"
+          fi
