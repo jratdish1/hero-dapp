@@ -34,7 +34,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
-          test "$(git rev-parse HEAD^)" = "0cb7dc84b82268753528df789a7e94eb6f3f7b89"
+          test "$(git rev-parse HEAD^)" = "717694a7fc192fe87926df254f0e2b0a10b51a0e"
           test "$(git log -1 --pretty=%s)" = "chore: stage authorized VETS remediation"
           test -z "$(git status --porcelain)"
 
@@ -54,7 +54,6 @@ jobs:
             git apply --3way "$patch"
           done
           rm -rf ops/audit-remediation
-          rm -f .github/workflows/apply-vets-remediation.yml
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
