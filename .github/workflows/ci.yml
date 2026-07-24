@@ -3,10 +3,7 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - master
-      - fix/security-high-vulns-2026-07-16
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:
@@ -55,23 +52,24 @@ jobs:
       - name: Token registry scanner
         run: node scripts/check-token-registry.mjs
 
-  finalize-pr40:
-    name: One-shot PR 40 finalization
+  validate-pr40-remediation:
+    name: Validate PR 40 remediation read-only
     if: >-
-      github.event_name == 'push' &&
-      github.ref == 'refs/heads/fix/security-high-vulns-2026-07-16' &&
-      github.actor != 'github-actions[bot]'
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 40 &&
+      github.head_ref == 'fix/security-high-vulns-2026-07-16'
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
-      contents: write
+      contents: read
 
     steps:
-      - name: Checkout authorized branch
+      - name: Checkout exact PR head
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: fix/security-high-vulns-2026-07-16
+          ref: ${{ github.event.pull_request.head.sha }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Setup Node
         uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
@@ -86,7 +84,7 @@ jobs:
           corepack prepare pnpm@10.34.4 --activate
           test "$(pnpm --version)" = "10.34.4"
 
-      - name: Remove prohibited hidden Unicode from tracked text files
+      - name: Generate bounded remediation in read-only workspace
         shell: bash
         run: |
           set -euo pipefail
@@ -95,18 +93,10 @@ jobs:
           from pathlib import Path
 
           forbidden = (
-              "\u200b",
-              "\u200c",
-              "\u200d",
-              "\u2060",
-              "\ufeff",
-              "\u202a",
-              "\u202b",
-              "\u202c",
-              "\u202d",
-              "\u202e",
+              "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff",
+              "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
           )
-
+          sanitized = []
           for raw_path in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0"):
               if not raw_path:
                   continue
@@ -122,14 +112,10 @@ jobs:
               for character in forbidden:
                   cleaned = cleaned.replace(character, "")
               if cleaned != text:
-                  print(f"sanitized: {path}")
+                  sanitized.append(str(path))
                   path.write_text(cleaned, encoding="utf-8")
+          Path("/tmp/pr40-sanitized-files.txt").write_text("\n".join(sanitized), encoding="utf-8")
           PY
-
-      - name: Regenerate canonical pnpm lockfile
-        shell: bash
-        run: |
-          set -euo pipefail
           pnpm install --lockfile-only --ignore-scripts
           test ! -e package-lock.json
 
@@ -146,6 +132,100 @@ jobs:
           node scripts/check-token-registry.mjs
           git diff --check
           node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
+          grep -q "wouter@3.7.1" pnpm-lock.yaml
+          grep -q "axios@1.18.0" pnpm-lock.yaml
+
+      - name: Verify bounded generated diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$(git status --short)"
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          changed = set(subprocess.check_output(["git", "diff", "--name-only"], text=True).splitlines())
+          allowed = {"pnpm-lock.yaml"}
+          report = Path("/tmp/pr40-sanitized-files.txt").read_text(encoding="utf-8")
+          allowed.update(line for line in report.splitlines() if line)
+          unexpected = changed - allowed
+          if unexpected:
+              raise SystemExit(f"Unexpected generated files: {sorted(unexpected)}")
+          PY
+
+  commit-pr40-remediation:
+    name: Commit validated PR 40 remediation
+    needs: validate-pr40-remediation
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.number == 40 &&
+      github.head_ref == 'fix/security-high-vulns-2026-07-16' &&
+      github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout authorized branch at exact event head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/security-high-vulns-2026-07-16
+          fetch-depth: 0
+
+      - name: Reject branch movement
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_HEAD"
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Activate repository-pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+
+      - name: Reproduce validated deterministic artifacts without lifecycle scripts
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          forbidden = (
+              "\u200b", "\u200c", "\u200d", "\u2060", "\ufeff",
+              "\u202a", "\u202b", "\u202c", "\u202d", "\u202e",
+          )
+          for raw_path in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0"):
+              if not raw_path:
+                  continue
+              path = Path(raw_path.decode("utf-8", "surrogateescape"))
+              data = path.read_bytes()
+              if b"\0" in data:
+                  continue
+              try:
+                  text = data.decode("utf-8")
+              except UnicodeDecodeError:
+                  continue
+              cleaned = text
+              for character in forbidden:
+                  cleaned = cleaned.replace(character, "")
+              if cleaned != text:
+                  path.write_text(cleaned, encoding="utf-8")
+          PY
+          pnpm install --lockfile-only --ignore-scripts
+          test ! -e package-lock.json
+          git diff --check
           grep -q "wouter@3.7.1" pnpm-lock.yaml
           grep -q "axios@1.18.0" pnpm-lock.yaml
 
