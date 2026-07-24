@@ -5,6 +5,9 @@ settings:
   excludeLinksFromLockfile: false
 
 overrides:
+  '@walletconnect/ethereum-provider': 2.17.0
+  '@walletconnect/modal': 2.7.0
+  '@reown/appkit': npm:empty-npm-package@1.0.0
   tailwindcss>nanoid: 3.3.7
   fast-xml-parser: '>=5.3.8'
   tar: '>=7.5.10'
@@ -160,8 +163,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0(@types/react@19.2.1)(react@19.2.1)
       axios:
-        specifier: ^1.16.1
-        version: 1.16.1
+        specifier: 1.18.0
+        version: 1.18.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -352,9 +355,6 @@ importers:
       mocha:
         specifier: ^11.7.6
         version: 11.7.6
-      pnpm:
-        specifier: ^10.34.4
-        version: 10.34.5
       postcss:
         specifier: ^8.5.15
         version: 8.5.15
@@ -2659,7 +2659,7 @@ packages:
       '@safe-global/safe-apps-provider': ~0.18.6
       '@safe-global/safe-apps-sdk': ^9.1.0
       '@wagmi/core': 3.4.1
-      '@walletconnect/ethereum-provider': ^2.21.1
+      '@walletconnect/ethereum-provider': 2.17.0
       porto: ~0.2.35
       typescript: '>=5.7.3'
       viem: 2.x
@@ -2889,8 +2889,8 @@ packages:
     resolution: {integrity: sha512-NZKeq9AfyQvEeNlN0zSYAaWrmBffJh3IELMZfRpJVWgrpEbtEpnjvzqBPf+mxoI287JohRDoa+/nsfqqiZmF6g==}
     engines: {node: '>= 6.0.0'}
 
-  axios@1.16.1:
-    resolution: {integrity: sha512-caYkukvroVPO8KrzuJEb50Hm07KwfBZPEC3VeFHTsqWHvKTsy54hjJz9BS/cdaypROE2rH6xvm9mHX4fgWkr3A==}
+  axios@1.18.0:
+    resolution: {integrity: sha512-E32NzpYKp++W7XRe52rHiXV2ehxmh3wbdgO7MHeFM+vqxLBYHzt0ElkiImtOBxtOmyp0yoC8C6uESVV84Y2/hw==}
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
@@ -4800,11 +4800,6 @@ packages:
   pngjs@5.0.0:
     resolution: {integrity: sha512-40QW5YalBNfQo5yRYmiw7Yz6TKKVr3h6970B2YE+3fQpsWcrbj1PzJgxeJ19DRQjhMbKPIuMY8rFaXc8moolVw==}
     engines: {node: '>=10.13.0'}
-
-  pnpm@10.34.5:
-    resolution: {integrity: sha512-pO4F8vc2WCVb1qiYWcBlpFwopX2u+uLIk6Fo7itzFow3uR6D5X6mdlStA/AwMXRkMOi84442LgQmBfuKvIAZLg==}
-    engines: {node: '>=18.12'}
-    hasBin: true
 
   points-on-curve@0.2.0:
     resolution: {integrity: sha512-0mYKnYYe9ZcqMCWhUjItv/oHjvgEsfKvnUTg8sAtnHr3GVy7rGkXCb6d5cSyqrWqL4k81b9CPg3urd+T7aop3A==}
@@ -9061,7 +9056,7 @@ snapshots:
 
   aws-ssl-profiles@1.1.2: {}
 
-  axios@1.16.1:
+  axios@1.18.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
@@ -11212,8 +11207,6 @@ snapshots:
       pathe: 2.0.3
 
   pngjs@5.0.0: {}
-
-  pnpm@10.34.5: {}
 
   points-on-curve@0.2.0: {}
 
