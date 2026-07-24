@@ -2,7 +2,7 @@
 
 ## Security objective
 
-Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, or bearer token may bypass the protected GitHub environment.
+Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, package lifecycle hook, or bearer token may bypass the protected GitHub environment.
 
 ## Permanent controls
 
@@ -18,38 +18,46 @@ Production deployment is a separate, human-approved release action. A merge must
 
 - The deployment workflow has no `push` trigger.
 - A human must invoke `workflow_dispatch`.
-- The requester must supply an exact 40-character commit SHA already merged to `main`.
+- The requester must supply an exact lowercase 40-character commit SHA already merged to `main`.
 - The requester must enter the explicit confirmation value `DEPLOY`.
+- Inputs are consumed through environment variables and are never interpolated into shell source.
 - The GitHub `production` environment must require human approval.
 - Concurrency allows only one VPS1 production deployment at a time and does not cancel an active release.
 
-### 3. Exact release identity
+### 3. Exact release identity and successful-check enforcement
 
 Before changing runtime state, the workflow:
 
-1. fetches `origin/main`;
-2. resolves the requested object as a commit;
-3. verifies it is an ancestor of `origin/main`;
-4. resets the server checkout to that exact SHA;
-5. verifies the active checkout still equals the requested SHA after build and reload.
+1. validates the SHA and confirmation;
+2. queries GitHub check runs for the requested SHA;
+3. requires successful completed `test-build-scan` and `repository-safety` checks;
+4. fetches `origin/main` on the server;
+5. resolves the requested object as a commit;
+6. verifies it is an ancestor of `origin/main`;
+7. records the previously active SHA;
+8. resets the server checkout to the exact requested SHA;
+9. verifies the active checkout still equals the requested SHA after build and reload.
 
-The workflow never deploys an ambiguous branch tip or an unmerged commit.
+The workflow never deploys an ambiguous branch tip, an unmerged commit, or an exact SHA without both required successful repository checks.
 
 ### 4. SSH and credential controls
 
 - Strict host-key verification is mandatory.
 - `VPS1_KNOWN_HOSTS` is environment-scoped.
-- Batch mode and a single explicit identity are required.
+- Batch mode, a connection timeout, and a single explicit identity are required.
+- Ephemeral SSH key and known-host files are removed on every workflow outcome.
 - Cloudflare uses a scoped API bearer token.
 - Global API keys and email/key authentication are prohibited.
 - Production secrets belong to the protected `production` environment, not general repository scope.
 
-### 5. Runtime and legacy bypass prevention
+### 5. Runtime and lifecycle bypass prevention
 
 - The former public tRPC deployment mutation is removed.
 - `deploy.sh` and `deploy-production.sh` fail closed and direct operators to the protected workflow.
-- Direct `git pull`, npm build, PM2 reload, and Cloudflare purge instructions are retired.
-- No source-controlled application code may execute Git, package-manager, PM2, nginx, or Cloudflare deployment commands.
+- The package `postdeploy` hook is removed.
+- `scripts/fix-nginx-dao.sh` is deleted.
+- Direct `git pull`, npm build, PM2 reload, nginx mutation, and Cloudflare purge instructions are retired.
+- No source-controlled application code or package lifecycle hook may execute Git, package-manager, PM2, nginx, or Cloudflare deployment commands outside the protected workflow.
 
 ### 6. CI prerequisites
 
@@ -66,7 +74,20 @@ The exact release commit must pass:
 - token registry scanner;
 - exact-index hidden Unicode and credential-pattern scans.
 
-Third-party GitHub Actions are pinned to immutable commit SHAs.
+The deployment workflow independently verifies the successful exact-SHA check runs before accessing production. Third-party GitHub Actions are pinned to immutable commit SHAs.
+
+### 7. Health gate and bounded rollback
+
+After PM2 reload, the workflow:
+
+- verifies the server checkout still equals the approved SHA;
+- retries the public tRPC health endpoint;
+- requires an `ok: true` response before declaring the release healthy;
+- restores the previously active SHA if installation, build, reload, SHA verification, or health verification fails;
+- rebuilds the previous SHA from its frozen pnpm lock and reloads PM2 during rollback;
+- purges Cloudflare only after the deployment and health gate succeed.
+
+A failed purge does not silently report a successful workflow.
 
 ## Prohibited production actions
 
@@ -74,21 +95,25 @@ Third-party GitHub Actions are pinned to immutable commit SHAs.
 - No direct server edits.
 - No `git pull` on production.
 - No npm install/build path.
-- No skipped lockfile verification.
+- No skipped lockfile or exact-SHA check verification.
 - No disabled SSH host verification.
 - No global Cloudflare API key.
 - No runtime deploy endpoint.
+- No package lifecycle deployment or nginx mutation hook.
 - No undocumented rollback.
 - No force push or history rewrite to alter release evidence.
 
 ## Rollback discipline
 
-Rollback uses the same protected workflow with a previously verified commit that remains in `main` history. The rollback record must include:
+A failed approved deployment automatically attempts restoration to the SHA active when that workflow began. An intentional rollback uses the same protected workflow with a previously verified commit that remains in `main` history.
+
+Every intentional rollback record must include:
 
 - reason;
 - target SHA;
 - approving reviewer;
 - workflow run;
+- exact-SHA check evidence;
 - post-release health result;
 - final active SHA.
 
