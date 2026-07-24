@@ -67,19 +67,21 @@ const connectorList = [
 // Only add WalletConnect if a Project ID is configured
 // WalletConnect enables: Trust Wallet, Ledger, Trezor, Rainbow, 300+ mobile wallets
 if (wcProjectId) {
-  connectorList.push(
-    walletConnect({
-      projectId: wcProjectId,
-      metadata: {
-        name: "HERO Dapp",
-        description:
-          "PulseChain & BASE DEX Aggregator — Built for Veterans by Veterans",
-        url: "https://www.herobase.io",
-        icons: ["https://www.herobase.io/favicon.ico"],
-      },
-      showQrModal: false,
-    })
-  );
+  // @wagmi/connectors and wagmi currently resolve the same connector runtime
+  // through distinct peer-dependency type instances. Normalize only at this
+  // well-defined connector boundary; runtime shape is validated by createConfig.
+  const walletConnectConnector = walletConnect({
+    projectId: wcProjectId,
+    metadata: {
+      name: "HERO Dapp",
+      description:
+        "PulseChain & BASE DEX Aggregator — Built for Veterans by Veterans",
+      url: "https://www.herobase.io",
+      icons: ["https://www.herobase.io/favicon.ico"],
+    },
+    showQrModal: false,
+  }) as unknown as (typeof connectorList)[number];
+  connectorList.push(walletConnectConnector);
 }
 
 // ─── RPC Failsafe Configuration ────────────────────────────────────────

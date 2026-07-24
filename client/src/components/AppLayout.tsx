@@ -67,6 +67,7 @@ interface NavItem {
   label: string;
   icon: any;
   external?: string;
+  dynamic?: boolean;
 }
 
 interface NavGroup {
@@ -280,7 +281,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                     {isExpanded && (
                       <div className="ml-3 pl-3 border-l border-sidebar-border/30 space-y-0.5 mt-0.5 mb-1">
                         {group.items.map((item) => {
-                          const resolvedPath = (item as any).dynamic && !isPulseChain ? "/stake/base" : item.path;
+                          const resolvedPath = item.dynamic && !isPulseChain ? "/stake/base" : item.path;
                           const isActive = location === resolvedPath;
                           const Icon = item.icon;
                           const isExternal = !!item.external;

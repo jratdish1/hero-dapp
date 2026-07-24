@@ -1,39 +1,359 @@
 name: Deploy to VPS1
 
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact lowercase 40-character commit SHA already merged to main
+        required: true
+        type: string
+      confirmation:
+        description: Type DEPLOY to authorize this protected production run
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: production-vps1
+  cancel-in-progress: false
 
 jobs:
   deploy:
+    name: Protected production deployment
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 35
+    environment: production
+    env:
+      DEPLOY_SHA: ${{ inputs.commit_sha }}
+      DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
+
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
-        with:
-          host: ${{ secrets.VDS_HOST }}
-          username: root
-          key: ${{ secrets.VDS_SSH_KEY }}
-          script: |
-            ssh root@${{ secrets.VPS1_HOST }} << 'DEPLOY'
-              set -e
-              cd /var/www/hero-dapp
-              git fetch origin main
-              git reset --hard origin/main
-              npm run build
-              pm2 reload hero-dapp
-            DEPLOY
-
-      - name: Purge Cloudflare Cache
-        if: success()
+      - name: Validate release authorization
+        shell: bash
         run: |
-          curl -s -X POST "https://api.cloudflare.com/client/v4/zones/${{ secrets.CF_ZONE_ID }}/purge_cache" \
-            -H "X-Auth-Email: ${{ secrets.CF_EMAIL }}" \
-            -H "X-Auth-Key: ${{ secrets.CF_API_KEY }}" \
-            -H "Content-Type: application/json" \
-            --data '{"purge_everything":true}'
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$DEPLOY_CONFIRMATION" = "DEPLOY"
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
 
-      - name: Notify Success
+      - name: Require successful exact-SHA repository checks
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$DEPLOY_SHA/check-runs?per_page=100")"
+
+          for required_check in test-build-scan repository-safety; do
+            jq -e --arg name "$required_check" --arg sha "$DEPLOY_SHA" '
+              [.check_runs[] | select(
+                .name == $name and
+                .head_sha == $sha and
+                .app.slug == "github-actions"
+              )]
+              | if length == 0 then false
+                else (max_by(.id) | .status == "completed" and .conclusion == "success")
+                end
+            ' <<<"$response" >/dev/null || {
+              echo "Latest trusted check is absent or unsuccessful for $DEPLOY_SHA: $required_check" >&2
+              exit 1
+            }
+          done
+
+      - name: Configure strict SSH trust
+        env:
+          VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
+          VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VPS1_SSH_KEY"
+          test -n "$VPS1_KNOWN_HOSTS"
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+
+      - name: Deploy exact merged commit with frozen pnpm dependencies
+        id: deploy_app
+        env:
+          VPS1_HOST: ${{ secrets.VPS1_HOST }}
+          VPS1_USER: ${{ secrets.VPS1_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+          test "$VPS1_USER" != "root"
+
+          deploy_log="$RUNNER_TEMP/vps1-deploy.log"
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS1_USER@$VPS1_HOST" \
+            bash -s -- "$DEPLOY_SHA" <<'REMOTE' | tee "$deploy_log"
+          set -Eeuo pipefail
+          DEPLOY_SHA="$1"
+          APP_DIR="/var/www/hero-dapp"
+          HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+
+          for required_command in git node corepack pm2 curl; do
+            command -v "$required_command" >/dev/null || {
+              echo "Missing required command: $required_command" >&2
+              exit 1
+            }
+          done
+          test -d "$APP_DIR"
+          test ! -L "$APP_DIR"
+          test "$(stat -c '%U' "$APP_DIR")" = "$(id -un)"
+          cd "$APP_DIR"
+          test -d .git
+
+          ORIGIN_URL="$(git remote get-url origin)"
+          case "$ORIGIN_URL" in
+            https://github.com/jratdish1/hero-dapp.git|git@github.com:jratdish1/hero-dapp.git)
+              ;;
+            *)
+              echo "Unexpected origin URL" >&2
+              exit 1
+              ;;
+          esac
+
+          PREVIOUS_SHA="$(git rev-parse HEAD)"
+          [[ "$PREVIOUS_SHA" =~ ^[0-9a-f]{40}$ ]]
+          git cat-file -e "${PREVIOUS_SHA}^{commit}"
+          test -z "$(git status --porcelain)"
+          MUTATION_STARTED=false
+
+          wait_for_health() {
+            local expected_sha="${1:-}"
+            local healthy=false
+            local response=""
+            local attempt
+            for attempt in $(seq 1 10); do
+              response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
+              if printf '%s' "$response" | grep -q '"ok":true'; then
+                if [ -z "$expected_sha" ] || printf '%s' "$response" | grep -q "\"releaseSha\":\"$expected_sha\""; then
+                  healthy=true
+                  break
+                fi
+              fi
+              sleep 3
+            done
+            test "$healthy" = true
+          }
+
+          verify_pm2_release_sha() {
+            local expected_sha="$1"
+            pm2 jlist | EXPECTED_SHA="$expected_sha" node -e '
+              let input = "";
+              process.stdin.setEncoding("utf8");
+              process.stdin.on("data", chunk => { input += chunk; });
+              process.stdin.on("end", () => {
+                const processes = JSON.parse(input);
+                const app = processes.find(item => item.name === "hero-dapp");
+                const actual = app?.pm2_env?.env?.HERO_RELEASE_SHA ?? app?.pm2_env?.HERO_RELEASE_SHA;
+                if (actual !== process.env.EXPECTED_SHA) {
+                  console.error(`PM2 release SHA mismatch: expected ${process.env.EXPECTED_SHA}, got ${actual ?? "missing"}`);
+                  process.exit(1);
+                }
+              });
+            '
+          }
+
+          build_without_lifecycle_hooks() {
+            pnpm exec vite build
+            pnpm exec esbuild server/_core/index.ts \
+              --platform=node \
+              --packages=external \
+              --bundle \
+              --format=esm \
+              --outdir=dist
+          }
+
+          rollback() {
+            original_status="$?"
+            trap - ERR
+            if [ "$MUTATION_STARTED" = true ]; then
+              echo "Deployment failed; restoring previous SHA $PREVIOUS_SHA" >&2
+              git reset --hard "$PREVIOUS_SHA"
+              corepack enable
+              corepack prepare pnpm@10.34.4 --activate
+              test "$(pnpm --version)" = "10.34.4"
+              pnpm install --frozen-lockfile
+              rm -rf dist
+              build_without_lifecycle_hooks
+              HERO_RELEASE_SHA="$PREVIOUS_SHA" pm2 reload hero-dapp --update-env
+              test "$(git rev-parse HEAD)" = "$PREVIOUS_SHA"
+              verify_pm2_release_sha "$PREVIOUS_SHA"
+              wait_for_health || {
+                echo "Rollback completed but health verification failed" >&2
+                exit 70
+              }
+            fi
+            exit "$original_status"
+          }
+          trap rollback ERR
+
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git cat-file -e "${DEPLOY_SHA}^{commit}"
+          git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+          MUTATION_STARTED=true
+          git reset --hard "$DEPLOY_SHA"
+
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+          test ! -e package-lock.json
+          pnpm install --frozen-lockfile
+          rm -rf dist
+          pnpm build
+          HERO_RELEASE_SHA="$DEPLOY_SHA" pm2 reload hero-dapp --update-env
+          test "$(git rev-parse HEAD)" = "$DEPLOY_SHA"
+          verify_pm2_release_sha "$DEPLOY_SHA"
+          wait_for_health "$DEPLOY_SHA"
+
+          MUTATION_STARTED=false
+          trap - ERR
+          printf 'VETS_PREVIOUS_SHA=%s\n' "$PREVIOUS_SHA"
+          REMOTE
+
+          previous_sha="$(sed -n 's/^VETS_PREVIOUS_SHA=//p' "$deploy_log" | tail -n 1)"
+          [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'previous_sha=%s\n' "$previous_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Purge Cloudflare cache
+        id: cloudflare_purge
         if: success()
-        run: echo "✅ Deployed to VPS1 and Cloudflare purged"
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CF_API_TOKEN"
+          test -n "$CF_ZONE_ID"
+          purge_response="$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')"
+          jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$purge_response" >/dev/null
+          echo "Cloudflare purge verified successful"
+
+      - name: Verify public deployment after purge
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          health_response="$(curl --fail --silent --show-error --max-time 15 \
+            'https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D')"
+          printf '%s' "$health_response" | grep -q '"ok":true'
+          printf '%s' "$health_response" | grep -q "\"releaseSha\":\"$DEPLOY_SHA\""
+          curl --fail --silent --show-error --max-time 15 \
+            --output /dev/null https://herobase.io/
+
+      - name: Roll back application after post-deploy failure
+        id: rollback_app
+        if: failure() && steps.deploy_app.outcome == 'success'
+        env:
+          VPS1_HOST: ${{ secrets.VPS1_HOST }}
+          VPS1_USER: ${{ secrets.VPS1_USER }}
+          ROLLBACK_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+          [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$VPS1_USER" != "root"
+
+          ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS1_USER@$VPS1_HOST" \
+            bash -s -- "$ROLLBACK_SHA" <<'REMOTE'
+          set -Eeuo pipefail
+          ROLLBACK_SHA="$1"
+          APP_DIR="/var/www/hero-dapp"
+          HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+
+          cd "$APP_DIR"
+          git fetch --no-tags origin main:refs/remotes/origin/main
+          git cat-file -e "${ROLLBACK_SHA}^{commit}"
+          git reset --hard "$ROLLBACK_SHA"
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+          pnpm install --frozen-lockfile
+          rm -rf dist
+          pnpm exec vite build
+          pnpm exec esbuild server/_core/index.ts \
+            --platform=node \
+            --packages=external \
+            --bundle \
+            --format=esm \
+            --outdir=dist
+          HERO_RELEASE_SHA="$ROLLBACK_SHA" pm2 reload hero-dapp --update-env
+          test "$(git rev-parse HEAD)" = "$ROLLBACK_SHA"
+          pm2 jlist | EXPECTED_SHA="$ROLLBACK_SHA" node -e '
+            let input = "";
+            process.stdin.setEncoding("utf8");
+            process.stdin.on("data", chunk => { input += chunk; });
+            process.stdin.on("end", () => {
+              const processes = JSON.parse(input);
+              const app = processes.find(item => item.name === "hero-dapp");
+              const actual = app?.pm2_env?.env?.HERO_RELEASE_SHA ?? app?.pm2_env?.HERO_RELEASE_SHA;
+              if (actual !== process.env.EXPECTED_SHA) process.exit(1);
+            });
+          '
+
+          healthy=false
+          for attempt in $(seq 1 10); do
+            response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
+            if printf '%s' "$response" | grep -q '"ok":true'; then
+              healthy=true
+              break
+            fi
+            sleep 3
+          done
+          test "$healthy" = true
+          REMOTE
+
+      - name: Purge Cloudflare after rollback
+        if: failure() && steps.rollback_app.outcome == 'success'
+        env:
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$CF_API_TOKEN"
+          test -n "$CF_ZONE_ID"
+          rollback_purge_response="$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data '{"purge_everything":true}')"
+          jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$rollback_purge_response" >/dev/null
+          echo "Cloudflare purge after rollback verified successful"
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: |
+          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"

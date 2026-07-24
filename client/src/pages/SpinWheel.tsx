@@ -232,7 +232,7 @@ export default function SpinWheel() {
   const [canSpin, setCanSpin] = useState(true);
   const [canBurn, setCanBurn] = useState(false);
   const [burnCost, setBurnCost] = useState('0');
-  const [claiming, setClaiming] = useState(false);
+  const [serviceMessage, setServiceMessage] = useState<string | null>(null);
   const spinTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // tRPC queries
@@ -254,7 +254,6 @@ export default function SpinWheel() {
   const leaderboardQuery = trpc.spin.leaderboard.useQuery();
 
   const spinMutation = trpc.spin.execute.useMutation();
-  const claimMutation = trpc.spin.claim.useMutation();
 
   // Update state from queries
   useEffect(() => {
@@ -262,6 +261,7 @@ export default function SpinWheel() {
       setCanSpin(eligibilityQuery.data.eligible);
       setCanBurn(eligibilityQuery.data.canBurnForSpin);
       setBurnCost(eligibilityQuery.data.burnCost);
+      setServiceMessage(eligibilityQuery.data.serviceMessage ?? null);
     }
   }, [eligibilityQuery.data]);
 
@@ -284,7 +284,7 @@ export default function SpinWheel() {
 
   // ─── Handle Spin ────────────────────────────────────────────────
   const handleSpin = useCallback(async (burnForSecond = false) => {
-    if (spinning || (!canSpin && !burnForSecond) || !walletConnected) return;
+    if (spinning || serviceMessage || (!canSpin && !burnForSecond) || !walletConnected) return;
 
     setSpinning(true);
     setResult(null);
@@ -339,25 +339,7 @@ export default function SpinWheel() {
       setSpinning(false);
       toast.error("Spin failed", { description: (err instanceof Error ? err.message : String(err)) || "Please try again" });
     }
-  }, [spinning, canSpin, walletConnected, walletAddress, segments, spinMutation, eligibilityQuery, historyQuery, leaderboardQuery]);
-
-  // ─── Handle Claim ───────────────────────────────────────────────
-  const handleClaim = useCallback(async () => {
-    if (!result || !result.claimable || !result.claimId) return;
-    setClaiming(true);
-    try {
-      const claimResult = await claimMutation.mutateAsync({
-        wallet: walletAddress || '',
-        claimId: result.claimId,
-        spinTimestamp: result.spinTimestamp,
-      });
-      toast.success(`Claim authorized! ${claimResult.amount} HERO ready for distribution.`);
-    } catch (err: unknown) {
-      toast.error("Claim failed", { description: err.message });
-    } finally {
-      setClaiming(false);
-    }
-  }, [result, walletAddress, claimMutation]);
+  }, [spinning, serviceMessage, canSpin, walletConnected, walletAddress, segments, spinMutation, eligibilityQuery, historyQuery, leaderboardQuery]);
 
   // ─── Render ─────────────────────────────────────────────────────
   return (
@@ -418,17 +400,6 @@ export default function SpinWheel() {
                     )}
                   </div>
 
-                  {/* Claim CTA */}
-                  {result.claimable && (
-                    <button
-                      onClick={handleClaim}
-                      disabled={claiming}
-                      className="mt-3 w-full py-3 bg-gradient-to-r from-green-500 to-emerald-600 text-white font-bold rounded-lg hover:from-green-400 hover:to-emerald-500 transition-all shadow-lg shadow-green-500/25 disabled:opacity-50"
-                    >
-                      {claiming ? '⏳ Processing Claim...' : `💰 CLAIM ${Number(result.finalRewardValue).toLocaleString()} HERO`}
-                    </button>
-                  )}
-
                   {/* Social Share */}
                   {result.rewardType !== 'nothing' && (
                     <div className="mt-3">
@@ -452,7 +423,12 @@ export default function SpinWheel() {
               )}
 
               {/* Spin Button */}
-              {!walletConnected ? (
+              {serviceMessage ? (
+                <div className="mt-4 rounded-lg border border-amber-500/30 bg-amber-500/10 p-4 text-center">
+                  <p className="text-sm font-semibold text-amber-300">Reward spins temporarily offline</p>
+                  <p className="mt-1 text-xs text-amber-100/70">{serviceMessage}</p>
+                </div>
+              ) : !walletConnected ? (
                 <div className="mt-4">
                   <button
                     onClick={() => { const btn = document.querySelector("[data-wallet-button]") as HTMLElement; if (btn) btn.click(); else toast.error("Use the wallet button in the header to connect"); }}

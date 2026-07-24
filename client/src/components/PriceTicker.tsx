@@ -1,6 +1,6 @@
 /**
  * PriceTicker — Scrolling real-time price bar for HERO, VETS, PLS/ETH.
- * Chain-aware: PulseChain shows HERO/VETS/PLS; BASE shows HERO/ETH/USDC.
+ * Chain-aware: PulseChain shows HERO/VETS/PLS; BASE shows HERO/ETH and any available tracked assets.
  * Auto-refreshes every 30s. Fixed: no overlap, high contrast, tabular-nums.
  */
 import { usePriceTicker, formatPrice, formatChange } from "@/hooks/usePrices";
@@ -79,12 +79,9 @@ export default function PriceTicker() {
       <Divider />
       <TickerItem symbol="HERO" price={data.hero?.price} change24h={data.hero?.change24h} icon="🦸" />
       <Divider />
-      {/* Show VETS on all chains */}
-      {(
+      {data.vets && (
         <>
-          <TickerItem symbol="VETS" price={data.vets?.price} change24h={data.vets?.change24h} icon="🎖️" />
-      <Divider />
-      <TickerItem symbol={isBase ? "USDC" : "DAI"} price={isBase ? data.usdc?.price : data.dai?.price} change24h={isBase ? data.usdc?.change24h : data.dai?.change24h} icon="💵" />
+          <TickerItem symbol="VETS" price={data.vets.price} change24h={data.vets.change24h} icon="🎖️" />
           <Divider />
         </>
       )}

@@ -1,60 +1,147 @@
-# Deploy Safeguards — Fleet-Wide Standards
+# HERO Dapp Production Deployment Safeguards
 
-## Problem Statement
-On May 31, 2026, a deploy failure on VPS1 went undetected for multiple days because:
-1. `git pull` silently failed due to divergent branches (local edits on VPS1)
-2. The deploy workflow had no `set -e` — so failures didn't stop the pipeline
-3. `npm run build` ran with stale code and stale `node_modules`
-4. No health check verified the deploy actually worked
+## Security objective
 
-## Safeguards Implemented
+Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, package lifecycle hook, privileged SSH principal, or bearer token may bypass the protected GitHub environment.
 
-### 1. Deploy Workflow Hardening (hero-dapp)
-- **`set -e`** — Any command failure stops the entire deploy
-- **`git fetch + git reset --hard origin/main`** — Force-syncs server to GitHub (no more divergent branch issues)
-- **`prebuild` script** — Validates dependencies before every build
-- **Cloudflare purge** — Automatic cache purge after every deploy
+## Permanent controls
 
-### 2. Fleet Health Check Workflow
-- **Manual trigger** via GitHub Actions (`workflow_dispatch`)
-- **Actions available:**
-  - `status` — Full health check of VPS1, VPS2, VDS
-  - `restart-all` — Restart all PM2 processes
-  - `fix-regen-valor` — Restart regen-valor specifically
-  - `diagnose-regen-valor` — Deep diagnostic (dist folder, logs, nginx, ports)
-- **Checks:** PM2 status, disk usage, memory, nginx, git repos, ports, Docker
+### 1. One package manager and one lockfile
 
-### 3. Rules for All Future Deploy Workflows
+- Canonical package manager: pnpm `10.34.4`.
+- Canonical dependency graph: `pnpm-lock.yaml`.
+- `package-lock.json` is prohibited.
+- Every install used for CI or production is `pnpm install --frozen-lockfile`.
+- Build-time scripts validate dependencies but never install, delete, or mutate them.
 
-```yaml
-# MANDATORY in all deploy scripts:
-set -e                              # Fail fast
-git fetch origin main               # Get latest
-git reset --hard origin/main        # Force sync (NEVER use git pull on servers)
-npm ci || npm install               # Always refresh dependencies
-npm run build                       # Build with verified deps
-pm2 reload <app-name>              # Graceful reload
-```
+### 2. Merge and deployment are separated
 
-### 4. Never Do These on Production Servers
-- ❌ `git pull` — Can fail silently with divergent branches
-- ❌ Manual edits on the server — Creates divergent branches
-- ❌ Deploy without `set -e` — Hides failures
-- ❌ Skip `npm install` — Stale deps cause build issues
-- ❌ Deploy without health check — No verification
+- The deployment workflow has no `push` trigger.
+- A human must invoke `workflow_dispatch` from the `main` ref.
+- The deployment job refuses non-`main` workflow refs.
+- The `production` environment deployment-branch policy must allow only `main`.
+- The requester must supply an exact lowercase 40-character commit SHA already merged to `main`.
+- The requester must enter the explicit confirmation value `DEPLOY`.
+- Inputs are consumed through environment variables and are never interpolated into shell source.
+- The GitHub `production` environment must require human approval.
+- Concurrency allows only one VPS1 production deployment at a time and does not cancel an active release.
 
-### 5. Known Issues (Separate from Deploy)
-- **regenvalor.com** — Nginx only listens on port 80, but Cloudflare SSL mode requires port 443. Needs SSL cert or Cloudflare "Flexible" mode.
-- **VPS2** — Not accessible from VDS via SSH. Needs key setup.
+### 3. Exact release identity and latest trusted check enforcement
 
-## Trigger Health Check
-```bash
-# Via GitHub CLI
-gh workflow run fleet-health.yml -f action=status -R jratdish1/hero-dapp
+Before changing runtime state, the workflow:
 
-# Via API (with PAT)
-curl -X POST \
-  -H "Authorization: token <PAT>" \
-  "https://api.github.com/repos/jratdish1/hero-dapp/actions/workflows/fleet-health.yml/dispatches" \
-  -d '{"ref":"main","inputs":{"action":"status"}}'
-```
+1. validates the workflow ref, SHA, and confirmation;
+2. queries GitHub check runs for the requested SHA;
+3. selects the latest check-run ID for each required name;
+4. requires those checks to originate from GitHub Actions;
+5. requires successful completed `test-build-scan` and `repository-safety` checks;
+6. validates remote host and username formats;
+7. verifies required server commands, application ownership, non-symlink path, accepted GitHub origin URL, and clean tracked tree;
+8. fetches `origin/main` on the server;
+9. resolves the requested object as a commit;
+10. verifies it is an ancestor of `origin/main`;
+11. records the previously active SHA;
+12. resets the server checkout to the exact requested SHA;
+13. verifies the active checkout still equals the requested SHA after build and reload.
+
+The workflow never deploys an ambiguous branch tip, an unmerged commit, a stale earlier successful check superseded by a newer failure, an unexpected remote, a dirty checkout, a misowned/symlinked application path, or an exact SHA without both required trusted repository checks.
+
+### 4. Least-privilege SSH and credential controls
+
+- `VPS1_USER` is environment-scoped, must match a restricted Unix username pattern, and must not equal `root`.
+- Before deployment activation, the non-root account must independently be verified as owner of the real `/var/www/hero-dapp` directory, able to fetch the accepted GitHub repository, able to use Git/Node/Corepack/PM2/curl, and able to manage only the `hero-dapp` PM2 process.
+- The deployment account must not have unrestricted passwordless sudo or permissions over unrelated services, users, firewall rules, DNS, or credentials.
+- Strict host-key verification is mandatory.
+- `VPS1_KNOWN_HOSTS` is environment-scoped.
+- Batch mode, a connection timeout, and a single explicit identity are required.
+- SSH secrets are scoped only to the steps that need them.
+- Ephemeral SSH key and known-host files are removed on every workflow outcome.
+- Cloudflare uses a scoped API bearer token.
+- Global API keys and email/key authentication are prohibited.
+- Production secrets belong to the protected `production` environment, not general repository scope.
+
+### 5. Runtime and lifecycle bypass prevention
+
+- The former public tRPC deployment mutation is removed.
+- `deploy.sh` and `deploy-production.sh` fail closed and direct operators to the protected workflow.
+- The package `postdeploy` hook is removed.
+- `scripts/fix-nginx-dao.sh` is deleted.
+- Direct `git pull`, npm build, PM2 reload, nginx mutation, and Cloudflare purge instructions are retired.
+- No source-controlled application code or package lifecycle hook may execute Git, package-manager, PM2, nginx, or Cloudflare deployment commands outside the protected workflow.
+
+### 6. CI prerequisites
+
+The exact release commit must pass:
+
+- repository-pinned pnpm activation;
+- absence of `package-lock.json`;
+- frozen dependency installation;
+- complete test suite;
+- production build;
+- production dependency audit at high severity;
+- exact Axios security resolution;
+- patched Wouter resolution;
+- token registry scanner;
+- exact-index hidden Unicode and credential-pattern scans.
+
+The deployment workflow independently verifies the latest trusted successful exact-SHA check runs before accessing production. Third-party GitHub Actions are pinned to immutable commit SHAs.
+
+### 7. Clean build, health gate, and bounded rollback
+
+The workflow requires a clean tracked tree before mutation and removes stale `dist` output before every deployment or rollback build.
+
+After PM2 reload, the workflow:
+
+- verifies the server checkout still equals the approved SHA;
+- retries the public tRPC health endpoint;
+- requires an `ok: true` response before declaring the release healthy;
+- restores the previously active SHA after every post-mutation installation, build, reload, SHA-verification, or health failure, including same-SHA redeploy failures;
+- reinstalls from the previous SHA's frozen pnpm lock;
+- rebuilds the previous SHA through direct Vite and esbuild commands so historical package lifecycle hooks cannot re-enter npm or deployment mutations;
+- reloads PM2 and requires restored service health before reporting the original deployment failure;
+- purges Cloudflare only after the deployment and health gate succeed.
+
+A failed purge does not silently report a successful workflow.
+
+## Prohibited production actions
+
+- No deployment on merge or push.
+- No production workflow execution from a non-`main` ref.
+- No root SSH deployment.
+- No unrestricted sudo for the deployment principal.
+- No deployment from an unexpected Git remote, symlinked/misowned app path, or dirty tracked tree.
+- No direct server edits.
+- No `git pull` on production.
+- No npm install/build path.
+- No skipped lockfile, exact-SHA, trusted-app, or latest-check verification.
+- No disabled SSH host verification.
+- No global Cloudflare API key.
+- No runtime deploy endpoint.
+- No package lifecycle deployment or nginx mutation hook.
+- No undocumented rollback.
+- No force push or history rewrite to alter release evidence.
+
+## Rollback discipline
+
+A failed approved deployment automatically attempts restoration to the SHA active when that workflow began, including health verification of the restored service. An intentional rollback uses the same protected workflow from `main` with a previously verified commit that remains in `main` history.
+
+Every intentional rollback record must include:
+
+- reason;
+- target SHA;
+- approving reviewer;
+- workflow run;
+- latest trusted exact-SHA check evidence;
+- post-release health result;
+- final active SHA.
+
+## Required GitHub and VPS settings
+
+Repository administrators must:
+
+- configure the `production` environment with required reviewers;
+- restrict its deployment branches to `main`;
+- restrict environment secrets to the deployment workflow;
+- provision and validate the non-root `VPS1_USER` account and its narrow permissions;
+- verify `/var/www/hero-dapp` ownership, accepted origin URL, required tools, and PM2 ownership;
+- require the CI and Security and Quality jobs through branch protection or a ruleset before merge.
