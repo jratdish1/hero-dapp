@@ -58,7 +58,7 @@
     "@wagmi/core": "^3.4.1",
     "@walletconnect/ethereum-provider": "2.17.0",
     "@walletconnect/modal": "2.7.0",
-    "axios": "^1.18.0",
+    "axios": "1.18.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
