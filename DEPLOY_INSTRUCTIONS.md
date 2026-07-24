@@ -6,15 +6,24 @@ Merging to `main` does **not** deploy production. Production releases are initia
 
 Direct SSH deployment, runtime API deployment, package lifecycle deployment, `git pull`, npm lockfiles, and manual PM2/nginx/Cloudflare operations are not authorized release paths.
 
-## Required GitHub configuration
+## Required GitHub and VPS configuration
 
 The `production` environment must require designated human reviewers, allow deployment only from `main`, and expose only these environment-scoped secrets:
 
 - `VPS1_HOST`
+- `VPS1_USER`
 - `VPS1_SSH_KEY`
 - `VPS1_KNOWN_HOSTS`
 - `CF_API_TOKEN`
 - `CF_ZONE_ID`
+
+`VPS1_USER` must be a validated non-root account. Before deployment activation, an administrator must independently provision and verify that this account:
+
+- owns or has narrowly scoped write access to `/var/www/hero-dapp`;
+- can fetch the repository and use the installed Node/Corepack toolchain;
+- owns or can manage only the `hero-dapp` PM2 process;
+- does not have unrestricted passwordless sudo;
+- cannot modify unrelated services, users, firewall rules, DNS, or credentials.
 
 The Cloudflare credential must be a scoped API token, not a global API key. Branch protection or a repository ruleset must require the `test-build-scan` and `repository-safety` checks before merge.
 
@@ -22,11 +31,12 @@ The Cloudflare credential must be a scoped API token, not a global API key. Bran
 
 1. Confirm the target commit is already merged to `main`.
 2. Confirm the latest CI and Security and Quality checks pass on that exact commit.
-3. Open **Actions → Deploy to VPS1 → Run workflow** from the `main` ref.
-4. Enter the exact lowercase 40-character commit SHA.
-5. Enter the confirmation value `DEPLOY`.
-6. Submit the run and obtain `production` environment approval.
-7. Review the completed workflow and record the deployed SHA and health result.
+3. Confirm the non-root deployment account and protected environment settings have been independently verified.
+4. Open **Actions → Deploy to VPS1 → Run workflow** from the `main` ref.
+5. Enter the exact lowercase 40-character commit SHA.
+6. Enter the confirmation value `DEPLOY`.
+7. Submit the run and obtain `production` environment approval.
+8. Review the completed workflow and record the deployed SHA and health result.
 
 Workflow inputs are passed to shell commands through environment variables, not interpolated into executable shell source.
 
@@ -44,6 +54,7 @@ Before opening an SSH session, the workflow:
 The deployment then:
 
 - exposes SSH secrets only to the steps that need them;
+- validates the deployment username and refuses `root`;
 - uses strict SSH known-host verification, batch mode, a single explicit identity, and a connection timeout;
 - confirms the SHA is an ancestor of `origin/main`;
 - records the previously active SHA for bounded rollback;
@@ -64,6 +75,8 @@ The deployment then:
 
 - Do not deploy merely by merging or pushing to `main`.
 - Do not launch the production workflow from a non-`main` ref.
+- Do not use `root` as the production SSH principal.
+- Do not grant the deployment account unrestricted sudo.
 - Do not invoke `deploy.sh` or `deploy-production.sh`; both intentionally fail closed.
 - Do not call a web or tRPC deployment endpoint; the runtime endpoint has been removed.
 - Do not add package lifecycle hooks that edit or reload nginx, PM2, Git, or Cloudflare.
