@@ -34,39 +34,6 @@ jobs:
           import sys
 
           scan_kind = sys.argv[1]
-          scope = sys.argv[2] if len(sys.argv) > 2 else "all"
-          broad_prefixes = (".github/", "client/", "docs/", "tests/")
-          client_prefixes = ("client/src/", "client/public/assets/")
-          asset_prefix = "client/public/assets/"
-          asset_scopes = {
-              "asset-cytoscape": asset_prefix + "cytoscape.esm-DtBltrT8.js",
-              "asset-html": asset_prefix + "html-GMplVEZG.js",
-              "asset-index": asset_prefix + "index-C_ediWZk.js",
-              "asset-less": asset_prefix + "less-B1dDrJ26.js",
-              "asset-mermaid": asset_prefix + "mermaid.core-Bxgwn2-U.js",
-              "asset-treemap": asset_prefix + "treemap-KMMF4GRG-qornxmMx.js",
-          }
-          suspect_assets = set(asset_scopes.values())
-
-          def in_scope(path):
-              if scope == "all":
-                  return True
-              if scope == "github":
-                  return path.startswith(".github/")
-              if scope in {"docs", "tests"}:
-                  return path.startswith(scope + "/")
-              if scope == "client-source":
-                  return path.startswith("client/src/")
-              if scope == "client-other":
-                  return path.startswith("client/") and not path.startswith(client_prefixes)
-              if scope in asset_scopes:
-                  return path == asset_scopes[scope]
-              if scope == "assets-other":
-                  return path.startswith(asset_prefix) and path not in suspect_assets
-              if scope == "other":
-                  return not path.startswith(broad_prefixes)
-              raise SystemExit(f"FAIL-CLOSED: unsupported path scope {scope}")
-
           hidden_patterns = {
               "\u200b".encode(): "U+200B ZERO WIDTH SPACE",
               "\u200c".encode(): "U+200C ZERO WIDTH NON-JOINER",
@@ -82,7 +49,12 @@ jobs:
           regex_patterns = {
               "private-key": re.compile(rb"-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----"),
               "github-token": re.compile(rb"gh[pousr]_[A-Za-z0-9_]{30,}"),
-              "openai-token": re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}"),
+              "openai-token": re.compile(
+                  rb"(?<![A-Za-z0-9])(?:"
+                  rb"sk-[A-Za-z0-9]{20,}"
+                  rb"|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}"
+                  rb")(?![A-Za-z0-9_-])"
+              ),
               "aws-key": re.compile(rb"AKIA[0-9A-Z]{16}"),
           }
 
@@ -113,8 +85,6 @@ jobs:
                   continue
               if mode not in {b"100644", b"100755", b"120000"}:
                   raise SystemExit(f"FAIL-CLOSED: unsupported Git mode {mode.decode()} at {path}")
-              if not in_scope(path):
-                  continue
 
               try:
                   data = subprocess.check_output(
@@ -142,11 +112,45 @@ jobs:
                   raise SystemExit(f"FAIL-CLOSED: unsupported scan kind {scan_kind}")
 
           if scanned_blobs == 0:
-              raise SystemExit(f"FAIL-CLOSED: no indexed blobs were scanned for scope {scope}")
+              raise SystemExit("FAIL-CLOSED: no indexed blobs were scanned")
           if findings:
               print("\n".join(findings), file=sys.stderr)
               raise SystemExit(1)
-          print(f"{scan_kind}/{scope} passed across {scanned_blobs} indexed blobs")
+          print(f"{scan_kind} passed across {scanned_blobs} indexed blobs")
+          PY
+
+      - name: Secret-pattern regression fixtures
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+
+          pattern = re.compile(
+              rb"(?<![A-Za-z0-9])(?:"
+              rb"sk-[A-Za-z0-9]{20,}"
+              rb"|sk-(?:proj|svcacct|admin)-[A-Za-z0-9_-]{20,}"
+              rb")(?![A-Za-z0-9_-])"
+          )
+          must_match = (
+              b"sk-AbCdEf0123456789GhIjKlMnOpQrStUv",
+              b"key=sk-proj-AbCdEf0123456789_abcdefghijkl",
+              b"sk-svcacct-ZyXwVu9876543210_abcdefghijkl",
+              b"sk-admin-QwErTy0123456789_abcdefghijklmn",
+          )
+          must_not_match = (
+              b"sk-long-emacs-lisp-symbol-name",
+              b"risk-adjusted-return",
+              b"task-e2e-smri-001-2026-07-10",
+              b"textsk-AbCdEf0123456789GhIjKlMnOpQrStUv",
+          )
+          for fixture in must_match:
+              if not pattern.search(fixture):
+                  raise SystemExit(f"FAIL-CLOSED: detector missed synthetic fixture {fixture!r}")
+          for fixture in must_not_match:
+              if pattern.search(fixture):
+                  raise SystemExit(f"FAIL-CLOSED: detector matched benign fixture {fixture!r}")
+          print("OpenAI-style key regression fixtures passed")
           PY
 
       - name: Git index structure
@@ -161,96 +165,8 @@ jobs:
       - name: GitHub token patterns
         run: python3 "$RUNNER_TEMP/scan_index.py" github-token
 
-      - name: OpenAI-style tokens — workflows
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token github
-
-      - name: OpenAI-style tokens — client source
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-source
-
-      - name: OpenAI-style tokens — cytoscape asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-cytoscape
-
-      - name: OpenAI-style tokens — html asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-html
-
-      - name: OpenAI-style tokens — index asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-index
-
-      - name: OpenAI-style tokens — less asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-less
-
-      - name: OpenAI-style tokens — mermaid asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-mermaid
-
-      - name: OpenAI-style tokens — treemap asset
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-treemap
-
-      - name: Create redacted diagnostic for remaining generated assets
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          import re
-          import subprocess
-          from pathlib import Path
-
-          asset_prefix = "client/public/assets/"
-          excluded = {
-              asset_prefix + "cytoscape.esm-DtBltrT8.js",
-              asset_prefix + "html-GMplVEZG.js",
-              asset_prefix + "index-C_ediWZk.js",
-              asset_prefix + "less-B1dDrJ26.js",
-              asset_prefix + "mermaid.core-Bxgwn2-U.js",
-              asset_prefix + "treemap-KMMF4GRG-qornxmMx.js",
-          }
-          pattern = re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}")
-          rows = ["path\tline\tmatch_length"]
-
-          for entry in subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0"):
-              if not entry:
-                  continue
-              metadata, raw_path = entry.split(b"\t", 1)
-              mode, object_id, stage = metadata.split(b" ")
-              path = raw_path.decode("utf-8", "surrogateescape")
-              if stage != b"0" or mode not in {b"100644", b"100755"}:
-                  continue
-              if not path.startswith(asset_prefix) or path in excluded:
-                  continue
-              data = subprocess.check_output(["git", "cat-file", "blob", object_id.decode("ascii")])
-              if b"\0" in data:
-                  continue
-              for match in pattern.finditer(data):
-                  line = data.count(b"\n", 0, match.start()) + 1
-                  rows.append(f"{path}\t{line}\t{match.end() - match.start()}")
-
-          report = Path("/tmp/openai-asset-diagnostic.tsv")
-          report.write_text("\n".join(rows) + "\n", encoding="utf-8")
-          if len(rows) == 1:
-              raise SystemExit("FAIL-CLOSED: expected asset finding was not reproduced")
-          PY
-
-      - name: Upload redacted asset diagnostic
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: pr40-openai-asset-diagnostic
-          path: /tmp/openai-asset-diagnostic.tsv
-          retention-days: 1
-          if-no-files-found: error
-
-      - name: OpenAI-style tokens — other generated assets
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token assets-other
-
-      - name: OpenAI-style tokens — other client files
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token client-other
-
-      - name: OpenAI-style tokens — docs
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token docs
-
-      - name: OpenAI-style tokens — tests
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token tests
-
-      - name: OpenAI-style tokens — other
-        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token other
+      - name: OpenAI-style token patterns
+        run: python3 "$RUNNER_TEMP/scan_index.py" openai-token
 
       - name: AWS access-key patterns
         run: python3 "$RUNNER_TEMP/scan_index.py" aws-key
