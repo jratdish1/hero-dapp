@@ -1,18 +1,30 @@
-# HERO Dapp Deploy Script
-# Builds and deploys to /var/www/hero-dapp (PM2 serving directory)
-set -e
-source /root/.nvm/nvm.sh
+#!/usr/bin/env bash
+# HERO Dapp deployment helper. This script does not authorize deployment;
+# it must be invoked only through an approved production change window.
+set -euo pipefail
 
-echo "[1/4] Building..."
-cd /root/hero-dapp
-npm run build
+[ -f /root/.nvm/nvm.sh ] && source /root/.nvm/nvm.sh
 
-echo "[2/4] Syncing to /var/www/hero-dapp/dist..."
-rm -rf /var/www/hero-dapp/dist
-cp -r /root/hero-dapp/dist /var/www/hero-dapp/dist
+APP_DIR="/root/hero-dapp"
+DEPLOY_DIR="/var/www/hero-dapp"
+PNPM_VERSION="10.34.4"
 
-echo "[3/4] Restarting PM2..."
-pm2 restart hero-dapp
+echo "[1/5] Activating pnpm $PNPM_VERSION..."
+corepack enable
+corepack prepare "pnpm@$PNPM_VERSION" --activate
+test "$(pnpm --version)" = "$PNPM_VERSION"
 
-echo "[4/4] Done! hero-dapp deployed."
+echo "[2/5] Installing frozen dependencies..."
+cd "$APP_DIR"
+pnpm install --frozen-lockfile
+
+echo "[3/5] Building..."
+pnpm build
+
+echo "[4/5] Syncing dist..."
+rm -rf "$DEPLOY_DIR/dist"
+cp -r "$APP_DIR/dist" "$DEPLOY_DIR/dist"
+
+echo "[5/5] Reloading PM2..."
+pm2 reload hero-dapp --update-env
 pm2 status hero-dapp
