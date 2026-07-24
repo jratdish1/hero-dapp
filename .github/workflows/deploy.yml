@@ -126,6 +126,16 @@ jobs:
             test "$healthy" = true
           }
 
+          build_without_lifecycle_hooks() {
+            pnpm exec vite build
+            pnpm exec esbuild server/_core/index.ts \
+              --platform=node \
+              --packages=external \
+              --bundle \
+              --format=esm \
+              --outdir=dist
+          }
+
           rollback() {
             original_status="$?"
             trap - ERR
@@ -137,7 +147,7 @@ jobs:
               test "$(pnpm --version)" = "10.34.4"
               pnpm install --frozen-lockfile
               rm -rf dist
-              pnpm build
+              build_without_lifecycle_hooks
               pm2 reload hero-dapp --update-env
               wait_for_health || {
                 echo "Rollback completed but health verification failed" >&2
