@@ -39,22 +39,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Package exact indexed source for authorized audit
-        shell: bash
-        run: |
-          set -euo pipefail
-          git archive --format=tar.gz --output=audit-source.tgz HEAD -- \
-            client/src server shared tsconfig.json package.json pnpm-lock.yaml vite.config.ts patches
-          test -s audit-source.tgz
-
-      - name: Upload exact indexed audit source
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: exact-indexed-audit-source-${{ github.sha }}
-          path: audit-source.tgz
-          retention-days: 7
-          if-no-files-found: error
-
       - name: Type check
         shell: bash
         run: |
