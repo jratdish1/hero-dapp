@@ -1,60 +1,97 @@
-# Deploy Safeguards — Fleet-Wide Standards
+# HERO Dapp Production Deployment Safeguards
 
-## Problem Statement
-On May 31, 2026, a deploy failure on VPS1 went undetected for multiple days because:
-1. `git pull` silently failed due to divergent branches (local edits on VPS1)
-2. The deploy workflow had no `set -e` — so failures didn't stop the pipeline
-3. `npm run build` ran with stale code and stale `node_modules`
-4. No health check verified the deploy actually worked
+## Security objective
 
-## Safeguards Implemented
+Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, or bearer token may bypass the protected GitHub environment.
 
-### 1. Deploy Workflow Hardening (hero-dapp)
-- **`set -e`** — Any command failure stops the entire deploy
-- **`git fetch + git reset --hard origin/main`** — Force-syncs server to GitHub (no more divergent branch issues)
-- **`prebuild` script** — Validates dependencies before every build
-- **Cloudflare purge** — Automatic cache purge after every deploy
+## Permanent controls
 
-### 2. Fleet Health Check Workflow
-- **Manual trigger** via GitHub Actions (`workflow_dispatch`)
-- **Actions available:**
-  - `status` — Full health check of VPS1, VPS2, VDS
-  - `restart-all` — Restart all PM2 processes
-  - `fix-regen-valor` — Restart regen-valor specifically
-  - `diagnose-regen-valor` — Deep diagnostic (dist folder, logs, nginx, ports)
-- **Checks:** PM2 status, disk usage, memory, nginx, git repos, ports, Docker
+### 1. One package manager and one lockfile
 
-### 3. Rules for All Future Deploy Workflows
+- Canonical package manager: pnpm `10.34.4`.
+- Canonical dependency graph: `pnpm-lock.yaml`.
+- `package-lock.json` is prohibited.
+- Every install used for CI or production is `pnpm install --frozen-lockfile`.
+- Build-time scripts validate dependencies but never install, delete, or mutate them.
 
-```yaml
-# MANDATORY in all deploy scripts:
-set -e                              # Fail fast
-git fetch origin main               # Get latest
-git reset --hard origin/main        # Force sync (NEVER use git pull on servers)
-npm ci || npm install               # Always refresh dependencies
-npm run build                       # Build with verified deps
-pm2 reload <app-name>              # Graceful reload
-```
+### 2. Merge and deployment are separated
 
-### 4. Never Do These on Production Servers
-- ❌ `git pull` — Can fail silently with divergent branches
-- ❌ Manual edits on the server — Creates divergent branches
-- ❌ Deploy without `set -e` — Hides failures
-- ❌ Skip `npm install` — Stale deps cause build issues
-- ❌ Deploy without health check — No verification
+- The deployment workflow has no `push` trigger.
+- A human must invoke `workflow_dispatch`.
+- The requester must supply an exact 40-character commit SHA already merged to `main`.
+- The requester must enter the explicit confirmation value `DEPLOY`.
+- The GitHub `production` environment must require human approval.
+- Concurrency allows only one VPS1 production deployment at a time and does not cancel an active release.
 
-### 5. Known Issues (Separate from Deploy)
-- **regenvalor.com** — Nginx only listens on port 80, but Cloudflare SSL mode requires port 443. Needs SSL cert or Cloudflare "Flexible" mode.
-- **VPS2** — Not accessible from VDS via SSH. Needs key setup.
+### 3. Exact release identity
 
-## Trigger Health Check
-```bash
-# Via GitHub CLI
-gh workflow run fleet-health.yml -f action=status -R jratdish1/hero-dapp
+Before changing runtime state, the workflow:
 
-# Via API (with PAT)
-curl -X POST \
-  -H "Authorization: token <PAT>" \
-  "https://api.github.com/repos/jratdish1/hero-dapp/actions/workflows/fleet-health.yml/dispatches" \
-  -d '{"ref":"main","inputs":{"action":"status"}}'
-```
+1. fetches `origin/main`;
+2. resolves the requested object as a commit;
+3. verifies it is an ancestor of `origin/main`;
+4. resets the server checkout to that exact SHA;
+5. verifies the active checkout still equals the requested SHA after build and reload.
+
+The workflow never deploys an ambiguous branch tip or an unmerged commit.
+
+### 4. SSH and credential controls
+
+- Strict host-key verification is mandatory.
+- `VPS1_KNOWN_HOSTS` is environment-scoped.
+- Batch mode and a single explicit identity are required.
+- Cloudflare uses a scoped API bearer token.
+- Global API keys and email/key authentication are prohibited.
+- Production secrets belong to the protected `production` environment, not general repository scope.
+
+### 5. Runtime and legacy bypass prevention
+
+- The former public tRPC deployment mutation is removed.
+- `deploy.sh` and `deploy-production.sh` fail closed and direct operators to the protected workflow.
+- Direct `git pull`, npm build, PM2 reload, and Cloudflare purge instructions are retired.
+- No source-controlled application code may execute Git, package-manager, PM2, nginx, or Cloudflare deployment commands.
+
+### 6. CI prerequisites
+
+The exact release commit must pass:
+
+- repository-pinned pnpm activation;
+- absence of `package-lock.json`;
+- frozen dependency installation;
+- complete test suite;
+- production build;
+- production dependency audit at high severity;
+- exact Axios security resolution;
+- patched Wouter resolution;
+- token registry scanner;
+- exact-index hidden Unicode and credential-pattern scans.
+
+Third-party GitHub Actions are pinned to immutable commit SHAs.
+
+## Prohibited production actions
+
+- No deployment on merge or push.
+- No direct server edits.
+- No `git pull` on production.
+- No npm install/build path.
+- No skipped lockfile verification.
+- No disabled SSH host verification.
+- No global Cloudflare API key.
+- No runtime deploy endpoint.
+- No undocumented rollback.
+- No force push or history rewrite to alter release evidence.
+
+## Rollback discipline
+
+Rollback uses the same protected workflow with a previously verified commit that remains in `main` history. The rollback record must include:
+
+- reason;
+- target SHA;
+- approving reviewer;
+- workflow run;
+- post-release health result;
+- final active SHA.
+
+## Required GitHub settings
+
+Repository administrators must configure the `production` environment with required reviewers and restrict environment secret access to the deployment workflow. Branch protection or rulesets should require the CI and Security and Quality jobs before merge.
