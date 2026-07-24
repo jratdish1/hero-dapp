@@ -2,7 +2,7 @@
 
 ## Security objective
 
-Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, package lifecycle hook, or bearer token may bypass the protected GitHub environment.
+Production deployment is a separate, human-approved release action. A merge must never imply deployment, and no application endpoint, shell helper, package lifecycle hook, privileged SSH principal, or bearer token may bypass the protected GitHub environment.
 
 ## Permanent controls
 
@@ -44,8 +44,11 @@ Before changing runtime state, the workflow:
 
 The workflow never deploys an ambiguous branch tip, an unmerged commit, a stale earlier successful check superseded by a newer failure, or an exact SHA without both required trusted repository checks.
 
-### 4. SSH and credential controls
+### 4. Least-privilege SSH and credential controls
 
+- `VPS1_USER` is environment-scoped, must match a restricted Unix username pattern, and must not equal `root`.
+- Before deployment activation, the non-root account must be independently provisioned with narrowly scoped access to `/var/www/hero-dapp`, the repository, the Node/Corepack toolchain, and only the `hero-dapp` PM2 process.
+- The deployment account must not have unrestricted passwordless sudo or permissions over unrelated services, users, firewall rules, DNS, or credentials.
 - Strict host-key verification is mandatory.
 - `VPS1_KNOWN_HOSTS` is environment-scoped.
 - Batch mode, a connection timeout, and a single explicit identity are required.
@@ -100,6 +103,8 @@ A failed purge does not silently report a successful workflow.
 
 - No deployment on merge or push.
 - No production workflow execution from a non-`main` ref.
+- No root SSH deployment.
+- No unrestricted sudo for the deployment principal.
 - No direct server edits.
 - No `git pull` on production.
 - No npm install/build path.
@@ -125,6 +130,12 @@ Every intentional rollback record must include:
 - post-release health result;
 - final active SHA.
 
-## Required GitHub settings
+## Required GitHub and VPS settings
 
-Repository administrators must configure the `production` environment with required reviewers, restrict its deployment branches to `main`, and restrict environment secret access to the deployment workflow. Branch protection or rulesets should require the CI and Security and Quality jobs before merge.
+Repository administrators must:
+
+- configure the `production` environment with required reviewers;
+- restrict its deployment branches to `main`;
+- restrict environment secrets to the deployment workflow;
+- provision and validate the non-root `VPS1_USER` account and its narrow permissions;
+- require the CI and Security and Quality jobs through branch protection or a ruleset before merge.
