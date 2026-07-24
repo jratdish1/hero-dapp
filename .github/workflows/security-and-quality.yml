@@ -185,6 +185,58 @@ jobs:
       - name: OpenAI-style tokens — treemap asset
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token asset-treemap
 
+      - name: Create redacted diagnostic for remaining generated assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import re
+          import subprocess
+          from pathlib import Path
+
+          asset_prefix = "client/public/assets/"
+          excluded = {
+              asset_prefix + "cytoscape.esm-DtBltrT8.js",
+              asset_prefix + "html-GMplVEZG.js",
+              asset_prefix + "index-C_ediWZk.js",
+              asset_prefix + "less-B1dDrJ26.js",
+              asset_prefix + "mermaid.core-Bxgwn2-U.js",
+              asset_prefix + "treemap-KMMF4GRG-qornxmMx.js",
+          }
+          pattern = re.compile(rb"(?<![A-Za-z0-9])sk-[A-Za-z0-9_-]{20,}")
+          rows = ["path\tline\tmatch_length"]
+
+          for entry in subprocess.check_output(["git", "ls-files", "-z", "--stage"]).split(b"\0"):
+              if not entry:
+                  continue
+              metadata, raw_path = entry.split(b"\t", 1)
+              mode, object_id, stage = metadata.split(b" ")
+              path = raw_path.decode("utf-8", "surrogateescape")
+              if stage != b"0" or mode not in {b"100644", b"100755"}:
+                  continue
+              if not path.startswith(asset_prefix) or path in excluded:
+                  continue
+              data = subprocess.check_output(["git", "cat-file", "blob", object_id.decode("ascii")])
+              if b"\0" in data:
+                  continue
+              for match in pattern.finditer(data):
+                  line = data.count(b"\n", 0, match.start()) + 1
+                  rows.append(f"{path}\t{line}\t{match.end() - match.start()}")
+
+          report = Path("/tmp/openai-asset-diagnostic.tsv")
+          report.write_text("\n".join(rows) + "\n", encoding="utf-8")
+          if len(rows) == 1:
+              raise SystemExit("FAIL-CLOSED: expected asset finding was not reproduced")
+          PY
+
+      - name: Upload redacted asset diagnostic
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr40-openai-asset-diagnostic
+          path: /tmp/openai-asset-diagnostic.tsv
+          retention-days: 1
+          if-no-files-found: error
+
       - name: OpenAI-style tokens — other generated assets
         run: python3 "$RUNNER_TEMP/scan_index.py" openai-token assets-other
 
