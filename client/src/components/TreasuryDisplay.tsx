@@ -4,7 +4,7 @@
  * Displays native token balance (PLS / ETH) side by side
  * Note: Funds donated to quarterly DAO vote winner
  */
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { Wallet, RefreshCw, Vote } from "lucide-react";
 
@@ -88,9 +88,10 @@ export default function TreasuryDisplay() {
     error: null,
   });
   const [refreshing, setRefreshing] = useState(false);
+  const mountedRef = useRef(true);
 
   const fetchBalances = useCallback(async () => {
-    setRefreshing(true);
+    if (mountedRef.current) setRefreshing(true);
     try {
       const [plsBal, ethBal, daiPls, usdcBase] = await Promise.all([
         getBalance(PLS_RPC, TREASURY_ADDRESS),
@@ -98,17 +99,26 @@ export default function TreasuryDisplay() {
         getErc20Balance(PLS_RPC, DAI_PLS, TREASURY_ADDRESS, 18),
         getErc20Balance(BASE_RPC, USDC_BASE, TREASURY_ADDRESS, 6),
       ]);
-      setBalances({ pls: plsBal, eth: ethBal, daiPls, usdcBase, loading: false, error: null });
-    } catch (err) {
-      setBalances((prev) => ({ ...prev, loading: false, error: "Failed to fetch" }));
+      if (mountedRef.current) {
+        setBalances({ pls: plsBal, eth: ethBal, daiPls, usdcBase, loading: false, error: null });
+      }
+    } catch {
+      if (mountedRef.current) {
+        setBalances((prev) => ({ ...prev, loading: false, error: "Failed to fetch" }));
+      }
+    } finally {
+      if (mountedRef.current) setRefreshing(false);
     }
-    if (mountedRef.current) setRefreshing(false);
   }, []);
 
   useEffect(() => {
+    mountedRef.current = true;
     fetchBalances();
     const interval = setInterval(fetchBalances, 60000); // refresh every 60s
-    return () => clearInterval(interval);
+    return () => {
+      mountedRef.current = false;
+      clearInterval(interval);
+    };
   }, [fetchBalances]);
 
   return (

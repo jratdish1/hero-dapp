@@ -1,0 +1,112 @@
+name: Apply authorized VETS remediation
+
+on:
+  push:
+    branches:
+      - fix/security-high-vulns-2026-07-16
+
+permissions:
+  contents: write
+  actions: write
+
+concurrency:
+  group: apply-vets-remediation-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: "github.event.head_commit.message == 'chore: stage authorized VETS remediation'"
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/security-high-vulns-2026-07-16
+          fetch-depth: 0
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Verify and apply bounded patches
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "fix/security-high-vulns-2026-07-16"
+          test -z "$(git status --porcelain)"
+
+          declare -A expected=(
+            [ops/audit-remediation/ci.patch]=fb1f3a44b0cf6ede7e5ab9cdf4ddf56b2f8e5a9768620f442c2f9cb56560d979
+            [ops/audit-remediation/client_src_pages_HeroStake.tsx.patch]=71dc7a6a4c97eb3a9abc9f71f59ec4d2d9ab660257e7c89a871dbb5fd72efe99
+            [ops/audit-remediation/client_src_pages_SpinWheel.tsx.patch]=c72583b88b1347689bc1aa7190f696284bf2545be8430df007dc2c7ebffde0dd
+            [ops/audit-remediation/server__core_security.ts.patch]=c680db80c1a846e188274c84cc908b630782c91e1d79f02fb01f2ab0b84ba09c
+            [ops/audit-remediation/server_db.ts.patch]=b67b975c11d2dc58b7fd8fa581ffaa834f2b6b63e43431f0547f5124ec5693c0
+            [ops/audit-remediation/server_routers.ts.patch]=854af8c2937cb92e91ab846e1bd708c55a4e1a26290cd5e261f9473e9197423c
+          )
+
+          for patch in "${!expected[@]}"; do
+            test -f "$patch"
+            test "$(sha256sum "$patch" | awk '{print $1}')" = "${expected[$patch]}"
+            git apply --check "$patch"
+          done
+
+          for patch in \
+            ops/audit-remediation/client_src_pages_HeroStake.tsx.patch \
+            ops/audit-remediation/client_src_pages_SpinWheel.tsx.patch \
+            ops/audit-remediation/server__core_security.ts.patch \
+            ops/audit-remediation/server_db.ts.patch \
+            ops/audit-remediation/server_routers.ts.patch \
+            ops/audit-remediation/ci.patch; do
+            git apply "$patch"
+          done
+
+          rm -rf ops/audit-remediation
+          rm -f .github/workflows/apply-vets-remediation.yml
+
+      - name: Validate exact remediated tree
+        env:
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm test
+          pnpm build
+          pnpm audit --prod --audit-level=high
+
+      - name: Commit and push exact validated tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "VETS Fleet Remediation"
+          git config user.email "actions@users.noreply.github.com"
+          git add -A
+          test -n "$(git status --porcelain)"
+          git commit -m "fix: complete production audit remediation"
+          git push origin HEAD:fix/security-high-vulns-2026-07-16
+          final_sha="$(git rev-parse HEAD)"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf 'Final remediated SHA: %s\n' "$final_sha"
+
+      - name: Dispatch exact-head CI and security gates
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          payload="$(jq -nc --arg ref 'fix/security-high-vulns-2026-07-16' '{ref:$ref}')"
+          for workflow in ci.yml security-and-quality.yml; do
+            curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/dispatches" \
+              --data "$payload"
+          done

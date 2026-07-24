@@ -1,0 +1,60 @@
+diff --git a/client/src/pages/HeroStake.tsx b/client/src/pages/HeroStake.tsx
+index 6feef61..a8b96e6 100644
+--- a/client/src/pages/HeroStake.tsx
++++ b/client/src/pages/HeroStake.tsx
+@@ -55,11 +55,13 @@ type SupportedChainId = 369 | 8453;
+ // Get chain config for HeroStake (derived from shared config)
+ function getHeroStakeChainConfig(chainId: SupportedChainId) {
+   const shared = getChainConfig(chainId);
+-  const display = CHAIN_DISPLAY_CONFIG[chainId];
+-  if (!shared) return undefined;
++  if (!shared) {
++    throw new Error(`Missing staking configuration for chain ${chainId}`);
++  }
+   return {
+-    ...display,
++    ...CHAIN_DISPLAY_CONFIG[chainId],
+     heroCA: shared.heroCA,
++    stakingCA: shared.stakingCA,
+     explorer: shared.explorer,
+   };
+ }
+@@ -153,9 +155,8 @@ export default function HeroStake() {
+         toast.info("Approving HERO for staking...", { description: "Please confirm the approval in your wallet" });
+         await actions.approve(stakeAmount);
+         toast.success("Approval confirmed! Now staking...");
+-        // Refetch allowance before staking
+-        await new Promise((r) => setTimeout(r, 2000));
+-        user.refetchAll();
++        // Approval waits for an on-chain receipt; refresh the allowance before staking.
++        await user.refetchAll();
+       }
+ 
+       toast.info("Staking HERO...", { description: `Staking ${stakeAmount} HERO` });
+@@ -230,8 +231,8 @@ export default function HeroStake() {
+ 
+   // ─── Derived Values ──────────────────────────────────────────────
+   const penaltyPct = stats.penaltyBps ? (Number(stats.penaltyBps) / 100).toFixed(0) : "10";
+-  const hasStake = user.stakedAmount && user.stakedAmount > 0n;
+-  const hasPendingRewards = user.pendingRewards && user.pendingRewards > 0n;
++  const hasStake = Boolean(user.stakedAmount && user.stakedAmount > 0n);
++  const hasPendingRewards = Boolean(user.pendingRewards && user.pendingRewards > 0n);
+   const isAnyTxPending = actions.isApproving || actions.isStaking || actions.isUnstaking || actions.isClaiming || actions.isConfirming;
+ 
+   // ─── Render ──────────────────────────────────────────────────────
+@@ -684,13 +685,13 @@ export default function HeroStake() {
+           <span>
+             Staking Contract: {" "}
+             <a
+-              href={`${chainConfig.explorer}/address/${getStakingAddress(chainId)}`}
++              href={`${chainConfig.explorer}/address/${chainConfig.stakingCA}`}
+               target="_blank" rel="noopener noreferrer"
+               
+               className="hover:underline"
+               style={{ color: "#C8A84B", fontFamily: "monospace" }}
+             >
+-              {getStakingAddress(chainId).slice(0, 10)}...{getStakingAddress(chainId).slice(-6)}
++              {chainConfig.stakingCA.slice(0, 10)}...{chainConfig.stakingCA.slice(-6)}
+             </a>
+           </span>
+           <ExternalLink className="w-3 h-3" />

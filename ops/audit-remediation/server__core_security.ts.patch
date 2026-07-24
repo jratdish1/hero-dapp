@@ -1,0 +1,30 @@
+diff --git a/server/_core/security.ts b/server/_core/security.ts
+index d1cd140..dff7507 100644
+--- a/server/_core/security.ts
++++ b/server/_core/security.ts
+@@ -124,7 +124,7 @@ function buildCspDirectives() {
+   // until a full SSR nonce pipeline is implemented, 'unsafe-inline' is the correct policy.
+   const scriptSrc = isDev
+     ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
+-    : ["'self'", "'unsafe-inline'"];
++    : ["'self'"];
+ 
+   // Base connect sources — dev needs ws: for Vite HMR websocket
+   const connectSrc = [
+@@ -184,8 +184,6 @@ export function setupHelmet(app: Express) {
+       xPermittedCrossDomainPolicies: { permittedPolicies: "none" },
+       xPoweredBy: false,
+       xXssProtection: true,
+-      // Disable helmet's noCache — we set our own Cache-Control per route
+-      noCache: false,
+     })
+   );
+ }
+@@ -720,6 +718,7 @@ export function setupSecurity(app: Express) {
+ 
+   // 12. Auth-specific rate limiting
+   app.use("/api/oauth", authLimiter);
++  app.use("/api/auth", authLimiter);
+   // 12.5 User-based rate limiting for authenticated mutation routes (Audit Fix: May 29, 2026)
+   app.use("/api/trpc", userMutationLimiter);
+ 

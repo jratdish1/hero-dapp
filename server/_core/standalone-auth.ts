@@ -1,73 +1,74 @@
-import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
+import { COOKIE_NAME } from "@shared/const";
 import type { Express, Request, Response } from "express";
+import crypto from "crypto";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
-import crypto from "crypto";
 
-// AUDIT FIX #2 (May 27, 2026): Constant-time comparison that doesn't leak length
-// Hash both values before comparing to prevent length-based timing attacks
-function safeCompare(a: string, b: string): boolean {
-  const hashA = crypto.createHash('sha256').update(a).digest();
-  const hashB = crypto.createHash('sha256').update(b).digest();
-  return crypto.timingSafeEqual(hashA, hashB);
+const SESSION_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+function safeCompare(candidate: string, expected: string): boolean {
+  const candidateDigest = crypto.createHash("sha256").update(candidate).digest();
+  const expectedDigest = crypto.createHash("sha256").update(expected).digest();
+  return crypto.timingSafeEqual(candidateDigest, expectedDigest);
+}
+
+function rotateCsrfToken(res: Response): void {
+  res.cookie("csrf_token", crypto.randomBytes(32).toString("hex"), {
+    httpOnly: false,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: "strict",
+    maxAge: SESSION_MAX_AGE_MS,
+    path: "/",
+  });
 }
 
 export function registerStandaloneAuthRoutes(app: Express) {
-  // Password login endpoint
   app.post("/api/auth/login", async (req: Request, res: Response) => {
     try {
-      const { password } = req.body;
-      
-      if (!password) {
+      const password: unknown = req.body?.password;
+      if (typeof password !== "string" || password.length === 0) {
         res.status(400).json({ error: "Password required" });
         return;
       }
 
-      // Get the admin password from environment
       const adminPassword = process.env.HERO_ADMIN_PASSWORD;
-      if (!adminPassword) {
-        console.error("[Auth] HERO_ADMIN_PASSWORD not set in environment");
-        res.status(500).json({ error: "Auth not configured" });
+      if (!adminPassword || adminPassword.length < 16) {
+        console.error("[Auth] HERO_ADMIN_PASSWORD is missing or does not meet the minimum length");
+        res.status(503).json({ error: "Authentication is temporarily unavailable" });
         return;
       }
 
-      // Verify password with constant-time comparison
       if (!safeCompare(password, adminPassword)) {
-        // Rate limit: add small delay on failed attempts
-        await new Promise(resolve => setTimeout(resolve, 1000));
         res.status(401).json({ error: "Invalid password" });
         return;
       }
 
-      // Use the owner's openId from environment (or default)
       const ownerOpenId = process.env.OWNER_OPEN_ID || "standalone-admin";
       const ownerName = process.env.OWNER_NAME || "VETS";
-
-      // Upsert the admin user
       await db.upsertUser({
         openId: ownerOpenId,
         name: ownerName,
         email: null,
         loginMethod: "password",
+        role: "admin",
         lastSignedIn: new Date(),
       });
 
-      // Create JWT session token (reuses existing SDK signing)
       const sessionToken = await sdk.createSessionToken(ownerOpenId, {
         name: ownerName,
-        expiresInMs: ONE_YEAR_MS,
+        expiresInMs: SESSION_MAX_AGE_MS,
       });
-
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: SESSION_MAX_AGE_MS,
+      });
+      rotateCsrfToken(res);
       res.json({ success: true, user: { name: ownerName } });
     } catch (error) {
-      console.error("[Auth] Login failed:", error);
+      console.error("[Auth] Login failed:", error instanceof Error ? error.message : String(error));
       res.status(500).json({ error: "Login failed" });
     }
   });
-
-  // Keep the OAuth callback as fallback (if Manus OAuth is still configured)
-  // This allows gradual migration
 }

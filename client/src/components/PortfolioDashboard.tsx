@@ -3,7 +3,7 @@
  * rewards earned, and DAO voting power across both chains.
  */
 import { useAccount, useChainId, useReadContract } from "wagmi";
-import { formatUnits } from "viem";
+import { formatUnits, isAddress, type Address } from "viem";
 import {
   Wallet,
   TrendingUp,
@@ -21,16 +21,23 @@ import { WalletIdentity } from "./WalletIdentity";
 import { getHeroAddress, getStakingAddress } from "@/lib/config";
 
 // ─── Contract Addresses (from shared config) ────────────────────────────
+function requireContractAddress(value: string | undefined, label: string): Address {
+  if (!value || !isAddress(value)) {
+    throw new Error(`Invalid ${label} contract address`);
+  }
+  return value;
+}
+
 const CONTRACTS = {
   base: {
-    hero: getHeroAddress(8453) ?? "",
-    staking: getStakingAddress(8453) ?? "",
+    hero: requireContractAddress(getHeroAddress(8453), "Base HERO"),
+    staking: requireContractAddress(getStakingAddress(8453), "Base staking"),
   },
   pulsechain: {
-    hero: getHeroAddress(369) ?? "",
-    staking: getStakingAddress(369) ?? "",
+    hero: requireContractAddress(getHeroAddress(369), "PulseChain HERO"),
+    staking: requireContractAddress(getStakingAddress(369), "PulseChain staking"),
   },
-};
+} as const;
 
 // ─── ABIs (minimal) ─────────────────────────────────────────────────────
 const ERC20_ABI = [

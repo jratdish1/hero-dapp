@@ -86,7 +86,7 @@ export default function LoginPage() {
 
             <div className="text-center">
               <p className="text-gray-600 text-[10px] font-mono">
-                AES-256-GCM ENCRYPTED | JWT SESSION
+                HTTPS PROTECTED | SHORT-LIVED SIGNED SESSION
               </p>
             </div>
           </div>
