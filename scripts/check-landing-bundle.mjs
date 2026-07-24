@@ -26,7 +26,7 @@ const entryRecord =
 
 if (!entryRecord) throw new Error("Unable to identify the Vite entry chunk");
 
-const [entryKey] = entryRecord;
+const [entryKey, entryChunk] = entryRecord;
 const visitedChunks = new Set();
 const outputFiles = new Set();
 
@@ -42,8 +42,32 @@ function visitStaticChunk(key) {
 
 visitStaticChunk(entryKey);
 
-const forbiddenPattern = /(web3|connect-evm|wagmi|walletconnect|reown|data-layer)/i;
-const forbiddenFiles = [...outputFiles].filter((file) => forbiddenPattern.test(file));
+const dappChunkKey = Object.entries(manifest).find(
+  ([key, chunk]) =>
+    /DappBootstrap/i.test(key) ||
+    /DappBootstrap/i.test(chunk?.src || "") ||
+    /DappBootstrap/i.test(chunk?.name || ""),
+)?.[0];
+
+if (!dappChunkKey) {
+  throw new Error("Unable to identify the DappBootstrap chunk in the Vite manifest");
+}
+if (visitedChunks.has(dappChunkKey)) {
+  throw new Error(
+    `Landing static graph incorrectly includes the DApp bootstrap: ${dappChunkKey}`,
+  );
+}
+if (!(entryChunk.dynamicImports || []).includes(dappChunkKey)) {
+  throw new Error(
+    `Landing entry does not dynamically import the DApp bootstrap: ${dappChunkKey}`,
+  );
+}
+
+const forbiddenPattern =
+  /(DappBootstrap|web3|connect-evm|wagmi|walletconnect|reown|data-layer)/i;
+const forbiddenFiles = [...outputFiles].filter((file) =>
+  forbiddenPattern.test(file),
+);
 if (forbiddenFiles.length > 0) {
   throw new Error(
     `Landing static graph includes prohibited DApp chunks: ${forbiddenFiles.join(", ")}`,
@@ -67,6 +91,7 @@ const details = [...outputFiles]
 
 const totalGzipBytes = details.reduce((sum, item) => sum + item.gzipBytes, 0);
 console.log(`Landing entry: ${entryKey}`);
+console.log(`Dynamic DApp chunk: ${dappChunkKey}`);
 for (const item of details) {
   console.log(`${item.file}: raw=${item.rawBytes} gzip=${item.gzipBytes}`);
 }
