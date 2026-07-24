@@ -178,29 +178,10 @@ export default defineConfig({
     manifest: true,
     rollupOptions: {
       // Belt-and-suspenders: mark @reown as external so Rollup never bundles it
-      // even if Vite alias fails to intercept a dynamic import
+      // even if Vite alias fails to intercept a dynamic import.
+      // Let Rollup preserve the DappBootstrap dynamic boundary automatically;
+      // broad manual chunks can create cycles that preload the full DApp on `/`.
       external: (id) => id.includes('@reown/appkit'),
-      output: {
-        onlyExplicitManualChunks: true,
-        manualChunks(id) {
-          // React core — cached separately, rarely changes
-          if (id.includes('node_modules/react-dom') || id.includes('node_modules/react/')) {
-            return 'react-vendor';
-          }
-          // Web3 and data-layer dependencies stay inside the dynamic DApp graph.
-          // Separate heavy UI libraries
-          if (id.includes('node_modules/framer-motion')) {
-            return 'framer';
-          }
-          if (id.includes('node_modules/recharts') || id.includes('node_modules/d3-')) {
-            return 'charts';
-          }
-          // Radix UI components
-          if (id.includes('node_modules/@radix-ui')) {
-            return 'radix';
-          }
-        },
-      },
     },
   },
   server: {
