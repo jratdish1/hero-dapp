@@ -140,15 +140,25 @@ jobs:
       - name: Token registry scanner
         run: node scripts/check-token-registry.mjs
 
-      - name: Verify canonical graph and bounded generated diff
+      - name: Generated diff formatting
+        run: git diff --check
+
+      - name: Axios resolves exactly to 1.18.0
+        run: node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
+
+      - name: Wouter patch remains represented
+        run: grep -q "wouter@3.7.1" pnpm-lock.yaml
+
+      - name: Axios lock entry is present
+        run: grep -q "axios@1.18.0" pnpm-lock.yaml
+
+      - name: Generated remediation is non-empty
+        run: test -n "$(git status --short)"
+
+      - name: Generated paths are bounded
         shell: bash
         run: |
           set -euo pipefail
-          git diff --check
-          node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
-          grep -q "wouter@3.7.1" pnpm-lock.yaml
-          grep -q "axios@1.18.0" pnpm-lock.yaml
-          test -n "$(git status --short)"
           python3 - <<'PY'
           import subprocess
           from pathlib import Path
