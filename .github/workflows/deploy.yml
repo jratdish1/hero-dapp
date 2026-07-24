@@ -23,26 +23,22 @@ concurrency:
 jobs:
   deploy:
     name: Protected production deployment
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     environment: production
     env:
       DEPLOY_SHA: ${{ inputs.commit_sha }}
       DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
-      VPS1_HOST: ${{ secrets.VPS1_HOST }}
-      VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
-      VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
 
     steps:
       - name: Validate release authorization
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/main"
           test "$DEPLOY_CONFIRMATION" = "DEPLOY"
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test -n "$VPS1_HOST"
-          test -n "$VPS1_SSH_KEY"
-          test -n "$VPS1_KNOWN_HOSTS"
 
       - name: Require successful exact-SHA repository checks
         env:
@@ -70,18 +66,26 @@ jobs:
           done
 
       - name: Configure strict SSH trust
+        env:
+          VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
+          VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$VPS1_SSH_KEY"
+          test -n "$VPS1_KNOWN_HOSTS"
           install -m 700 -d "$HOME/.ssh"
+          umask 077
           printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
-          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
       - name: Deploy exact merged commit with frozen pnpm dependencies
+        env:
+          VPS1_HOST: ${{ secrets.VPS1_HOST }}
         shell: bash
         run: |
           set -euo pipefail
+          test -n "$VPS1_HOST"
           ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
