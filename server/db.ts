@@ -538,6 +538,8 @@ export async function getInfluencerMentionStats() {
 
 // AUDIT FIX: Bind wallet address to user on first vote (prevents vote spoofing)
 export async function updateUserWalletAddress(userId: number, walletAddress: string) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
   await db
     .update(users)
     .set({ walletAddress: walletAddress.toLowerCase() })
