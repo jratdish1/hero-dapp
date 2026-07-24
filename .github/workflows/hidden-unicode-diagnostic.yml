@@ -1,0 +1,75 @@
+name: One-shot hidden Unicode diagnostic
+
+on:
+  push:
+    branches:
+      - fix/security-high-vulns-2026-07-16
+    paths:
+      - .github/workflows/hidden-unicode-diagnostic.yml
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout authorized branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/security-high-vulns-2026-07-16
+          fetch-depth: 0
+
+      - name: Generate exact diagnostic report
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          from pathlib import Path
+
+          forbidden = {
+              "\u200b": "U+200B ZERO WIDTH SPACE",
+              "\u200c": "U+200C ZERO WIDTH NON-JOINER",
+              "\u200d": "U+200D ZERO WIDTH JOINER",
+              "\u2060": "U+2060 WORD JOINER",
+              "\ufeff": "U+FEFF BYTE ORDER MARK",
+              "\u202a": "U+202A LEFT-TO-RIGHT EMBEDDING",
+              "\u202b": "U+202B RIGHT-TO-LEFT EMBEDDING",
+              "\u202c": "U+202C POP DIRECTIONAL FORMATTING",
+              "\u202d": "U+202D LEFT-TO-RIGHT OVERRIDE",
+              "\u202e": "U+202E RIGHT-TO-LEFT OVERRIDE",
+          }
+
+          rows = []
+          for raw_path in subprocess.check_output(["git", "ls-files", "-z"]).split(b"\0"):
+              if not raw_path:
+                  continue
+              path = Path(raw_path.decode("utf-8", "surrogateescape"))
+              data = path.read_bytes()
+              if b"\0" in data:
+                  continue
+              for line_number, line in enumerate(data.splitlines(), 1):
+                  for character, label in forbidden.items():
+                      count = line.count(character.encode("utf-8"))
+                      if count:
+                          rows.append(f"{path}\t{line_number}\t{label}\t{count}")
+
+          Path("ops/reports/hidden-unicode-diagnostic.tsv").parent.mkdir(parents=True, exist_ok=True)
+          Path("ops/reports/hidden-unicode-diagnostic.tsv").write_text(
+              "path\tline\tcodepoint\tcount\n" + "\n".join(rows) + ("\n" if rows else ""),
+              encoding="utf-8",
+          )
+          PY
+
+      - name: Commit diagnostic report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "vets-diagnostic-bot"
+          git config user.email "vets-diagnostic-bot@users.noreply.github.com"
+          git add ops/reports/hidden-unicode-diagnostic.tsv
+          git commit -m "chore(security): record hidden Unicode diagnostic"
+          git push origin HEAD:fix/security-high-vulns-2026-07-16
