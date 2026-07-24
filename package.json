@@ -12,8 +12,7 @@
     "format": "prettier --write .",
     "test": "vitest run",
     "audit:prod": "pnpm audit --prod --audit-level=high",
-    "db:push": "drizzle-kit generate && drizzle-kit migrate",
-    "postdeploy": "bash scripts/fix-nginx-dao.sh || true"
+    "db:push": "drizzle-kit generate && drizzle-kit migrate"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
