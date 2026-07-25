@@ -1,7 +1,6 @@
 import React, {
   Component,
   createRef,
-  type ErrorInfo,
   type ReactNode,
 } from "react";
 
@@ -13,9 +12,20 @@ interface DappLoadBoundaryState {
   error: Error | null;
 }
 
+interface DappRecoveryViewProps {
+  error: Error;
+}
+
+interface ReactErrorInfo {
+  componentStack?: string | null;
+}
+
+type ErrorLogger = (...args: unknown[]) => void;
+
 /**
- * Identifies the common browser errors raised when a previously opened page
- * requests a hashed JavaScript chunk that no longer exists after deployment.
+ * Identifies browser errors commonly raised when a lazy JavaScript module
+ * cannot be fetched. The wording deliberately does not assume a deployment:
+ * offline clients, CDN failures, and policy blocks can produce the same text.
  */
 export function isDappLoadFailure(error: Error): boolean {
   return /chunkloaderror|loading chunk|dynamically imported module|importing a module script failed|failed to fetch/i.test(
@@ -24,49 +34,38 @@ export function isDappLoadFailure(error: Error): boolean {
 }
 
 /**
- * The full DApp is lazy-loaded outside App's internal error boundary. This
- * boundary prevents a rejected dynamic import from leaving a blank root and
- * gives visitors an explicit reload or public-home recovery path.
+ * React 19 logs caught errors at the root independently of component
+ * boundaries. Override the root callbacks with this helper so production
+ * consoles receive only a generic event while development retains detail.
  */
-export default class DappLoadBoundary extends Component<
-  DappLoadBoundaryProps,
-  DappLoadBoundaryState
-> {
-  state: DappLoadBoundaryState = { error: null };
+export function reportReactRuntimeError(
+  error: unknown,
+  errorInfo: ReactErrorInfo = {},
+  isDevelopment = import.meta.env.DEV,
+  logger: ErrorLogger = console.error,
+): void {
+  if (isDevelopment) {
+    logger("[React runtime error]", {
+      error,
+      componentStack: errorInfo.componentStack,
+    });
+    return;
+  }
+
+  logger("[React runtime error]");
+}
+
+/** Shared recovery view for the bootstrap import and route-level lazy chunks. */
+export class DappRecoveryView extends Component<DappRecoveryViewProps> {
   private readonly headingRef = createRef<HTMLHeadingElement>();
 
-  static getDerivedStateFromError(error: Error): DappLoadBoundaryState {
-    return { error };
-  }
-
-  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    if (import.meta.env.DEV) {
-      console.error("[DApp bootstrap load failure]", {
-        name: error.name,
-        message: error.message,
-        componentStack: errorInfo.componentStack,
-      });
-      return;
-    }
-
-    // Do not expose provider endpoints, error messages, or component internals
-    // in production visitor consoles.
-    console.error("[DApp bootstrap load failure]");
-  }
-
-  componentDidUpdate(
-    _previousProps: DappLoadBoundaryProps,
-    previousState: DappLoadBoundaryState,
-  ) {
-    if (!previousState.error && this.state.error) {
-      this.headingRef.current?.focus();
-    }
+  componentDidMount() {
+    this.headingRef.current?.focus();
   }
 
   render() {
-    if (!this.state.error) return this.props.children;
+    const moduleLoadFailure = isDappLoadFailure(this.props.error);
 
-    const staleChunk = isDappLoadFailure(this.state.error);
     return (
       <main
         aria-labelledby="dapp-recovery-title"
@@ -83,9 +82,9 @@ export default class DappLoadBoundary extends Component<
             tabIndex={-1}
             className="mt-4 text-2xl font-bold focus:outline-none"
           >
-            {staleChunk
-              ? "A fresh application version is ready."
-              : "The secure DApp did not load."}
+            {moduleLoadFailure
+              ? "The secure DApp could not load."
+              : "The secure DApp encountered an error."}
           </h1>
           <p
             id="dapp-recovery-description"
@@ -93,9 +92,10 @@ export default class DappLoadBoundary extends Component<
             aria-live="assertive"
             className="mt-3 text-sm leading-6 text-zinc-300"
           >
-            Reload to fetch the current verified application files. Before
-            retrying any wallet action, confirm its status in your wallet or on
-            the appropriate block explorer.
+            Reload to request the current application files. If you are offline
+            or the service is temporarily unavailable, reconnect and try again.
+            Before retrying any wallet action, confirm its status in your wallet
+            or on the appropriate block explorer.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
@@ -115,5 +115,25 @@ export default class DappLoadBoundary extends Component<
         </section>
       </main>
     );
+  }
+}
+
+/**
+ * Boundary around the initial dynamic DApp bootstrap. Route-level boundaries
+ * reuse DappRecoveryView for later lazy chunk failures.
+ */
+export default class DappLoadBoundary extends Component<
+  DappLoadBoundaryProps,
+  DappLoadBoundaryState
+> {
+  state: DappLoadBoundaryState = { error: null };
+
+  static getDerivedStateFromError(error: Error): DappLoadBoundaryState {
+    return { error };
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children;
+    return <DappRecoveryView error={this.state.error} />;
   }
 }
