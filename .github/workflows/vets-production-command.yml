@@ -10,10 +10,6 @@ permissions:
   contents: read
   issues: write
 
-concurrency:
-  group: vets-production-command
-  cancel-in-progress: false
-
 jobs:
   dispatch-and-monitor:
     name: Validate, dispatch, and verify production release
@@ -26,6 +22,9 @@ jobs:
       github.triggering_actor == github.repository_owner &&
       github.run_attempt == 1 &&
       startsWith(github.event.comment.body, 'VETS DEPLOY ')
+    concurrency:
+      group: vets-production-command
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
@@ -202,6 +201,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          main_sha="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+            | jq -r '.object.sha')"
+          test "$main_sha" = "$TARGET_SHA"
           dispatch_epoch="$(date -u +%s)"
           payload="$(jq -nc \
             --arg sha "$TARGET_SHA" \
@@ -267,6 +273,8 @@ jobs:
           exit 72
 
       - name: Post deployment-start receipt
+        id: start_receipt
+        continue-on-error: true
         env:
           TARGET_SHA: ${{ steps.command.outputs.target_sha }}
           RUN_ID: ${{ steps.locate.outputs.run_id }}
@@ -297,6 +305,7 @@ jobs:
 
       - name: Monitor protected deployment
         id: monitor
+        if: always() && steps.locate.outputs.run_id != ''
         env:
           RUN_ID: ${{ steps.locate.outputs.run_id }}
           DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
@@ -359,6 +368,7 @@ jobs:
           deploy_conclusion="$(step_conclusion 'Deploy exact merged commit with frozen pnpm dependencies')"
           purge_conclusion="$(step_conclusion 'Purge Cloudflare cache')"
           verify_conclusion="$(step_conclusion 'Verify public deployment after purge')"
+          inline_attempted_conclusion="$(step_conclusion 'Record inline rollback attempted')"
           inline_success_conclusion="$(step_conclusion 'Record inline rollback succeeded')"
           inline_failed_conclusion="$(step_conclusion 'Record inline rollback attempted but failed')"
           post_rollback_conclusion="$(step_conclusion 'Roll back application after post-deploy failure')"
@@ -374,6 +384,9 @@ jobs:
           inline_rollback_attempted=false
           inline_rollback_succeeded=false
           inline_rollback_failed=false
+          if [ "$inline_attempted_conclusion" = "success" ]; then
+            inline_rollback_attempted=true
+          fi
           if [ "$inline_success_conclusion" = "success" ]; then
             inline_rollback_attempted=true
             inline_rollback_succeeded=true
@@ -428,6 +441,7 @@ jobs:
             echo "- Protected workflow run: $RUN_URL"
             echo "- Run ID: \`$RUN_ID\`"
             echo "- Run conclusion: **${RUN_CONCLUSION:-unknown}**"
+            echo "- Start receipt step outcome: **${{ steps.start_receipt.outcome }}**"
             echo "- Exact-SHA application deploy: **$deploy_ok**"
             echo "- Cloudflare purge: **$purge_ok**"
             echo "- Public post-purge verification: **$verify_ok**"
