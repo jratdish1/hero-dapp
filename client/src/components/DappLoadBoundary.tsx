@@ -135,7 +135,8 @@ export class DappRecoveryView extends Component<DappRecoveryViewProps> {
             id="dapp-recovery-title"
             ref={this.headingRef}
             tabIndex={-1}
-            className="mt-4 text-2xl font-bold focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-amber-400"
+            className="mt-4 text-2xl font-bold"
+            style={{ outline: "2px solid currentColor", outlineOffset: "4px" }}
           >
             {moduleLoadFailure
               ? "The secure DApp could not load."
