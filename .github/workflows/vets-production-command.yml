@@ -18,6 +18,7 @@ jobs:
   dispatch-and-monitor:
     name: Validate, dispatch, and verify production release
     if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
       github.event.issue.number == 43 &&
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
@@ -36,6 +37,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
           if [[ ! "$COMMAND" =~ ^VETS[[:space:]]DEPLOY[[:space:]]([0-9a-f]{40})$ ]]; then
             echo "Command must be exactly: VETS DEPLOY <lowercase-40-character-SHA>" >&2
             exit 64
