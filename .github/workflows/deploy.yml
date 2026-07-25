@@ -165,7 +165,7 @@ jobs:
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&head_sha=$DEPLOY_SHA&per_page=100")"
             trusted_run="$(jq -c --arg sha "$DEPLOY_SHA" '
               [.workflow_runs[] | select(
-                .head_sha == $sha and .head_branch == "main" and .event == "push"
+                .head_sha == $sha and .head_branch == "main" and .event == "push" and .run_attempt == 1
               )] | sort_by(.id) | last // empty
             ' <<<"$runs")"
             test -n "$trusted_run"

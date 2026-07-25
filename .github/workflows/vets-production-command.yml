@@ -107,8 +107,25 @@ jobs:
             | jq -r '.object.sha')"
           test "$main_sha" = "$TARGET_SHA"
 
-          comments="$(api_get \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100")"
+          collect_issue_comments() {
+            local page=1 response count
+            : > "$RUNNER_TEMP/command-issue-comments.jsonl"
+            while :; do
+              [ "$page" -le 10000 ] || {
+                echo "Issue comment pagination exceeded fail-closed bound" >&2
+                return 74
+              }
+              response="$(api_get \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100&page=$page")"
+              jq -c '.' <<<"$response" >> "$RUNNER_TEMP/command-issue-comments.jsonl"
+              count="$(jq -r 'length' <<<"$response")"
+              [ "$count" -lt 100 ] && break
+              page=$((page + 1))
+            done
+            jq -s 'add' "$RUNNER_TEMP/command-issue-comments.jsonl"
+          }
+
+          comments="$(collect_issue_comments)"
           consumed="$(jq -r --arg correlation "$CORRELATION_ID" '
             [.[] | select(
               .user.login == "github-actions[bot]" and
@@ -152,7 +169,7 @@ jobs:
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100")"
             trusted_run="$(jq -c --arg sha "$TARGET_SHA" '
               [.workflow_runs[] | select(
-                .head_sha == $sha and .head_branch == "main" and .event == "push"
+                .head_sha == $sha and .head_branch == "main" and .event == "push" and .run_attempt == 1
               )] | sort_by(.id) | last // empty
             ' <<<"$runs")"
             test -n "$trusted_run"
