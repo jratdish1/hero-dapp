@@ -186,7 +186,18 @@ async function startStaticServer() {
 
   const server = createServer((request, response) => {
     const requestUrl = new URL(request.url ?? '/', 'http://127.0.0.1');
-    const pathname = decodeURIComponent(requestUrl.pathname);
+    let pathname;
+    try {
+      pathname = decodeURIComponent(requestUrl.pathname);
+    } catch {
+      requests.push(requestUrl.pathname);
+      response.writeHead(400, {
+        'content-type': 'text/plain; charset=utf-8',
+        'cache-control': 'no-store',
+      });
+      response.end('Malformed request path');
+      return;
+    }
     requests.push(pathname);
 
     if (blockedPath && pathname === blockedPath) {
