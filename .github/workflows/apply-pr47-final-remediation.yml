@@ -9,7 +9,7 @@ on:
       - main
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: apply-pr47-final-remediation
@@ -30,14 +30,15 @@ jobs:
           ref: ops/vets-production-command-20260724
           fetch-depth: 0
           show-progress: false
+          persist-credentials: false
 
       - name: Verify exact staged head
         shell: bash
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "ops/vets-production-command-20260724"
-          test "$(git rev-parse HEAD^)" = "38d4416ce4d22d2df1bce7722019b10a22542e22"
-          test "$(git log -1 --pretty=%s)" = "chore: rerun PR47 final remediation"
+          test "$(git rev-parse HEAD^)" = "92b3877d8610988f8f6db114b7df13b85b6a5135"
+          test "$(git log -1 --pretty=%s)" = "chore: export PR47 remediated workflows"
           test -z "$(git status --porcelain)"
           test -f ops/pr47-final-remediation.py
 
@@ -50,15 +51,20 @@ jobs:
           python3 ops/pr47-final-remediation.py > pr47-remediation.log 2>&1
           status=$?
           cat pr47-remediation.log
+          git diff -- .github/workflows/deploy.yml .github/workflows/vets-production-command.yml > pr47-remediation.patch
           printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      - name: Upload remediation diagnostics
+      - name: Upload exact validated workflow bytes
         if: always() && hashFiles('pr47-remediation.log') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pr47-remediation-diagnostics-${{ github.sha }}
-          path: pr47-remediation.log
+          name: pr47-remediated-workflows-${{ github.sha }}
+          path: |
+            .github/workflows/deploy.yml
+            .github/workflows/vets-production-command.yml
+            pr47-remediation.patch
+            pr47-remediation.log
           retention-days: 7
           if-no-files-found: error
 
@@ -68,14 +74,4 @@ jobs:
         run: |
           test "${{ steps.remediation.outcome }}" = "success"
           test "${{ steps.remediation.outputs.exit_status }}" = "0"
-
-      - name: Commit exact validated workflow tree
-        shell: bash
-        run: |
-          set -euo pipefail
-          git config user.name "VETS Production Gate Remediation"
-          git config user.email "actions@users.noreply.github.com"
-          git add -A
-          test -n "$(git status --porcelain)"
-          git commit -m "fix: close production command race and rollback gaps"
-          git push origin HEAD:ops/vets-production-command-20260724
+          test -s pr47-remediation.patch
