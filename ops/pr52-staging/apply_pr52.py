@@ -16,7 +16,7 @@ from urllib.request import Request, urlopen
 REPO = os.environ["GITHUB_REPOSITORY"]
 TOKEN = os.environ["GH_TOKEN"]
 OWNER = os.environ["GITHUB_REPOSITORY_OWNER"]
-HEAD = os.environ["GITHUB_SHA"]
+HEAD = os.environ.get("APPLY_HEAD_SHA", os.environ["GITHUB_SHA"])
 BRANCH = "fix/production-controller-hardening-20260725"
 API = f"https://api.github.com/repos/{REPO}"
 
@@ -149,7 +149,7 @@ def create_blob(data: bytes) -> str:
 def main() -> None:
     if REPO != "jratdish1/hero-dapp":
         raise RuntimeError("Unexpected repository")
-    if os.environ.get("GITHUB_REF") != f"refs/heads/{BRANCH}":
+    if os.environ.get("GITHUB_HEAD_REF") not in {"", BRANCH, None} and os.environ.get("GITHUB_REF") != f"refs/heads/{BRANCH}":
         raise RuntimeError("Unexpected branch")
 
     commit = api("GET", f"/commits/{HEAD}")
