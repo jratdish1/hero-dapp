@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { useLocation } from "wouter";
+import DappLoadBoundary from "./components/DappLoadBoundary";
 import LandingApp from "./LandingApp";
 import "./index.css";
 
@@ -25,9 +26,11 @@ function BootstrapRouter() {
   }
 
   return (
-    <Suspense fallback={<DappLoader />}>
-      <DappBootstrap />
-    </Suspense>
+    <DappLoadBoundary>
+      <Suspense fallback={<DappLoader />}>
+        <DappBootstrap />
+      </Suspense>
+    </DappLoadBoundary>
   );
 }
 
