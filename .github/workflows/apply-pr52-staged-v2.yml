@@ -1,27 +1,29 @@
 name: Apply PR52 exact staged controller v2
 
 on:
-  push:
+  pull_request:
     branches:
-      - fix/production-controller-hardening-20260725
+      - main
+    types: [opened, reopened, synchronize]
 
 permissions:
   contents: write
   issues: write
 
 concurrency:
-  group: apply-pr52-exact-v2
+  group: apply-pr52-exact-v2-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   apply:
     if: >-
       github.repository == 'jratdish1/hero-dapp' &&
-      github.event.head_commit.message == 'chore: execute PR52 exact applier'
+      github.event.pull_request.head.ref == 'fix/production-controller-hardening-20260725'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GH_TOKEN: ${{ github.token }}
+      APPLY_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
 
     steps:
       - name: Checkout exact branch head
@@ -32,20 +34,19 @@ jobs:
           persist-credentials: false
           show-progress: false
 
-      - name: Run exact bounded applier
+      - name: Run exact bounded applier only on the authorized trigger head
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REF" = "refs/heads/fix/production-controller-hardening-20260725"
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test "$(git log -1 --pretty=%s)" = "chore: execute PR52 exact applier"
+          test "$GITHUB_HEAD_REF" = "fix/production-controller-hardening-20260725"
+          test "$(git rev-parse HEAD)" = "$APPLY_HEAD_SHA"
           python3 ops/pr52-staging/apply_pr52.py
 
       - name: Upload exact staging evidence
         if: always() && hashFiles('pr52-exact-evidence.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pr52-exact-evidence-${{ github.sha }}
+          name: pr52-exact-evidence-${{ github.event.pull_request.head.sha }}
           path: pr52-exact-evidence.json
           retention-days: 14
           if-no-files-found: error
