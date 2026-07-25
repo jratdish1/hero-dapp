@@ -6,6 +6,8 @@ interface PageSEO {
   description: string;
 }
 
+type SeoDocument = Pick<Document, "title" | "querySelector">;
+
 const PAGE_SEO_MAP: Record<string, PageSEO> = {
   "/": {
     title: "HERO Dapp — PulseChain & BASE DApp | Trade $HERO & $VETS",
@@ -101,28 +103,42 @@ const PAGE_SEO_MAP: Record<string, PageSEO> = {
   },
 };
 
+/**
+ * Applies route metadata to a supplied document. Passing the document makes
+ * navigation behavior deterministic and directly testable without a browser.
+ */
+export function applyPageSEO(
+  location: string,
+  targetDocument: SeoDocument = document,
+): void {
+  const seo = PAGE_SEO_MAP[location];
+  if (!seo) return;
+
+  const routeUrl = "https://herobase.io" + (location === "/" ? "" : location);
+  targetDocument.title = seo.title;
+
+  const setAttribute = (selector: string, name: string, value: string) => {
+    targetDocument.querySelector(selector)?.setAttribute(name, value);
+  };
+
+  setAttribute("meta[name=description]", "content", seo.description);
+  setAttribute('meta[property="og:title"]', "content", seo.title);
+  setAttribute('meta[property="og:description"]', "content", seo.description);
+  setAttribute('meta[property="og:url"]', "content", routeUrl);
+  setAttribute('meta[name="twitter:title"]', "content", seo.title);
+  setAttribute('meta[name="twitter:description"]', "content", seo.description);
+  setAttribute(
+    "link[rel=canonical]",
+    "href",
+    "https://herobase.io" + (location === "/" ? "/" : location),
+  );
+}
+
 export function usePageSEO() {
   const [location] = useLocation();
 
   useEffect(() => {
-    const seo = PAGE_SEO_MAP[location];
-    if (seo) {
-      document.title = seo.title;
-      const metaDesc = document.querySelector("meta[name=description]");
-      if (metaDesc) metaDesc.setAttribute("content", seo.description);
-      const ogTitle = document.querySelector("meta[property=\"og:title\"]");
-      if (ogTitle) ogTitle.setAttribute("content", seo.title);
-      const ogDesc = document.querySelector("meta[property=\"og:description\"]");
-      if (ogDesc) ogDesc.setAttribute("content", seo.description);
-      const ogUrl = document.querySelector("meta[property=\"og:url\"]");
-      if (ogUrl) ogUrl.setAttribute("content", "https://herobase.io" + (location === "/" ? "" : location));
-      const twTitle = document.querySelector("meta[name=\"twitter:title\"]");
-      if (twTitle) twTitle.setAttribute("content", seo.title);
-      const twDesc = document.querySelector("meta[name=\"twitter:description\"]");
-      if (twDesc) twDesc.setAttribute("content", seo.description);
-      const canonical = document.querySelector("link[rel=canonical]");
-      if (canonical) canonical.setAttribute("href", "https://herobase.io" + (location === "/" ? "/" : location));
-    }
+    applyPageSEO(location);
   }, [location]);
 }
 
