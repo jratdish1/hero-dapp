@@ -60,12 +60,19 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          main_sha="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
-            | jq -r '.object.sha')"
+          main_sha=""
+          for attempt in $(seq 1 5); do
+            if main_sha="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+              | jq -r '.object.sha')"; then
+              break
+            fi
+            echo "Transient main-ref lookup failure (attempt $attempt/5)" >&2
+            sleep $((attempt * 2))
+          done
           test "$main_sha" = "$TARGET_SHA"
           echo "Current main matches authorized SHA $TARGET_SHA"
 
@@ -78,12 +85,21 @@ jobs:
 
           resolve_workflow_id() {
             local workflow_file="$1"
-            curl --fail-with-body --silent --show-error \
-              -H "Authorization: Bearer $GH_TOKEN" \
-              -H "Accept: application/vnd.github+json" \
-              -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_file" \
-              | jq -r '.id'
+            local response=""
+            local attempt
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_file")"; then
+                jq -r '.id' <<<"$response"
+                return 0
+              fi
+              echo "Transient workflow lookup failure (attempt $attempt/5): $workflow_file" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
           }
 
           workflow_state() {
@@ -96,11 +112,14 @@ jobs:
             local run_id
             local jobs
 
-            runs="$(curl --fail-with-body --silent --show-error \
+            if ! runs="$(curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&per_page=100")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&per_page=100")"; then
+              echo pending
+              return
+            fi
 
             trusted_run="$(jq -c --arg sha "$TARGET_SHA" '
               [.workflow_runs[] | select(
@@ -129,11 +148,14 @@ jobs:
             fi
 
             run_id="$(jq -r '.id' <<<"$trusted_run")"
-            jobs="$(curl --fail-with-body --silent --show-error \
+            if ! jobs="$(curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"; then
+              echo pending
+              return
+            fi
 
             if jq -e --arg name "$required_job" '
               [.jobs[] | select(.name == $name)]
@@ -177,18 +199,31 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          main_sha="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
+          get_with_retry() {
+            local url="$1"
+            local response=""
+            local attempt
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$url")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              echo "Transient GitHub API failure (attempt $attempt/5): $url" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          main_sha="$(get_with_retry \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
             | jq -r '.object.sha')"
           test "$main_sha" = "$TARGET_SHA"
 
-          deploy_runs="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
+          deploy_runs="$(get_with_retry \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"
           duplicate_count="$(jq -r --arg title "$DISPLAY_TITLE" '[.workflow_runs[] | select(.display_title == $title)] | length' <<<"$deploy_runs")"
           test "$duplicate_count" = "0"
@@ -198,13 +233,29 @@ jobs:
         id: dispatch
         env:
           TARGET_SHA: ${{ steps.command.outputs.target_sha }}
+          DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
         shell: bash
         run: |
           set -euo pipefail
-          main_sha="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
+          get_with_retry() {
+            local url="$1"
+            local response=""
+            local attempt
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$url")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          main_sha="$(get_with_retry \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
             | jq -r '.object.sha')"
           test "$main_sha" = "$TARGET_SHA"
@@ -212,15 +263,35 @@ jobs:
           payload="$(jq -nc \
             --arg sha "$TARGET_SHA" \
             --arg correlation "$CORRELATION_ID" \
-            '{ref:"main",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:"DEPLOY"}}')"
+            '{ref:"main",inputs:{commit_sha:$sha,correlation_id:$correlation,operation:"deploy",confirmation:"DEPLOY"}}')"
 
-          curl --fail-with-body --silent --show-error \
-            -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/dispatches" \
-            --data "$payload"
+          dispatched=false
+          for dispatch_attempt in $(seq 1 3); do
+            if curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/dispatches" \
+              --data "$payload"; then
+              dispatched=true
+              break
+            fi
+
+            echo "Dispatch response failed; checking correlation before retry $dispatch_attempt/3" >&2
+            for observe_attempt in $(seq 1 6); do
+              if runs="$(get_with_retry \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")" && \
+                 jq -e --arg title "$DISPLAY_TITLE" \
+                   '[.workflow_runs[] | select(.display_title == $title)] | length == 1' \
+                   <<<"$runs" >/dev/null; then
+                dispatched=true
+                break 2
+              fi
+              sleep 5
+            done
+          done
+          test "$dispatched" = true
 
           echo "dispatch_epoch=$dispatch_epoch" >> "$GITHUB_OUTPUT"
           echo "Protected deployment dispatched for $TARGET_SHA with $CORRELATION_ID"
@@ -235,11 +306,15 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 30); do
-            response="$(curl --fail-with-body --silent --show-error \
+            if ! response="$(curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"; then
+              echo "Transient run-list failure while locating deployment (attempt $attempt/30)" >&2
+              sleep 10
+              continue
+            fi
 
             matching_runs="$(jq -c \
               --arg sha "$TARGET_SHA" \
@@ -313,11 +388,15 @@ jobs:
         run: |
           set -euo pipefail
           for attempt in $(seq 1 400); do
-            response="$(curl --fail-with-body --silent --show-error \
+            if ! response="$(curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"; then
+              echo "Transient deployment-monitor API failure (attempt $attempt/400)" >&2
+              sleep 15
+              continue
+            fi
             test "$(jq -r '.display_title' <<<"$response")" = "$DISPLAY_TITLE"
             status="$(jq -r '.status' <<<"$response")"
             conclusion="$(jq -r '.conclusion // "pending"' <<<"$response")"
@@ -343,19 +422,36 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          run_response="$(curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          get_with_retry() {
+            local url="$1"
+            local output_file="${2:-}"
+            local response=""
+            local attempt
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$url")"; then
+                if [ -n "$output_file" ]; then
+                  printf '%s' "$response" > "$output_file"
+                else
+                  printf '%s' "$response"
+                fi
+                return 0
+              fi
+              echo "Transient GitHub API failure (attempt $attempt/5): $url" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          run_response="$(get_with_retry "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
           test "$(jq -r '.display_title' <<<"$run_response")" = "$DISPLAY_TITLE"
 
-          curl --fail-with-body --silent --show-error \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
+          get_with_retry \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
-            > deployment-jobs.json
+            deployment-jobs.json
 
           step_conclusion() {
             local step_name="$1"
@@ -496,13 +592,22 @@ jobs:
               "${VERIFIED:-false}")"
           fi
           payload="$(jq -nc --arg body "$body" '{body:$body}')"
-          curl --fail-with-body --silent --show-error \
-            -X POST \
-            -H "Authorization: Bearer $GH_TOKEN" \
-            -H "Accept: application/vnd.github+json" \
-            -H "X-GitHub-Api-Version: 2022-11-28" \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
-            --data "$payload" >/dev/null
+          posted=false
+          for attempt in $(seq 1 5); do
+            if curl --fail-with-body --silent --show-error \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+              --data "$payload" >/dev/null; then
+              posted=true
+              break
+            fi
+            echo "Transient final-receipt post failure (attempt $attempt/5)" >&2
+            sleep $((attempt * 2))
+          done
+          test "$posted" = true
 
       - name: Enforce verified deployment
         if: always()
