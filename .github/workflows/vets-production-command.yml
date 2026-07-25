@@ -20,31 +20,40 @@ jobs:
     if: >-
       github.repository == 'jratdish1/hero-dapp' &&
       github.event.issue.number == 43 &&
+      github.event.issue.state == 'open' &&
       github.event.comment.user.login == github.repository_owner &&
       github.event.comment.author_association == 'OWNER' &&
+      github.triggering_actor == github.repository_owner &&
+      github.run_attempt == 1 &&
       startsWith(github.event.comment.body, 'VETS DEPLOY ')
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
       COMMAND: ${{ github.event.comment.body }}
+      CORRELATION_ID: issue-43-comment-${{ github.event.comment.id }}
       DEPLOY_WORKFLOW: deploy.yml
       TRACKER_ISSUE: '43'
 
     steps:
-      - name: Validate owner command
+      - name: Validate one-shot owner command
         id: command
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          [[ "$CORRELATION_ID" =~ ^issue-43-comment-[0-9]+$ ]]
           if [[ ! "$COMMAND" =~ ^VETS[[:space:]]DEPLOY[[:space:]]([0-9a-f]{40})$ ]]; then
             echo "Command must be exactly: VETS DEPLOY <lowercase-40-character-SHA>" >&2
             exit 64
           fi
           target_sha="${BASH_REMATCH[1]}"
+          display_title="VETS deploy $target_sha / $CORRELATION_ID"
           echo "target_sha=$target_sha" >> "$GITHUB_OUTPUT"
-          echo "Validated owner production command for $target_sha"
+          echo "display_title=$display_title" >> "$GITHUB_OUTPUT"
+          echo "Validated one-shot owner production command for $target_sha"
 
       - name: Require target to be current main
         env:
@@ -61,57 +70,130 @@ jobs:
           test "$main_sha" = "$TARGET_SHA"
           echo "Current main matches authorized SHA $TARGET_SHA"
 
-      - name: Wait for exact-main release checks
+      - name: Wait for exact-main push workflows
         env:
           TARGET_SHA: ${{ steps.command.outputs.target_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 120); do
-            response="$(curl --fail-with-body --silent --show-error \
+
+          resolve_workflow_id() {
+            local workflow_file="$1"
+            curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$TARGET_SHA/check-runs?per_page=100")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_file" \
+              | jq -r '.id'
+          }
 
-            failed=false
-            pending=false
-            for required_check in test-build-scan repository-safety; do
-              state="$(jq -r --arg name "$required_check" --arg sha "$TARGET_SHA" '
-                [.check_runs[] | select(
-                  .name == $name and
-                  .head_sha == $sha and
-                  .app.slug == "github-actions"
-                )]
-                | if length == 0 then "missing"
-                  else (max_by(.id) | if .status != "completed" then "pending" else (.conclusion // "unknown") end)
-                  end
-              ' <<<"$response")"
+          workflow_state() {
+            local workflow_id="$1"
+            local required_job="$2"
+            local runs
+            local trusted_run
+            local status
+            local conclusion
+            local run_id
+            local jobs
 
-              case "$state" in
-                success) ;;
-                missing|pending) pending=true ;;
-                *)
-                  echo "Required check failed for $TARGET_SHA: $required_check = $state" >&2
-                  failed=true
-                  ;;
-              esac
-            done
+            runs="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&per_page=100")"
 
-            if [ "$failed" = true ]; then
-              exit 65
+            trusted_run="$(jq -c --arg sha "$TARGET_SHA" '
+              [.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == "main" and
+                .event == "push"
+              )]
+              | sort_by(.id)
+              | last // empty
+            ' <<<"$runs")"
+
+            if [ -z "$trusted_run" ]; then
+              echo missing
+              return
             fi
-            if [ "$pending" = false ]; then
-              echo "Exact-main release checks are green for $TARGET_SHA"
+
+            status="$(jq -r '.status' <<<"$trusted_run")"
+            conclusion="$(jq -r '.conclusion // "pending"' <<<"$trusted_run")"
+            if [ "$status" != "completed" ]; then
+              echo pending
+              return
+            fi
+            if [ "$conclusion" != "success" ]; then
+              echo "failure:$conclusion"
+              return
+            fi
+
+            run_id="$(jq -r '.id' <<<"$trusted_run")"
+            jobs="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+
+            if jq -e --arg name "$required_job" '
+              [.jobs[] | select(.name == $name)]
+              | if length == 0 then false
+                else (max_by(.id) | .status == "completed" and .conclusion == "success")
+                end
+            ' <<<"$jobs" >/dev/null; then
+              echo success
+            else
+              echo failure:job
+            fi
+          }
+
+          ci_workflow_id="$(resolve_workflow_id ci.yml)"
+          security_workflow_id="$(resolve_workflow_id security-and-quality.yml)"
+          [[ "$ci_workflow_id" =~ ^[0-9]+$ ]]
+          [[ "$security_workflow_id" =~ ^[0-9]+$ ]]
+
+          for attempt in $(seq 1 80); do
+            ci_state="$(workflow_state "$ci_workflow_id" test-build-scan)"
+            security_state="$(workflow_state "$security_workflow_id" repository-safety)"
+            echo "Exact-main workflow states: CI=$ci_state security=$security_state attempt=$attempt/80"
+
+            if [ "$ci_state" = "success" ] && [ "$security_state" = "success" ]; then
               exit 0
             fi
-
-            echo "Release checks pending (attempt $attempt/120)"
+            if [[ "$ci_state" == failure:* ]] || [[ "$security_state" == failure:* ]]; then
+              echo "An exact-main release workflow failed" >&2
+              exit 65
+            fi
             sleep 15
           done
 
-          echo "Timed out waiting for exact-main checks" >&2
+          echo "Timed out waiting for exact-main push workflows" >&2
           exit 70
+
+      - name: Revalidate current main and reject replay
+        env:
+          TARGET_SHA: ${{ steps.command.outputs.target_sha }}
+          DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          main_sha="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+            | jq -r '.object.sha')"
+          test "$main_sha" = "$TARGET_SHA"
+
+          deploy_runs="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"
+          duplicate_count="$(jq -r --arg title "$DISPLAY_TITLE" '[.workflow_runs[] | select(.display_title == $title)] | length' <<<"$deploy_runs")"
+          test "$duplicate_count" = "0"
+          echo "Current main revalidated and correlation is unused: $CORRELATION_ID"
 
       - name: Dispatch protected VPS1 deployment
         id: dispatch
@@ -121,7 +203,10 @@ jobs:
         run: |
           set -euo pipefail
           dispatch_epoch="$(date -u +%s)"
-          payload="$(jq -nc --arg sha "$TARGET_SHA" '{ref:"main",inputs:{commit_sha:$sha,confirmation:"DEPLOY"}}')"
+          payload="$(jq -nc \
+            --arg sha "$TARGET_SHA" \
+            --arg correlation "$CORRELATION_ID" \
+            '{ref:"main",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:"DEPLOY"}}')"
 
           curl --fail-with-body --silent --show-error \
             -X POST \
@@ -132,42 +217,54 @@ jobs:
             --data "$payload"
 
           echo "dispatch_epoch=$dispatch_epoch" >> "$GITHUB_OUTPUT"
-          echo "Protected deployment dispatched for $TARGET_SHA"
+          echo "Protected deployment dispatched for $TARGET_SHA with $CORRELATION_ID"
 
-      - name: Locate protected deployment run
+      - name: Locate exact correlated deployment run
         id: locate
         env:
           TARGET_SHA: ${{ steps.command.outputs.target_sha }}
+          DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
           DISPATCH_EPOCH: ${{ steps.dispatch.outputs.dispatch_epoch }}
         shell: bash
         run: |
           set -euo pipefail
-          for attempt in $(seq 1 60); do
+          for attempt in $(seq 1 30); do
             response="$(curl --fail-with-body --silent --show-error \
               -H "Authorization: Bearer $GH_TOKEN" \
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=30")"
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$DEPLOY_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=100")"
 
-            run_id="$(jq -r --arg sha "$TARGET_SHA" --argjson epoch "$DISPATCH_EPOCH" '
-              [.workflow_runs[] | select(
-                .head_sha == $sha and
-                ((.created_at | fromdateiso8601) >= ($epoch - 5))
-              )] | sort_by(.id) | last | .id // empty
-            ' <<<"$response")"
-
-            if [ -n "$run_id" ]; then
-              run_url="$(jq -r --argjson id "$run_id" '.workflow_runs[] | select(.id == $id) | .html_url' <<<"$response")"
+            matching_runs="$(jq -c \
+              --arg sha "$TARGET_SHA" \
+              --arg title "$DISPLAY_TITLE" \
+              --argjson epoch "$DISPATCH_EPOCH" '
+                [.workflow_runs[] | select(
+                  .head_sha == $sha and
+                  .head_branch == "main" and
+                  .event == "workflow_dispatch" and
+                  .display_title == $title and
+                  ((.created_at | fromdateiso8601) >= ($epoch - 5))
+                )]
+              ' <<<"$response")"
+            count="$(jq -r 'length' <<<"$matching_runs")"
+            if [ "$count" = "1" ]; then
+              run_id="$(jq -r '.[0].id' <<<"$matching_runs")"
+              run_url="$(jq -r '.[0].html_url' <<<"$matching_runs")"
               echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
               echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
-              echo "Located deployment run: $run_url"
+              echo "Located exact correlated deployment run: $run_url"
               exit 0
+            fi
+            if [ "$count" -gt 1 ]; then
+              echo "Multiple deployment runs matched correlation $CORRELATION_ID" >&2
+              exit 71
             fi
             sleep 10
           done
 
-          echo "Unable to locate dispatched deployment run" >&2
-          exit 71
+          echo "Unable to locate exact correlated deployment run" >&2
+          exit 72
 
       - name: Post deployment-start receipt
         env:
@@ -177,14 +274,18 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          body="## VETS production deployment started
+          body="$(cat <<EOF_RECEIPT
+          ## VETS production deployment started
 
-- Target SHA: \`$TARGET_SHA\`
-- Protected workflow run: $RUN_URL
-- Run ID: \`$RUN_ID\`
-- State: **DISPATCHED / MONITORING**
+          - Target SHA: \`$TARGET_SHA\`
+          - Correlation: \`$CORRELATION_ID\`
+          - Protected workflow run: $RUN_URL
+          - Run ID: \`$RUN_ID\`
+          - State: **DISPATCHED / MONITORING**
 
-The existing protected VPS1 workflow remains responsible for production-environment approval, exact-SHA checks, strict SSH, non-root deployment, rollback, Cloudflare purge, and live verification."
+          The protected VPS1 workflow remains responsible for production-environment approval, exact-main workflow provenance, strict SSH, non-root deployment, rollback, Cloudflare purge, and live verification.
+          EOF_RECEIPT
+          )"
           payload="$(jq -nc --arg body "$body" '{body:$body}')"
           curl --fail-with-body --silent --show-error \
             -X POST \
@@ -198,6 +299,7 @@ The existing protected VPS1 workflow remains responsible for production-environm
         id: monitor
         env:
           RUN_ID: ${{ steps.locate.outputs.run_id }}
+          DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
         shell: bash
         run: |
           set -euo pipefail
@@ -207,6 +309,7 @@ The existing protected VPS1 workflow remains responsible for production-environm
               -H "Accept: application/vnd.github+json" \
               -H "X-GitHub-Api-Version: 2022-11-28" \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+            test "$(jq -r '.display_title' <<<"$response")" = "$DISPLAY_TITLE"
             status="$(jq -r '.status' <<<"$response")"
             conclusion="$(jq -r '.conclusion // "pending"' <<<"$response")"
             echo "Deployment status=$status conclusion=$conclusion attempt=$attempt/400"
@@ -217,9 +320,9 @@ The existing protected VPS1 workflow remains responsible for production-environm
             sleep 15
           done
           echo "Timed out monitoring deployment run $RUN_ID" >&2
-          exit 72
+          exit 73
 
-      - name: Collect deployment receipt
+      - name: Collect deployment and rollback receipt
         id: receipt
         if: always() && steps.locate.outputs.run_id != ''
         env:
@@ -227,9 +330,17 @@ The existing protected VPS1 workflow remains responsible for production-environm
           RUN_ID: ${{ steps.locate.outputs.run_id }}
           RUN_URL: ${{ steps.locate.outputs.run_url }}
           RUN_CONCLUSION: ${{ steps.monitor.outputs.conclusion }}
+          DISPLAY_TITLE: ${{ steps.command.outputs.display_title }}
         shell: bash
         run: |
           set -euo pipefail
+          run_response="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+          test "$(jq -r '.display_title' <<<"$run_response")" = "$DISPLAY_TITLE"
+
           curl --fail-with-body --silent --show-error \
             -H "Authorization: Bearer $GH_TOKEN" \
             -H "Accept: application/vnd.github+json" \
@@ -237,13 +348,74 @@ The existing protected VPS1 workflow remains responsible for production-environm
             "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
             > deployment-jobs.json
 
-          deploy_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Deploy exact merged commit with frozen pnpm dependencies" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
-          purge_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Purge Cloudflare cache" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
-          verify_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Verify public deployment after purge" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
-          rollback_ran="$(jq -r '[.jobs[].steps[]? | select(.name == "Roll back application after post-deploy failure" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
+          step_conclusion() {
+            local step_name="$1"
+            jq -r --arg name "$step_name" '
+              [.jobs[].steps[]? | select(.name == $name)]
+              | if length == 0 then "missing" else (last | .conclusion // "unknown") end
+            ' deployment-jobs.json
+          }
+
+          deploy_conclusion="$(step_conclusion 'Deploy exact merged commit with frozen pnpm dependencies')"
+          purge_conclusion="$(step_conclusion 'Purge Cloudflare cache')"
+          verify_conclusion="$(step_conclusion 'Verify public deployment after purge')"
+          inline_success_conclusion="$(step_conclusion 'Record inline rollback succeeded')"
+          inline_failed_conclusion="$(step_conclusion 'Record inline rollback attempted but failed')"
+          post_rollback_conclusion="$(step_conclusion 'Roll back application after post-deploy failure')"
+          rollback_purge_conclusion="$(step_conclusion 'Purge Cloudflare after rollback')"
+
+          deploy_ok=false
+          purge_ok=false
+          verify_ok=false
+          [ "$deploy_conclusion" = "success" ] && deploy_ok=true
+          [ "$purge_conclusion" = "success" ] && purge_ok=true
+          [ "$verify_conclusion" = "success" ] && verify_ok=true
+
+          inline_rollback_attempted=false
+          inline_rollback_succeeded=false
+          inline_rollback_failed=false
+          if [ "$inline_success_conclusion" = "success" ]; then
+            inline_rollback_attempted=true
+            inline_rollback_succeeded=true
+          fi
+          if [ "$inline_failed_conclusion" = "success" ]; then
+            inline_rollback_attempted=true
+            inline_rollback_failed=true
+          fi
+
+          post_rollback_attempted=false
+          post_rollback_succeeded=false
+          post_rollback_failed=false
+          case "$post_rollback_conclusion" in
+            success)
+              post_rollback_attempted=true
+              post_rollback_succeeded=true
+              ;;
+            failure|cancelled|timed_out|action_required|stale)
+              post_rollback_attempted=true
+              post_rollback_failed=true
+              ;;
+          esac
+
+          rollback_attempted=false
+          rollback_succeeded=false
+          rollback_failed=false
+          if [ "$inline_rollback_attempted" = true ] || [ "$post_rollback_attempted" = true ]; then
+            rollback_attempted=true
+          fi
+          if [ "$inline_rollback_succeeded" = true ] || [ "$post_rollback_succeeded" = true ]; then
+            rollback_succeeded=true
+          fi
+          if [ "$inline_rollback_failed" = true ] || [ "$post_rollback_failed" = true ]; then
+            rollback_failed=true
+          fi
 
           verified=false
-          if [ "$RUN_CONCLUSION" = "success" ] && [ "$deploy_ok" = true ] && [ "$purge_ok" = true ] && [ "$verify_ok" = true ] && [ "$rollback_ran" = false ]; then
+          if [ "$RUN_CONCLUSION" = "success" ] && \
+             [ "$deploy_ok" = true ] && \
+             [ "$purge_ok" = true ] && \
+             [ "$verify_ok" = true ] && \
+             [ "$rollback_attempted" = false ]; then
             verified=true
           fi
           echo "verified=$verified" >> "$GITHUB_OUTPUT"
@@ -252,13 +424,23 @@ The existing protected VPS1 workflow remains responsible for production-environm
             echo "## VETS production deployment receipt"
             echo
             echo "- Target SHA: \`$TARGET_SHA\`"
+            echo "- Correlation: \`$CORRELATION_ID\`"
             echo "- Protected workflow run: $RUN_URL"
             echo "- Run ID: \`$RUN_ID\`"
             echo "- Run conclusion: **${RUN_CONCLUSION:-unknown}**"
             echo "- Exact-SHA application deploy: **$deploy_ok**"
             echo "- Cloudflare purge: **$purge_ok**"
             echo "- Public post-purge verification: **$verify_ok**"
-            echo "- Rollback executed: **$rollback_ran**"
+            echo "- Inline rollback attempted: **$inline_rollback_attempted**"
+            echo "- Inline rollback succeeded: **$inline_rollback_succeeded**"
+            echo "- Inline rollback failed: **$inline_rollback_failed**"
+            echo "- Post-deploy rollback attempted: **$post_rollback_attempted**"
+            echo "- Post-deploy rollback succeeded: **$post_rollback_succeeded**"
+            echo "- Post-deploy rollback failed: **$post_rollback_failed**"
+            echo "- Rollback Cloudflare purge conclusion: **$rollback_purge_conclusion**"
+            echo "- Any rollback attempted: **$rollback_attempted**"
+            echo "- Any rollback succeeded: **$rollback_succeeded**"
+            echo "- Any rollback failed: **$rollback_failed**"
             echo "- Deployment verified: **$verified**"
             echo
             echo "### Job and step conclusions"
@@ -270,7 +452,7 @@ The existing protected VPS1 workflow remains responsible for production-environm
         if: always() && steps.locate.outputs.run_id != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-deployment-receipt-${{ steps.command.outputs.target_sha }}
+          name: production-deployment-receipt-${{ steps.command.outputs.target_sha }}-${{ env.CORRELATION_ID }}
           path: |
             deployment-receipt.md
             deployment-jobs.json
@@ -291,15 +473,13 @@ The existing protected VPS1 workflow remains responsible for production-environm
           if [ -f deployment-receipt.md ]; then
             body="$(cat deployment-receipt.md)"
           else
-            body="## VETS production deployment receipt
-
-- Target SHA: \`${TARGET_SHA:-unknown}\`
-- Protected workflow run: ${RUN_URL:-not located}
-- Run ID: \`${RUN_ID:-not located}\`
-- Run conclusion: **${RUN_CONCLUSION:-unknown}**
-- Deployment verified: **${VERIFIED:-false}**
-
-The command lane did not obtain a complete deployment receipt."
+            body="$(printf '## VETS production deployment receipt\n\n- Target SHA: `%s`\n- Correlation: `%s`\n- Protected workflow run: %s\n- Run ID: `%s`\n- Run conclusion: **%s**\n- Deployment verified: **%s**\n\nThe command lane did not obtain a complete deployment receipt.\n' \
+              "${TARGET_SHA:-unknown}" \
+              "$CORRELATION_ID" \
+              "${RUN_URL:-not located}" \
+              "${RUN_ID:-not located}" \
+              "${RUN_CONCLUSION:-unknown}" \
+              "${VERIFIED:-false}")"
           fi
           payload="$(jq -nc --arg body "$body" '{body:$body}')"
           curl --fail-with-body --silent --show-error \
