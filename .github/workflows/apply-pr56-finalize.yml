@@ -52,12 +52,15 @@ jobs:
           printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
-      - name: Upload diagnostics
+      - name: Upload validated patched files and diagnostics
         if: always() && hashFiles('pr56-finalize.log') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pr56-finalize-diagnostics-${{ github.event.pull_request.head.sha }}
-          path: pr56-finalize.log
+          name: pr56-validated-patch-${{ github.event.pull_request.head.sha }}
+          path: |
+            pr56-finalize.log
+            .github/workflows/deploy.yml
+            DEPLOY_INSTRUCTIONS.md
           retention-days: 7
           if-no-files-found: error
 
