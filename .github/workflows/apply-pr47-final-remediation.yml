@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - ops/vets-production-command-20260724
+  pull_request:
+    branches:
+      - main
 
 permissions:
   contents: write
@@ -14,7 +17,9 @@ concurrency:
 
 jobs:
   apply:
-    if: github.event.head_commit.message == 'chore: apply final PR47 remediation'
+    if: >-
+      (github.event_name == 'pull_request' && github.head_ref == 'ops/vets-production-command-20260724') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ops/vets-production-command-20260724' && github.event.head_commit.message == 'chore: apply final PR47 remediation')
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -31,8 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "ops/vets-production-command-20260724"
-          test "$(git rev-parse HEAD^)" = "47475972453cc20d6ac8b8311eb099b31f7eb5be"
-          test "$(git log -1 --pretty=%s)" = "chore: apply final PR47 remediation"
+          test "$(git rev-parse HEAD^)" = "13bf017bf09c3b52cd56be789b92788c6c0f6e27"
+          test "$(git log -1 --pretty=%s)" = "chore: enable PR47 remediation on PR sync"
           test -z "$(git status --porcelain)"
           test -f ops/pr47-final-remediation.py
 
