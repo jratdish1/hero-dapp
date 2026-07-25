@@ -77,6 +77,8 @@ jobs:
           "$chrome_bin" --version
 
       - name: Exercise mounted bootstrap and route chunk recovery
+        id: recovery
+        continue-on-error: true
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         run: node scripts/check-bootstrap-recovery.mjs
@@ -98,6 +100,12 @@ jobs:
             dist/public/.vite/manifest.json
           retention-days: 14
           if-no-files-found: error
+
+      - name: Enforce mounted recovery gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.recovery.outcome }}" = "success"
 
       - name: Production dependency audit
         run: pnpm audit --prod --audit-level=high
