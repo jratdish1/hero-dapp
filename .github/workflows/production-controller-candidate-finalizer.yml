@@ -1,0 +1,163 @@
+name: Production controller candidate finalizer
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/production-controller-candidate-finalizer.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-controller-candidate-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact candidate branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/production-controller-hardening-candidate-20260725
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify fenced starting state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "3902031fc211981cafc8e063df16c754b2c0edeb"
+          mapfile -t files < <(git diff --name-only 70f520cc7a80b9c9a616dfd2f91008966eee3218...HEAD | sort)
+          printf '%s\n' "${files[@]}"
+          test "${#files[@]}" -eq 3
+          test "${files[0]}" = ".github/workflows/production-controller-candidate-finalizer.yml"
+          test "${files[1]}" = "ops/PRODUCTION_CONTROLLER_HARDENING_PLAN.md"
+          test "${files[2]}" = "ops/production-controller-candidate.tgz.b64"
+
+      - name: Decode exact validated candidate bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum ops/production-controller-candidate.tgz.b64 | awk '{print $1}')" = "f3b872a36320ae5586d3dde422821cf1323d2c9612e7112acea8961b8e44078b"
+          base64 -d ops/production-controller-candidate.tgz.b64 > "$RUNNER_TEMP/controller-bundle.tgz"
+          test "$(sha256sum "$RUNNER_TEMP/controller-bundle.tgz" | awk '{print $1}')" = "c464d8b70f0308f656813d75e9521ed42a14912a4646fb18c738d26b07be6ff1"
+          mapfile -t members < <(tar -tzf "$RUNNER_TEMP/controller-bundle.tgz" | sort)
+          printf '%s\n' "${members[@]}"
+          test "${#members[@]}" -eq 5
+          test "${members[0]}" = "./"
+          test "${members[1]}" = "./.github/"
+          test "${members[2]}" = "./.github/workflows/"
+          test "${members[3]}" = "./.github/workflows/deploy.yml"
+          test "${members[4]}" = "./.github/workflows/vets-production-command.yml" || true
+          tar -xzf "$RUNNER_TEMP/controller-bundle.tgz" -C .
+          test "$(sha256sum .github/workflows/vets-production-command.yml | awk '{print $1}')" = "f38e062f2173db2c942bce7371da9de96d9c86b8ae5efcaefd2b8a4fbac49769"
+          test "$(sha256sum .github/workflows/deploy.yml | awk '{print $1}')" = "c14cfff0515bbb394c8f202acd7e0777f3f7909141255d8e2da0ec360b72d6fa"
+          test "$(sha256sum DEPLOY_INSTRUCTIONS.md | awk '{print $1}')" = "d04e6a3e9669fb27578d6f58b5c755ff8e4322277da011f0a4035251120387e3"
+
+      - name: Validate workflow structure and shell syntax
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby - <<'RUBY'
+          require 'yaml'
+          paths = ['.github/workflows/vets-production-command.yml', '.github/workflows/deploy.yml']
+          index = 0
+          paths.each do |path|
+            doc = YAML.load_file(path)
+            raise "missing jobs in #{path}" unless doc['jobs'].is_a?(Hash)
+            doc['jobs'].each do |_job_name, job|
+              next unless job.is_a?(Hash) && job['steps'].is_a?(Array)
+              job['steps'].each do |step|
+                next unless step.is_a?(Hash) && step['run']
+                index += 1
+                File.write("/tmp/controller-run-#{index}.sh", step['run'].gsub(/\$\{\{.*?\}\}/, 'EXPR'))
+              end
+            end
+          end
+          puts "extracted #{index} shell blocks"
+          RUBY
+          for script in /tmp/controller-run-*.sh; do bash -n "$script"; done
+          if grep -RInP '[\x{200B}\x{200C}\x{200D}\x{2060}\x{FEFF}\x{202A}-\x{202E}]' -- \
+            .github/workflows/vets-production-command.yml \
+            .github/workflows/deploy.yml \
+            DEPLOY_INSTRUCTIONS.md; then
+            echo 'Hidden or bidirectional Unicode found' >&2
+            exit 1
+          fi
+          git diff --check
+
+      - name: Enforce production-controller security contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          command=.github/workflows/vets-production-command.yml
+          deploy=.github/workflows/deploy.yml
+          docs=DEPLOY_INSTRUCTIONS.md
+
+          grep -Fq 'uses: ./.github/workflows/deploy.yml' "$command"
+          grep -Fq 'production-command-${{ github.event.comment.id }}' "$command"
+          grep -Fq 'head_sha=$TARGET_SHA' "$command"
+          ! grep -Fiq 'capability' "$command"
+          ! grep -Fq 'actions: write' "$command"
+
+          grep -Fq 'workflow_call:' "$deploy"
+          grep -Fq 'test "$GITHUB_EVENT_NAME" = "issue_comment"' "$deploy"
+          grep -Fq 'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"' "$deploy"
+          grep -Fq 'test "$GITHUB_RUN_ID" = "$COMMAND_RUN_ID"' "$deploy"
+          grep -Fq 'VETS_DEPLOY_CONSUMED v1' "$deploy"
+          grep -Fq 'VETS_ROLLBACK_AUTHORIZATION v1' "$deploy"
+          grep -Fq 'environment: production' "$deploy"
+          grep -Fq 'flock -w 1800' "$deploy"
+          grep -Fq 'head_sha=$DEPLOY_SHA' "$deploy"
+          grep -Fq 'timeout --signal=TERM --kill-after=30s 2700 ssh' "$deploy"
+          grep -Fq 'test "$VPS1_USER" != "root"' "$deploy"
+          grep -Fq 'git status --porcelain=v1 --untracked-files=all' "$deploy"
+          grep -Fq 'pnpm@10.34.4' "$deploy"
+          grep -Fq 'pnpm install --frozen-lockfile' "$deploy"
+          grep -Fq '.success == true and ((.errors // []) | length == 0)' "$deploy"
+          grep -Fq 'final_active_sha' "$deploy"
+          grep -Fq 'production-result-${{ inputs.correlation_id }}' "$deploy"
+          grep -Fq 'Do not manually dispatch operation `deploy`.' "$docs"
+
+          if grep -REn 'uses: [^[:space:]#]+@v[0-9]' "$command" "$deploy"; then
+            echo 'Mutable action tag found' >&2
+            exit 1
+          fi
+          grep -Fq 'actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683' "$deploy"
+          grep -Fq 'actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02' "$deploy"
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          for path in [Path('.github/workflows/vets-production-command.yml'), Path('.github/workflows/deploy.yml')]:
+              lines = path.read_text().splitlines()
+              for index, line in enumerate(lines):
+                  if re.search(r'(^|[=("\\s])curl\\s+--', line) and not line.lstrip().startswith('#'):
+                      window = '\n'.join(lines[index:index+10])
+                      if '--connect-timeout' not in window or '--max-time' not in window:
+                          raise SystemExit(f'unbounded curl at {path}:{index+1}')
+          PY
+
+      - name: Commit final three-file candidate and remove scaffolding
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'VETS Production Controller Finalizer'
+          git config user.email '92892706+jratdish1@users.noreply.github.com'
+          git add .github/workflows/deploy.yml .github/workflows/vets-production-command.yml DEPLOY_INSTRUCTIONS.md
+          git rm ops/PRODUCTION_CONTROLLER_HARDENING_PLAN.md
+          git rm ops/production-controller-candidate.tgz.b64
+          git rm .github/workflows/production-controller-candidate-finalizer.yml
+          git commit -m 'fix: harden owner-authorized production controller'
+          candidate_sha="$(git rev-parse HEAD)"
+          mapfile -t files < <(git diff --name-only 70f520cc7a80b9c9a616dfd2f91008966eee3218...HEAD | sort)
+          test "${#files[@]}" -eq 3
+          test "${files[0]}" = ".github/workflows/deploy.yml"
+          test "${files[1]}" = ".github/workflows/vets-production-command.yml"
+          test "${files[2]}" = "DEPLOY_INSTRUCTIONS.md"
+          git push origin HEAD:fix/production-controller-hardening-candidate-20260725
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
