@@ -118,8 +118,10 @@ export class DappRecoveryView extends Component<DappRecoveryViewProps> {
     const heading = this.headingRef.current;
     if (!heading) return;
 
-    heading.style.outline = "2px solid currentColor";
-    heading.style.outlineOffset = "4px";
+    if (heading.style) {
+      heading.style.outline = "2px solid currentColor";
+      heading.style.outlineOffset = "4px";
+    }
     heading.focus();
   }
 
