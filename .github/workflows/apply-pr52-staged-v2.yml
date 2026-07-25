@@ -35,12 +35,30 @@ jobs:
           show-progress: false
 
       - name: Run exact bounded applier only on the authorized trigger head
+        id: applier
+        continue-on-error: true
         shell: bash
         run: |
-          set -euo pipefail
-          test "$GITHUB_HEAD_REF" = "fix/production-controller-hardening-20260725"
-          test "$(git rev-parse HEAD)" = "$APPLY_HEAD_SHA"
-          python3 ops/pr52-staging/apply_pr52.py
+          set +e
+          {
+            set -euo pipefail
+            test "$GITHUB_HEAD_REF" = "fix/production-controller-hardening-20260725"
+            test "$(git rev-parse HEAD)" = "$APPLY_HEAD_SHA"
+            python3 ops/pr52-staging/apply_pr52.py
+          } > pr52-applier.log 2>&1
+          status=$?
+          cat pr52-applier.log
+          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Upload applier diagnostics
+        if: always() && hashFiles('pr52-applier.log') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr52-applier-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: pr52-applier.log
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Upload exact staging evidence
         if: always() && hashFiles('pr52-exact-evidence.json') != ''
@@ -50,3 +68,10 @@ jobs:
           path: pr52-exact-evidence.json
           retention-days: 14
           if-no-files-found: error
+
+      - name: Enforce exact applier gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.applier.outcome }}" = "success"
+          test "${{ steps.applier.outputs.exit_status }}" = "0"
