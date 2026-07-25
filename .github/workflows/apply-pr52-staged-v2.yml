@@ -1,0 +1,51 @@
+name: Apply PR52 exact staged controller v2
+
+on:
+  push:
+    branches:
+      - fix/production-controller-hardening-20260725
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: apply-pr52-exact-v2
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.head_commit.message == 'chore: execute PR52 exact applier'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/production-controller-hardening-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Run exact bounded applier
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/fix/production-controller-hardening-20260725"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git log -1 --pretty=%s)" = "chore: execute PR52 exact applier"
+          python3 ops/pr52-staging/apply_pr52.py
+
+      - name: Upload exact staging evidence
+        if: always() && hashFiles('pr52-exact-evidence.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr52-exact-evidence-${{ github.sha }}
+          path: pr52-exact-evidence.json
+          retention-days: 14
+          if-no-files-found: error
