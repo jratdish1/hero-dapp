@@ -269,7 +269,7 @@ jobs:
     needs: authorize
     if: needs.authorize.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 120
     environment: production
     concurrency:
       group: production-vps1
@@ -333,7 +333,8 @@ jobs:
           printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
           chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
-          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          timeout --signal=TERM --kill-after=5s 15s \
+            ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
           ssh-keygen -F "$VPS1_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
 
       - name: Deploy exact authorized commit with host writer lock
