@@ -14,7 +14,6 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error;
-  headingFocused: boolean;
 }
 
 /**
@@ -30,27 +29,35 @@ export class ErrorBoundary extends Component<Props, State> {
     this.state = {
       hasError: false,
       error: new Error("No application error has been captured"),
-      headingFocused: false,
     };
   }
 
   static getDerivedStateFromError(error: unknown): State {
-    return {
-      hasError: true,
-      error: normalizeThrownValue(error),
-      headingFocused: false,
-    };
+    return { hasError: true, error: normalizeThrownValue(error) };
+  }
+
+  private focusHeading() {
+    const heading = this.headingRef.current;
+    if (!heading) return;
+
+    // Tailwind focus utilities remain the primary styling contract. Apply a
+    // direct lifecycle fallback before focus so the initial error-boundary
+    // mount has a visible indicator even when the production stylesheet has
+    // not finished resolving its focus ring variables.
+    heading.style.outline = "2px solid currentColor";
+    heading.style.outlineOffset = "4px";
+    heading.focus();
   }
 
   componentDidMount() {
     if (this.state.hasError) {
-      this.headingRef.current?.focus();
+      this.focusHeading();
     }
   }
 
   componentDidUpdate(_previousProps: Props, previousState: State) {
     if (!previousState.hasError && this.state.hasError) {
-      this.headingRef.current?.focus();
+      this.focusHeading();
     }
   }
 
@@ -79,13 +86,14 @@ export class ErrorBoundary extends Component<Props, State> {
             id="application-error-title"
             ref={this.headingRef}
             tabIndex={-1}
-            onFocus={() => this.setState({ headingFocused: true })}
-            onBlur={() => this.setState({ headingFocused: false })}
-            style={
-              this.state.headingFocused
-                ? { outline: "2px solid currentColor", outlineOffset: "4px" }
-                : undefined
-            }
+            onFocus={(event) => {
+              event.currentTarget.style.outline = "2px solid currentColor";
+              event.currentTarget.style.outlineOffset = "4px";
+            }}
+            onBlur={(event) => {
+              event.currentTarget.style.removeProperty("outline");
+              event.currentTarget.style.removeProperty("outline-offset");
+            }}
             className="mb-4 rounded-sm text-xl focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-primary focus:ring-2 focus:ring-primary focus:ring-offset-4 focus:ring-offset-background"
           >
             An unexpected application error occurred.
