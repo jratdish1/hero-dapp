@@ -1,1 +1,1 @@
-apply=pr52-exact-controller-v2-diagnostics
+apply=pr52-exact-controller-v2-sha-repair
