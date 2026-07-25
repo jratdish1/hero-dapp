@@ -65,19 +65,36 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Locate headless Chrome
+        id: chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome_bin"
+          test -x "$chrome_bin"
+          echo "chrome_bin=$chrome_bin" >> "$GITHUB_OUTPUT"
+          "$chrome_bin" --version
+
+      - name: Exercise mounted bootstrap and route chunk recovery
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        run: node scripts/check-bootstrap-recovery.mjs
+
       - name: Verify public landing critical path
         shell: bash
         run: |
           set -euo pipefail
           node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
-      - name: Upload exact-head landing evidence
-        if: always() && hashFiles('landing-bundle-report.txt') != ''
+      - name: Upload exact-head landing and recovery evidence
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: landing-evidence-${{ github.sha }}
           path: |
             landing-bundle-report.txt
+            bootstrap-recovery-report.json
             dist/public/.vite/manifest.json
           retention-days: 14
           if-no-files-found: error
