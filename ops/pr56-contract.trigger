@@ -1,1 +1,1 @@
-apply=pr56-final-contract
+apply=pr56-final-contract-v2
