@@ -92,6 +92,22 @@ jobs:
           printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
+      - name: Exercise mounted generic render-error focus
+        id: generic_focus
+        continue-on-error: true
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 90s \
+            node scripts/check-generic-error-focus.mjs \
+            > generic-error-focus.log 2>&1
+          status=$?
+          cat generic-error-focus.log
+          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
       - name: Verify public landing critical path
         shell: bash
         run: |
@@ -99,7 +115,7 @@ jobs:
           node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
       - name: Upload exact-head landing and recovery evidence
-        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json') != ''
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: landing-evidence-${{ github.sha }}
@@ -107,16 +123,20 @@ jobs:
             landing-bundle-report.txt
             bootstrap-recovery.log
             bootstrap-recovery-report.json
+            generic-error-focus.log
+            generic-error-focus-report.json
             dist/public/.vite/manifest.json
           retention-days: 14
           if-no-files-found: error
 
-      - name: Enforce mounted recovery gate
+      - name: Enforce mounted recovery gates
         if: always()
         shell: bash
         run: |
           test "${{ steps.recovery.outcome }}" = "success"
           test "${{ steps.recovery.outputs.exit_status }}" = "0"
+          test "${{ steps.generic_focus.outcome }}" = "success"
+          test "${{ steps.generic_focus.outputs.exit_status }}" = "0"
 
       - name: Production dependency audit
         run: pnpm audit --prod --audit-level=high
