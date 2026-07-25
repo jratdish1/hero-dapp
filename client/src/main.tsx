@@ -4,6 +4,7 @@ import { useLocation } from "wouter";
 import DappLoadBoundary, {
   createRootErrorHandlers,
 } from "./components/DappLoadBoundary";
+import { installAnalytics } from "./lib/analytics";
 import LandingApp from "./LandingApp";
 import "./index.css";
 
@@ -37,6 +38,8 @@ function BootstrapRouter() {
     </DappLoadBoundary>
   );
 }
+
+installAnalytics();
 
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root application mount");
