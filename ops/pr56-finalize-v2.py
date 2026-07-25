@@ -69,9 +69,11 @@ def patch_docs(source: str) -> str:
 
 
 original_api = module.api
+blob_counter = 0
 
 
 def api_with_wrapper_cleanup(method: str, path: str, payload=None):
+    global blob_counter
     if method == "POST" and path == "/git/trees" and isinstance(payload, dict):
         entries = list(payload.get("tree", []))
         entries.append({
@@ -82,7 +84,11 @@ def api_with_wrapper_cleanup(method: str, path: str, payload=None):
         })
         payload = dict(payload)
         payload["tree"] = entries
-    return original_api(method, path, payload)
+    result = original_api(method, path, payload)
+    if method == "POST" and path == "/git/blobs" and isinstance(result, dict):
+        blob_counter += 1
+        print(f"VETS_PR56_BLOB_{blob_counter}={result.get('sha')}", flush=True)
+    return result
 
 
 module.patch_docs = patch_docs
