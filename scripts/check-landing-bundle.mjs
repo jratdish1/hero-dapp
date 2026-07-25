@@ -4,6 +4,7 @@ import { gzipSync } from "node:zlib";
 
 const outputRoot = path.resolve(process.cwd(), "dist/public");
 const manifestPath = path.join(outputRoot, ".vite/manifest.json");
+const builtHtmlPath = path.join(outputRoot, "index.html");
 const budgetBytes = Number.parseInt(
   process.env.LANDING_GZIP_BUDGET_BYTES || "400000",
   10,
@@ -15,6 +16,23 @@ if (!Number.isFinite(budgetBytes) || budgetBytes <= 0) {
 if (!fs.existsSync(manifestPath)) {
   throw new Error(`Vite manifest not found: ${manifestPath}`);
 }
+if (!fs.existsSync(builtHtmlPath)) {
+  throw new Error(`Built HTML shell not found: ${builtHtmlPath}`);
+}
+
+const builtHtml = fs.readFileSync(builtHtmlPath, "utf8");
+for (const placeholder of [
+  "%VITE_ANALYTICS_ENDPOINT%",
+  "%VITE_ANALYTICS_WEBSITE_ID%",
+]) {
+  if (builtHtml.includes(placeholder)) {
+    throw new Error(`Built HTML shell contains unresolved analytics placeholder: ${placeholder}`);
+  }
+}
+if (/src=["']%VITE_[^"']+%/i.test(builtHtml)) {
+  throw new Error("Built HTML shell contains an unresolved Vite script source");
+}
+console.log("Built HTML analytics placeholder gate: PASS");
 
 const manifest = JSON.parse(fs.readFileSync(manifestPath, "utf8"));
 const entryRecord =

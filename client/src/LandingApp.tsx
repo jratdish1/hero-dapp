@@ -1,6 +1,7 @@
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingSocial from "./components/FloatingSocial";
 import { ThemeProvider } from "./contexts/ThemeContext";
+import { usePageSEO } from "./hooks/usePageSEO";
 import Home from "./pages/Home";
 
 /**
@@ -10,6 +11,8 @@ import Home from "./pages/Home";
  * public homepage can render without downloading the full DApp runtime.
  */
 export default function LandingApp() {
+  usePageSEO();
+
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable>

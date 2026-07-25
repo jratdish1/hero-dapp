@@ -1,6 +1,11 @@
 import { cn } from "@/lib/utils";
 import { AlertTriangle, RotateCcw } from "lucide-react";
-import { Component, ReactNode } from "react";
+import React, { Component, createRef, type ReactNode } from "react";
+import {
+  DappRecoveryView,
+  isDappLoadFailure,
+  normalizeThrownValue,
+} from "./DappLoadBoundary";
 
 interface Props {
   children: ReactNode;
@@ -8,54 +13,100 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
+  error: Error;
 }
 
-class ErrorBoundary extends Component<Props, State> {
+/**
+ * Application-level boundary for route and render failures. Lazy route chunk
+ * failures delegate to the same focused recovery view as the outer bootstrap
+ * boundary so already-open tabs recover safely after releases or outages.
+ */
+export class ErrorBoundary extends Component<Props, State> {
+  private readonly headingRef = createRef<HTMLHeadingElement>();
+
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = {
+      hasError: false,
+      error: new Error("No application error has been captured"),
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(error: unknown): State {
+    return { hasError: true, error: normalizeThrownValue(error) };
+  }
+
+  componentDidMount() {
+    if (this.state.hasError) {
+      this.headingRef.current?.focus();
+    }
+  }
+
+  componentDidUpdate(_previousProps: Props, previousState: State) {
+    if (!previousState.hasError && this.state.hasError) {
+      this.headingRef.current?.focus();
+    }
   }
 
   render() {
-    if (this.state.hasError) {
-      return (
-        <div className="flex items-center justify-center min-h-screen p-8 bg-background">
-          <div className="flex flex-col items-center w-full max-w-2xl p-8">
-            <AlertTriangle
-              size={48}
-              className="text-destructive mb-6 flex-shrink-0"
-            />
-
-            <h2 className="text-xl mb-4">An unexpected error occurred.</h2>
-
-            <div className="p-4 w-full rounded bg-muted overflow-auto mb-6">
-              <pre className="text-sm text-muted-foreground whitespace-break-spaces">
-                {this.state.error?.stack}
-              </pre>
-            </div>
-
-            <button
-              onClick={() => window.location.reload()}
-              className={cn(
-                "flex items-center gap-2 px-4 py-2 rounded-lg",
-                "bg-primary text-primary-foreground",
-                "hover:opacity-90 cursor-pointer"
-              )}
-            >
-              <RotateCcw size={16} />
-              Reload Page
-            </button>
-          </div>
-        </div>
-      );
+    if (!this.state.hasError) {
+      return this.props.children;
     }
 
-    return this.props.children;
+    if (isDappLoadFailure(this.state.error)) {
+      return <DappRecoveryView error={this.state.error} />;
+    }
+
+    return (
+      <main
+        role="alert"
+        aria-labelledby="application-error-title"
+        className="flex min-h-screen items-center justify-center bg-background p-8"
+      >
+        <section className="flex w-full max-w-2xl flex-col items-center p-8 text-center">
+          <AlertTriangle
+            size={48}
+            className="mb-6 flex-shrink-0 text-destructive"
+          />
+
+          <h1
+            id="application-error-title"
+            ref={this.headingRef}
+            tabIndex={-1}
+            className="mb-4 text-xl focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-primary"
+          >
+            An unexpected application error occurred.
+          </h1>
+
+          <p className="mb-6 text-sm text-muted-foreground">
+            Reload the page to retry. Before repeating any wallet action,
+            confirm its status in your wallet or on the appropriate block
+            explorer.
+          </p>
+
+          {import.meta.env.DEV && (
+            <div className="mb-6 w-full overflow-auto rounded bg-muted p-4 text-left">
+              <pre className="whitespace-break-spaces text-sm text-muted-foreground">
+                {this.state.error.stack ?? this.state.error.message}
+              </pre>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={() => window.location.reload()}
+            className={cn(
+              "flex cursor-pointer items-center gap-2 rounded-lg px-4 py-2",
+              "bg-primary text-primary-foreground",
+              "hover:opacity-90",
+            )}
+          >
+            <RotateCcw size={16} />
+            Reload Page
+          </button>
+        </section>
+      </main>
+    );
   }
 }
 
