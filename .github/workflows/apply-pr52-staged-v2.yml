@@ -44,7 +44,7 @@ jobs:
             set -euo pipefail
             test "$GITHUB_HEAD_REF" = "fix/production-controller-hardening-20260725"
             test "$(git rev-parse HEAD)" = "$APPLY_HEAD_SHA"
-            python3 ops/pr52-staging/apply_pr52.py
+            python3 ops/pr52-staging/repair_and_apply.py
           } > pr52-applier.log 2>&1
           status=$?
           cat pr52-applier.log
