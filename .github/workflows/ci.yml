@@ -60,22 +60,7 @@ jobs:
       - name: Test
         env:
           VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
-        shell: bash
-        run: |
-          set +e
-          pnpm test > test.log 2>&1
-          status=$?
-          cat test.log
-          exit "$status"
-
-      - name: Upload test diagnostics
-        if: failure() && hashFiles('test.log') != ''
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: test-diagnostics-${{ github.sha }}
-          path: test.log
-          retention-days: 7
-          if-no-files-found: error
+        run: pnpm test
 
       - name: Build
         run: pnpm build
