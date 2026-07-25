@@ -4,9 +4,10 @@ import { createElement, type ReactElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import DappLoadBoundary, {
+  createRootErrorHandlers,
   DappRecoveryView,
   isDappLoadFailure,
-  reportReactRuntimeError,
+  normalizeThrownValue,
 } from "./components/DappLoadBoundary";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import { applyPageSEO } from "./hooks/usePageSEO";
@@ -64,7 +65,7 @@ describe("public bootstrap resilience", () => {
     expect(isDappLoadFailure(new Error("ordinary render failure"))).toBe(false);
   });
 
-  it("renders a neutral safe recovery screen after a rejected DApp import", () => {
+  it("renders a neutral safe shared recovery view from a captured load error", () => {
     const error = new Error(
       "Failed to fetch dynamically imported module: /assets/DappBootstrap-old.js",
     );
@@ -96,48 +97,79 @@ describe("public bootstrap resilience", () => {
     expect(focus).toHaveBeenCalledOnce();
   });
 
-  it("routes lazy page chunk failures through the shared recovery view", () => {
-    const error = new Error("ChunkLoadError: Loading chunk 84 failed");
-    const boundary = new ErrorBoundary({ children: null });
-    boundary.state = ErrorBoundary.getDerivedStateFromError(error);
+  it("normalizes falsy and non-Error thrown values in both boundaries", () => {
+    for (const thrown of [null, undefined, false, 0, ""]) {
+      const normalized = normalizeThrownValue(thrown);
+      expect(normalized).toBeInstanceOf(Error);
+      expect(normalized.message.length).toBeGreaterThan(0);
 
-    const markup = renderToStaticMarkup(boundary.render() as ReactElement);
-    expect(markup).toContain("HERO DApp recovery");
-    expect(markup).toContain("The secure DApp could not load.");
-    expect(markup).toContain("Reload secure DApp");
-    expect(markup).not.toContain(error.message);
+      const outerState = DappLoadBoundary.getDerivedStateFromError(thrown);
+      expect(outerState.hasError).toBe(true);
+      expect(outerState.error).toBeInstanceOf(Error);
+      const outerBoundary = new DappLoadBoundary({ children: "failing child" });
+      outerBoundary.state = outerState;
+      expect(renderToStaticMarkup(outerBoundary.render() as ReactElement)).not.toContain(
+        "failing child",
+      );
+
+      const innerState = ErrorBoundary.getDerivedStateFromError(thrown);
+      expect(innerState.hasError).toBe(true);
+      expect(innerState.error).toBeInstanceOf(Error);
+      const innerBoundary = new ErrorBoundary({ children: "failing route" });
+      innerBoundary.state = innerState;
+      expect(renderToStaticMarkup(innerBoundary.render() as ReactElement)).not.toContain(
+        "failing route",
+      );
+    }
   });
 
-  it("sanitizes React root errors in production and preserves detail in development", () => {
+  it("sanitizes every actual root handler in production", () => {
     const logger = vi.fn();
     const error = new Error(
       "Failed to fetch https://private-provider.example/internal-endpoint",
     );
     const errorInfo = { componentStack: "at SecretProvider (SecretProvider.tsx:42)" };
+    const handlers = createRootErrorHandlers(false, logger);
 
-    reportReactRuntimeError(error, errorInfo, false, logger);
-    expect(logger.mock.calls).toEqual([["[React runtime error]"]]);
+    handlers.onCaughtError(error, errorInfo);
+    handlers.onUncaughtError(error, errorInfo);
+    handlers.onRecoverableError(error, errorInfo);
 
-    logger.mockClear();
-    reportReactRuntimeError(error, errorInfo, true, logger);
-    expect(logger).toHaveBeenCalledOnce();
-    expect(logger.mock.calls[0]?.[0]).toBe("[React runtime error]");
-    expect(logger.mock.calls[0]?.[1]).toMatchObject({
-      error,
-      componentStack: errorInfo.componentStack,
-    });
+    expect(logger.mock.calls).toEqual([
+      ["[React runtime error]"],
+      ["[React runtime error]"],
+      ["[React runtime error]"],
+    ]);
   });
 
-  it("wraps the lazy DApp and overrides every React 19 root error logger", () => {
+  it("preserves details through every actual root handler in development", () => {
+    const logger = vi.fn();
+    const error = new Error("development-only detail");
+    const errorInfo = { componentStack: "at DevelopmentComponent" };
+    const handlers = createRootErrorHandlers(true, logger);
+
+    handlers.onCaughtError(error, errorInfo);
+    handlers.onUncaughtError(error, errorInfo);
+    handlers.onRecoverableError(error, errorInfo);
+
+    expect(logger).toHaveBeenCalledTimes(3);
+    for (const call of logger.mock.calls) {
+      expect(call[0]).toBe("[React runtime error]");
+      expect(call[1]).toMatchObject({
+        error,
+        componentStack: errorInfo.componentStack,
+      });
+    }
+  });
+
+  it("passes the tested handler factory directly to createRoot", () => {
     const main = source("main.tsx");
     expect(main).toContain("<DappLoadBoundary>");
     expect(main).toMatch(
       /<DappLoadBoundary>[\s\S]*<Suspense fallback=\{<DappLoader \/>\}>[\s\S]*<DappBootstrap \/>/,
     );
-    expect(main).toContain("onCaughtError(error, errorInfo)");
-    expect(main).toContain("onUncaughtError(error, errorInfo)");
-    expect(main).toContain("onRecoverableError(error, errorInfo)");
-    expect(main.match(/reportReactRuntimeError\(error, errorInfo\)/g)).toHaveLength(3);
+    expect(main).toContain("createRoot(root, createRootErrorHandlers())");
+    expect(main).not.toContain("console.error(error");
   });
 
   it("restores all root metadata after client navigation from a DApp route", () => {
