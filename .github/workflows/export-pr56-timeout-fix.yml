@@ -1,0 +1,167 @@
+name: Export PR56 timeout fix
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-pr56-timeout-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 56 &&
+      github.event.pull_request.head.ref == 'fix/production-controller-final-evidence-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/production-controller-final-evidence-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Build, validate, and export exact timeout correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pr56-timeout/.github/workflows
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from urllib.request import Request, urlopen
+
+          deploy_path = Path('.github/workflows/deploy.yml')
+          docs_path = Path('DEPLOY_INSTRUCTIONS.md')
+          deploy = deploy_path.read_text()
+          docs = docs_path.read_text()
+
+          old_timeout = '    timeout-minutes: 75\n    environment: production\n'
+          new_timeout = (
+              '    # The outer job budget must exceed the bounded 45.5-minute deployment SSH\n'
+              '    # window plus the bounded 30.5-minute recovery SSH window, while reserving\n'
+              '    # time for preflight, Cloudflare, final-state, receipt, and artifact steps.\n'
+              '    timeout-minutes: 120\n'
+              '    environment: production\n'
+          )
+          if deploy.count(old_timeout) != 1:
+              raise RuntimeError(f'expected one stale protected timeout, found {deploy.count(old_timeout)}')
+          deploy = deploy.replace(old_timeout, new_timeout, 1)
+
+          docs_anchor = (
+              'Production mutation remains behind the protected `production` environment and its required human approval.\n\n'
+          )
+          docs_insert = (
+              'The protected production job reserves 120 minutes so the bounded 45-minute deployment path, '
+              'bounded 30-minute recovery path, kill grace, secret preflight, Cloudflare purge, public verification, '
+              'final-state capture, receipt delivery, artifact upload, and runner overhead can complete without the '
+              'outer job timer terminating recovery. The ceiling must not be reduced below the declared worst-case '
+              'recovery path.\n\n'
+          )
+          if docs_insert not in docs:
+              if docs.count(docs_anchor) != 1:
+                  raise RuntimeError(f'expected one documentation anchor, found {docs.count(docs_anchor)}')
+              docs = docs.replace(docs_anchor, docs_anchor + docs_insert, 1)
+
+          out_deploy = Path('pr56-timeout/.github/workflows/deploy.yml')
+          out_docs = Path('pr56-timeout/DEPLOY_INSTRUCTIONS.md')
+          out_deploy.write_text(deploy)
+          out_docs.write_text(docs)
+
+          subprocess.run(['ruby', '-e', 'require "yaml"; YAML.load_file(ARGV[0])', str(out_deploy)], check=True)
+
+          expression = re.compile(r'\$\{\{.*?\}\}')
+          lines = deploy.splitlines()
+          index = 0
+          block_count = 0
+          while index < len(lines):
+              line = lines[index]
+              stripped = line.lstrip()
+              indent = len(line) - len(stripped)
+              if stripped not in {'run: |', 'run: |-'}:
+                  index += 1
+                  continue
+              block_count += 1
+              index += 1
+              block = []
+              while index < len(lines):
+                  candidate = lines[index]
+                  candidate_indent = len(candidate) - len(candidate.lstrip())
+                  if candidate.strip() and candidate_indent <= indent:
+                      break
+                  block.append(candidate[indent + 2:] if candidate.strip() else '')
+                  index += 1
+              result = subprocess.run(
+                  ['bash', '-n'],
+                  input=expression.sub('VALUE', '\n'.join(block) + '\n'),
+                  text=True,
+                  capture_output=True,
+              )
+              if result.returncode:
+                  raise RuntimeError(f'Bash block {block_count} failed: {result.stderr}')
+
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
+          for name, text in [('deploy.yml', deploy), ('DEPLOY_INSTRUCTIONS.md', docs)]:
+              if any(char in forbidden for char in text):
+                  raise RuntimeError(f'{name}: hidden or bidirectional Unicode found')
+              if credential.search(text):
+                  raise RuntimeError(f'{name}: credential pattern found')
+
+          if 'timeout-minutes: 75' in deploy or 'timeout-minutes: 120' not in deploy:
+              raise RuntimeError('protected timing budget correction did not apply')
+
+          def create_blob(content: bytes) -> str:
+              payload = json.dumps({
+                  'content': base64.b64encode(content).decode(),
+                  'encoding': 'base64',
+              }).encode()
+              request = Request(
+                  f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'VETS-PR56-Timeout-Exporter',
+                  },
+              )
+              with urlopen(request, timeout=60) as response:
+                  sha = json.loads(response.read())['sha']
+              if not re.fullmatch(r'[0-9a-f]{40}', sha):
+                  raise RuntimeError('invalid blob SHA')
+              return sha
+
+          deploy_blob = create_blob(deploy.encode())
+          docs_blob = create_blob(docs.encode())
+          print(f'VETS_TIMEOUT_DEPLOY_BLOB={deploy_blob}')
+          print(f'VETS_TIMEOUT_DOCS_BLOB={docs_blob}')
+          print(f'VETS_TIMEOUT_BASH_BLOCKS={block_count}')
+          PY
+
+      - name: Upload exact validated timeout correction
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr56-timeout-fix-${{ github.event.pull_request.head.sha }}
+          path: pr56-timeout
+          retention-days: 7
+          if-no-files-found: error
