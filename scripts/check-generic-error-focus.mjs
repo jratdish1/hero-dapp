@@ -10,6 +10,7 @@ import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
 const PROJECT_ROOT = process.cwd();
+const OUTPUT_ROOT = path.resolve(PROJECT_ROOT, 'dist/public');
 const REPORT_PATH = path.resolve(PROJECT_ROOT, 'generic-error-focus-report.json');
 const EXPECTED_HEADING_ID = 'application-error-title';
 const EXPECTED_HEADING = 'An unexpected application error occurred.';
@@ -18,6 +19,10 @@ const SANITIZED_MARKER = '[React runtime error]';
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+function redact(value) {
+  return String(value).split(SENSITIVE_DETAIL).join('[REDACTED]');
 }
 
 class ChromeStartupError extends Error {
@@ -114,12 +119,49 @@ class CdpClient {
 }
 
 function contentType(filePath) {
-  return path.extname(filePath) === '.js'
-    ? 'text/javascript; charset=utf-8'
-    : 'text/html; charset=utf-8';
+  const extension = path.extname(filePath).toLowerCase();
+  return {
+    '.html': 'text/html; charset=utf-8',
+    '.js': 'text/javascript; charset=utf-8',
+    '.mjs': 'text/javascript; charset=utf-8',
+    '.css': 'text/css; charset=utf-8',
+    '.json': 'application/json; charset=utf-8',
+    '.svg': 'image/svg+xml',
+    '.png': 'image/png',
+    '.jpg': 'image/jpeg',
+    '.jpeg': 'image/jpeg',
+    '.webp': 'image/webp',
+    '.woff': 'font/woff',
+    '.woff2': 'font/woff2',
+  }[extension] ?? 'application/octet-stream';
 }
 
-async function startStaticServer(root) {
+function safeFile(root, pathname) {
+  const candidate = path.resolve(root, `.${pathname}`);
+  if (!candidate.startsWith(`${root}${path.sep}`)) return null;
+  if (!existsSync(candidate)) return null;
+  return candidate;
+}
+
+function productionStylesheets() {
+  const builtHtmlPath = path.join(OUTPUT_ROOT, 'index.html');
+  if (!existsSync(builtHtmlPath)) {
+    throw new Error(`Missing production HTML shell: ${builtHtmlPath}`);
+  }
+  const builtHtml = readFileSync(builtHtmlPath, 'utf8');
+  const hrefs = [];
+  for (const tag of builtHtml.match(/<link\b[^>]*>/gi) ?? []) {
+    if (!/\brel=["'][^"']*stylesheet[^"']*["']/i.test(tag)) continue;
+    const href = tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
+    if (href) hrefs.push(href);
+  }
+  if (hrefs.length === 0) {
+    throw new Error('Production HTML shell does not reference a stylesheet');
+  }
+  return [...new Set(hrefs)];
+}
+
+async function startStaticServer(harnessRoot) {
   const server = createServer((request, response) => {
     let pathname;
     try {
@@ -131,8 +173,8 @@ async function startStaticServer(root) {
     }
 
     const requested = pathname === '/' ? '/index.html' : pathname;
-    const candidate = path.resolve(root, `.${requested}`);
-    if (!candidate.startsWith(`${root}${path.sep}`) || !existsSync(candidate)) {
+    const candidate = safeFile(harnessRoot, requested) ?? safeFile(OUTPUT_ROOT, requested);
+    if (!candidate) {
       response.writeHead(404, { 'content-type': 'text/plain; charset=utf-8' });
       response.end('Not found');
       return;
@@ -156,7 +198,9 @@ async function startStaticServer(root) {
 
   return {
     url: `http://127.0.0.1:${address.port}/index.html`,
-    close: () => new Promise(resolve => server.close(resolve)),
+    close: () => new Promise((resolve, reject) => {
+      server.close(error => error ? reject(error) : resolve());
+    }),
   };
 }
 
@@ -171,16 +215,30 @@ async function waitForFile(filePath, child) {
   throw new Error(`Timed out waiting for ${filePath}`);
 }
 
+async function waitForExit(child, timeoutMs) {
+  if (child.exitCode !== null) return true;
+  return Promise.race([
+    new Promise(resolve => child.once('exit', () => resolve(true))),
+    sleep(timeoutMs).then(() => false),
+  ]);
+}
+
 async function stopChromeProcess(child, userDataDir) {
   if (child && child.exitCode === null) {
     child.kill('SIGTERM');
-    await Promise.race([
-      new Promise(resolve => child.once('exit', resolve)),
-      sleep(5_000),
-    ]);
-    if (child.exitCode === null) child.kill('SIGKILL');
+    if (!(await waitForExit(child, 5_000))) {
+      child.kill('SIGKILL');
+      if (!(await waitForExit(child, 5_000))) {
+        throw new Error('Chrome did not exit after SIGKILL');
+      }
+    }
   }
-  if (userDataDir) await rm(userDataDir, { recursive: true, force: true });
+  if (userDataDir) {
+    await rm(userDataDir, { recursive: true, force: true });
+    if (existsSync(userDataDir)) {
+      throw new Error(`Chrome profile cleanup failed: ${userDataDir}`);
+    }
+  }
 }
 
 async function launchChrome(chromeBin) {
@@ -236,7 +294,11 @@ async function launchChrome(chromeBin) {
     const logTail = await readFile(chromeLog, 'utf8')
       .then(value => value.slice(-2_000))
       .catch(() => 'Chrome log unavailable');
-    await stopChromeProcess(child, userDataDir).catch(() => {});
+    try {
+      await stopChromeProcess(child, userDataDir);
+    } catch (cleanupError) {
+      throw new Error('Chrome cleanup failed after a startup error', { cause: cleanupError });
+    }
     throw new ChromeStartupError(
       `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,
       { cause: error },
@@ -275,12 +337,20 @@ async function waitForHarness(client) {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
     try {
-      const state = await evaluate(client, `(() => ({
-        ready: document.body?.dataset.ready || '',
-        focusedId: document.activeElement?.id || '',
-        heading: document.body?.dataset.heading || '',
-        focusClass: document.body?.dataset.focusClass || '',
-      }))()`);
+      const state = await evaluate(client, `(() => {
+        const heading = document.getElementById(${JSON.stringify(EXPECTED_HEADING_ID)});
+        const style = heading ? getComputedStyle(heading) : null;
+        return {
+          ready: document.body?.dataset.ready || '',
+          focusedId: document.activeElement?.id || '',
+          heading: document.body?.dataset.heading || '',
+          focusClass: document.body?.dataset.focusClass || '',
+          outlineStyle: style?.outlineStyle || '',
+          outlineWidth: style?.outlineWidth || '',
+          outlineColor: style?.outlineColor || '',
+          boxShadow: style?.boxShadow || '',
+        };
+      })()`);
       if (state.ready === 'true') return state;
     } catch {
       // Navigation can briefly invalidate the execution context.
@@ -307,6 +377,7 @@ async function main() {
   let client = null;
 
   try {
+    const stylesheets = productionStylesheets();
     const entry = `
       import React from 'react';
       import { createRoot } from 'react-dom/client';
@@ -345,13 +416,17 @@ async function main() {
       nodePaths: [path.resolve(PROJECT_ROOT, 'node_modules')],
       define: {
         'import.meta.env.DEV': 'false',
+        'process.env.NODE_ENV': '"production"',
       },
       tsconfig: path.resolve(PROJECT_ROOT, 'tsconfig.json'),
       logLevel: 'silent',
     });
+    const styleLinks = stylesheets
+      .map(href => `<link rel="stylesheet" href="${href}">`)
+      .join('');
     await writeFile(
       htmlPath,
-      '<!doctype html><html><head><meta charset="utf-8"><title>VETS generic focus test</title></head><body><div id="root"></div><script type="module" src="/harness.js"></script></body></html>',
+      `<!doctype html><html><head><meta charset="utf-8"><title>VETS generic focus test</title>${styleLinks}</head><body><div id="root"></div><script type="module" src="/harness.js"></script></body></html>`,
     );
 
     server = await startStaticServer(workdir);
@@ -389,7 +464,13 @@ async function main() {
       throw new Error(`Unexpected generic error heading: ${state.heading || 'missing'}`);
     }
     if (!state.focusClass.includes('focus:outline') || state.focusClass.includes('focus:outline-none')) {
-      throw new Error(`Generic error heading lacks a visible focus indicator: ${state.focusClass}`);
+      throw new Error(`Generic error heading lacks a focus utility: ${state.focusClass}`);
+    }
+    const outlineWidth = Number.parseFloat(state.outlineWidth || '0');
+    const visibleOutline = state.outlineStyle !== 'none' && outlineWidth > 0;
+    const visibleRing = state.boxShadow && state.boxShadow !== 'none';
+    if (!visibleOutline && !visibleRing) {
+      throw new Error('Focused generic error heading has no computed outline or ring');
     }
 
     const sanitizedMarkerObserved = consoleMessages.some(message =>
@@ -399,10 +480,10 @@ async function main() {
       message.includes(SENSITIVE_DETAIL),
     );
     if (!sanitizedMarkerObserved) {
-      throw new Error(`Sanitized renderer console marker was not observed: ${JSON.stringify(consoleMessages)}`);
+      throw new Error('Sanitized renderer console marker was not observed');
     }
     if (!sensitiveDetailAbsent) {
-      throw new Error('Sensitive generic error detail leaked through renderer diagnostics');
+      throw new Error('Sensitive renderer detail was observed and redacted');
     }
 
     const report = {
@@ -411,8 +492,13 @@ async function main() {
       focusedId: state.focusedId,
       heading: state.heading,
       focusClass: state.focusClass,
-      consoleMessages,
-      exceptionMessages,
+      outlineStyle: state.outlineStyle,
+      outlineWidth: state.outlineWidth,
+      outlineColor: state.outlineColor,
+      boxShadow: state.boxShadow,
+      productionStylesheets: stylesheets,
+      consoleEventCount: consoleMessages.length,
+      exceptionEventCount: exceptionMessages.length,
       sanitizedMarkerObserved,
       sensitiveDetailAbsent,
     };
@@ -420,22 +506,23 @@ async function main() {
     console.log(`Mounted generic error focus: PASS (${REPORT_PATH})`);
   } finally {
     client?.close();
-    await chrome?.close().catch(() => {});
-    await server?.close().catch(() => {});
+    if (chrome) await chrome.close();
+    if (server) await server.close();
     await rm(workdir, { recursive: true, force: true });
   }
 }
 
 if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
   main().catch(async error => {
+    const safeError = redact(error instanceof Error ? error.message : String(error));
     const report = {
       timestamp: new Date().toISOString(),
       result: 'FAIL',
-      error: error instanceof Error ? error.message : String(error),
+      error: safeError,
       errorKind: error instanceof ChromeStartupError ? 'chrome-startup' : 'assertion-or-runtime',
     };
     await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`).catch(() => {});
-    console.error('[Mounted generic error focus failed]', error);
+    console.error(`[Mounted generic error focus failed] ${safeError}`);
     process.exitCode = 1;
   });
 }
