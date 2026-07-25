@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { createRoot } from "react-dom/client";
 import { useLocation } from "wouter";
 import DappLoadBoundary, {
-  reportReactRuntimeError,
+  createRootErrorHandlers,
 } from "./components/DappLoadBoundary";
 import LandingApp from "./LandingApp";
 import "./index.css";
@@ -41,14 +41,4 @@ function BootstrapRouter() {
 const root = document.getElementById("root");
 if (!root) throw new Error("Missing #root application mount");
 
-createRoot(root, {
-  onCaughtError(error, errorInfo) {
-    reportReactRuntimeError(error, errorInfo);
-  },
-  onUncaughtError(error, errorInfo) {
-    reportReactRuntimeError(error, errorInfo);
-  },
-  onRecoverableError(error, errorInfo) {
-    reportReactRuntimeError(error, errorInfo);
-  },
-}).render(<BootstrapRouter />);
+createRoot(root, createRootErrorHandlers()).render(<BootstrapRouter />);
