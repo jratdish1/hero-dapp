@@ -1,0 +1,79 @@
+name: One-shot AMD bridge ACK monitor
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+  issues: read
+
+jobs:
+  monitor:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      COMMAND_ID: amd-status-20260725T182400Z-herobase
+      ISSUE_NUMBER: '37'
+      SINCE_UTC: '2026-07-25T18:24:00Z'
+
+    steps:
+      - name: Poll for correlated AMD_QUEUE_ACK
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p amd-monitor
+
+          api_get() {
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$1"
+          }
+
+          found=false
+          for attempt in $(seq 1 20); do
+            api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$ISSUE_NUMBER/comments?since=$SINCE_UTC&per_page=100" \
+              > amd-monitor/comments.json
+            ack="$(jq -c --arg id "$COMMAND_ID" '
+              [.[] | select(
+                (.body | startswith("AMD_QUEUE_ACK v1\n")) and
+                (.body | contains("id: " + $id + "\n"))
+              )] | sort_by(.id) | last // empty
+            ' amd-monitor/comments.json)"
+            if [ -n "$ack" ]; then
+              printf '%s\n' "$ack" > amd-monitor/ack.json
+              found=true
+              break
+            fi
+            sleep 15
+          done
+
+          jq -n \
+            --arg command_id "$COMMAND_ID" \
+            --argjson found "$found" \
+            --slurpfile ack "$(if [ -f amd-monitor/ack.json ]; then echo amd-monitor/ack.json; else echo amd-monitor/comments.json; fi)" \
+            '{
+              command_id:$command_id,
+              acknowledged:$found,
+              evidence:($ack[0] // null),
+              observed_at:(now|todateiso8601)
+            }' > amd-monitor/summary.json
+
+          jq . amd-monitor/summary.json
+
+      - name: Upload AMD bridge monitor receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: amd-bridge-ack-${{ github.event.pull_request.head.sha }}
+          path: amd-monitor
+          retention-days: 7
+          if-no-files-found: error
