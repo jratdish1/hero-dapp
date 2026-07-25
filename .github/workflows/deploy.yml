@@ -123,22 +123,15 @@ jobs:
             return 1
           }
 
-          api_post() {
-            local url="$1" payload="$2" response=""
-            for attempt in $(seq 1 5); do
-              if response="$(curl --fail-with-body --silent --show-error \
-                --connect-timeout 10 --max-time 30 \
-                -X POST \
-                -H "Authorization: Bearer $GH_TOKEN" \
-                -H "Accept: application/vnd.github+json" \
-                -H "X-GitHub-Api-Version: 2022-11-28" \
-                "$url" --data "$payload")"; then
-                printf '%s' "$response"
-                return 0
-              fi
-              sleep $((attempt * 2))
-            done
-            return 1
+          api_post_once() {
+            local url="$1" payload="$2"
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$url" --data "$payload"
           }
 
           collect_issue_comments() {
@@ -171,6 +164,7 @@ jobs:
             jq -e '.status == "completed" and .conclusion == "success"' \
               <<<"$trusted_run" >/dev/null
             run_id="$(jq -r '.id' <<<"$trusted_run")"
+            [[ "$run_id" =~ ^[0-9]+$ ]]
             jobs="$(api_get \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
             jq -e --arg name "$required_job" '
@@ -181,8 +175,6 @@ jobs:
             ' <<<"$jobs" >/dev/null
           }
 
-          issue="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE")"
-          test "$(jq -r '.state' <<<"$issue")" = "open"
           all_comments="$(collect_issue_comments)"
 
           case "$DEPLOY_OPERATION" in
@@ -197,6 +189,9 @@ jobs:
               test "$GITHUB_RUN_ID" = "$COMMAND_RUN_ID"
               test "$DEPLOY_CORRELATION_ID" = "issue-43-comment-$COMMAND_COMMENT_ID"
               test "${{ github.event.comment.id }}" = "$COMMAND_COMMENT_ID"
+
+              issue="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE")"
+              test "$(jq -r '.state' <<<"$issue")" = "open"
 
               owner_comment="$(api_get \
                 "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/comments/$COMMAND_COMMENT_ID")"
@@ -243,6 +238,7 @@ jobs:
                 )] | length
               ' <<<"$all_comments")"
               test "$rollback_count" = "0"
+
               printf -v consumption_body '%s\n' \
                 'VETS_ROLLBACK_AUTHORIZATION v1' \
                 "correlation_id: $DEPLOY_CORRELATION_ID" \
@@ -260,7 +256,7 @@ jobs:
           require_workflow_run ci.yml test-build-scan
           require_workflow_run security-and-quality.yml repository-safety
 
-          response="$(api_post \
+          response="$(api_post_once \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
             "$(jq -nc --arg body "$consumption_body" '{body:$body}')")"
           consumption_comment_id="$(jq -r '.id' <<<"$response")"
@@ -279,7 +275,7 @@ jobs:
       group: production-vps1
       cancel-in-progress: false
     outputs:
-      verified: ${{ steps.result.outputs.verified }}
+      verified: ${{ steps.state.outputs.verified }}
       result_artifact: production-result-${{ inputs.correlation_id }}
     env:
       DEPLOY_SHA: ${{ inputs.commit_sha }}
@@ -302,19 +298,43 @@ jobs:
             *) exit 64 ;;
           esac
 
-      - name: Configure strict SSH trust
+      - name: Validate protected production secrets and SSH trust
         env:
+          VPS1_HOST: ${{ secrets.VPS1_HOST }}
+          VPS1_USER: ${{ secrets.VPS1_USER }}
           VPS1_SSH_KEY: ${{ secrets.VPS1_SSH_KEY }}
           VPS1_KNOWN_HOSTS: ${{ secrets.VPS1_KNOWN_HOSTS }}
+          CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+          CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$VPS1_SSH_KEY"
-          test -n "$VPS1_KNOWN_HOSTS"
+          missing=()
+          [ -n "$VPS1_HOST" ] || missing+=(VPS1_HOST)
+          [ -n "$VPS1_USER" ] || missing+=(VPS1_USER)
+          [ -n "$VPS1_SSH_KEY" ] || missing+=(VPS1_SSH_KEY)
+          [ -n "$VPS1_KNOWN_HOSTS" ] || missing+=(VPS1_KNOWN_HOSTS)
+          [ -n "$CF_API_TOKEN" ] || missing+=(CF_API_TOKEN)
+          [ -n "$CF_ZONE_ID" ] || missing+=(CF_ZONE_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            for name in "${missing[@]}"; do
+              echo "Missing required production secret: $name" >&2
+            done
+            exit 78
+          fi
+
+          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
+          test "$VPS1_USER" != "root"
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+
           install -m 700 -d "$HOME/.ssh"
           umask 077
           printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          ssh-keygen -F "$VPS1_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
 
       - name: Deploy exact authorized commit with host writer lock
         id: deploy_app
@@ -324,10 +344,6 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
-          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
-          test "$VPS1_USER" != "root"
-
           deploy_log="$RUNNER_TEMP/vps1-deploy.log"
           set +e
           timeout --signal=TERM --kill-after=30s 2700 ssh \
@@ -442,6 +458,7 @@ jobs:
             *) exit 64 ;;
           esac
 
+          printf 'VETS_MUTATION_STARTED=true\n'
           MUTATION_STARTED=true
           git reset --hard "$DEPLOY_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
@@ -465,15 +482,18 @@ jobs:
           set -e
 
           previous_sha="$(sed -n 's/^VETS_PREVIOUS_SHA=//p' "$deploy_log" | head -n 1)"
-          final_sha="$(sed -n 's/^VETS_FINAL_SHA=//p' "$deploy_log" | tail -n 1)"
+          remote_final_sha="$(sed -n 's/^VETS_FINAL_SHA=//p' "$deploy_log" | tail -n 1)"
+          mutation_started=false
           inline_attempted=false
           inline_succeeded=false
           inline_failed=false
+          grep -q '^VETS_MUTATION_STARTED=true$' "$deploy_log" && mutation_started=true
           grep -q '^VETS_INLINE_ROLLBACK_ATTEMPTED=true$' "$deploy_log" && inline_attempted=true
           grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=true$' "$deploy_log" && inline_succeeded=true
           grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=false$' "$deploy_log" && inline_failed=true
           [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && echo "previous_sha=$previous_sha" >> "$GITHUB_OUTPUT"
-          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]] && echo "remote_final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          [[ "$remote_final_sha" =~ ^[0-9a-f]{40}$ ]] && echo "remote_final_sha=$remote_final_sha" >> "$GITHUB_OUTPUT"
+          echo "mutation_started=$mutation_started" >> "$GITHUB_OUTPUT"
           echo "inline_rollback_attempted=$inline_attempted" >> "$GITHUB_OUTPUT"
           echo "inline_rollback_succeeded=$inline_succeeded" >> "$GITHUB_OUTPUT"
           echo "inline_rollback_failed=$inline_failed" >> "$GITHUB_OUTPUT"
@@ -482,15 +502,13 @@ jobs:
 
       - name: Purge Cloudflare cache
         id: cloudflare_purge
-        if: success()
+        if: steps.deploy_app.outcome == 'success'
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CF_API_TOKEN"
-          test -n "$CF_ZONE_ID"
           for attempt in $(seq 1 3); do
             if response="$(curl --fail-with-body --silent --show-error \
               --connect-timeout 10 --max-time 30 \
@@ -508,7 +526,7 @@ jobs:
 
       - name: Verify public deployment after purge
         id: public_verify
-        if: success()
+        if: steps.deploy_app.outcome == 'success' && steps.cloudflare_purge.outcome == 'success'
         shell: bash
         run: |
           set -euo pipefail
@@ -526,9 +544,24 @@ jobs:
           done
           exit 1
 
-      - name: Roll back application after post-deploy failure
+      - name: Roll back after interrupted or post-deploy failure
         id: rollback_app
-        if: failure() && steps.deploy_app.outcome == 'success'
+        if: >-
+          always() &&
+          (
+            (
+              steps.deploy_app.outcome != 'success' &&
+              steps.deploy_app.outputs.mutation_started == 'true' &&
+              steps.deploy_app.outputs.inline_rollback_succeeded != 'true'
+            ) ||
+            (
+              steps.deploy_app.outcome == 'success' &&
+              (
+                steps.cloudflare_purge.outcome != 'success' ||
+                steps.public_verify.outcome != 'success'
+              )
+            )
+          )
         env:
           VPS1_HOST: ${{ secrets.VPS1_HOST }}
           VPS1_USER: ${{ secrets.VPS1_USER }}
@@ -536,10 +569,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
-          [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
           [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
-          test "$VPS1_USER" != "root"
           timeout --signal=TERM --kill-after=30s 1800 ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
@@ -595,15 +625,13 @@ jobs:
 
       - name: Purge Cloudflare after rollback
         id: rollback_purge
-        if: failure() && steps.rollback_app.outcome == 'success'
+        if: always() && steps.rollback_app.outcome == 'success'
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
           CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
         shell: bash
         run: |
           set -euo pipefail
-          test -n "$CF_API_TOKEN"
-          test -n "$CF_ZONE_ID"
           for attempt in $(seq 1 3); do
             if response="$(curl --fail-with-body --silent --show-error \
               --connect-timeout 10 --max-time 30 \
@@ -642,12 +670,12 @@ jobs:
           [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
           echo "final_active_sha=$final_sha" >> "$GITHUB_OUTPUT"
 
-      - name: Write immutable production result
-        id: result
+      - name: Compute production state before receipt
+        id: state
         if: always()
         env:
-          PREVIOUS_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
           FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
+          MUTATION_STARTED: ${{ steps.deploy_app.outputs.mutation_started }}
           INLINE_ATTEMPTED: ${{ steps.deploy_app.outputs.inline_rollback_attempted }}
           INLINE_SUCCEEDED: ${{ steps.deploy_app.outputs.inline_rollback_succeeded }}
           INLINE_FAILED: ${{ steps.deploy_app.outputs.inline_rollback_failed }}
@@ -671,8 +699,8 @@ jobs:
           inline_attempted="${INLINE_ATTEMPTED:-false}"
           inline_succeeded="${INLINE_SUCCEEDED:-false}"
           inline_failed="${INLINE_FAILED:-false}"
+          mutation_started="${MUTATION_STARTED:-false}"
           final_active_sha="${FINAL_ACTIVE_SHA:-unknown}"
-          previous_sha="${PREVIOUS_SHA:-unknown}"
           verified=false
           if [ "$DEPLOY_OUTCOME" = "success" ] &&
              [ "$PURGE_OUTCOME" = "success" ] &&
@@ -683,64 +711,35 @@ jobs:
              [ "$post_attempted" = "false" ]; then
             verified=true
           fi
-          jq -n \
-            --arg requested_sha "$DEPLOY_SHA" \
-            --arg previous_sha "$previous_sha" \
-            --arg final_active_sha "$final_active_sha" \
-            --arg correlation_id "$DEPLOY_CORRELATION_ID" \
-            --arg operation "$DEPLOY_OPERATION" \
-            --arg authorization_mode "$AUTHORIZATION_MODE" \
-            --arg consumption_comment_id "$CONSUMPTION_COMMENT_ID" \
-            --arg deploy_outcome "$DEPLOY_OUTCOME" \
-            --arg purge_outcome "$PURGE_OUTCOME" \
-            --arg verify_outcome "$VERIFY_OUTCOME" \
-            --arg rollback_purge_outcome "$ROLLBACK_PURGE_OUTCOME" \
-            --argjson inline_rollback_attempted "$inline_attempted" \
-            --argjson inline_rollback_succeeded "$inline_succeeded" \
-            --argjson inline_rollback_failed "$inline_failed" \
-            --argjson post_rollback_attempted "$post_attempted" \
-            --argjson post_rollback_succeeded "$post_succeeded" \
-            --argjson post_rollback_failed "$post_failed" \
-            --argjson verified "$verified" \
-            '{
-              requested_sha:$requested_sha,
-              previous_sha:$previous_sha,
-              final_active_sha:$final_active_sha,
-              correlation_id:$correlation_id,
-              operation:$operation,
-              authorization_mode:$authorization_mode,
-              consumption_comment_id:$consumption_comment_id,
-              deploy_outcome:$deploy_outcome,
-              purge_outcome:$purge_outcome,
-              verify_outcome:$verify_outcome,
-              rollback_purge_outcome:$rollback_purge_outcome,
-              inline_rollback_attempted:$inline_rollback_attempted,
-              inline_rollback_succeeded:$inline_rollback_succeeded,
-              inline_rollback_failed:$inline_rollback_failed,
-              post_rollback_attempted:$post_rollback_attempted,
-              post_rollback_succeeded:$post_rollback_succeeded,
-              post_rollback_failed:$post_rollback_failed,
-              verified:$verified
-            }' > production-result.json
           echo "verified=$verified" >> "$GITHUB_OUTPUT"
-
-      - name: Upload immutable production result
-        if: always()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: production-result-${{ inputs.correlation_id }}
-          path: production-result.json
-          retention-days: 30
-          if-no-files-found: error
+          echo "mutation_started=$mutation_started" >> "$GITHUB_OUTPUT"
+          echo "inline_attempted=$inline_attempted" >> "$GITHUB_OUTPUT"
+          echo "inline_succeeded=$inline_succeeded" >> "$GITHUB_OUTPUT"
+          echo "inline_failed=$inline_failed" >> "$GITHUB_OUTPUT"
+          echo "post_attempted=$post_attempted" >> "$GITHUB_OUTPUT"
+          echo "post_succeeded=$post_succeeded" >> "$GITHUB_OUTPUT"
+          echo "post_failed=$post_failed" >> "$GITHUB_OUTPUT"
 
       - name: Post final production receipt
+        id: receipt
         if: always()
         continue-on-error: true
         env:
           GH_TOKEN: ${{ github.token }}
-          VERIFIED: ${{ steps.result.outputs.verified }}
+          VERIFIED: ${{ steps.state.outputs.verified }}
           FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
           PREVIOUS_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
+          MUTATION_STARTED: ${{ steps.state.outputs.mutation_started }}
+          INLINE_ATTEMPTED: ${{ steps.state.outputs.inline_attempted }}
+          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_succeeded }}
+          INLINE_FAILED: ${{ steps.state.outputs.inline_failed }}
+          POST_ATTEMPTED: ${{ steps.state.outputs.post_attempted }}
+          POST_SUCCEEDED: ${{ steps.state.outputs.post_succeeded }}
+          POST_FAILED: ${{ steps.state.outputs.post_failed }}
+          DEPLOY_OUTCOME: ${{ steps.deploy_app.outcome }}
+          PURGE_OUTCOME: ${{ steps.cloudflare_purge.outcome }}
+          VERIFY_OUTCOME: ${{ steps.public_verify.outcome }}
+          ROLLBACK_PURGE_OUTCOME: ${{ steps.rollback_purge.outcome }}
         shell: bash
         run: |
           set -euo pipefail
@@ -754,6 +753,13 @@ jobs:
           - Operation: **$DEPLOY_OPERATION**
           - Authorization mode: **$AUTHORIZATION_MODE**
           - Consumption comment: \`$CONSUMPTION_COMMENT_ID\`
+          - Mutation started: **${MUTATION_STARTED:-false}**
+          - Deployment outcome: **$DEPLOY_OUTCOME**
+          - Cloudflare purge outcome: **$PURGE_OUTCOME**
+          - Public verification outcome: **$VERIFY_OUTCOME**
+          - Inline rollback attempted/succeeded/failed: **${INLINE_ATTEMPTED:-false}/${INLINE_SUCCEEDED:-false}/${INLINE_FAILED:-false}**
+          - Post-deploy rollback attempted/succeeded/failed: **${POST_ATTEMPTED:-false}/${POST_SUCCEEDED:-false}/${POST_FAILED:-false}**
+          - Rollback purge outcome: **$ROLLBACK_PURGE_OUTCOME**
           - Exact state verified: **${VERIFIED:-false}**
           - Result artifact: \`production-result-$DEPLOY_CORRELATION_ID\`
           EOF_BODY
@@ -774,7 +780,90 @@ jobs:
             fi
             sleep $((attempt * 2))
           done
+          echo "posted=$posted" >> "$GITHUB_OUTPUT"
           test "$posted" = "true"
+
+      - name: Write immutable production result
+        id: result
+        if: always()
+        env:
+          PREVIOUS_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
+          FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
+          MUTATION_STARTED: ${{ steps.state.outputs.mutation_started }}
+          INLINE_ATTEMPTED: ${{ steps.state.outputs.inline_attempted }}
+          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_succeeded }}
+          INLINE_FAILED: ${{ steps.state.outputs.inline_failed }}
+          POST_ATTEMPTED: ${{ steps.state.outputs.post_attempted }}
+          POST_SUCCEEDED: ${{ steps.state.outputs.post_succeeded }}
+          POST_FAILED: ${{ steps.state.outputs.post_failed }}
+          DEPLOY_OUTCOME: ${{ steps.deploy_app.outcome }}
+          PURGE_OUTCOME: ${{ steps.cloudflare_purge.outcome }}
+          VERIFY_OUTCOME: ${{ steps.public_verify.outcome }}
+          ROLLBACK_PURGE_OUTCOME: ${{ steps.rollback_purge.outcome }}
+          FINAL_STATE_OUTCOME: ${{ steps.final_state.outcome }}
+          VERIFIED: ${{ steps.state.outputs.verified }}
+          RECEIPT_POSTED: ${{ steps.receipt.outputs.posted }}
+          RECEIPT_OUTCOME: ${{ steps.receipt.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          receipt_posted="${RECEIPT_POSTED:-false}"
+          jq -n \
+            --arg requested_sha "$DEPLOY_SHA" \
+            --arg previous_sha "${PREVIOUS_SHA:-unknown}" \
+            --arg final_active_sha "${FINAL_ACTIVE_SHA:-unknown}" \
+            --arg correlation_id "$DEPLOY_CORRELATION_ID" \
+            --arg operation "$DEPLOY_OPERATION" \
+            --arg authorization_mode "$AUTHORIZATION_MODE" \
+            --arg consumption_comment_id "$CONSUMPTION_COMMENT_ID" \
+            --arg deploy_outcome "$DEPLOY_OUTCOME" \
+            --arg purge_outcome "$PURGE_OUTCOME" \
+            --arg verify_outcome "$VERIFY_OUTCOME" \
+            --arg rollback_purge_outcome "$ROLLBACK_PURGE_OUTCOME" \
+            --arg final_state_outcome "$FINAL_STATE_OUTCOME" \
+            --arg receipt_outcome "$RECEIPT_OUTCOME" \
+            --argjson mutation_started "${MUTATION_STARTED:-false}" \
+            --argjson inline_rollback_attempted "${INLINE_ATTEMPTED:-false}" \
+            --argjson inline_rollback_succeeded "${INLINE_SUCCEEDED:-false}" \
+            --argjson inline_rollback_failed "${INLINE_FAILED:-false}" \
+            --argjson post_rollback_attempted "${POST_ATTEMPTED:-false}" \
+            --argjson post_rollback_succeeded "${POST_SUCCEEDED:-false}" \
+            --argjson post_rollback_failed "${POST_FAILED:-false}" \
+            --argjson receipt_posted "$receipt_posted" \
+            --argjson verified "${VERIFIED:-false}" \
+            '{
+              requested_sha:$requested_sha,
+              previous_sha:$previous_sha,
+              final_active_sha:$final_active_sha,
+              correlation_id:$correlation_id,
+              operation:$operation,
+              authorization_mode:$authorization_mode,
+              consumption_comment_id:$consumption_comment_id,
+              mutation_started:$mutation_started,
+              deploy_outcome:$deploy_outcome,
+              purge_outcome:$purge_outcome,
+              verify_outcome:$verify_outcome,
+              rollback_purge_outcome:$rollback_purge_outcome,
+              final_state_outcome:$final_state_outcome,
+              inline_rollback_attempted:$inline_rollback_attempted,
+              inline_rollback_succeeded:$inline_rollback_succeeded,
+              inline_rollback_failed:$inline_rollback_failed,
+              post_rollback_attempted:$post_rollback_attempted,
+              post_rollback_succeeded:$post_rollback_succeeded,
+              post_rollback_failed:$post_rollback_failed,
+              receipt_posted:$receipt_posted,
+              receipt_outcome:$receipt_outcome,
+              verified:$verified
+            }' > production-result.json
+
+      - name: Upload immutable production result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-result-${{ inputs.correlation_id }}
+          path: production-result.json
+          retention-days: 30
+          if-no-files-found: error
 
       - name: Remove ephemeral SSH material
         if: always()
@@ -784,6 +873,6 @@ jobs:
       - name: Enforce verified production state
         if: always()
         env:
-          VERIFIED: ${{ steps.result.outputs.verified }}
+          VERIFIED: ${{ steps.state.outputs.verified }}
         shell: bash
         run: test "$VERIFIED" = "true"
