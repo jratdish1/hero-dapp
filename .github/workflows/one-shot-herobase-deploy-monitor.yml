@@ -21,6 +21,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
       CORRELATION_ID: issue-43-comment-5079810536
+      FAILED_PRODUCTION_JOB_ID: '89707706379'
 
     steps:
       - name: Capture raw deployment evidence
@@ -47,9 +48,7 @@ jobs:
 
           owner_run_id="$(jq -r --arg sha "$TARGET_SHA" '
             [.workflow_runs[] | select(
-              .head_sha == $sha and
-              .head_branch == "main" and
-              .event == "issue_comment"
+              .head_sha == $sha and .head_branch == "main" and .event == "issue_comment"
             )] | sort_by(.id) | last.id // empty
           ' monitor/owner-runs.json)"
           if [[ "$owner_run_id" =~ ^[0-9]+$ ]]; then
@@ -57,40 +56,45 @@ jobs:
               > monitor/owner-run.json
             api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$owner_run_id/jobs?per_page=100" \
               > monitor/owner-jobs.json
-            set +e
-            api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$owner_run_id/pending_deployments" \
-              > monitor/pending-deployments.json 2> monitor/pending-deployments.err
-            echo "$?" > monitor/pending-deployments.exit
-            set -e
           else
             printf '{"status":"not-found"}\n' > monitor/owner-run.json
             printf '{"jobs":[]}\n' > monitor/owner-jobs.json
-            printf '[]\n' > monitor/pending-deployments.json
-            printf '0\n' > monitor/pending-deployments.exit
           fi
 
           api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/43/comments?per_page=100" \
             > monitor/issue-43-comments.json
-
           api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" \
             > monitor/ci-workflow.json
           ci_workflow_id="$(jq -r '.id' monitor/ci-workflow.json)"
           api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$ci_workflow_id/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100" \
             > monitor/ci-runs.json
-
           api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/security-and-quality.yml" \
             > monitor/security-workflow.json
           security_workflow_id="$(jq -r '.id' monitor/security-workflow.json)"
           api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$security_workflow_id/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100" \
             > monitor/security-runs.json
 
+          curl --fail-with-body --silent --show-error --location \
+            --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$FAILED_PRODUCTION_JOB_ID/logs" \
+            > monitor/failed-production-job.log
+
+          grep -E '^.*Missing required production secret: [A-Z0-9_]+.*$' \
+            monitor/failed-production-job.log \
+            | sed -E 's/^.*Missing required production secret: /Missing required production secret: /' \
+            | sed -E 's/[[:cntrl:]]\[[0-9;]*[A-Za-z]//g' \
+            | sort -u > monitor/missing-production-secrets.txt || true
+
           jq -n \
             --arg target_sha "$TARGET_SHA" \
             --arg correlation_id "$CORRELATION_ID" \
             --arg owner_run_id "${owner_run_id:-not-found}" \
+            --arg missing_secrets "$(paste -sd ',' monitor/missing-production-secrets.txt)" \
             --slurpfile owner_run monitor/owner-run.json \
             --slurpfile owner_jobs monitor/owner-jobs.json \
-            --slurpfile pending monitor/pending-deployments.json \
             --slurpfile comments monitor/issue-43-comments.json \
             --slurpfile ci monitor/ci-runs.json \
             --slurpfile security monitor/security-runs.json \
@@ -100,11 +104,10 @@ jobs:
               owner_run_id:$owner_run_id,
               owner_run:$owner_run[0],
               owner_jobs:$owner_jobs[0],
-              pending_deployments:$pending[0],
+              missing_secret_lines:($missing_secrets | split(",") | map(select(length>0))),
               matching_ledger:[
                 $comments[0][] | select(
-                  (.body | contains($correlation_id)) or
-                  (.body | contains($target_sha))
+                  (.body | contains($correlation_id)) or (.body | contains($target_sha))
                 ) | {id,user:.user.login,created_at,body}
               ],
               ci_runs:$ci[0].workflow_runs,
