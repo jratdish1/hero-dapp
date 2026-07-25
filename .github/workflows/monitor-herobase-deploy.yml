@@ -1,0 +1,107 @@
+name: Monitor HeroBase deployment
+
+on:
+  push:
+    branches:
+      - fix/production-controller-finality-20260725
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    if: github.event.head_commit.message == 'chore: run HeroBase deployment monitor'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
+      CORRELATION_ID: issue-43-comment-5079752085
+      TRACKER_ISSUE: '43'
+      REPORT_PR: '58'
+
+    steps:
+      - name: Collect exact deployment state and post receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "$1"
+          }
+
+          workflow_id="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/vets-production-command.yml" \
+            | jq -r '.id')"
+          [[ "$workflow_id" =~ ^[0-9]+$ ]]
+
+          runs="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?event=issue_comment&branch=main&per_page=100")"
+          run="$(jq -c --arg sha "$TARGET_SHA" '
+            [.workflow_runs[] | select(
+              .head_sha == $sha and .head_branch == "main" and .event == "issue_comment"
+            )] | sort_by(.id) | last // empty
+          ' <<<"$runs")"
+
+          if [ -z "$run" ]; then
+            run_id=not-found
+            run_status=not-found
+            run_conclusion=not-found
+            run_attempt=not-found
+            run_url=not-found
+            jobs_summary='No exact owner-command workflow run found.'
+          else
+            run_id="$(jq -r '.id' <<<"$run")"
+            run_status="$(jq -r '.status' <<<"$run")"
+            run_conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+            run_attempt="$(jq -r '.run_attempt' <<<"$run")"
+            run_url="$(jq -r '.html_url' <<<"$run")"
+            jobs="$(api_get \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+            jobs_summary="$(jq -r '[.jobs[] | "- " + .name + ": " + .status + " / " + (.conclusion // "pending")] | join("\n")' <<<"$jobs")"
+          fi
+
+          comments="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100")"
+          ledger="$(jq -r --arg correlation "$CORRELATION_ID" --arg sha "$TARGET_SHA" '
+            [.[] | select(
+              (.body | contains($correlation)) or
+              (.body | contains($sha))
+            ) | "- comment " + (.id|tostring) + " by " + .user.login + ": " + ((.body | split("\n")[0]) // "")]
+            | if length == 0 then "- no matching Issue #43 ledger comment yet" else join("\n") end
+          ' <<<"$comments")"
+
+          body="$(cat <<EOF_BODY
+          VETS_DEPLOY_MONITOR v1
+
+          target_sha: $TARGET_SHA
+          correlation_id: $CORRELATION_ID
+          workflow_run_id: $run_id
+          workflow_status: $run_status
+          workflow_conclusion: $run_conclusion
+          workflow_attempt: $run_attempt
+          workflow_url: $run_url
+
+          jobs:
+          $jobs_summary
+
+          issue_43_ledger:
+          $ledger
+          EOF_BODY
+          )"
+          payload="$(jq -nc --arg body "$body" '{body:$body}')"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$REPORT_PR/comments" \
+            --data "$payload" >/dev/null
