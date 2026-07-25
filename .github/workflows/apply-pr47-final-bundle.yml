@@ -1,0 +1,101 @@
+name: Apply final PR47 bundle
+
+on:
+  push:
+    branches:
+      - ops/vets-production-command-20260724
+
+permissions:
+  actions: write
+  contents: write
+
+concurrency:
+  group: apply-pr47-final-bundle
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.head_commit.message == 'chore: apply final PR47 bundle'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/vets-production-command-20260724
+          fetch-depth: 0
+          show-progress: false
+
+      - name: Verify staged bundle and branch identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git branch --show-current)" = "ops/vets-production-command-20260724"
+          test "$(git rev-parse HEAD^)" = "7dbabf73b06e3cd5b69df0c5f8ce45cf3efa0235"
+          test "$(git log -1 --pretty=%s)" = "chore: apply final PR47 bundle"
+          test -z "$(git status --porcelain)"
+          test -f ops/pr47-final-bundle.b64
+
+      - name: Decode and validate exact production files
+        shell: bash
+        run: |
+          set -euo pipefail
+          base64 --decode ops/pr47-final-bundle.b64 > "$RUNNER_TEMP/pr47-final-bundle.tar.gz"
+          echo "ba38615cd6677b047c161afba0be593580d988c237524ec23d262ee23e478aa4  $RUNNER_TEMP/pr47-final-bundle.tar.gz" | sha256sum --check
+          mkdir -p "$RUNNER_TEMP/pr47-final"
+          tar -xzf "$RUNNER_TEMP/pr47-final-bundle.tar.gz" -C "$RUNNER_TEMP/pr47-final"
+          install -m 0644 "$RUNNER_TEMP/pr47-final/.github/workflows/deploy.yml" .github/workflows/deploy.yml
+          install -m 0644 "$RUNNER_TEMP/pr47-final/.github/workflows/vets-production-command.yml" .github/workflows/vets-production-command.yml
+          install -m 0644 "$RUNNER_TEMP/pr47-final/DEPLOY_INSTRUCTIONS.md" DEPLOY_INSTRUCTIONS.md
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          paths = [
+              Path('.github/workflows/deploy.yml'),
+              Path('.github/workflows/vets-production-command.yml'),
+          ]
+          for path in paths:
+              lines = path.read_text().splitlines()
+              index = 0
+              block_number = 0
+              while index < len(lines):
+                  line = lines[index]
+                  stripped = line.lstrip()
+                  indent = len(line) - len(stripped)
+                  if stripped == 'run: |':
+                      block_number += 1
+                      index += 1
+                      block = []
+                      while index < len(lines):
+                          candidate = lines[index]
+                          if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indent:
+                              break
+                          block.append(candidate[indent + 2:] if candidate.strip() else '')
+                          index += 1
+                      result = subprocess.run(
+                          ['bash', '-n'],
+                          input='\n'.join(block) + '\n',
+                          text=True,
+                          capture_output=True,
+                      )
+                      if result.returncode != 0:
+                          raise SystemExit(
+                              f'{path}: run block {block_number} failed bash -n:\n{result.stderr}'
+                          )
+                      continue
+                  index += 1
+          PY
+          git diff --check
+
+      - name: Commit and push exact validated files
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "VETS Production Gate Remediation"
+          git config user.email "actions@users.noreply.github.com"
+          git add .github/workflows/deploy.yml .github/workflows/vets-production-command.yml DEPLOY_INSTRUCTIONS.md
+          test -n "$(git status --porcelain)"
+          git commit -m "fix: close remaining production release-control gaps"
+          git push origin HEAD:ops/vets-production-command-20260724
