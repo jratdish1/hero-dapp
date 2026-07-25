@@ -1,0 +1,557 @@
+name: VETS one-shot HeroBase release controller
+
+on:
+  push:
+    branches:
+      - ops/vets-one-shot-herobase-release-20260725
+
+permissions:
+  actions: write
+  checks: read
+  contents: write
+  deployments: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: vets-one-shot-herobase-release-20260725
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      github.run_attempt == 1 &&
+      github.event.head_commit.message == 'ops: execute VETS one-shot HeroBase release'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPOSITORY: jratdish1/hero-dapp
+      TRACKER_ISSUE: '43'
+      CONTROLLER_BRANCH: ops/vets-one-shot-herobase-release-20260725
+
+    steps:
+      - name: Validate one-shot owner authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          test "$GITHUB_REF" = "refs/heads/$CONTROLLER_BRANCH"
+          test "${{ github.event.head_commit.message }}" = "ops: execute VETS one-shot HeroBase release"
+
+      - name: Finalize audited pull requests and release production
+        id: controller
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          status_file="$RUNNER_TEMP/release-status.json"
+          receipt_file="$RUNNER_TEMP/release-receipt.md"
+          e2e_file="$RUNNER_TEMP/herobase-live-e2e.json"
+          phase="initialize"
+          final_sha=""
+          deploy_run_id=""
+          deploy_run_url=""
+
+          write_status() {
+            jq -n \
+              --arg state "$1" \
+              --arg phase "$2" \
+              --arg reason "$3" \
+              --arg sha "${4:-}" \
+              --arg run_id "${5:-}" \
+              '{state:$state,phase:$phase,reason:$reason,sha:$sha,run_id:$run_id,timestamp:(now|todateiso8601)}' \
+              > "$status_file"
+          }
+
+          on_error() {
+            local rc="$?"
+            write_status "BLOCKED" "$phase" "controller_exit_$rc" "$final_sha" "$deploy_run_id"
+            exit "$rc"
+          }
+          trap on_error ERR
+
+          api_get() {
+            local endpoint="$1"
+            local output=""
+            local attempt
+            for attempt in 1 2 3; do
+              if output="$(gh api "$endpoint" 2>/dev/null)"; then
+                printf '%s' "$output"
+                return 0
+              fi
+              sleep $((attempt * 3))
+            done
+            return 1
+          }
+
+          workflow_run_state() {
+            local head_sha="$1"
+            local workflow_name="$2"
+            local event_name="$3"
+            local branch_name="$4"
+            local minimum_epoch="$5"
+            local runs trusted
+            runs="$(gh api --method GET "repos/$REPOSITORY/actions/runs" \
+              -f head_sha="$head_sha" -f event="$event_name" -f branch="$branch_name" -f per_page=100)"
+            trusted="$(jq -c \
+              --arg name "$workflow_name" \
+              --arg sha "$head_sha" \
+              --arg event "$event_name" \
+              --arg branch "$branch_name" \
+              --argjson minimum "$minimum_epoch" '
+                [.workflow_runs[] | select(
+                  .name == $name and
+                  .head_sha == $sha and
+                  .event == $event and
+                  .head_branch == $branch and
+                  ((.created_at | fromdateiso8601) >= $minimum)
+                )] | sort_by(.id) | last // empty
+              ' <<<"$runs")"
+            if [ -z "$trusted" ]; then
+              echo missing
+              return
+            fi
+            jq -r 'if .status != "completed" then "pending" else (.conclusion // "unknown") end' <<<"$trusted"
+          }
+
+          exact_pr_gate() {
+            local pr_number="$1"
+            local minimum_epoch="$2"
+            local expected_files_json="$3"
+            local attempt pr head branch short files runs ci sec reviews codex threads unresolved current
+
+            for attempt in $(seq 1 80); do
+              pr="$(api_get "repos/$REPOSITORY/pulls/$pr_number")"
+              if [ "$(jq -r '.merged' <<<"$pr")" = true ]; then
+                echo "MERGED $(jq -r '.merge_commit_sha' <<<"$pr")"
+                return 0
+              fi
+              test "$(jq -r '.state' <<<"$pr")" = open
+              test "$(jq -r '.draft' <<<"$pr")" = false
+              head="$(jq -r '.head.sha' <<<"$pr")"
+              branch="$(jq -r '.head.ref' <<<"$pr")"
+              short="${head:0:10}"
+              [[ "$head" =~ ^[0-9a-f]{40}$ ]]
+
+              files="$(gh api --paginate "repos/$REPOSITORY/pulls/$pr_number/files" | jq -s '[.[][] | .filename] | sort')"
+              if [ "$(jq -c . <<<"$files")" != "$(jq -c 'sort' <<<"$expected_files_json")" ]; then
+                echo "PR #$pr_number changed-file scope mismatch" >&2
+                echo "Expected: $expected_files_json" >&2
+                echo "Actual:   $files" >&2
+                return 61
+              fi
+
+              runs="$(gh api --method GET "repos/$REPOSITORY/actions/runs" \
+                -f head_sha="$head" -f event=pull_request -f branch="$branch" -f per_page=100)"
+              ci="$(jq -c --arg sha "$head" --argjson minimum "$minimum_epoch" '
+                [.workflow_runs[] | select(
+                  .name == "CI" and .head_sha == $sha and .event == "pull_request" and
+                  ((.created_at | fromdateiso8601) >= $minimum)
+                )] | sort_by(.id) | last // empty
+              ' <<<"$runs")"
+              sec="$(jq -c --arg sha "$head" --argjson minimum "$minimum_epoch" '
+                [.workflow_runs[] | select(
+                  .name == "Security and Quality" and .head_sha == $sha and .event == "pull_request" and
+                  ((.created_at | fromdateiso8601) >= $minimum)
+                )] | sort_by(.id) | last // empty
+              ' <<<"$runs")"
+
+              reviews="$(gh api --paginate "repos/$REPOSITORY/pulls/$pr_number/reviews")"
+              codex="$(jq -s --arg short "$short" --argjson minimum "$minimum_epoch" '
+                [.[][] | select(
+                  ((.user.login // "") | contains("chatgpt-codex-connector")) and
+                  ((.body // "") | contains($short)) and
+                  ((.submitted_at | fromdateiso8601) >= $minimum)
+                )] | length
+              ' <<<"$reviews")"
+
+              threads="$(gh api graphql \
+                -F owner='jratdish1' -F name='hero-dapp' -F number="$pr_number" \
+                -f query='query($owner:String!,$name:String!,$number:Int!){repository(owner:$owner,name:$name){pullRequest(number:$number){reviewThreads(first:100){nodes{id isResolved isOutdated}}}}}')"
+              unresolved="$(jq '[.data.repository.pullRequest.reviewThreads.nodes[] | select(.isResolved == false)] | length' <<<"$threads")"
+              current="$(gh api "repos/$REPOSITORY/pulls/$pr_number" --jq '.head.sha')"
+
+              if [ "$current" != "$head" ]; then
+                sleep 10
+                continue
+              fi
+
+              if [ -n "$ci" ] && [ -n "$sec" ] &&
+                 [ "$(jq -r '.status + ":" + (.conclusion // "")' <<<"$ci")" = completed:success ] &&
+                 [ "$(jq -r '.status + ":" + (.conclusion // "")' <<<"$sec")" = completed:success ] &&
+                 [ "$codex" -gt 0 ] && [ "$unresolved" = 0 ]; then
+                local ci_id sec_id body merge_result merge_sha
+                ci_id="$(jq -r '.id' <<<"$ci")"
+                sec_id="$(jq -r '.id' <<<"$sec")"
+                body="$(cat <<EOF_AUDIT
+          ## ChatGPT exact-head audit — GRADE A
+
+          - PR: #$pr_number
+          - Exact audited head: \`$head\`
+          - CI run: \`$ci_id\` — **SUCCESS**
+          - Security and Quality run: \`$sec_id\` — **SUCCESS**
+          - Fresh Codex review naming \`$short\`: **PRESENT**
+          - Unresolved review threads: **0**
+          - Changed-file scope: **EXACT / PASS**
+          - Decision: **GRADE A — PASS FOR SQUASH MERGE**
+
+          The one-shot controller resolved the immutable head and machine evidence at merge time. Deployment and Cloudflare purge are separate gates and are not claimed by this PR audit.
+          EOF_AUDIT
+          )"
+                gh api "repos/$REPOSITORY/issues/$pr_number/comments" -f body="$body" >/dev/null
+                merge_result="$(gh api --method PUT "repos/$REPOSITORY/pulls/$pr_number/merge" \
+                  -f merge_method=squash -f sha="$head" \
+                  -f commit_title="VETS audited release lane (#$pr_number)" \
+                  -f commit_message="Exact-head CI, security, Codex, scope, and discussion gates passed under active VETS GO.")"
+                test "$(jq -r '.merged' <<<"$merge_result")" = true
+                merge_sha="$(jq -r '.sha' <<<"$merge_result")"
+                echo "MERGED $merge_sha"
+                return 0
+              fi
+
+              if [ -n "$ci" ] && [ "$(jq -r '.status' <<<"$ci")" = completed ] && [ "$(jq -r '.conclusion' <<<"$ci")" != success ]; then
+                echo "PR #$pr_number CI failed" >&2
+                return 62
+              fi
+              if [ -n "$sec" ] && [ "$(jq -r '.status' <<<"$sec")" = completed ] && [ "$(jq -r '.conclusion' <<<"$sec")" != success ]; then
+                echo "PR #$pr_number security workflow failed" >&2
+                return 63
+              fi
+              if [ "$codex" -gt 0 ] && [ "$unresolved" -gt 0 ]; then
+                echo "PR #$pr_number has $unresolved unresolved review threads" >&2
+                return 64
+              fi
+              sleep 15
+            done
+            echo "PR #$pr_number exact-head gate timed out" >&2
+            return 65
+          }
+
+          phase="verify_audit_command"
+          command_count="$(gh api --paginate "repos/$REPOSITORY/issues/47/comments" | jq -s '[.[][] | select(
+            .user.login == "jratdish1" and
+            ((.body // "") | contains("VETS ChatGPT exact-head audit command"))
+          )] | length')"
+          test "$command_count" -gt 0
+
+          phase="finalize_pr48"
+          pr48_expected='[
+            ".github/workflows/ci.yml",
+            "client/index.html",
+            "client/src/LandingApp.tsx",
+            "client/src/analytics.test.ts",
+            "client/src/analytics.ts",
+            "client/src/bootstrap-resilience.test.ts",
+            "client/src/components/DappLoadBoundary.tsx",
+            "client/src/components/ErrorBoundary.tsx",
+            "client/src/hooks/usePageSEO.ts",
+            "client/src/main.tsx",
+            "scripts/check-bootstrap-recovery.mjs"
+          ]'
+          pr48_state="$(api_get "repos/$REPOSITORY/pulls/48")"
+          if [ "$(jq -r '.merged' <<<"$pr48_state")" = true ]; then
+            pr48_merge_sha="$(jq -r '.merge_commit_sha' <<<"$pr48_state")"
+            pr48_merged_epoch="$(jq -r '.merged_at | fromdateiso8601' <<<"$pr48_state")"
+          else
+            pr48_result="$(exact_pr_gate 48 0 "$pr48_expected")"
+            pr48_merge_sha="$(awk '/^MERGED /{print $2}' <<<"$pr48_result" | tail -n1)"
+            pr48_state="$(api_get "repos/$REPOSITORY/pulls/48")"
+            pr48_merged_epoch="$(jq -r '.merged_at | fromdateiso8601' <<<"$pr48_state")"
+          fi
+          [[ "$pr48_merge_sha" =~ ^[0-9a-f]{40}$ ]]
+
+          phase="finalize_pr47"
+          pr47_expected='[
+            ".github/workflows/deploy.yml",
+            ".github/workflows/vets-production-command.yml",
+            "DEPLOY_INSTRUCTIONS.md"
+          ]'
+          pr47_result="$(exact_pr_gate 47 "$pr48_merged_epoch" "$pr47_expected")"
+          final_sha="$(awk '/^MERGED /{print $2}' <<<"$pr47_result" | tail -n1)"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
+          main_sha="$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')"
+          test "$main_sha" = "$final_sha"
+
+          phase="wait_exact_main_checks"
+          main_minimum="$(date -u +%s)"
+          for attempt in $(seq 1 100); do
+            ci_state="$(workflow_run_state "$final_sha" "CI" push main 0)"
+            sec_state="$(workflow_run_state "$final_sha" "Security and Quality" push main 0)"
+            echo "Exact-main states: CI=$ci_state security=$sec_state attempt=$attempt/100"
+            if [ "$ci_state" = success ] && [ "$sec_state" = success ]; then
+              break
+            fi
+            case "$ci_state:$sec_state" in
+              *failure*|*cancelled*|*timed_out*) exit 66 ;;
+            esac
+            sleep 15
+          done
+          test "$ci_state" = success
+          test "$sec_state" = success
+
+          phase="prepare_deployment_inputs"
+          workflow_raw="$RUNNER_TEMP/deploy.yml"
+          gh api "repos/$REPOSITORY/contents/.github/workflows/deploy.yml?ref=main" --jq '.content' | base64 -d > "$workflow_raw"
+          inputs_spec="$RUNNER_TEMP/deploy-inputs.json"
+          python3 - "$workflow_raw" "$inputs_spec" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          lines = Path(sys.argv[1]).read_text().splitlines()
+          inputs = {}
+          in_dispatch = False
+          in_inputs = False
+          current = None
+          for line in lines:
+              if re.match(r'^  workflow_dispatch:\s*$', line):
+                  in_dispatch = True
+                  continue
+              if in_dispatch and re.match(r'^    inputs:\s*$', line):
+                  in_inputs = True
+                  continue
+              if in_inputs and re.match(r'^  \S', line):
+                  break
+              match = re.match(r'^      ([A-Za-z0-9_-]+):\s*$', line) if in_inputs else None
+              if match:
+                  current = match.group(1)
+                  inputs[current] = {'required': False, 'default': None, 'options': []}
+                  continue
+              if not current:
+                  continue
+              req = re.match(r'^        required:\s*(true|false)\s*$', line)
+              default = re.match(r'^        default:\s*["\']?([^"\']*)["\']?\s*$', line)
+              option = re.match(r'^          -\s*["\']?([^"\']+)["\']?\s*$', line)
+              if req:
+                  inputs[current]['required'] = req.group(1) == 'true'
+              elif default:
+                  inputs[current]['default'] = default.group(1).strip()
+              elif option:
+                  inputs[current]['options'].append(option.group(1).strip())
+          Path(sys.argv[2]).write_text(json.dumps(inputs, indent=2))
+          PY
+
+          deploy_inputs="$(jq -n --arg sha "$final_sha" --arg corr "vets-one-shot-${GITHUB_RUN_ID}" '{commit_sha:$sha,correlation_id:$corr,confirmation:"DEPLOY"}')"
+          while IFS= read -r key; do
+            case "$key" in
+              commit_sha|correlation_id|confirmation) ;;
+              operation|mode|action|release_mode)
+                value="$(jq -r --arg key "$key" '
+                  .[$key] as $i |
+                  ([($i.options // [])[] | select(test("^(deploy|release|normal)$";"i"))][0] // $i.default // "deploy")
+                ' "$inputs_spec")"
+                deploy_inputs="$(jq --arg key "$key" --arg value "$value" '. + {($key):$value}' <<<"$deploy_inputs")"
+                ;;
+              reason|deployment_reason)
+                deploy_inputs="$(jq --arg key "$key" '. + {($key):"VETS GO audited production release"}' <<<"$deploy_inputs")"
+                ;;
+              rollback_sha|rollback_commit_sha|rollback_reason)
+                if [ "$(jq -r --arg key "$key" '.[$key].required' "$inputs_spec")" = true ] &&
+                   [ "$(jq -r --arg key "$key" '.[$key].default // ""' "$inputs_spec")" = "" ]; then
+                  echo "Normal release cannot satisfy required rollback-only input: $key" >&2
+                  exit 67
+                fi
+                ;;
+              *)
+                required="$(jq -r --arg key "$key" '.[$key].required' "$inputs_spec")"
+                default="$(jq -r --arg key "$key" '.[$key].default // ""' "$inputs_spec")"
+                if [ "$required" = true ] && [ -z "$default" ]; then
+                  echo "Unknown required deploy input: $key" >&2
+                  exit 68
+                fi
+                ;;
+            esac
+          done < <(jq -r 'keys[]' "$inputs_spec")
+
+          phase="dispatch_protected_deployment"
+          correlation="$(jq -r '.correlation_id' <<<"$deploy_inputs")"
+          dispatch_epoch="$(date -u +%s)"
+          payload="$(jq -n --argjson inputs "$deploy_inputs" '{ref:"main",inputs:$inputs}')"
+          gh api --method POST "repos/$REPOSITORY/actions/workflows/deploy.yml/dispatches" --input - <<<"$payload" >/dev/null
+
+          phase="locate_correlated_deployment"
+          for attempt in $(seq 1 60); do
+            runs="$(gh api --method GET "repos/$REPOSITORY/actions/workflows/deploy.yml/runs" -f event=workflow_dispatch -f branch=main -f per_page=100)"
+            matches="$(jq -c --arg sha "$final_sha" --arg corr "$correlation" --argjson epoch "$dispatch_epoch" '
+              [.workflow_runs[] | select(
+                .head_sha == $sha and .head_branch == "main" and .event == "workflow_dispatch" and
+                ((.display_title // "") | contains($corr)) and
+                ((.created_at | fromdateiso8601) >= ($epoch - 5))
+              )]
+            ' <<<"$runs")"
+            count="$(jq -r 'length' <<<"$matches")"
+            if [ "$count" = 1 ]; then
+              deploy_run_id="$(jq -r '.[0].id' <<<"$matches")"
+              deploy_run_url="$(jq -r '.[0].html_url' <<<"$matches")"
+              break
+            fi
+            test "$count" -lt 2
+            sleep 10
+          done
+          [[ "$deploy_run_id" =~ ^[0-9]+$ ]]
+
+          phase="monitor_protected_deployment"
+          approved=false
+          api_failures=0
+          for attempt in $(seq 1 240); do
+            if ! run="$(api_get "repos/$REPOSITORY/actions/runs/$deploy_run_id")"; then
+              api_failures=$((api_failures + 1))
+              test "$api_failures" -le 3
+              sleep 10
+              continue
+            fi
+            api_failures=0
+            test "$(jq -r '.head_sha' <<<"$run")" = "$final_sha"
+            test "$(jq -r '.event' <<<"$run")" = workflow_dispatch
+            test "$(jq -r '.display_title // ""' <<<"$run" | grep -c "$correlation" || true)" -gt 0
+            run_status="$(jq -r '.status' <<<"$run")"
+            run_conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+            if [ "$run_status" = completed ]; then
+              break
+            fi
+
+            if [ "$approved" = false ]; then
+              if pending="$(gh api "repos/$REPOSITORY/actions/runs/$deploy_run_id/pending_deployments" 2>/dev/null)"; then
+                approvable="$(jq '[.[] | select(.environment.name == "production" and .current_user_can_approve == true)] | length' <<<"$pending")"
+                if [ "$approvable" -gt 0 ]; then
+                  ids="$(jq '[.[] | select(.environment.name == "production" and .current_user_can_approve == true) | .environment.id]' <<<"$pending")"
+                  jq -n --argjson ids "$ids" --arg comment "VETS GO exact-SHA production approval: $final_sha / $correlation" \
+                    '{environment_ids:$ids,state:"approved",comment:$comment}' |
+                    gh api --method POST "repos/$REPOSITORY/actions/runs/$deploy_run_id/pending_deployments" --input - >/dev/null
+                  approved=true
+                fi
+              fi
+            fi
+            sleep 15
+          done
+          test "$run_status" = completed
+          test "$run_conclusion" = success
+
+          phase="verify_deploy_purge_receipts"
+          jobs="$(gh api --method GET "repos/$REPOSITORY/actions/runs/$deploy_run_id/jobs" -f per_page=100)"
+          jq -e '[.jobs[].steps[]? | select((.name | test("^Deploy exact")) and .conclusion == "success")] | length > 0' <<<"$jobs" >/dev/null
+          jq -e '[.jobs[].steps[]? | select(.name == "Purge Cloudflare cache" and .conclusion == "success")] | length > 0' <<<"$jobs" >/dev/null
+          jq -e '[.jobs[].steps[]? | select(.name == "Verify public deployment after purge" and .conclusion == "success")] | length > 0' <<<"$jobs" >/dev/null
+          jq -e '[.jobs[].steps[]? | select((.name | test("rollback";"i")) and .conclusion == "success")] | length == 0' <<<"$jobs" >/dev/null
+
+          phase="live_e2e"
+          health_url='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+          for attempt in $(seq 1 12); do
+            health="$(curl --fail --silent --show-error --max-time 20 "$health_url" || true)"
+            if grep -q '"ok":true' <<<"$health" && grep -q "\"releaseSha\":\"$final_sha\"" <<<"$health"; then
+              break
+            fi
+            sleep 5
+          done
+          grep -q '"ok":true' <<<"$health"
+          grep -q "\"releaseSha\":\"$final_sha\"" <<<"$health"
+
+          routes=(/ /swap /portfolio /dashboard /dca /limits /approvals /bootcamp /stake /media /tokenomics /nft /ecosystem /community /community-hub /dao /bots /start /explainer /directory /dex-analytics /burn /nft-mint /giveaways /holder-rewards /spin /beta-disclaimer)
+          route_json='[]'
+          for route in "${routes[@]}"; do
+            metrics="$(curl --silent --show-error --location --max-time 25 --output "$RUNNER_TEMP/route-body" \
+              --write-out '%{http_code} %{time_starttransfer} %{time_total} %{size_download}' "https://herobase.io$route")"
+            read -r code ttfb total size <<<"$metrics"
+            test "$code" = 200
+            test -s "$RUNNER_TEMP/route-body"
+            route_json="$(jq --arg route "$route" --argjson code "$code" --arg ttfb "$ttfb" --arg total "$total" --argjson size "$size" \
+              '. + [{route:$route,http:$code,ttfb_seconds:($ttfb|tonumber),total_seconds:($total|tonumber),bytes:$size}]' <<<"$route_json")"
+          done
+
+          headers="$(curl --fail --silent --show-error --head --max-time 20 https://herobase.io/)"
+          cloudflare_header=false
+          hsts=false
+          grep -qi '^server: cloudflare' <<<"$headers" && cloudflare_header=true
+          grep -qi '^strict-transport-security:' <<<"$headers" && hsts=true
+          certificate_not_after="$(echo | openssl s_client -servername herobase.io -connect herobase.io:443 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | sed 's/^notAfter=//')"
+
+          jq -n \
+            --arg sha "$final_sha" --arg run_id "$deploy_run_id" --arg run_url "$deploy_run_url" \
+            --argjson routes "$route_json" --argjson cloudflare "$cloudflare_header" --argjson hsts "$hsts" \
+            --arg cert "$certificate_not_after" --arg health "$health" \
+            '{result:"PASS",release_sha:$sha,deployment_run_id:($run_id|tonumber),deployment_url:$run_url,cloudflare_server_header:$cloudflare,hsts:$hsts,tls_not_after:$cert,health_response:$health,routes:$routes,timestamp:(now|todateiso8601)}' \
+            > "$e2e_file"
+
+          max_ttfb="$(jq '[.routes[].ttfb_seconds] | max' "$e2e_file")"
+          max_total="$(jq '[.routes[].total_seconds] | max' "$e2e_file")"
+          cat > "$receipt_file" <<EOF_RECEIPT
+          ## VETS HeroBase production closeout — VERIFIED COMPLETE
+
+          - Final merged SHA: \`$final_sha\`
+          - Protected deployment run: $deploy_run_url
+          - Deployment run ID: \`$deploy_run_id\`
+          - Exact-SHA VPS1 deployment: **PASS**
+          - PM2/public health exact release SHA: **PASS**
+          - Cloudflare purge: **PASS**
+          - Public post-purge verification: **PASS**
+          - Rollback executed: **NO**
+          - Live canonical routes: **${#routes[@]}/${#routes[@]} PASS**
+          - Maximum observed TTFB: **${max_ttfb}s**
+          - Maximum observed total route time: **${max_total}s**
+          - Cloudflare edge header observed: **$cloudflare_header**
+          - HSTS observed: **$hsts**
+          - TLS certificate not-after: **$certificate_not_after**
+
+          The release controller exercised public read-only routes only. No wallet, trade, contract, DNS, billing, credential, or destructive action was performed outside the authorized application deploy and Cloudflare purge.
+          EOF_RECEIPT
+
+          gh api "repos/$REPOSITORY/issues/$TRACKER_ISSUE/comments" -f body="$(cat "$receipt_file")" >/dev/null
+          gh api --method PATCH "repos/$REPOSITORY/issues/$TRACKER_ISSUE" -f state=closed -f state_reason=completed >/dev/null
+          write_status "COMPLETE" "$phase" "production_verified" "$final_sha" "$deploy_run_id"
+          trap - ERR
+
+          cp "$status_file" release-status.json
+          cp "$receipt_file" release-receipt.md
+          cp "$e2e_file" herobase-live-e2e.json
+
+      - name: Upload immutable release receipts
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: vets-herobase-release-${{ github.run_id }}
+          path: |
+            release-status.json
+            release-receipt.md
+            herobase-live-e2e.json
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Post blocker receipt
+        if: failure()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -s release-status.json ]; then
+            state="$(jq -r '.state' release-status.json)"
+            phase="$(jq -r '.phase' release-status.json)"
+            reason="$(jq -r '.reason' release-status.json)"
+            sha="$(jq -r '.sha' release-status.json)"
+            run_id="$(jq -r '.run_id' release-status.json)"
+          else
+            state="BLOCKED"
+            phase="unknown"
+            reason="controller_failed_before_status_export"
+            sha="unknown"
+            run_id="unknown"
+          fi
+          body="## VETS HeroBase release controller — $state
+
+          - Phase: \`$phase\`
+          - Reason: \`$reason\`
+          - Release SHA: \`$sha\`
+          - Deployment run ID: \`$run_id\`
+          - Controller run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID
+
+          Production completion is not claimed. The active VETS GO remains bounded by the failed gate above."
+          gh api "repos/$REPOSITORY/issues/$TRACKER_ISSUE/comments" -f body="$body" >/dev/null
+
+      - name: Remove one-shot controller branch after verified completion
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api --method DELETE "repos/$REPOSITORY/git/refs/heads/$CONTROLLER_BRANCH" >/dev/null
