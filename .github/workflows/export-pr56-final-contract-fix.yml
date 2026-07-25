@@ -1,23 +1,23 @@
 name: Export PR56 final contract corrections
 
 on:
-  pull_request:
-    branches: [main]
-    types: [opened, reopened, synchronize]
+  push:
+    branches:
+      - fix/production-controller-final-evidence-20260725
 
 permissions:
   contents: write
 
 concurrency:
-  group: export-pr56-final-contract-${{ github.event.pull_request.number }}
+  group: export-pr56-final-contract
   cancel-in-progress: false
 
 jobs:
   export:
     if: >-
       github.repository == 'jratdish1/hero-dapp' &&
-      github.event.pull_request.number == 56 &&
-      github.event.pull_request.head.ref == 'fix/production-controller-final-evidence-20260725'
+      github.ref == 'refs/heads/fix/production-controller-final-evidence-20260725' &&
+      github.event.head_commit.message == 'chore: execute PR56 final contract exporter'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -211,7 +211,7 @@ jobs:
       - name: Upload exact validated final contract
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pr56-final-contract-${{ github.event.pull_request.head.sha }}
+          name: pr56-final-contract-${{ github.sha }}
           path: pr56-contract
           retention-days: 7
           if-no-files-found: error
