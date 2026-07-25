@@ -36,6 +36,12 @@ export class ErrorBoundary extends Component<Props, State> {
     return { hasError: true, error: normalizeThrownValue(error) };
   }
 
+  componentDidMount() {
+    if (this.state.hasError) {
+      this.headingRef.current?.focus();
+    }
+  }
+
   componentDidUpdate(_previousProps: Props, previousState: State) {
     if (!previousState.hasError && this.state.hasError) {
       this.headingRef.current?.focus();
