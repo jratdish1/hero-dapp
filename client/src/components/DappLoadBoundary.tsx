@@ -9,34 +9,56 @@ interface DappLoadBoundaryProps {
 }
 
 interface DappLoadBoundaryState {
-  error: Error | null;
+  hasError: boolean;
+  error: Error;
 }
 
 interface DappRecoveryViewProps {
   error: Error;
 }
 
-interface ReactErrorInfo {
+export interface ReactErrorInfo {
   componentStack?: string | null;
 }
 
 type ErrorLogger = (...args: unknown[]) => void;
+
+export interface ReactRootErrorHandlers {
+  onCaughtError(error: unknown, errorInfo: ReactErrorInfo): void;
+  onUncaughtError(error: unknown, errorInfo: ReactErrorInfo): void;
+  onRecoverableError(error: unknown, errorInfo: ReactErrorInfo): void;
+}
+
+/** Normalize every JavaScript throw/rejection, including falsy non-Error values. */
+export function normalizeThrownValue(value: unknown): Error {
+  if (value instanceof Error) return value;
+  if (typeof value === "string") return new Error(value || "Empty string was thrown");
+
+  let serialized = "";
+  try {
+    serialized = JSON.stringify(value);
+  } catch {
+    serialized = "[unserializable value]";
+  }
+  if (!serialized) serialized = String(value);
+  return new Error(`Non-Error thrown value: ${serialized}`);
+}
 
 /**
  * Identifies browser errors commonly raised when a lazy JavaScript module
  * cannot be fetched. The wording deliberately does not assume a deployment:
  * offline clients, CDN failures, and policy blocks can produce the same text.
  */
-export function isDappLoadFailure(error: Error): boolean {
+export function isDappLoadFailure(error: unknown): boolean {
   return /chunkloaderror|loading chunk|dynamically imported module|importing a module script failed|failed to fetch/i.test(
-    error.message,
+    normalizeThrownValue(error).message,
   );
 }
 
 /**
  * React 19 logs caught errors at the root independently of component
- * boundaries. Override the root callbacks with this helper so production
- * consoles receive only a generic event while development retains detail.
+ * boundaries. Production receives only a generic event; development preserves
+ * the original value and component stack.
  */
 export function reportReactRuntimeError(
   error: unknown,
@@ -53,6 +75,26 @@ export function reportReactRuntimeError(
   }
 
   logger("[React runtime error]");
+}
+
+/**
+ * Returns the exact callback object passed to createRoot. Keeping all three
+ * callbacks in one tested factory prevents an unreviewed inline logger from
+ * reintroducing production details.
+ */
+export function createRootErrorHandlers(
+  isDevelopment = import.meta.env.DEV,
+  logger: ErrorLogger = console.error,
+): ReactRootErrorHandlers {
+  const report = (error: unknown, errorInfo: ReactErrorInfo = {}) => {
+    reportReactRuntimeError(error, errorInfo, isDevelopment, logger);
+  };
+
+  return {
+    onCaughtError: report,
+    onUncaughtError: report,
+    onRecoverableError: report,
+  };
 }
 
 /** Shared recovery view for the bootstrap import and route-level lazy chunks. */
@@ -126,14 +168,17 @@ export default class DappLoadBoundary extends Component<
   DappLoadBoundaryProps,
   DappLoadBoundaryState
 > {
-  state: DappLoadBoundaryState = { error: null };
+  state: DappLoadBoundaryState = {
+    hasError: false,
+    error: new Error("No DApp runtime error has been captured"),
+  };
 
-  static getDerivedStateFromError(error: Error): DappLoadBoundaryState {
-    return { error };
+  static getDerivedStateFromError(error: unknown): DappLoadBoundaryState {
+    return { hasError: true, error: normalizeThrownValue(error) };
   }
 
   render() {
-    if (!this.state.error) return this.props.children;
+    if (!this.state.hasError) return this.props.children;
     return <DappRecoveryView error={this.state.error} />;
   }
 }
