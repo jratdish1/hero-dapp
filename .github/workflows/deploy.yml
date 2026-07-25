@@ -29,7 +29,7 @@ concurrency:
 jobs:
   deploy:
     name: Protected production deployment
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
     timeout-minutes: 45
     environment: production
@@ -44,6 +44,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/main"
           test "$DEPLOY_CONFIRMATION" = "DEPLOY"
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
@@ -302,6 +303,10 @@ jobs:
             printf 'previous_sha=%s\n' "$previous_sha" >> "$GITHUB_OUTPUT"
           fi
           exit "$ssh_status"
+
+      - name: Record inline rollback attempted
+        if: always() && steps.deploy_app.outputs.inline_rollback_attempted == 'true'
+        run: echo "Inline deployment rollback was attempted"
 
       - name: Record inline rollback succeeded
         if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'
