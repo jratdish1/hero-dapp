@@ -29,7 +29,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "3902031fc211981cafc8e063df16c754b2c0edeb"
+          test "$(git rev-parse HEAD^)" = "10cbcdc34fbb9695e71c5c0677fd6a5ef321a99e"
           mapfile -t files < <(git diff --name-only 70f520cc7a80b9c9a616dfd2f91008966eee3218...HEAD | sort)
           printf '%s\n' "${files[@]}"
           test "${#files[@]}" -eq 3
@@ -46,12 +46,13 @@ jobs:
           test "$(sha256sum "$RUNNER_TEMP/controller-bundle.tgz" | awk '{print $1}')" = "c464d8b70f0308f656813d75e9521ed42a14912a4646fb18c738d26b07be6ff1"
           mapfile -t members < <(tar -tzf "$RUNNER_TEMP/controller-bundle.tgz" | sort)
           printf '%s\n' "${members[@]}"
-          test "${#members[@]}" -eq 5
+          test "${#members[@]}" -eq 6
           test "${members[0]}" = "./"
           test "${members[1]}" = "./.github/"
           test "${members[2]}" = "./.github/workflows/"
           test "${members[3]}" = "./.github/workflows/deploy.yml"
-          test "${members[4]}" = "./.github/workflows/vets-production-command.yml" || true
+          test "${members[4]}" = "./.github/workflows/vets-production-command.yml"
+          test "${members[5]}" = "./DEPLOY_INSTRUCTIONS.md"
           tar -xzf "$RUNNER_TEMP/controller-bundle.tgz" -C .
           test "$(sha256sum .github/workflows/vets-production-command.yml | awk '{print $1}')" = "f38e062f2173db2c942bce7371da9de96d9c86b8ae5efcaefd2b8a4fbac49769"
           test "$(sha256sum .github/workflows/deploy.yml | awk '{print $1}')" = "c14cfff0515bbb394c8f202acd7e0777f3f7909141255d8e2da0ec360b72d6fa"
@@ -135,7 +136,7 @@ jobs:
           for path in [Path('.github/workflows/vets-production-command.yml'), Path('.github/workflows/deploy.yml')]:
               lines = path.read_text().splitlines()
               for index, line in enumerate(lines):
-                  if re.search(r'(^|[=("\\s])curl\\s+--', line) and not line.lstrip().startswith('#'):
+                  if re.search(r'(^|[=("\s])curl\s+--', line) and not line.lstrip().startswith('#'):
                       window = '\n'.join(lines[index:index+10])
                       if '--connect-timeout' not in window or '--max-time' not in window:
                           raise SystemExit(f'unbounded curl at {path}:{index+1}')
