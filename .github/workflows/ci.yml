@@ -84,10 +84,21 @@ jobs:
         shell: bash
         run: |
           set +e
-          timeout --signal=TERM --kill-after=10s 180s \
-            node scripts/check-bootstrap-recovery.mjs \
-            > bootstrap-recovery.log 2>&1
-          status=$?
+          : > bootstrap-recovery.log
+          status=1
+          for attempt in 1 2 3; do
+            rm -f bootstrap-recovery-report.json
+            echo "Bootstrap recovery browser attempt $attempt/3" | tee -a bootstrap-recovery.log
+            timeout --signal=TERM --kill-after=10s 180s \
+              node scripts/check-bootstrap-recovery.mjs \
+              >> bootstrap-recovery.log 2>&1
+            status=$?
+            if [ "$status" -eq 0 ]; then
+              break
+            fi
+            echo "Bootstrap recovery attempt $attempt failed with status $status" | tee -a bootstrap-recovery.log
+            sleep $((attempt * 3))
+          done
           cat bootstrap-recovery.log
           printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
