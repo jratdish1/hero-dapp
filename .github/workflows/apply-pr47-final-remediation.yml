@@ -36,13 +36,38 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "ops/vets-production-command-20260724"
-          test "$(git rev-parse HEAD^)" = "13bf017bf09c3b52cd56be789b92788c6c0f6e27"
-          test "$(git log -1 --pretty=%s)" = "chore: enable PR47 remediation on PR sync"
+          test "$(git rev-parse HEAD^)" = "5cec1561f456de2c85fe6273e8eb195f5e305b09"
+          test "$(git log -1 --pretty=%s)" = "chore: diagnose PR47 final remediation"
           test -z "$(git status --porcelain)"
           test -f ops/pr47-final-remediation.py
 
       - name: Apply and validate bounded workflow corrections
-        run: python3 ops/pr47-final-remediation.py
+        id: remediation
+        continue-on-error: true
+        shell: bash
+        run: |
+          set +e
+          python3 ops/pr47-final-remediation.py > pr47-remediation.log 2>&1
+          status=$?
+          cat pr47-remediation.log
+          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Upload remediation diagnostics
+        if: always() && hashFiles('pr47-remediation.log') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr47-remediation-diagnostics-${{ github.sha }}
+          path: pr47-remediation.log
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Enforce remediation gate
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.remediation.outcome }}" = "success"
+          test "${{ steps.remediation.outputs.exit_status }}" = "0"
 
       - name: Commit exact validated workflow tree
         shell: bash
