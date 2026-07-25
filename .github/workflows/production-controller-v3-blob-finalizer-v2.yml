@@ -1,0 +1,89 @@
+name: Production controller v3 blob finalizer v2
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/production-controller-v3-blob-finalizer-v2.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-controller-v3-blob-finalizer-v2
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact staging branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/production-controller-v3-blob-stage-20260725
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify fenced staging state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "9d2c4a2817324b848650f5d0c0c6698b877a9dba"
+          mapfile -t files < <(git diff --name-only f3858025eab1e713096ed8b10d7d4e960659abdd...HEAD | sort)
+          printf '%s\n' "${files[@]}"
+          test "${#files[@]}" -eq 3
+          test "${files[0]}" = ".github/workflows/production-controller-v3-blob-finalizer-v2.yml"
+          test "${files[1]}" = ".github/workflows/production-controller-v3-blob-finalizer.yml"
+          test "${files[2]}" = "ops/production-controller-v3.tgz.b64"
+
+      - name: Normalize and decode exact bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          tr -d '\r\n' < ops/production-controller-v3.tgz.b64 > "$RUNNER_TEMP/controller-v3.normalized.b64"
+          test "$(sha256sum "$RUNNER_TEMP/controller-v3.normalized.b64" | awk '{print $1}')" = "5f9978ad5a0475c66d43b88e8004dfe5f86cf712f5a3146e466ebec6c9b7ff63"
+          base64 -d "$RUNNER_TEMP/controller-v3.normalized.b64" > "$RUNNER_TEMP/controller-v3.tgz"
+          test "$(sha256sum "$RUNNER_TEMP/controller-v3.tgz" | awk '{print $1}')" = "94184558281c24b75a551ded31279b86daf7dd9d64aee09664203d58a743d2e3"
+          mapfile -t members < <(tar -tzf "$RUNNER_TEMP/controller-v3.tgz" | sort)
+          test "${#members[@]}" -eq 6
+          test "${members[0]}" = "./"
+          test "${members[1]}" = "./.github/"
+          test "${members[2]}" = "./.github/workflows/"
+          test "${members[3]}" = "./.github/workflows/deploy.yml"
+          test "${members[4]}" = "./.github/workflows/vets-production-command.yml"
+          test "${members[5]}" = "./DEPLOY_INSTRUCTIONS.md"
+          tar -xzf "$RUNNER_TEMP/controller-v3.tgz" -C .
+          test "$(sha256sum .github/workflows/vets-production-command.yml | awk '{print $1}')" = "89b940cf31159aca8d3eb89b280d831271910f82a0bada1ba04570e15fd1eaa4"
+          test "$(sha256sum .github/workflows/deploy.yml | awk '{print $1}')" = "c6b4928c7769fc0e41b67462afc7a680682eb2e2477db308633421df5ee9f133"
+          test "$(sha256sum DEPLOY_INSTRUCTIONS.md | awk '{print $1}')" = "d04e6a3e9669fb27578d6f58b5c755ff8e4322277da011f0a4035251120387e3"
+
+      - name: Extract reviewed validation steps
+        shell: bash
+        run: |
+          cat > "$RUNNER_TEMP/extract-step.rb" <<'RUBY'
+          require 'yaml'
+          doc = YAML.load_file(ARGV.fetch(0))
+          step = doc.fetch('jobs').fetch('finalize').fetch('steps').find { |item| item['name'] == ARGV.fetch(1) }
+          abort "step not found: #{ARGV.fetch(1)}" unless step && step['run']
+          print step['run']
+          RUBY
+
+      - name: Parse workflows and validate every shell block
+        shell: bash
+        run: |
+          ruby "$RUNNER_TEMP/extract-step.rb" .github/workflows/production-controller-v3-blob-finalizer.yml 'Parse workflows and validate every shell block' > "$RUNNER_TEMP/parse.sh"
+          bash -euo pipefail "$RUNNER_TEMP/parse.sh"
+
+      - name: Enforce final security contract
+        shell: bash
+        run: |
+          ruby "$RUNNER_TEMP/extract-step.rb" .github/workflows/production-controller-v3-blob-finalizer.yml 'Enforce final security contract' > "$RUNNER_TEMP/enforce.sh"
+          bash -euo pipefail "$RUNNER_TEMP/enforce.sh"
+
+      - name: Commit candidate and attempt target push
+        shell: bash
+        run: |
+          ruby "$RUNNER_TEMP/extract-step.rb" .github/workflows/production-controller-v3-blob-finalizer.yml 'Commit candidate and attempt target push' > "$RUNNER_TEMP/commit.sh"
+          sed -i '/git commit -m/i\          git rm .github/workflows/production-controller-v3-blob-finalizer-v2.yml' "$RUNNER_TEMP/commit.sh"
+          bash -euo pipefail "$RUNNER_TEMP/commit.sh"
