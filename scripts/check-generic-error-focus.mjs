@@ -2,8 +2,8 @@
 
 import { spawn } from 'node:child_process';
 import { createServer } from 'node:http';
-import { existsSync, readFileSync } from 'node:fs';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { closeSync, existsSync, openSync, readFileSync } from 'node:fs';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -13,6 +13,105 @@ const PROJECT_ROOT = process.cwd();
 const REPORT_PATH = path.resolve(PROJECT_ROOT, 'generic-error-focus-report.json');
 const EXPECTED_HEADING_ID = 'application-error-title';
 const EXPECTED_HEADING = 'An unexpected application error occurred.';
+const SENSITIVE_DETAIL = 'VETS mounted generic error focus test';
+const SANITIZED_MARKER = '[React runtime error]';
+
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+class ChromeStartupError extends Error {
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = 'ChromeStartupError';
+  }
+}
+
+class CdpClient {
+  constructor(webSocketUrl) {
+    this.webSocketUrl = webSocketUrl;
+    this.socket = null;
+    this.nextId = 1;
+    this.pending = new Map();
+    this.listeners = new Map();
+  }
+
+  async connect() {
+    this.socket = new WebSocket(this.webSocketUrl);
+    await new Promise((resolve, reject) => {
+      const timeout = setTimeout(
+        () => reject(new Error('Timed out connecting to Chrome DevTools')),
+        15_000,
+      );
+      this.socket.addEventListener('open', () => {
+        clearTimeout(timeout);
+        resolve();
+      }, { once: true });
+      this.socket.addEventListener('error', event => {
+        clearTimeout(timeout);
+        reject(new Error(`Chrome DevTools WebSocket error: ${event.message ?? 'unknown'}`));
+      }, { once: true });
+    });
+
+    this.socket.addEventListener('message', event => void this.handleMessage(event.data));
+    this.socket.addEventListener('close', () => {
+      for (const request of this.pending.values()) {
+        request.reject(new Error('Chrome DevTools closed'));
+      }
+      this.pending.clear();
+    });
+  }
+
+  async handleMessage(data) {
+    const raw = typeof data === 'string' ? data : await data.text();
+    const message = JSON.parse(raw);
+    if (message.id) {
+      const request = this.pending.get(message.id);
+      if (!request) return;
+      this.pending.delete(message.id);
+      if (message.error) request.reject(new Error(message.error.message));
+      else request.resolve(message.result ?? {});
+      return;
+    }
+    if (message.method) {
+      for (const listener of this.listeners.get(message.method) ?? []) {
+        listener(message.params ?? {});
+      }
+    }
+  }
+
+  send(method, params = {}) {
+    const id = this.nextId++;
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => {
+        this.pending.delete(id);
+        reject(new Error(`Timed out executing CDP method ${method}`));
+      }, 30_000);
+      this.pending.set(id, {
+        resolve(value) {
+          clearTimeout(timeout);
+          resolve(value);
+        },
+        reject(error) {
+          clearTimeout(timeout);
+          reject(error);
+        },
+      });
+      this.socket.send(JSON.stringify({ id, method, params }));
+    });
+  }
+
+  on(method, listener) {
+    const listeners = this.listeners.get(method) ?? new Set();
+    listeners.add(listener);
+    this.listeners.set(method, listeners);
+    return () => listeners.delete(listener);
+  }
+
+  close() {
+    this.socket?.close();
+  }
+}
 
 function contentType(filePath) {
   return path.extname(filePath) === '.js'
@@ -61,8 +160,34 @@ async function startStaticServer(root) {
   };
 }
 
-async function runChrome(chromeBin, url) {
-  const args = [
+async function waitForFile(filePath, child) {
+  for (let attempt = 0; attempt < 200; attempt += 1) {
+    if (existsSync(filePath)) return;
+    if (child.exitCode !== null) {
+      throw new Error(`Chrome exited with code ${child.exitCode}`);
+    }
+    await sleep(100);
+  }
+  throw new Error(`Timed out waiting for ${filePath}`);
+}
+
+async function stopChromeProcess(child, userDataDir) {
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM');
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      sleep(5_000),
+    ]);
+    if (child.exitCode === null) child.kill('SIGKILL');
+  }
+  if (userDataDir) await rm(userDataDir, { recursive: true, force: true });
+}
+
+async function launchChrome(chromeBin) {
+  const userDataDir = await mkdtemp(path.join(os.tmpdir(), 'vets-generic-error-focus-'));
+  const chromeLog = path.join(userDataDir, 'chrome.log');
+  const logFd = openSync(chromeLog, 'a');
+  const child = spawn(chromeBin, [
     '--headless=new',
     '--no-sandbox',
     '--disable-dev-shm-usage',
@@ -74,42 +199,95 @@ async function runChrome(chromeBin, url) {
     '--metrics-recording-only',
     '--no-first-run',
     '--no-default-browser-check',
+    '--remote-debugging-address=127.0.0.1',
+    '--remote-debugging-port=0',
+    `--user-data-dir=${userDataDir}`,
     '--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE 127.0.0.1',
-    '--virtual-time-budget=5000',
-    '--dump-dom',
-    url,
-  ];
+    '--window-size=1280,900',
+    'about:blank',
+  ], { stdio: ['ignore', logFd, logFd] });
+  closeSync(logFd);
 
-  const child = spawn(chromeBin, args, { stdio: ['ignore', 'pipe', 'pipe'] });
-  let stdout = '';
-  let stderr = '';
-  child.stdout.setEncoding('utf8');
-  child.stderr.setEncoding('utf8');
-  child.stdout.on('data', chunk => { stdout += chunk; });
-  child.stderr.on('data', chunk => { stderr += chunk; });
+  try {
+    const portFile = path.join(userDataDir, 'DevToolsActivePort');
+    await waitForFile(portFile, child);
+    const [portText] = (await readFile(portFile, 'utf8')).trim().split(/\r?\n/);
+    const port = Number.parseInt(portText, 10);
+    if (!Number.isInteger(port)) {
+      throw new Error(`Invalid Chrome debugging port: ${portText}`);
+    }
 
-  const exitCode = await Promise.race([
-    new Promise((resolve, reject) => {
-      child.once('error', reject);
-      child.once('exit', code => resolve(code ?? 1));
-    }),
-    new Promise((_, reject) => {
-      setTimeout(() => {
-        child.kill('SIGKILL');
-        reject(new Error('Timed out waiting for headless Chrome generic focus test'));
-      }, 30_000);
-    }),
-  ]);
+    const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {
+      method: 'PUT',
+    });
+    if (!targetResponse.ok) {
+      throw new Error(`Unable to create Chrome target: ${targetResponse.status}`);
+    }
+    const target = await targetResponse.json();
+    if (!target.webSocketDebuggerUrl) {
+      throw new Error('Chrome target lacks a DevTools WebSocket URL');
+    }
 
-  if (exitCode !== 0) {
-    throw new Error(`Headless Chrome exited with ${exitCode}: ${stderr.slice(-1000)}`);
+    return {
+      webSocketUrl: target.webSocketDebuggerUrl,
+      close: () => stopChromeProcess(child, userDataDir),
+    };
+  } catch (error) {
+    const logTail = await readFile(chromeLog, 'utf8')
+      .then(value => value.slice(-2_000))
+      .catch(() => 'Chrome log unavailable');
+    await stopChromeProcess(child, userDataDir).catch(() => {});
+    throw new ChromeStartupError(
+      `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,
+      { cause: error },
+    );
   }
-  return { stdout, stderr };
 }
 
-function attribute(dom, name) {
-  const match = dom.match(new RegExp(`${name}="([^"]*)"`));
-  return match?.[1] ?? '';
+async function launchChromeWithRetry(chromeBin, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await launchChrome(chromeBin);
+    } catch (error) {
+      if (!(error instanceof ChromeStartupError)) throw error;
+      lastError = error;
+      console.error(`Chrome startup attempt ${attempt}/${attempts} failed: ${error.message}`);
+      if (attempt < attempts) await sleep(attempt * 1_000);
+    }
+  }
+  throw lastError ?? new ChromeStartupError('Chrome failed to start');
+}
+
+async function evaluate(client, expression) {
+  const result = await client.send('Runtime.evaluate', {
+    expression,
+    awaitPromise: true,
+    returnByValue: true,
+  });
+  if (result.exceptionDetails) {
+    throw new Error(result.exceptionDetails.text || 'Browser evaluation failed');
+  }
+  return result.result?.value;
+}
+
+async function waitForHarness(client) {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    try {
+      const state = await evaluate(client, `(() => ({
+        ready: document.body?.dataset.ready || '',
+        focusedId: document.activeElement?.id || '',
+        heading: document.body?.dataset.heading || '',
+        focusClass: document.body?.dataset.focusClass || '',
+      }))()`);
+      if (state.ready === 'true') return state;
+    } catch {
+      // Navigation can briefly invalidate the execution context.
+    }
+    await sleep(100);
+  }
+  throw new Error('Generic focus harness did not report ready');
 }
 
 async function main() {
@@ -118,13 +296,15 @@ async function main() {
     throw new Error('CHROME_BIN must point to an installed Chrome/Chromium executable');
   }
 
-  const workdir = await mkdtemp(path.join(os.tmpdir(), 'vets-generic-error-focus-'));
+  const workdir = await mkdtemp(path.join(os.tmpdir(), 'vets-generic-error-focus-build-'));
   const entryPath = path.join(workdir, 'entry.tsx');
   const bundlePath = path.join(workdir, 'harness.js');
   const htmlPath = path.join(workdir, 'index.html');
   const errorBoundaryPath = path.resolve(PROJECT_ROOT, 'client/src/components/ErrorBoundary.tsx');
   const dappBoundaryPath = path.resolve(PROJECT_ROOT, 'client/src/components/DappLoadBoundary.tsx');
-  let server;
+  let server = null;
+  let chrome = null;
+  let client = null;
 
   try {
     const entry = `
@@ -134,7 +314,7 @@ async function main() {
       import { createRootErrorHandlers } from ${JSON.stringify(dappBoundaryPath)};
 
       function ThrowOnInitialRender() {
-        throw new Error('VETS mounted generic error focus test');
+        throw new Error(${JSON.stringify(SENSITIVE_DETAIL)});
       }
 
       const root = document.getElementById('root');
@@ -175,37 +355,72 @@ async function main() {
     );
 
     server = await startStaticServer(workdir);
-    const { stdout, stderr } = await runChrome(chromeBin, server.url);
-    const ready = attribute(stdout, 'data-ready');
-    const focusedId = attribute(stdout, 'data-focused-id');
-    const heading = attribute(stdout, 'data-heading');
-    const focusClass = attribute(stdout, 'data-focus-class');
+    chrome = await launchChromeWithRetry(chromeBin);
+    client = new CdpClient(chrome.webSocketUrl);
+    await client.connect();
 
-    if (ready !== 'true') throw new Error('Generic focus harness did not report ready');
-    if (focusedId !== EXPECTED_HEADING_ID) {
-      throw new Error(`Generic error heading was not focused: ${focusedId || 'none'}`);
+    const consoleMessages = [];
+    const exceptionMessages = [];
+    client.on('Runtime.consoleAPICalled', params => {
+      consoleMessages.push(
+        (params.args ?? []).map(arg => arg.value ?? arg.description ?? '').join(' '),
+      );
+    });
+    client.on('Runtime.exceptionThrown', params => {
+      const details = params.exceptionDetails ?? {};
+      exceptionMessages.push([
+        details.text,
+        details.exception?.description,
+        details.exception?.value,
+      ].filter(Boolean).join(' '));
+    });
+
+    await Promise.all([
+      client.send('Page.enable'),
+      client.send('Runtime.enable'),
+    ]);
+    await client.send('Page.navigate', { url: server.url });
+    const state = await waitForHarness(client);
+
+    if (state.focusedId !== EXPECTED_HEADING_ID) {
+      throw new Error(`Generic error heading was not focused: ${state.focusedId || 'none'}`);
     }
-    if (heading !== EXPECTED_HEADING) {
-      throw new Error(`Unexpected generic error heading: ${heading || 'missing'}`);
+    if (state.heading !== EXPECTED_HEADING) {
+      throw new Error(`Unexpected generic error heading: ${state.heading || 'missing'}`);
     }
-    if (!focusClass.includes('focus:outline') || focusClass.includes('focus:outline-none')) {
-      throw new Error(`Generic error heading lacks a visible focus indicator: ${focusClass}`);
+    if (!state.focusClass.includes('focus:outline') || state.focusClass.includes('focus:outline-none')) {
+      throw new Error(`Generic error heading lacks a visible focus indicator: ${state.focusClass}`);
+    }
+
+    const sanitizedMarkerObserved = consoleMessages.some(message =>
+      message.includes(SANITIZED_MARKER),
+    );
+    const sensitiveDetailAbsent = ![...consoleMessages, ...exceptionMessages].some(message =>
+      message.includes(SENSITIVE_DETAIL),
+    );
+    if (!sanitizedMarkerObserved) {
+      throw new Error(`Sanitized renderer console marker was not observed: ${JSON.stringify(consoleMessages)}`);
+    }
+    if (!sensitiveDetailAbsent) {
+      throw new Error('Sensitive generic error detail leaked through renderer diagnostics');
     }
 
     const report = {
       timestamp: new Date().toISOString(),
       result: 'PASS',
-      focusedId,
-      heading,
-      focusClass,
-      consoleWasSanitized: !stderr.includes('VETS mounted generic error focus test'),
+      focusedId: state.focusedId,
+      heading: state.heading,
+      focusClass: state.focusClass,
+      consoleMessages,
+      exceptionMessages,
+      sanitizedMarkerObserved,
+      sensitiveDetailAbsent,
     };
-    if (!report.consoleWasSanitized) {
-      throw new Error('Generic error detail leaked into the production browser console');
-    }
     await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Mounted generic error focus: PASS (${REPORT_PATH})`);
   } finally {
+    client?.close();
+    await chrome?.close().catch(() => {});
     await server?.close().catch(() => {});
     await rm(workdir, { recursive: true, force: true });
   }
@@ -217,6 +432,7 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       timestamp: new Date().toISOString(),
       result: 'FAIL',
       error: error instanceof Error ? error.message : String(error),
+      errorKind: error instanceof ChromeStartupError ? 'chrome-startup' : 'assertion-or-runtime',
     };
     await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`).catch(() => {});
     console.error('[Mounted generic error focus failed]', error);
