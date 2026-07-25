@@ -17,6 +17,25 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms));
 }
 
+class ChromeStartupError extends Error {
+  constructor(message, options = {}) {
+    super(message, options);
+    this.name = 'ChromeStartupError';
+  }
+}
+
+async function stopChromeProcess(child, userDataDir) {
+  if (child && child.exitCode === null) {
+    child.kill('SIGTERM');
+    await Promise.race([
+      new Promise(resolve => child.once('exit', resolve)),
+      sleep(5_000),
+    ]);
+    if (child.exitCode === null) child.kill('SIGKILL');
+  }
+  if (userDataDir) await rm(userDataDir, { recursive: true, force: true });
+}
+
 function contentType(filePath) {
   const extension = path.extname(filePath).toLowerCase();
   return {
@@ -154,29 +173,58 @@ async function launchChrome(chromeBin) {
   ], { stdio: ['ignore', logFd, logFd] });
   closeSync(logFd);
 
-  const portFile = path.join(userDataDir, 'DevToolsActivePort');
-  await waitForFile(portFile, child);
-  const [portText] = (await readFile(portFile, 'utf8')).trim().split(/\r?\n/);
-  const port = Number.parseInt(portText, 10);
-  if (!Number.isInteger(port)) throw new Error(`Invalid Chrome debugging port: ${portText}`);
+  try {
+    const portFile = path.join(userDataDir, 'DevToolsActivePort');
+    await waitForFile(portFile, child);
+    const [portText] = (await readFile(portFile, 'utf8')).trim().split(/\r?\n/);
+    const port = Number.parseInt(portText, 10);
+    if (!Number.isInteger(port)) {
+      throw new Error(`Invalid Chrome debugging port: ${portText}`);
+    }
 
-  const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' });
-  if (!targetResponse.ok) throw new Error(`Unable to create Chrome target: ${targetResponse.status}`);
-  const target = await targetResponse.json();
-  if (!target.webSocketDebuggerUrl) throw new Error('Chrome target lacks a DevTools WebSocket URL');
+    const targetResponse = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, {
+      method: 'PUT',
+    });
+    if (!targetResponse.ok) {
+      throw new Error(`Unable to create Chrome target: ${targetResponse.status}`);
+    }
+    const target = await targetResponse.json();
+    if (!target.webSocketDebuggerUrl) {
+      throw new Error('Chrome target lacks a DevTools WebSocket URL');
+    }
 
-  return {
-    child,
-    userDataDir,
-    chromeLog,
-    webSocketUrl: target.webSocketDebuggerUrl,
-    async close() {
-      child.kill('SIGTERM');
-      await Promise.race([new Promise(resolve => child.once('exit', resolve)), sleep(5_000)]);
-      if (child.exitCode === null) child.kill('SIGKILL');
-      await rm(userDataDir, { recursive: true, force: true });
-    },
-  };
+    return {
+      child,
+      userDataDir,
+      chromeLog,
+      webSocketUrl: target.webSocketDebuggerUrl,
+      close: () => stopChromeProcess(child, userDataDir),
+    };
+  } catch (error) {
+    const logTail = await readFile(chromeLog, 'utf8')
+      .then(value => value.slice(-2_000))
+      .catch(() => 'Chrome log unavailable');
+    await stopChromeProcess(child, userDataDir).catch(() => {});
+    throw new ChromeStartupError(
+      `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,
+      { cause: error },
+    );
+  }
+}
+
+async function launchChromeWithRetry(chromeBin, attempts = 3) {
+  let lastError = null;
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await launchChrome(chromeBin);
+    } catch (error) {
+      if (!(error instanceof ChromeStartupError)) throw error;
+      lastError = error;
+      console.error(`Chrome startup attempt ${attempt}/${attempts} failed: ${error.message}`);
+      if (attempt < attempts) await sleep(attempt * 1_000);
+    }
+  }
+  throw lastError ?? new ChromeStartupError('Chrome failed to start');
 }
 
 async function startStaticServer() {
@@ -336,11 +384,13 @@ async function main() {
   );
 
   const server = await startStaticServer();
-  const chrome = await launchChrome(chromeBin);
-  const client = new CdpClient(chrome.webSocketUrl);
+  let chrome = null;
+  let client = null;
   const consoleMessages = [];
 
   try {
+    chrome = await launchChromeWithRetry(chromeBin);
+    client = new CdpClient(chrome.webSocketUrl);
     await client.connect();
     await Promise.all([
       client.send('Page.enable'),
@@ -382,9 +432,9 @@ async function main() {
       console.log(`${scenario.name}: ${scenario.heading}; focus=${scenario.focusedId}`);
     }
   } finally {
-    client.close();
-    await chrome.close();
-    await server.close();
+    client?.close();
+    await chrome?.close().catch(() => {});
+    await server.close().catch(() => {});
   }
 }
 
