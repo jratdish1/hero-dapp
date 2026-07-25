@@ -38,7 +38,7 @@ Before any SSH connection, the workflow checks every secret by name without prin
 
 - a valid host and non-root Unix username;
 - a 32-character hexadecimal Cloudflare zone ID;
-- a private key that `ssh-keygen -y` can parse;
+- a private key that `ssh-keygen -y` can parse within a bounded timeout;
 - a `known_hosts` entry that represents `VPS1_HOST`.
 
 A missing or malformed secret fails before production mutation and identifies only the secret name or failed validation class.
@@ -57,11 +57,11 @@ Repository rules must require `test-build-scan` and `repository-safety` before m
    - `.github/workflows/security-and-quality.yml`, job `repository-safety`.
 3. Confirm the protected environment, six secrets, and restricted VPS1 account are configured.
 4. Add the exact owner command to open Issue #43.
-5. The command workflow binds correlation `issue-43-comment-<comment-id>`, validates owner/event/run provenance, rejects reuse, and calls the reusable deployment workflow in the same run.
+5. The command workflow binds correlation `issue-43-comment-<comment-id>`, validates owner/event/run provenance, records the exact authorizing CI and Security run IDs, rejects reuse, and calls the reusable deployment workflow in the same run.
 6. A designated reviewer approves the `production` environment request.
-7. Preserve the final Issue #43 receipt when posted and the immutable artifact `production-result-<correlation>` in every outcome.
+7. Preserve the final Issue #43 receipt and the immutable artifact `production-result-<correlation>` in every outcome.
 
-The immutable artifact is controlling evidence. It records whether the final Issue receipt posted successfully; a transient comment-API failure does not roll back an otherwise exact-SHA-verified application release.
+The immutable artifact is controlling evidence. It records the exact authorizing workflow runs and whether the final Issue receipt posted successfully. A transient comment-API failure does not roll back an otherwise exact-SHA-verified application release; the artifact is uploaded with `receipt_posted: false`, and the workflow then fails its final receipt gate so the release cannot be reported fully verified.
 
 ## Protected intentional rollback
 
@@ -88,9 +88,10 @@ A closed Issue #43 does not disable emergency rollback. A locked or unavailable 
 - The caller and reusable workflow share the immutable owner-comment event and run ID.
 - Manual collaborators cannot self-assert normal deployment provenance.
 - Deploy and rollback correlations are serialized and consumed once before environment access.
+- Correlation lookup paginates the complete Issue #43 ledger and fails closed if the ledger cannot be exhausted safely.
+- A correlation-consumption POST is attempted once; if its response is ambiguous, the workflow re-reads the complete ledger and accepts exactly one matching record rather than issuing a duplicate POST.
 - Production mutations are serialized by GitHub concurrency and an independent VPS1 `flock` lock.
 - GitHub API calls use bounded connection/overall timeouts and bounded retries where retrying is safe.
-- Correlation-consumption POST is a single fail-closed request to avoid duplicate non-idempotent authorization records.
 
 ## Pre-production evidence gates
 
@@ -103,6 +104,7 @@ Before any production secret is available, authorization verifies:
 - owner-only workflow dispatch for rollback;
 - unused deploy/rollback correlation;
 - exact target `push` CI and repository-safety workflow/job success;
+- preservation of the exact authorizing CI and Security workflow run IDs in the consumption record, final Issue receipt, and immutable result;
 - ancestor relationship for intentional rollback.
 
 ## VPS1 mutation gates
@@ -121,7 +123,7 @@ The protected job:
 - activates pnpm `10.34.4`, rejects `package-lock.json`, and uses frozen installation;
 - removes stale build output, rebuilds, reloads only `hero-dapp`, and verifies Git/PM2/public health SHA identity.
 
-Immediately before the first production mutation, the remote script emits `VETS_MUTATION_STARTED=true`. The runner records this marker. If the SSH session, runner, or terminal result is interrupted after the marker and inline rollback is not verified successful, the separate bounded rollback path restores the previous SHA. A pre-mutation failure does not invoke application rollback.
+Immediately before the first production mutation, the remote script emits `VETS_MUTATION_STARTED=true`. The runner records this marker. If the SSH session, runner, or terminal result is interrupted after the marker and inline rollback is not verified successful, the separate bounded rollback path restores the previous SHA. A pre-mutation failure does not invoke application rollback. The protected job reserves enough time for the bounded deployment attempt, the full separate rollback window, evidence capture, and cleanup.
 
 ## Cloudflare and public verification
 
@@ -149,10 +151,12 @@ The immutable result records:
 - inline rollback attempted/succeeded/failed;
 - post-deploy rollback attempted/succeeded/failed;
 - rollback purge outcome;
+- exact authorizing CI and Security workflow run IDs;
+- application-state verification before receipt publication;
 - receipt-posted boolean and receipt step outcome;
-- final verified boolean.
+- final verified boolean, which requires both exact application state and the required Issue receipt.
 
-A transient Issue-comment failure does not trigger application rollback and does not erase exact production truth; it is recorded as `receipt_posted: false` in the mandatory artifact.
+A transient Issue-comment failure does not trigger application rollback and does not erase exact production truth. It is recorded as `receipt_posted: false` in the mandatory artifact, the artifact is uploaded, and the workflow concludes failure at the final receipt gate.
 
 ## Prohibited paths
 
@@ -165,7 +169,7 @@ A transient Issue-comment failure does not trigger application rollback and does
 - No `git pull`, npm lockfile, npm install/build path, legacy deploy script, or runtime deploy API.
 - No Cloudflare global API key.
 - No bypass of environment approval, exact-SHA evidence, correlation consumption, writer locking, rollback, purge validation, or public verification.
-- No claim of success from a missing artifact, unknown final SHA, or false `verified` state.
+- No claim of success from a missing artifact, missing Issue receipt, unknown final SHA, or false `verified` state.
 
 ## Post-release independent verification
 
@@ -185,4 +189,4 @@ curl --fail --silent --show-error \
   "https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D"
 ```
 
-Record route results, TLS state, browser/mobile checks, Cloudflare cache state, requested/previous/final SHAs, workflow run, receipt status, artifact name, and artifact digest.
+Record route results, TLS state, browser/mobile checks, Cloudflare cache state, requested/previous/final SHAs, authorizing CI/Security run IDs, workflow run, receipt status, artifact name, and artifact digest.
