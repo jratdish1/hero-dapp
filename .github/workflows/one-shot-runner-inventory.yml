@@ -1,0 +1,54 @@
+name: One-shot repository runner inventory
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  inventory:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Collect runner metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p runner-inventory
+          set +e
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runners" 2> runner-inventory/error.txt)"
+          status=$?
+          set -e
+          if [ "$status" -eq 0 ]; then
+            printf '%s\n' "$response" > runner-inventory/runners.json
+            jq '{total_count, runners:[.runners[] | {id,name,os,status,busy,labels:[.labels[].name]}]}' \
+              runner-inventory/runners.json > runner-inventory/summary.json
+          else
+            jq -n --argjson status "$status" --rawfile error runner-inventory/error.txt \
+              '{available:false,curl_status:$status,error:$error}' > runner-inventory/summary.json
+          fi
+          jq . runner-inventory/summary.json
+
+      - name: Upload runner inventory
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: repository-runner-inventory-${{ github.event.pull_request.head.sha }}
+          path: runner-inventory
+          retention-days: 7
+          if-no-files-found: error
