@@ -1,0 +1,212 @@
+name: One-shot HeroBase deployment monitor
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
+      CORRELATION_ID: issue-43-comment-5079752085
+      TRACKER_ISSUE: '43'
+      REPORT_PR: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Collect current deployment state
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          api_get() {
+            local url="$1" response=""
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$url")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          workflow_id="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/vets-production-command.yml" \
+            | jq -r '.id')"
+          [[ "$workflow_id" =~ ^[0-9]+$ ]]
+
+          runs="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?event=issue_comment&branch=main&per_page=100")"
+          run="$(jq -c --arg sha "$TARGET_SHA" '
+            [.workflow_runs[] | select(
+              .head_sha == $sha and
+              .head_branch == "main" and
+              .event == "issue_comment"
+            )] | sort_by(.id) | last // empty
+          ' <<<"$runs")"
+
+          run_id=not-found
+          run_status=not-found
+          run_conclusion=not-found
+          run_attempt=not-found
+          run_url=not-found
+          jobs_json='[]'
+          pending_json='[]'
+
+          if [ -n "$run" ]; then
+            run_id="$(jq -r '.id' <<<"$run")"
+            run_status="$(jq -r '.status' <<<"$run")"
+            run_conclusion="$(jq -r '.conclusion // "pending"' <<<"$run")"
+            run_attempt="$(jq -r '.run_attempt' <<<"$run")"
+            run_url="$(jq -r '.html_url' <<<"$run")"
+            jobs_json="$(api_get \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+              | jq '[.jobs[] | {
+                  id,
+                  name,
+                  status,
+                  conclusion,
+                  steps:[.steps[]? | {name,status,conclusion}]
+                }]')"
+            pending_json="$(api_get \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/pending_deployments" \
+              | jq '[.[] | {
+                  environment:.environment.name,
+                  wait_timer,
+                  current_user_can_approve,
+                  reviewers
+                }]')"
+          fi
+
+          comments="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100")"
+          ledger_json="$(jq --arg correlation "$CORRELATION_ID" --arg sha "$TARGET_SHA" '
+            [.[] | select(
+              (.body | contains($correlation)) or
+              (.body | contains($sha))
+            ) | {
+              id,
+              author:.user.login,
+              created_at,
+              first_line:(.body | split("\n")[0]),
+              body
+            }]
+          ' <<<"$comments")"
+
+          ci_workflow_id="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" | jq -r '.id')"
+          security_workflow_id="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/security-and-quality.yml" | jq -r '.id')"
+          ci_run="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$ci_workflow_id/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100" \
+            | jq -c --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha==$sha and .run_attempt==1)] | sort_by(.id) | last // {}')"
+          security_run="$(api_get \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$security_workflow_id/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100" \
+            | jq -c --arg sha "$TARGET_SHA" '[.workflow_runs[] | select(.head_sha==$sha and .run_attempt==1)] | sort_by(.id) | last // {}')"
+
+          jq -n \
+            --arg target_sha "$TARGET_SHA" \
+            --arg correlation_id "$CORRELATION_ID" \
+            --arg run_id "$run_id" \
+            --arg run_status "$run_status" \
+            --arg run_conclusion "$run_conclusion" \
+            --arg run_attempt "$run_attempt" \
+            --arg run_url "$run_url" \
+            --argjson jobs "$jobs_json" \
+            --argjson pending_deployments "$pending_json" \
+            --argjson ledger "$ledger_json" \
+            --argjson ci_run "$ci_run" \
+            --argjson security_run "$security_run" \
+            '{
+              target_sha:$target_sha,
+              correlation_id:$correlation_id,
+              owner_command_run:{
+                id:$run_id,
+                status:$run_status,
+                conclusion:$run_conclusion,
+                attempt:$run_attempt,
+                url:$run_url,
+                jobs:$jobs,
+                pending_deployments:$pending_deployments
+              },
+              exact_main_ci:$ci_run,
+              exact_main_security:$security_run,
+              issue_43_ledger:$ledger,
+              observed_at:(now|todateiso8601)
+            }' > herobase-deploy-monitor.json
+
+          jobs_text="$(jq -r '
+            if length == 0 then "- no jobs found"
+            else .[] | "- " + .name + ": " + .status + " / " + (.conclusion // "pending")
+            end
+          ' <<<"$jobs_json")"
+          pending_text="$(jq -r '
+            if length == 0 then "- none"
+            else .[] | "- " + .environment + ": current_user_can_approve=" + (.current_user_can_approve|tostring)
+            end
+          ' <<<"$pending_json")"
+          ledger_text="$(jq -r '
+            if length == 0 then "- no matching Issue #43 ledger records"
+            else .[] | "- comment " + (.id|tostring) + " by " + .author + ": " + .first_line
+            end
+          ' <<<"$ledger_json")"
+          ci_text="$(jq -r 'if .id then (.id|tostring) + " / " + .status + " / " + (.conclusion // "pending") + " / attempt " + (.run_attempt|tostring) else "not-found" end' <<<"$ci_run")"
+          security_text="$(jq -r 'if .id then (.id|tostring) + " / " + .status + " / " + (.conclusion // "pending") + " / attempt " + (.run_attempt|tostring) else "not-found" end' <<<"$security_run")"
+
+          body="$(cat <<EOF_BODY
+          VETS_DEPLOY_MONITOR v2
+
+          target_sha: $TARGET_SHA
+          correlation_id: $CORRELATION_ID
+          owner_workflow_run_id: $run_id
+          owner_workflow_status: $run_status
+          owner_workflow_conclusion: $run_conclusion
+          owner_workflow_attempt: $run_attempt
+          owner_workflow_url: $run_url
+          exact_main_ci: $ci_text
+          exact_main_security: $security_text
+
+          jobs:
+          $jobs_text
+
+          pending_production_approvals:
+          $pending_text
+
+          issue_43_ledger:
+          $ledger_text
+          EOF_BODY
+          )"
+          payload="$(jq -nc --arg body "$body" '{body:$body}')"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$REPORT_PR/comments" \
+            --data "$payload" >/dev/null
+
+      - name: Upload monitor receipt
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-deploy-monitor-${{ github.event.pull_request.head.sha }}
+          path: herobase-deploy-monitor.json
+          retention-days: 7
+          if-no-files-found: error
