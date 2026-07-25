@@ -123,6 +123,30 @@ describe("public bootstrap resilience", () => {
     }
   });
 
+  it("normalizes values whose JSON and string conversion both throw", () => {
+    const hostile = {
+      toJSON() {
+        throw new Error("toJSON denied");
+      },
+      toString() {
+        throw new Error("toString denied");
+      },
+      [Symbol.toPrimitive]() {
+        throw new Error("primitive conversion denied");
+      },
+    };
+
+    expect(() => normalizeThrownValue(hostile)).not.toThrow();
+    const normalized = normalizeThrownValue(hostile);
+    expect(normalized).toBeInstanceOf(Error);
+    expect(normalized.message).toContain("[unconvertible value]");
+
+    const outerState = DappLoadBoundary.getDerivedStateFromError(hostile);
+    const innerState = ErrorBoundary.getDerivedStateFromError(hostile);
+    expect(outerState.hasError).toBe(true);
+    expect(innerState.hasError).toBe(true);
+  });
+
   it("sanitizes every actual root handler in production", () => {
     const logger = vi.fn();
     const error = new Error(
