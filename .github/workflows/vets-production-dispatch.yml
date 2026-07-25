@@ -1,0 +1,260 @@
+name: VETS one-shot production dispatch
+
+on:
+  push:
+    branches:
+      - perf/herobase-public-bootstrap-20260724
+
+permissions:
+  actions: write
+  checks: read
+  contents: read
+  issues: write
+
+concurrency:
+  group: vets-production-dispatch-ffabe446
+  cancel-in-progress: false
+
+jobs:
+  dispatch-and-monitor:
+    if: github.event.head_commit.message == 'ops: dispatch audited production release ffabe446'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      TARGET_SHA: ffabe4462f8e2e807a41e1d5b327d3ee49991b32
+      TARGET_WORKFLOW: deploy.yml
+      TRACKER_ISSUE: '43'
+      EXPECTED_SOURCE_BRANCH: perf/herobase-public-bootstrap-20260724
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Validate one-shot authorization
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = "refs/heads/$EXPECTED_SOURCE_BRANCH"
+          test "${{ github.event.head_commit.message }}" = "ops: dispatch audited production release ffabe446"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+
+      - name: Wait for exact-main release gates
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          main_sha="$(curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \
+            | jq -r '.object.sha')"
+          test "$main_sha" = "$TARGET_SHA"
+
+          for attempt in $(seq 1 80); do
+            response="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/commits/$TARGET_SHA/check-runs?per_page=100")"
+
+            all_green=true
+            for required_check in test-build-scan repository-safety; do
+              if ! jq -e --arg name "$required_check" --arg sha "$TARGET_SHA" '
+                [.check_runs[] | select(
+                  .name == $name and
+                  .head_sha == $sha and
+                  .app.slug == "github-actions"
+                )]
+                | if length == 0 then false
+                  else (max_by(.id) | .status == "completed" and .conclusion == "success")
+                  end
+              ' <<<"$response" >/dev/null; then
+                all_green=false
+              fi
+            done
+
+            if [ "$all_green" = true ]; then
+              echo "Exact-main release checks are green for $TARGET_SHA"
+              exit 0
+            fi
+
+            echo "Release checks not green yet (attempt $attempt/80)"
+            sleep 15
+          done
+
+          echo "Timed out waiting for exact-main release checks" >&2
+          exit 70
+
+      - name: Dispatch protected VPS1 deployment
+        id: dispatch
+        shell: bash
+        run: |
+          set -euo pipefail
+          dispatch_epoch="$(date -u +%s)"
+          payload="$(jq -nc --arg sha "$TARGET_SHA" '{ref:"main",inputs:{commit_sha:$sha,confirmation:"DEPLOY"}}')"
+
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/dispatches" \
+            --data "$payload"
+
+          echo "dispatch_epoch=$dispatch_epoch" >> "$GITHUB_OUTPUT"
+          echo "Protected deployment dispatched for $TARGET_SHA"
+
+      - name: Locate protected deployment run
+        id: locate
+        shell: bash
+        env:
+          DISPATCH_EPOCH: ${{ steps.dispatch.outputs.dispatch_epoch }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 60); do
+            response="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$TARGET_WORKFLOW/runs?event=workflow_dispatch&branch=main&per_page=20")"
+
+            run_id="$(jq -r --arg sha "$TARGET_SHA" --argjson epoch "$DISPATCH_EPOCH" '
+              [.workflow_runs[] | select(
+                .head_sha == $sha and
+                ((.created_at | fromdateiso8601) >= ($epoch - 5))
+              )] | sort_by(.id) | last | .id // empty
+            ' <<<"$response")"
+
+            if [ -n "$run_id" ]; then
+              run_url="$(jq -r --argjson id "$run_id" '.workflow_runs[] | select(.id == $id) | .html_url' <<<"$response")"
+              echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+              echo "run_url=$run_url" >> "$GITHUB_OUTPUT"
+              echo "Located deployment run: $run_url"
+              exit 0
+            fi
+
+            sleep 10
+          done
+
+          echo "Unable to locate the dispatched deployment run" >&2
+          exit 71
+
+      - name: Monitor deployment to completion
+        id: monitor
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.locate.outputs.run_id }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 180); do
+            response="$(curl --fail-with-body --silent --show-error \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID")"
+
+            status="$(jq -r '.status' <<<"$response")"
+            conclusion="$(jq -r '.conclusion // "pending"' <<<"$response")"
+            echo "Deployment status=$status conclusion=$conclusion attempt=$attempt/180"
+
+            if [ "$status" = "completed" ]; then
+              echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+
+            sleep 15
+          done
+
+          echo "Timed out monitoring deployment run $RUN_ID" >&2
+          exit 72
+
+      - name: Collect and verify deployment receipt
+        id: receipt
+        if: always() && steps.locate.outputs.run_id != ''
+        shell: bash
+        env:
+          RUN_ID: ${{ steps.locate.outputs.run_id }}
+          RUN_URL: ${{ steps.locate.outputs.run_url }}
+          RUN_CONCLUSION: ${{ steps.monitor.outputs.conclusion }}
+        run: |
+          set -euo pipefail
+
+          curl --fail-with-body --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/jobs?per_page=100" \
+            > deployment-jobs.json
+
+          purge_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Purge Cloudflare cache" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
+          verify_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Verify public deployment after purge" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
+          deploy_ok="$(jq -r '[.jobs[].steps[]? | select(.name == "Deploy exact merged commit with frozen pnpm dependencies" and .conclusion == "success")] | length > 0' deployment-jobs.json)"
+
+          {
+            echo "## VETS production deployment receipt"
+            echo
+            echo "- Target SHA: \`$TARGET_SHA\`"
+            echo "- Deployment run: $RUN_URL"
+            echo "- Run ID: \`$RUN_ID\`"
+            echo "- Run conclusion: **$RUN_CONCLUSION**"
+            echo "- Exact-SHA application deploy: **$deploy_ok**"
+            echo "- Cloudflare purge step: **$purge_ok**"
+            echo "- Public post-purge verification: **$verify_ok**"
+            echo
+            echo "### Job and step conclusions"
+            jq -r '.jobs[] | "- Job: **\(.name)** — \(.status) / \(.conclusion)\n" + ((.steps // []) | map("  - \(.name): \(.status) / \(.conclusion)") | join("\n"))' deployment-jobs.json
+          } > deployment-receipt.md
+
+          cat deployment-receipt.md
+
+          if [ "$RUN_CONCLUSION" = "success" ] && [ "$deploy_ok" = true ] && [ "$purge_ok" = true ] && [ "$verify_ok" = true ]; then
+            echo "verified=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "verified=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload deployment receipt
+        if: always() && steps.locate.outputs.run_id != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-deployment-receipt-${{ env.TARGET_SHA }}
+          path: |
+            deployment-receipt.md
+            deployment-jobs.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Post deployment receipt to incident tracker
+        if: always()
+        shell: bash
+        env:
+          RUN_URL: ${{ steps.locate.outputs.run_url }}
+          RUN_ID: ${{ steps.locate.outputs.run_id }}
+          RUN_CONCLUSION: ${{ steps.monitor.outputs.conclusion }}
+          VERIFIED: ${{ steps.receipt.outputs.verified }}
+        run: |
+          set -euo pipefail
+
+          if [ -f deployment-receipt.md ]; then
+            body="$(cat deployment-receipt.md)"
+          else
+            body="## VETS production deployment receipt\n\n- Target SHA: \`$TARGET_SHA\`\n- Deployment run: ${RUN_URL:-not located}\n- Run ID: \`${RUN_ID:-not located}\`\n- Run conclusion: **${RUN_CONCLUSION:-unknown}**\n- Verified: **${VERIFIED:-false}**\n\nThe orchestration lane did not obtain a complete deployment receipt."
+          fi
+
+          payload="$(jq -nc --arg body "$body" '{body:$body}')"
+          curl --fail-with-body --silent --show-error \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+            --data "$payload" >/dev/null
+
+      - name: Enforce verified deployment
+        if: always()
+        shell: bash
+        env:
+          VERIFIED: ${{ steps.receipt.outputs.verified }}
+        run: |
+          test "$VERIFIED" = "true"
