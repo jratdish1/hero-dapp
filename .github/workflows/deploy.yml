@@ -79,6 +79,8 @@ jobs:
     outputs:
       consumption_comment_id: ${{ steps.authorization.outputs.consumption_comment_id }}
       authorization_mode: ${{ steps.authorization.outputs.authorization_mode }}
+      ci_run_id: ${{ steps.authorization.outputs.ci_run_id }}
+      security_run_id: ${{ steps.authorization.outputs.security_run_id }}
     env:
       GH_TOKEN: ${{ github.token }}
       DEPLOY_SHA: ${{ inputs.commit_sha }}
@@ -135,15 +137,21 @@ jobs:
           }
 
           collect_issue_comments() {
-            local page response
+            local page=1 response count exhausted=false
             : > "$RUNNER_TEMP/issue-comments.jsonl"
-            for page in $(seq 1 20); do
+            while [ "$page" -le 200 ]; do
               response="$(api_get \
                 "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100&page=$page")"
               jq -c '.' <<<"$response" >> "$RUNNER_TEMP/issue-comments.jsonl"
-              [ "$(jq -r 'length' <<<"$response")" -lt 100 ] && break
+              count="$(jq -r 'length' <<<"$response")"
+              if [ "$count" -lt 100 ]; then
+                exhausted=true
+                break
+              fi
+              page=$((page + 1))
             done
-            jq -s 'add' "$RUNNER_TEMP/issue-comments.jsonl"
+            test "$exhausted" = "true"
+            jq -s 'add // []' "$RUNNER_TEMP/issue-comments.jsonl"
           }
 
           require_workflow_run() {
@@ -173,8 +181,13 @@ jobs:
                 else (max_by(.id) | .status == "completed" and .conclusion == "success")
                 end
             ' <<<"$jobs" >/dev/null
+            printf '%s' "$run_id"
           }
 
+          ci_run_id="$(require_workflow_run ci.yml test-build-scan)"
+          security_run_id="$(require_workflow_run security-and-quality.yml repository-safety)"
+          [[ "$ci_run_id" =~ ^[0-9]+$ ]]
+          [[ "$security_run_id" =~ ^[0-9]+$ ]]
           all_comments="$(collect_issue_comments)"
 
           case "$DEPLOY_OPERATION" in
@@ -215,6 +228,8 @@ jobs:
                 "correlation_id: $DEPLOY_CORRELATION_ID" \
                 "command_comment_id: $COMMAND_COMMENT_ID" \
                 "command_run_id: $COMMAND_RUN_ID" \
+                "ci_run_id: $ci_run_id" \
+                "security_run_id: $security_run_id" \
                 "target_sha: $DEPLOY_SHA" \
                 'state: consumed'
               authorization_mode="owner-issue-comment-reusable-workflow"
@@ -243,6 +258,8 @@ jobs:
                 'VETS_ROLLBACK_AUTHORIZATION v1' \
                 "correlation_id: $DEPLOY_CORRELATION_ID" \
                 "deployment_run_id: $GITHUB_RUN_ID" \
+                "ci_run_id: $ci_run_id" \
+                "security_run_id: $security_run_id" \
                 "target_sha: $DEPLOY_SHA" \
                 "authorized_by: $GITHUB_ACTOR" \
                 'state: consumed'
@@ -253,16 +270,61 @@ jobs:
               ;;
           esac
 
-          require_workflow_run ci.yml test-build-scan
-          require_workflow_run security-and-quality.yml repository-safety
+          exact_marker_matches() {
+            local comments="$1"
+            jq -c --arg body "$consumption_body" '[.[] | select(
+              .user.login == "github-actions[bot]" and .body == $body
+            )]' <<<"$comments"
+          }
 
+          wait_for_exact_marker() {
+            local attempts="$1" comments matches count
+            for attempt in $(seq 1 "$attempts"); do
+              comments="$(collect_issue_comments)"
+              matches="$(exact_marker_matches "$comments")"
+              count="$(jq -r 'length' <<<"$matches")"
+              if [ "$count" = "1" ]; then
+                jq -c '.[0]' <<<"$matches"
+                return 0
+              fi
+              if [ "$count" -gt 1 ]; then
+                echo "Duplicate exact authorization markers found" >&2
+                return 2
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          initial_matches="$(exact_marker_matches "$all_comments")"
+          test "$(jq -r 'length' <<<"$initial_matches")" = "0"
+          payload="$(jq -nc --arg body "$consumption_body" '{body:$body}')"
+          set +e
           response="$(api_post_once \
             "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
-            "$(jq -nc --arg body "$consumption_body" '{body:$body}')")"
-          consumption_comment_id="$(jq -r '.id' <<<"$response")"
+            "$payload")"
+          first_status=$?
+          set -e
+          if [ "$first_status" -ne 0 ]; then
+            if ! marker="$(wait_for_exact_marker 3)"; then
+              set +e
+              api_post_once \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+                "$payload" >/dev/null
+              retry_status=$?
+              set -e
+              if [ "$retry_status" -ne 0 ]; then
+                echo "Authorization marker retry response was ambiguous; reconciling from Issue evidence" >&2
+              fi
+            fi
+          fi
+          marker="$(wait_for_exact_marker 5)"
+          consumption_comment_id="$(jq -r '.id' <<<"$marker")"
           [[ "$consumption_comment_id" =~ ^[0-9]+$ ]]
           echo "consumption_comment_id=$consumption_comment_id" >> "$GITHUB_OUTPUT"
           echo "authorization_mode=$authorization_mode" >> "$GITHUB_OUTPUT"
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "security_run_id=$security_run_id" >> "$GITHUB_OUTPUT"
 
   deploy:
     name: Protected production mutation
@@ -283,6 +345,8 @@ jobs:
       DEPLOY_OPERATION: ${{ inputs.operation }}
       AUTHORIZATION_MODE: ${{ needs.authorize.outputs.authorization_mode }}
       CONSUMPTION_COMMENT_ID: ${{ needs.authorize.outputs.consumption_comment_id }}
+      CI_RUN_ID: ${{ needs.authorize.outputs.ci_run_id }}
+      SECURITY_RUN_ID: ${{ needs.authorize.outputs.security_run_id }}
       TRACKER_ISSUE: '43'
 
     steps:
@@ -293,6 +357,8 @@ jobs:
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
           [[ "$DEPLOY_CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
           [[ "$CONSUMPTION_COMMENT_ID" =~ ^[0-9]+$ ]]
+          [[ "$CI_RUN_ID" =~ ^[0-9]+$ ]]
+          [[ "$SECURITY_RUN_ID" =~ ^[0-9]+$ ]]
           case "$AUTHORIZATION_MODE" in
             owner-issue-comment-reusable-workflow|owner-intentional-rollback) ;;
             *) exit 64 ;;
@@ -753,6 +819,8 @@ jobs:
           - Operation: **$DEPLOY_OPERATION**
           - Authorization mode: **$AUTHORIZATION_MODE**
           - Consumption comment: \`$CONSUMPTION_COMMENT_ID\`
+          - Authorized CI run: \`$CI_RUN_ID\`
+          - Authorized Security run: \`$SECURITY_RUN_ID\`
           - Mutation started: **${MUTATION_STARTED:-false}**
           - Deployment outcome: **$DEPLOY_OUTCOME**
           - Cloudflare purge outcome: **$PURGE_OUTCOME**
@@ -816,6 +884,8 @@ jobs:
             --arg operation "$DEPLOY_OPERATION" \
             --arg authorization_mode "$AUTHORIZATION_MODE" \
             --arg consumption_comment_id "$CONSUMPTION_COMMENT_ID" \
+            --arg ci_run_id "$CI_RUN_ID" \
+            --arg security_run_id "$SECURITY_RUN_ID" \
             --arg deploy_outcome "$DEPLOY_OUTCOME" \
             --arg purge_outcome "$PURGE_OUTCOME" \
             --arg verify_outcome "$VERIFY_OUTCOME" \
@@ -839,6 +909,8 @@ jobs:
               operation:$operation,
               authorization_mode:$authorization_mode,
               consumption_comment_id:$consumption_comment_id,
+              ci_run_id:$ci_run_id,
+              security_run_id:$security_run_id,
               mutation_started:$mutation_started,
               deploy_outcome:$deploy_outcome,
               purge_outcome:$purge_outcome,
@@ -870,9 +942,12 @@ jobs:
         shell: bash
         run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
 
-      - name: Enforce verified production state
+      - name: Enforce verified production state and durable receipt
         if: always()
         env:
           VERIFIED: ${{ steps.state.outputs.verified }}
+          RECEIPT_POSTED: ${{ steps.receipt.outputs.posted }}
         shell: bash
-        run: test "$VERIFIED" = "true"
+        run: |
+          test "$VERIFIED" = "true"
+          test "$RECEIPT_POSTED" = "true"

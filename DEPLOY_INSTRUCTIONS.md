@@ -61,7 +61,7 @@ Repository rules must require `test-build-scan` and `repository-safety` before m
 6. A designated reviewer approves the `production` environment request.
 7. Preserve the final Issue #43 receipt when posted and the immutable artifact `production-result-<correlation>` in every outcome.
 
-The immutable artifact is controlling evidence. It records whether the final Issue receipt posted successfully; a transient comment-API failure does not roll back an otherwise exact-SHA-verified application release.
+The immutable artifact is controlling evidence. It records whether the final Issue receipt posted successfully; a transient comment-API failure does not roll back an otherwise exact-SHA-verified application release, but the workflow remains incomplete until the final receipt is durably posted.
 
 ## Protected intentional rollback
 
@@ -90,7 +90,9 @@ A closed Issue #43 does not disable emergency rollback. A locked or unavailable 
 - Deploy and rollback correlations are serialized and consumed once before environment access.
 - Production mutations are serialized by GitHub concurrency and an independent VPS1 `flock` lock.
 - GitHub API calls use bounded connection/overall timeouts and bounded retries where retrying is safe.
-- Correlation-consumption POST is a single fail-closed request to avoid duplicate non-idempotent authorization records.
+- Issue #43 comments are paginated to exhaustion; reaching the bounded safety ceiling fails closed instead of silently truncating correlation evidence.
+- Authorization-marker creation reconciles an accepted-but-response-lost POST from exact bot-authored Issue evidence before any bounded retry, and requires exactly one matching marker.
+- Deploy and rollback correlations remain single-use and fail closed on duplicate exact authorization markers.
 
 ## Pre-production evidence gates
 
@@ -103,6 +105,7 @@ Before any production secret is available, authorization verifies:
 - owner-only workflow dispatch for rollback;
 - unused deploy/rollback correlation;
 - exact target `push` CI and repository-safety workflow/job success;
+- preservation of the exact selected CI and Security workflow run IDs in the authorization marker, immutable result, and final receipt;
 - ancestor relationship for intentional rollback.
 
 ## VPS1 mutation gates
@@ -150,9 +153,10 @@ The immutable result records:
 - post-deploy rollback attempted/succeeded/failed;
 - rollback purge outcome;
 - receipt-posted boolean and receipt step outcome;
+- exact CI and Security authorization workflow run IDs;
 - final verified boolean.
 
-A transient Issue-comment failure does not trigger application rollback and does not erase exact production truth; it is recorded as `receipt_posted: false` in the mandatory artifact.
+A transient Issue-comment failure does not trigger application rollback and does not erase exact production truth; it is recorded as `receipt_posted: false` in the mandatory artifact, and final workflow enforcement remains incomplete until receipt delivery succeeds.
 
 ## Prohibited paths
 
