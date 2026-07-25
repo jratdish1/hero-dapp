@@ -88,7 +88,7 @@ A closed Issue #43 does not disable emergency rollback. A locked or unavailable 
 - The caller and reusable workflow share the immutable owner-comment event and run ID.
 - Manual collaborators cannot self-assert normal deployment provenance.
 - Deploy and rollback correlations are serialized and consumed once before environment access.
-- Correlation lookup paginates the complete Issue #43 ledger and fails closed if the ledger cannot be exhausted safely.
+- Both the owner-command preflight and reusable authorization paginate the complete Issue #43 ledger and fail closed if the ledger cannot be exhausted safely.
 - A correlation-consumption POST is attempted once; if its response is ambiguous, the workflow re-reads the complete ledger and accepts exactly one matching record rather than issuing a duplicate POST.
 - Production mutations are serialized by GitHub concurrency and an independent VPS1 `flock` lock.
 - GitHub API calls use bounded connection/overall timeouts and bounded retries where retrying is safe.
@@ -104,6 +104,7 @@ Before any production secret is available, authorization verifies:
 - owner-only workflow dispatch for rollback;
 - unused deploy/rollback correlation;
 - exact target `push` CI and repository-safety workflow/job success;
+- only first-attempt CI and Security workflow runs qualify; successful reruns never authorize production;
 - preservation of the exact authorizing CI and Security workflow run IDs in the consumption record, final Issue receipt, and immutable result;
 - ancestor relationship for intentional rollback.
 
