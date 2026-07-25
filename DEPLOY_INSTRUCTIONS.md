@@ -10,11 +10,11 @@ A normal release begins only with a new owner-authored comment on repository Iss
 VETS DEPLOY <lowercase-40-character-current-main-SHA>
 ```
 
-The owner-command workflow validates that immutable comment, the exact current `main` SHA, and successful exact-SHA `push` runs for the required CI and repository-safety jobs. It then calls the reusable **Deploy to VPS1** workflow within the same GitHub Actions run.
+The owner-command workflow validates the immutable comment, current `main`, exact-SHA push CI/security evidence, first-attempt owner identity, and an unused correlation. It then calls the reusable **Deploy to VPS1** workflow in the same GitHub Actions run and event context.
 
-The normal release path is not manually dispatchable. The reusable workflow rejects operation `deploy` unless its caller context is the owner-authored Issue #43 workflow run. This removes the detached-child authorization race and prevents a collaborator from inventing a normal-deploy correlation.
+Normal deployment is not manually dispatchable. Manual workflow dispatch exists only for a separately owner-authorized intentional rollback.
 
-Production mutation remains blocked by the protected `production` environment and its human approval rules.
+Production mutation remains behind the protected `production` environment and its required human approval.
 
 ## Required GitHub configuration
 
@@ -23,7 +23,7 @@ The `production` environment must:
 - require designated human reviewers;
 - allow deployments only from `main`;
 - prevent self-approval where the repository plan supports that control;
-- expose only the environment-scoped production secrets listed below.
+- expose only the six environment-scoped production secrets below.
 
 Required environment secrets:
 
@@ -34,161 +34,142 @@ Required environment secrets:
 - `CF_API_TOKEN`
 - `CF_ZONE_ID`
 
-`VPS1_USER` must be a validated non-root account. Before first use, independently verify that it:
+Before any SSH connection, the workflow checks every secret by name without printing its value. It also requires:
 
-- owns `/var/www/hero-dapp`, which must be a real directory rather than a symlink;
-- can fetch only the accepted `jratdish1/hero-dapp` Git origin;
-- can use Git, Node, Corepack, PM2, curl, and `flock`;
-- can manage the `hero-dapp` PM2 process but not unrelated services;
-- does not have unrestricted passwordless sudo;
-- cannot modify unrelated users, firewall rules, DNS, credentials, or infrastructure.
+- a valid host and non-root Unix username;
+- a 32-character hexadecimal Cloudflare zone ID;
+- a private key that `ssh-keygen -y` can parse;
+- a `known_hosts` entry that represents `VPS1_HOST`.
 
-The Cloudflare credential must be a scoped API token rather than a global API key.
+A missing or malformed secret fails before production mutation and identifies only the secret name or failed validation class.
 
-Repository rules must require the `test-build-scan` and `repository-safety` checks before merge.
+`VPS1_USER` must own the real, non-symlinked `/var/www/hero-dapp` directory, fetch only the accepted `jratdish1/hero-dapp` origin, use Git/Node/Corepack/PM2/curl/`flock`, manage only the `hero-dapp` PM2 process, and have no unrestricted passwordless sudo or unrelated infrastructure authority.
+
+The Cloudflare credential must be a scoped API token, never a global API key.
+
+Repository rules must require `test-build-scan` and `repository-safety` before merge.
 
 ## Normal release procedure
 
 1. Confirm the intended SHA is the current tip of `main`.
-2. Confirm exact-SHA `push` runs on `main` succeeded for:
-   - `.github/workflows/ci.yml`, required job `test-build-scan`;
-   - `.github/workflows/security-and-quality.yml`, required job `repository-safety`.
-3. Confirm the protected `production` environment and non-root VPS1 account are still correctly configured.
-4. Add a new owner-authored comment to Issue #43 exactly matching:
+2. Confirm exact-SHA `push` runs on branch `main` passed for:
+   - `.github/workflows/ci.yml`, job `test-build-scan`;
+   - `.github/workflows/security-and-quality.yml`, job `repository-safety`.
+3. Confirm the protected environment, six secrets, and restricted VPS1 account are configured.
+4. Add the exact owner command to open Issue #43.
+5. The command workflow binds correlation `issue-43-comment-<comment-id>`, validates owner/event/run provenance, rejects reuse, and calls the reusable deployment workflow in the same run.
+6. A designated reviewer approves the `production` environment request.
+7. Preserve the final Issue #43 receipt when posted and the immutable artifact `production-result-<correlation>` in every outcome.
 
-   ```text
-   VETS DEPLOY <lowercase-40-character-current-main-SHA>
-   ```
-
-5. The owner-command workflow:
-   - binds the correlation to the immutable Issue #43 comment ID;
-   - verifies the comment author and `OWNER` association;
-   - verifies the workflow run is first-attempt, owner-triggered, and based on the exact target SHA on `main`;
-   - checks the exact historical SHA rather than relying on a latest-runs window;
-   - rejects a previously consumed correlation;
-   - calls the reusable deployment workflow directly in the same Actions run.
-6. A designated reviewer approves the protected `production` environment request.
-7. Require the final Issue #43 receipt and immutable artifact `production-result-<correlation>` to record:
-   - requested SHA;
-   - previous active SHA;
-   - final active SHA;
-   - deployment outcome;
-   - Cloudflare purge outcome;
-   - public exact-SHA verification outcome;
-   - inline rollback attempted/succeeded/failed;
-   - post-deploy rollback attempted/succeeded/failed;
-   - final `verified` state.
-
-A successful workflow process or PM2 PID is not sufficient. The result must prove the exact requested release is active publicly and that no rollback was attempted.
+The immutable artifact is controlling evidence. It records whether the final Issue receipt posted successfully; a transient comment-API failure does not roll back an otherwise exact-SHA-verified application release.
 
 ## Protected intentional rollback
 
-Intentional rollback is a separate owner-operated path. It is used only after a completed release when a defect requires returning to a previously verified ancestor.
+Intentional rollback is a distinct owner-operated path for a previously verified ancestor. It does **not** depend on Issue #43 remaining open.
 
-1. Select a target that:
-   - is a different commit from current `main`;
-   - remains an ancestor of current `main`;
-   - has successful exact-SHA `push` evidence for both required workflows;
-   - is documented as a known-good production release.
-2. Record the incident, rollback reason, target SHA, approving reviewer, and tracking reference.
-3. Open **Actions → Deploy to VPS1 → Run workflow** from the `main` ref.
-4. Enter:
-   - `commit_sha`: the verified ancestor SHA;
+1. Select a target that is different from current `main`, remains an ancestor of current `main`, has successful exact-SHA push CI/security evidence, and is documented as known-good.
+2. Record the incident, reason, target SHA, approving reviewer, and tracking reference.
+3. Run **Deploy to VPS1** from `main` with:
+   - `commit_sha`: verified ancestor SHA;
    - `correlation_id`: `rollback-<ticket-or-UTC-identifier>`;
    - `operation`: `rollback`;
    - `confirmation`: `ROLLBACK`;
-   - leave `command_comment_id` and `command_run_id` at `0`.
-5. Only the repository owner may initiate this workflow-dispatch path.
-6. Obtain protected `production` environment approval.
-7. Preserve the final result artifact and Issue #43 receipt.
+   - `command_comment_id`: `0`;
+   - `command_run_id`: `0`.
+4. Only the repository owner may initiate the dispatch.
+5. Obtain protected-environment approval.
+6. Preserve the authorization/result ledger comments when GitHub permits and always preserve the immutable result artifact.
 
-The workflow rejects manual operation `deploy`, non-owner rollback actors, reruns, equal-to-main rollback targets, non-ancestor targets, duplicate rollback correlations, and targets without exact historical CI/security evidence.
+A closed Issue #43 does not disable emergency rollback. A locked or unavailable ledger that prevents correlation consumption fails closed before mutation.
 
 ## Authorization and duplicate-execution controls
 
-Normal releases use a same-run reusable workflow call rather than a detached `workflow_dispatch` child. Therefore:
+- Normal releases use a same-run reusable workflow call, not a detached child dispatch.
+- The caller and reusable workflow share the immutable owner-comment event and run ID.
+- Manual collaborators cannot self-assert normal deployment provenance.
+- Deploy and rollback correlations are serialized and consumed once before environment access.
+- Production mutations are serialized by GitHub concurrency and an independent VPS1 `flock` lock.
+- GitHub API calls use bounded connection/overall timeouts and bounded retries where retrying is safe.
+- Correlation-consumption POST is a single fail-closed request to avoid duplicate non-idempotent authorization records.
 
-- a collaborator cannot manually self-assert normal-release provenance;
-- no raw one-time capability is placed in workflow inputs, logs, artifacts, or issue text;
-- there is no detached child run that can become orphaned after controller timeout;
-- the caller and reusable workflow share the immutable owner-comment event context and run ID;
-- every correlation is consumed once through a GitHub Actions bot record on Issue #43;
-- same-correlation authorization attempts are serialized without canceling a pending eligible owner command;
-- all production mutations are serialized by the protected workflow and an independent VPS1 `flock` writer lock.
+## Pre-production evidence gates
 
-GitHub job timeouts bound active authorization and production execution. The host lock prevents concurrent repository mutation even across different approved correlations.
+Before any production secret is available, authorization verifies:
 
-## Code-enforced pre-production gates
-
-Before any production secret is available, the authorization job verifies:
-
-- repository, `main` ref, and first workflow attempt;
-- exact SHA and correlation formats;
-- Issue #43 remains open;
-- normal deploys originated from the current owner Issue #43 event and same reusable workflow run;
-- manual dispatch is accepted only for owner intentional rollback;
-- duplicate deploy or rollback correlations do not already exist;
-- the exact target has successful `push`-event CI and repository-safety jobs;
-- every GitHub API request uses bounded connection and total timeouts with bounded retries.
-
-Only after those checks pass may the protected production job request environment approval and access VPS1 or Cloudflare secrets.
+- canonical repository, `main` ref, and first workflow attempt;
+- exact SHA/correlation formats;
+- open Issue #43 for normal deploy only;
+- owner-authored immutable deploy comment and same-run provenance;
+- owner-only workflow dispatch for rollback;
+- unused deploy/rollback correlation;
+- exact target `push` CI and repository-safety workflow/job success;
+- ancestor relationship for intentional rollback.
 
 ## VPS1 mutation gates
 
 The protected job:
 
-- uses strict known-host verification, batch mode, one explicit SSH identity, and connection timeouts;
+- validates all six secret names and SSH trust material before connection;
+- uses strict host-key checking, batch mode, one explicit key, keepalives, and timeouts;
 - refuses `root`;
-- requires `/var/www/hero-dapp` to be non-symlinked and owned by the deployment account;
-- acquires `.git/vets-production.lock` through `flock` before mutation;
-- accepts only the canonical GitHub origin URLs;
+- requires the real app directory to be owned by the deployment account;
+- accepts only canonical GitHub origins;
 - requires the complete tracked and untracked tree to be clean;
-- requires a normal release to equal `origin/main`;
-- requires rollback to be a different ancestor of `origin/main`;
-- records the previously active SHA before mutation;
-- resets to the exact requested SHA without `git pull`;
-- activates pnpm `10.34.4` and requires the frozen lockfile;
-- rejects `package-lock.json`;
-- removes stale build output and performs the production build;
-- reloads only `hero-dapp` through PM2;
-- verifies checkout SHA, PM2 release identity, and public health release SHA;
-- bounds health and API calls with connection and total timeouts.
+- records the previous SHA and acquires `.git/vets-production.lock`;
+- requires normal release SHA to equal `origin/main`;
+- requires rollback SHA to be a different ancestor of `origin/main`;
+- activates pnpm `10.34.4`, rejects `package-lock.json`, and uses frozen installation;
+- removes stale build output, rebuilds, reloads only `hero-dapp`, and verifies Git/PM2/public health SHA identity.
+
+Immediately before the first production mutation, the remote script emits `VETS_MUTATION_STARTED=true`. The runner records this marker. If the SSH session, runner, or terminal result is interrupted after the marker and inline rollback is not verified successful, the separate bounded rollback path restores the previous SHA. A pre-mutation failure does not invoke application rollback.
 
 ## Cloudflare and public verification
 
-Cloudflare purge occurs only after application deployment and exact-SHA health checks succeed. A purge is accepted only when:
+Cloudflare purge occurs only after exact-SHA application deployment succeeds. Purge passes only when:
 
 - the HTTP request succeeds;
-- API field `success` is `true`;
-- the API returns zero errors.
+- JSON field `success` is `true`;
+- the `errors` array is empty.
 
-The workflow then verifies the public health endpoint reports `ok: true` and the exact requested release SHA, and confirms the public site responds successfully.
+The workflow then requires the public health endpoint to report `ok: true` and the exact requested release SHA, and requires the public homepage to respond successfully.
 
-## Rollback behavior
+## Rollback and receipt truth
 
-If installation, build, reload, PM2 identity, or health verification fails after mutation starts, the remote in-run rollback restores the previously active SHA, reinstalls its frozen dependency graph, rebuilds without historical package lifecycle hooks, reloads PM2, and requires restored exact-SHA health.
+The remote inline rollback covers install/build/reload/identity/health failures after mutation starts. The separate rollback covers:
 
-If deployment succeeds but Cloudflare or post-purge verification fails, the protected workflow performs a second bounded rollback to the previously active SHA and purges Cloudflare again.
+- interrupted SSH or runner execution after the mutation marker when inline recovery is not verified;
+- Cloudflare purge failure after successful deployment;
+- public post-purge verification failure.
 
-Inline and post-deploy rollback states are recorded separately. A failed rollback is never reported as recovered.
+The immutable result records:
+
+- requested, previous, and final active SHAs;
+- whether mutation began;
+- deploy, purge, public verification, and final-state outcomes;
+- inline rollback attempted/succeeded/failed;
+- post-deploy rollback attempted/succeeded/failed;
+- rollback purge outcome;
+- receipt-posted boolean and receipt step outcome;
+- final verified boolean.
+
+A transient Issue-comment failure does not trigger application rollback and does not erase exact production truth; it is recorded as `receipt_posted: false` in the mandatory artifact.
 
 ## Prohibited paths
 
-- Do not deploy merely by merging or pushing to `main`.
-- Do not manually dispatch operation `deploy`.
-- Do not run the production workflow from a non-`main` ref.
-- Do not rerun either workflow; create a new owner command or new documented rollback correlation.
-- Do not use `root`, unrestricted sudo, public SSH fallback, or disabled host-key verification.
-- Do not deploy from a dirty, misowned, symlinked, or unexpected-origin checkout.
-- Do not use `git pull`, npm lockfiles, `npm install`, `npm ci`, or `npm run build`.
-- Do not invoke legacy deployment scripts or runtime deployment APIs.
-- Do not use Cloudflare global API keys.
-- Do not bypass environment approval, exact-SHA workflow evidence, correlation consumption, host writer locking, rollback, or public verification.
-- Do not treat a missing result artifact, unknown final SHA, incomplete receipt, or canceled run as success.
+- No deployment merely by merge or push.
+- No manual dispatch of operation `deploy`.
+- No non-`main` production workflow ref.
+- No workflow rerun; create a new owner command or rollback correlation.
+- No root deployment, unrestricted sudo, public SSH fallback, or disabled host verification.
+- No dirty, misowned, symlinked, or unexpected-origin checkout.
+- No `git pull`, npm lockfile, npm install/build path, legacy deploy script, or runtime deploy API.
+- No Cloudflare global API key.
+- No bypass of environment approval, exact-SHA evidence, correlation consumption, writer locking, rollback, purge validation, or public verification.
+- No claim of success from a missing artifact, unknown final SHA, or false `verified` state.
 
 ## Post-release independent verification
 
-After the protected workflow reports `verified: true`, operators may perform additional read-only checks:
+After the protected workflow artifact reports `verified: true`, perform read-only route and health verification:
 
 ```bash
 for route in / /wallet /swap /portfolio /stake /community-hub /dao; do
@@ -204,4 +185,4 @@ curl --fail --silent --show-error \
   "https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D"
 ```
 
-Record route results, TLS state, browser and mobile checks, Cloudflare cache state, requested SHA, previous SHA, final active SHA, workflow run, Issue #43 receipt, and artifact digest.
+Record route results, TLS state, browser/mobile checks, Cloudflare cache state, requested/previous/final SHAs, workflow run, receipt status, artifact name, and artifact digest.
