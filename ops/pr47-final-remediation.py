@@ -6,6 +6,7 @@ DEPLOY = Path('.github/workflows/deploy.yml')
 COMMAND = Path('.github/workflows/vets-production-command.yml')
 SELF = Path('ops/pr47-final-remediation.py')
 WORKFLOW = Path('.github/workflows/apply-pr47-final-remediation.yml')
+BS = '\\'
 
 
 def replace_once(text: str, old: str, new: str, label: str) -> str:
@@ -15,26 +16,27 @@ def replace_once(text: str, old: str, new: str, label: str) -> str:
     return text.replace(old, new, 1)
 
 
+def lines(*items: str) -> str:
+    return '\n'.join(items) + '\n'
+
+
 def validate_bash_blocks(path: Path) -> None:
-    lines = path.read_text().splitlines()
+    source_lines = path.read_text().splitlines()
     index = 0
     block_number = 0
-    while index < len(lines):
-        line = lines[index]
+    while index < len(source_lines):
+        line = source_lines[index]
         stripped = line.lstrip()
         indent = len(line) - len(stripped)
         if stripped == 'run: |':
             block_number += 1
             index += 1
             block = []
-            while index < len(lines):
-                candidate = lines[index]
+            while index < len(source_lines):
+                candidate = source_lines[index]
                 if candidate.strip() and len(candidate) - len(candidate.lstrip()) <= indent:
                     break
-                if candidate.strip():
-                    block.append(candidate[indent + 2 :])
-                else:
-                    block.append('')
+                block.append(candidate[indent + 2 :] if candidate.strip() else '')
                 index += 1
             result = subprocess.run(
                 ['bash', '-n'],
@@ -59,24 +61,33 @@ deploy = replace_once(
 )
 deploy = replace_once(
     deploy,
-    '          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"\n'
-    '          test "$GITHUB_REF" = "refs/heads/main"\n',
-    '          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"\n'
-    '          test "$GITHUB_RUN_ATTEMPT" = "1"\n'
-    '          test "$GITHUB_REF" = "refs/heads/main"\n',
+    lines(
+        '          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"',
+        '          test "$GITHUB_REF" = "refs/heads/main"',
+    ),
+    lines(
+        '          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"',
+        '          test "$GITHUB_RUN_ATTEMPT" = "1"',
+        '          test "$GITHUB_REF" = "refs/heads/main"',
+    ),
     'protected deployment run-attempt validation',
 )
 deploy = replace_once(
     deploy,
-    '      - name: Record inline rollback succeeded\n'
-    "        if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'\n"
-    '        run: echo "Inline deployment rollback restored the previous exact SHA"\n',
-    '      - name: Record inline rollback attempted\n'
-    "        if: always() && steps.deploy_app.outputs.inline_rollback_attempted == 'true'\n"
-    '        run: echo "Inline deployment rollback was attempted"\n\n'
-    '      - name: Record inline rollback succeeded\n'
-    "        if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'\n"
-    '        run: echo "Inline deployment rollback restored the previous exact SHA"\n',
+    lines(
+        '      - name: Record inline rollback succeeded',
+        "        if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'",
+        '        run: echo "Inline deployment rollback restored the previous exact SHA"',
+    ),
+    lines(
+        '      - name: Record inline rollback attempted',
+        "        if: always() && steps.deploy_app.outputs.inline_rollback_attempted == 'true'",
+        '        run: echo "Inline deployment rollback was attempted"',
+        '',
+        '      - name: Record inline rollback succeeded',
+        "        if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'",
+        '        run: echo "Inline deployment rollback restored the previous exact SHA"',
+    ),
     'attempted-only inline rollback marker',
 )
 DEPLOY.write_text(deploy)
@@ -84,102 +95,132 @@ DEPLOY.write_text(deploy)
 command = COMMAND.read_text()
 command = replace_once(
     command,
-    'concurrency:\n'
-    '  group: vets-production-command\n'
-    '  cancel-in-progress: false\n\n',
+    lines(
+        'concurrency:',
+        '  group: vets-production-command',
+        '  cancel-in-progress: false',
+        '',
+    ),
     '',
     'remove workflow-level comment concurrency',
 )
 command = replace_once(
     command,
-    "      startsWith(github.event.comment.body, 'VETS DEPLOY ')\n"
-    '    runs-on: ubuntu-latest\n',
-    "      startsWith(github.event.comment.body, 'VETS DEPLOY ')\n"
-    '    concurrency:\n'
-    '      group: vets-production-command\n'
-    '      cancel-in-progress: false\n'
-    '    runs-on: ubuntu-latest\n',
+    lines(
+        "      startsWith(github.event.comment.body, 'VETS DEPLOY ')",
+        '    runs-on: ubuntu-latest',
+    ),
+    lines(
+        "      startsWith(github.event.comment.body, 'VETS DEPLOY ')",
+        '    concurrency:',
+        '      group: vets-production-command',
+        '      cancel-in-progress: false',
+        '    runs-on: ubuntu-latest',
+    ),
     'eligible-job concurrency',
+)
+
+old_dispatch = lines(
+    '        run: |',
+    '          set -euo pipefail',
+    '          dispatch_epoch="$(date -u +%s)"',
+    '          payload="$(jq -nc ' + BS,
+    '            --arg sha "$TARGET_SHA" ' + BS,
+    '            --arg correlation "$CORRELATION_ID" ' + BS,
+    "            '{ref:\"main\",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:\"DEPLOY\"}}')\"",
+)
+new_dispatch = lines(
+    '        run: |',
+    '          set -euo pipefail',
+    '          main_sha="$(curl --fail-with-body --silent --show-error ' + BS,
+    '            -H "Authorization: Bearer $GH_TOKEN" ' + BS,
+    '            -H "Accept: application/vnd.github+json" ' + BS,
+    '            -H "X-GitHub-Api-Version: 2022-11-28" ' + BS,
+    '            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" ' + BS,
+    "            | jq -r '.object.sha')\"",
+    '          test "$main_sha" = "$TARGET_SHA"',
+    '          dispatch_epoch="$(date -u +%s)"',
+    '          payload="$(jq -nc ' + BS,
+    '            --arg sha "$TARGET_SHA" ' + BS,
+    '            --arg correlation "$CORRELATION_ID" ' + BS,
+    "            '{ref:\"main\",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:\"DEPLOY\"}}')\"",
 )
 command = replace_once(
     command,
-    '        run: |\n'
-    '          set -euo pipefail\n'
-    '          dispatch_epoch="$(date -u +%s)"\n'
-    '          payload="$(jq -nc \\\n'
-    '            --arg sha "$TARGET_SHA" \\\n'
-    '            --arg correlation "$CORRELATION_ID" \\\n'
-    "            '{ref:\"main\",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:\"DEPLOY\"}}')"\n",
-    '        run: |\n'
-    '          set -euo pipefail\n'
-    '          main_sha="$(curl --fail-with-body --silent --show-error \\\n'
-    '            -H "Authorization: Bearer $GH_TOKEN" \\\n'
-    '            -H "Accept: application/vnd.github+json" \\\n'
-    '            -H "X-GitHub-Api-Version: 2022-11-28" \\\n'
-    '            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" \\\n'
-    "            | jq -r '.object.sha')"\n"
-    '          test "$main_sha" = "$TARGET_SHA"\n'
-    '          dispatch_epoch="$(date -u +%s)"\n'
-    '          payload="$(jq -nc \\\n'
-    '            --arg sha "$TARGET_SHA" \\\n'
-    '            --arg correlation "$CORRELATION_ID" \\\n'
-    "            '{ref:\"main\",inputs:{commit_sha:$sha,correlation_id:$correlation,confirmation:\"DEPLOY\"}}')"\n",
+    old_dispatch,
+    new_dispatch,
     'immediate pre-POST main recheck',
 )
 command = replace_once(
     command,
-    '      - name: Post deployment-start receipt\n'
-    '        env:\n',
-    '      - name: Post deployment-start receipt\n'
-    '        id: start_receipt\n'
-    '        continue-on-error: true\n'
-    '        env:\n',
+    lines(
+        '      - name: Post deployment-start receipt',
+        '        env:',
+    ),
+    lines(
+        '      - name: Post deployment-start receipt',
+        '        id: start_receipt',
+        '        continue-on-error: true',
+        '        env:',
+    ),
     'non-blocking start receipt',
 )
 command = replace_once(
     command,
-    '      - name: Monitor protected deployment\n'
-    '        id: monitor\n'
-    '        env:\n',
-    '      - name: Monitor protected deployment\n'
-    '        id: monitor\n'
-    "        if: always() && steps.locate.outputs.run_id != ''\n"
-    '        env:\n',
+    lines(
+        '      - name: Monitor protected deployment',
+        '        id: monitor',
+        '        env:',
+    ),
+    lines(
+        '      - name: Monitor protected deployment',
+        '        id: monitor',
+        "        if: always() && steps.locate.outputs.run_id != ''",
+        '        env:',
+    ),
     'monitor after start-receipt failure',
 )
 command = replace_once(
     command,
     '          inline_success_conclusion="$(step_conclusion \'Record inline rollback succeeded\')"\n',
-    '          inline_attempted_conclusion="$(step_conclusion \'Record inline rollback attempted\')"\n'
-    '          inline_success_conclusion="$(step_conclusion \'Record inline rollback succeeded\')"\n',
+    lines(
+        '          inline_attempted_conclusion="$(step_conclusion \'Record inline rollback attempted\')"',
+        '          inline_success_conclusion="$(step_conclusion \'Record inline rollback succeeded\')"',
+    ),
     'read attempted-only rollback marker',
 )
 command = replace_once(
     command,
-    '          inline_rollback_attempted=false\n'
-    '          inline_rollback_succeeded=false\n'
-    '          inline_rollback_failed=false\n'
-    '          if [ "$inline_success_conclusion" = "success" ]; then\n'
-    '            inline_rollback_attempted=true\n'
-    '            inline_rollback_succeeded=true\n'
-    '          fi\n',
-    '          inline_rollback_attempted=false\n'
-    '          inline_rollback_succeeded=false\n'
-    '          inline_rollback_failed=false\n'
-    '          if [ "$inline_attempted_conclusion" = "success" ]; then\n'
-    '            inline_rollback_attempted=true\n'
-    '          fi\n'
-    '          if [ "$inline_success_conclusion" = "success" ]; then\n'
-    '            inline_rollback_attempted=true\n'
-    '            inline_rollback_succeeded=true\n'
-    '          fi\n',
+    lines(
+        '          inline_rollback_attempted=false',
+        '          inline_rollback_succeeded=false',
+        '          inline_rollback_failed=false',
+        '          if [ "$inline_success_conclusion" = "success" ]; then',
+        '            inline_rollback_attempted=true',
+        '            inline_rollback_succeeded=true',
+        '          fi',
+    ),
+    lines(
+        '          inline_rollback_attempted=false',
+        '          inline_rollback_succeeded=false',
+        '          inline_rollback_failed=false',
+        '          if [ "$inline_attempted_conclusion" = "success" ]; then',
+        '            inline_rollback_attempted=true',
+        '          fi',
+        '          if [ "$inline_success_conclusion" = "success" ]; then',
+        '            inline_rollback_attempted=true',
+        '            inline_rollback_succeeded=true',
+        '          fi',
+    ),
     'preserve attempted-only rollback state',
 )
 command = replace_once(
     command,
     '            echo "- Run conclusion: **${RUN_CONCLUSION:-unknown}**"\n',
-    '            echo "- Run conclusion: **${RUN_CONCLUSION:-unknown}**"\n'
-    '            echo "- Start receipt step outcome: **${{ steps.start_receipt.outcome }}**"\n',
+    lines(
+        '            echo "- Run conclusion: **${RUN_CONCLUSION:-unknown}**"',
+        '            echo "- Start receipt step outcome: **${{ steps.start_receipt.outcome }}**"',
+    ),
     'receipt start-comment outcome',
 )
 COMMAND.write_text(command)
