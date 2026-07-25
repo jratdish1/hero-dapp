@@ -9,7 +9,8 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { build } from 'esbuild';
 
-const REPORT_PATH = path.resolve(process.cwd(), 'generic-error-focus-report.json');
+const PROJECT_ROOT = process.cwd();
+const REPORT_PATH = path.resolve(PROJECT_ROOT, 'generic-error-focus-report.json');
 const EXPECTED_HEADING_ID = 'application-error-title';
 const EXPECTED_HEADING = 'An unexpected application error occurred.';
 
@@ -121,8 +122,8 @@ async function main() {
   const entryPath = path.join(workdir, 'entry.tsx');
   const bundlePath = path.join(workdir, 'harness.js');
   const htmlPath = path.join(workdir, 'index.html');
-  const errorBoundaryPath = path.resolve(process.cwd(), 'client/src/components/ErrorBoundary.tsx');
-  const dappBoundaryPath = path.resolve(process.cwd(), 'client/src/components/DappLoadBoundary.tsx');
+  const errorBoundaryPath = path.resolve(PROJECT_ROOT, 'client/src/components/ErrorBoundary.tsx');
+  const dappBoundaryPath = path.resolve(PROJECT_ROOT, 'client/src/components/DappLoadBoundary.tsx');
   let server;
 
   try {
@@ -153,7 +154,7 @@ async function main() {
 
     await writeFile(entryPath, entry);
     await build({
-      absWorkingDir: process.cwd(),
+      absWorkingDir: PROJECT_ROOT,
       entryPoints: [entryPath],
       outfile: bundlePath,
       bundle: true,
@@ -161,10 +162,11 @@ async function main() {
       platform: 'browser',
       target: ['es2022'],
       jsx: 'automatic',
+      nodePaths: [path.resolve(PROJECT_ROOT, 'node_modules')],
       define: {
         'import.meta.env.DEV': 'false',
       },
-      tsconfig: path.resolve(process.cwd(), 'tsconfig.json'),
+      tsconfig: path.resolve(PROJECT_ROOT, 'tsconfig.json'),
       logLevel: 'silent',
     });
     await writeFile(
