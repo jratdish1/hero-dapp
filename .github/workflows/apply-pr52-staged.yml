@@ -1,0 +1,335 @@
+name: Apply staged PR52 controller
+
+on:
+  push:
+    branches:
+      - fix/production-controller-hardening-20260725
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: apply-pr52-staged-controller
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.actor == github.repository_owner &&
+      github.event.head_commit.message == 'chore: apply PR52 staged controller'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BRANCH: fix/production-controller-hardening-20260725
+      EXPECTED_DEPLOY_SHA256: 5dd8e30e4e836201a4aab758f20eba34d1f86abbc51dfc2b587cc5122c05d0b8
+      EXPECTED_COMMAND_SHA256: 42d1f9931737330dd74f8d26c27a70a95171a547386aebe459000b2022bd0a5b
+      EXPECTED_INSTRUCTIONS_SHA256: 48941d09e170971ff5d7b71da23c9f91d599f8fc7bf614d65bb18f1e311a57c8
+
+    steps:
+      - name: Checkout exact trigger head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/production-controller-hardening-20260725
+          fetch-depth: 0
+          persist-credentials: false
+          show-progress: false
+
+      - name: Verify trigger and staging inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_REF" = "refs/heads/$BRANCH"
+          test "$(git branch --show-current)" = "$BRANCH"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test "$(git log -1 --pretty=%s)" = "chore: apply PR52 staged controller"
+          test -z "$(git status --porcelain --untracked-files=all)"
+          test -f ops/PRODUCTION_CONTROLLER_HARDENING_PLAN.md
+          test -f ops/pr52-staging/trigger.txt
+          test "$(find ops/pr52-staging -maxdepth 1 -type f -name 'deploy.b64.*' | wc -l)" = "5"
+          test "$(find ops/pr52-staging -maxdepth 1 -type f -name 'command.b64.*' | wc -l)" = "5"
+          test "$(find ops/pr52-staging -maxdepth 1 -type f -name 'instructions.b64.*' | wc -l)" = "2"
+
+      - name: Reconstruct and validate exact final files
+        id: validate
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          cat ops/pr52-staging/deploy.b64.* | tr -d '\r\n' | base64 -d > /tmp/deploy.yml
+          cat ops/pr52-staging/command.b64.* | tr -d '\r\n' | base64 -d > /tmp/vets-production-command.yml
+          cat ops/pr52-staging/instructions.b64.* | tr -d '\r\n' | base64 -d > /tmp/DEPLOY_INSTRUCTIONS.md
+
+          printf '%s  %s\n' "$EXPECTED_DEPLOY_SHA256" /tmp/deploy.yml > /tmp/expected.sha256
+          printf '%s  %s\n' "$EXPECTED_COMMAND_SHA256" /tmp/vets-production-command.yml >> /tmp/expected.sha256
+          printf '%s  %s\n' "$EXPECTED_INSTRUCTIONS_SHA256" /tmp/DEPLOY_INSTRUCTIONS.md >> /tmp/expected.sha256
+          sha256sum -c /tmp/expected.sha256
+
+          ruby -e 'require "yaml"; ARGV.each { |path| YAML.load_file(path) }' \
+            /tmp/deploy.yml /tmp/vets-production-command.yml
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+          import sys
+
+          expected = {
+              "/tmp/deploy.yml": 12,
+              "/tmp/vets-production-command.yml": 11,
+          }
+          expression = re.compile(r"\$\{\{.*?\}\}")
+
+          for filename, expected_count in expected.items():
+              lines = Path(filename).read_text(encoding="utf-8").splitlines()
+              blocks = []
+              index = 0
+              while index < len(lines):
+                  line = lines[index]
+                  stripped = line.lstrip()
+                  indent = len(line) - len(stripped)
+                  if stripped not in {"run: |", "run: |-"}:
+                      index += 1
+                      continue
+                  index += 1
+                  block = []
+                  while index < len(lines):
+                      candidate = lines[index]
+                      candidate_indent = len(candidate) - len(candidate.lstrip())
+                      if candidate.strip() and candidate_indent <= indent:
+                          break
+                      block.append(candidate[indent + 2:] if candidate.strip() else "")
+                      index += 1
+                  blocks.append("\n".join(block) + "\n")
+
+              if len(blocks) != expected_count:
+                  raise SystemExit(
+                      f"{filename}: expected {expected_count} run blocks, found {len(blocks)}"
+                  )
+              for number, block in enumerate(blocks, start=1):
+                  sanitized = expression.sub("VALUE", block)
+                  result = subprocess.run(
+                      ["bash", "-n"],
+                      input=sanitized,
+                      text=True,
+                      capture_output=True,
+                  )
+                  if result.returncode:
+                      sys.stderr.write(
+                          f"{filename}: run block {number} failed bash -n:\n{result.stderr}"
+                      )
+                      raise SystemExit(result.returncode)
+
+          bidi = {
+              "\u061c", "\u200e", "\u200f", "\u202a", "\u202b", "\u202c",
+              "\u202d", "\u202e", "\u2066", "\u2067", "\u2068", "\u2069",
+          }
+          for filename in [
+              "/tmp/deploy.yml",
+              "/tmp/vets-production-command.yml",
+              "/tmp/DEPLOY_INSTRUCTIONS.md",
+          ]:
+              text = Path(filename).read_text(encoding="utf-8")
+              found = sorted({character for character in text if character in bidi})
+              if found:
+                  raise SystemExit(f"{filename}: hidden/bidirectional Unicode found: {found}")
+
+          print("Workflow YAML, embedded Bash, and hidden-Unicode validation passed")
+          PY
+
+          if grep -EIn \
+            '(BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16})' \
+            /tmp/deploy.yml /tmp/vets-production-command.yml /tmp/DEPLOY_INSTRUCTIONS.md; then
+            echo "Credential-like content found in reconstructed files" >&2
+            exit 1
+          fi
+
+          printf 'deploy_sha256=%s\n' "$EXPECTED_DEPLOY_SHA256" >> "$GITHUB_OUTPUT"
+          printf 'command_sha256=%s\n' "$EXPECTED_COMMAND_SHA256" >> "$GITHUB_OUTPUT"
+          printf 'instructions_sha256=%s\n' "$EXPECTED_INSTRUCTIONS_SHA256" >> "$GITHUB_OUTPUT"
+
+      - name: Create exact clean child commit
+        id: commit
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          github_api() {
+            local method="$1"
+            local url="$2"
+            local data_file="${3:-}"
+            local response=""
+            local attempt
+            for attempt in $(seq 1 5); do
+              if [ -n "$data_file" ]; then
+                if response="$(curl --fail-with-body --silent --show-error \
+                  --connect-timeout 10 --max-time 60 \
+                  -X "$method" \
+                  -H "Authorization: Bearer $GH_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  -H "Content-Type: application/json" \
+                  "$url" --data-binary "@$data_file")"; then
+                  printf '%s' "$response"
+                  return 0
+                fi
+              else
+                if response="$(curl --fail-with-body --silent --show-error \
+                  --connect-timeout 10 --max-time 60 \
+                  -X "$method" \
+                  -H "Authorization: Bearer $GH_TOKEN" \
+                  -H "Accept: application/vnd.github+json" \
+                  -H "X-GitHub-Api-Version: 2022-11-28" \
+                  "$url")"; then
+                  printf '%s' "$response"
+                  return 0
+                fi
+              fi
+              echo "Transient GitHub API failure (attempt $attempt/5): $method $url" >&2
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+
+          create_blob() {
+            local filename="$1"
+            local payload="$2"
+            base64 -w0 "$filename" | jq -Rs '{content: ., encoding: "base64"}' > "$payload"
+            github_api POST \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/git/blobs" \
+              "$payload" | jq -r '.sha'
+          }
+
+          deploy_blob="$(create_blob /tmp/deploy.yml /tmp/deploy-blob.json)"
+          command_blob="$(create_blob /tmp/vets-production-command.yml /tmp/command-blob.json)"
+          instructions_blob="$(create_blob /tmp/DEPLOY_INSTRUCTIONS.md /tmp/instructions-blob.json)"
+          [[ "$deploy_blob" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$command_blob" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$instructions_blob" =~ ^[0-9a-f]{40}$ ]]
+
+          base_commit="$(github_api GET \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/commits/$GITHUB_SHA")"
+          base_tree="$(jq -r '.tree.sha' <<< "$base_commit")"
+          [[ "$base_tree" =~ ^[0-9a-f]{40}$ ]]
+
+          jq -n \
+            --arg base_tree "$base_tree" \
+            --arg deploy "$deploy_blob" \
+            --arg command "$command_blob" \
+            --arg instructions "$instructions_blob" \
+            '{
+              base_tree: $base_tree,
+              tree: [
+                {path: ".github/workflows/deploy.yml", mode: "100644", type: "blob", sha: $deploy},
+                {path: ".github/workflows/vets-production-command.yml", mode: "100644", type: "blob", sha: $command},
+                {path: "DEPLOY_INSTRUCTIONS.md", mode: "100644", type: "blob", sha: $instructions},
+                {path: "ops/PRODUCTION_CONTROLLER_HARDENING_PLAN.md", mode: "100644", type: "blob", sha: null},
+                {path: ".github/workflows/apply-pr52-staged.yml", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/trigger.txt", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/deploy.b64.01", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/deploy.b64.02", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/deploy.b64.03", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/deploy.b64.04", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/deploy.b64.05", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/command.b64.01", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/command.b64.02", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/command.b64.03", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/command.b64.04", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/command.b64.05", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/instructions.b64.01", mode: "100644", type: "blob", sha: null},
+                {path: "ops/pr52-staging/instructions.b64.02", mode: "100644", type: "blob", sha: null}
+              ]
+            }' > /tmp/tree.json
+
+          tree_response="$(github_api POST \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/trees" \
+            /tmp/tree.json)"
+          tree_sha="$(jq -r '.sha' <<< "$tree_response")"
+          [[ "$tree_sha" =~ ^[0-9a-f]{40}$ ]]
+
+          jq -n \
+            --arg message "fix: implement hardened owner-authorized production controller" \
+            --arg tree "$tree_sha" \
+            --arg parent "$GITHUB_SHA" \
+            '{message: $message, tree: $tree, parents: [$parent]}' > /tmp/commit.json
+          commit_response="$(github_api POST \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/commits" \
+            /tmp/commit.json)"
+          commit_sha="$(jq -r '.sha' <<< "$commit_response")"
+          [[ "$commit_sha" =~ ^[0-9a-f]{40}$ ]]
+          test "$(jq -r '.parents[0].sha' <<< "$commit_response")" = "$GITHUB_SHA"
+          test "$(jq -r '.tree.sha' <<< "$commit_response")" = "$tree_sha"
+
+          final_tree="$(github_api GET \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/git/trees/$tree_sha?recursive=1")"
+          test "$(jq -r --arg path '.github/workflows/deploy.yml' '.tree[] | select(.path == $path) | .sha' <<< "$final_tree")" = "$deploy_blob"
+          test "$(jq -r --arg path '.github/workflows/vets-production-command.yml' '.tree[] | select(.path == $path) | .sha' <<< "$final_tree")" = "$command_blob"
+          test "$(jq -r --arg path 'DEPLOY_INSTRUCTIONS.md' '.tree[] | select(.path == $path) | .sha' <<< "$final_tree")" = "$instructions_blob"
+          test "$(jq -r '[.tree[] | select(.path | startswith("ops/pr52-staging/"))] | length' <<< "$final_tree")" = "0"
+          test "$(jq -r '[.tree[] | select(.path == "ops/PRODUCTION_CONTROLLER_HARDENING_PLAN.md")] | length' <<< "$final_tree")" = "0"
+          test "$(jq -r '[.tree[] | select(.path == ".github/workflows/apply-pr52-staged.yml")] | length' <<< "$final_tree")" = "0"
+
+          printf 'commit_sha=%s\n' "$commit_sha" >> "$GITHUB_OUTPUT"
+          printf 'tree_sha=%s\n' "$tree_sha" >> "$GITHUB_OUTPUT"
+          jq -n \
+            --arg parent "$GITHUB_SHA" \
+            --arg commit "$commit_sha" \
+            --arg tree "$tree_sha" \
+            --arg deploy "$EXPECTED_DEPLOY_SHA256" \
+            --arg command "$EXPECTED_COMMAND_SHA256" \
+            --arg instructions "$EXPECTED_INSTRUCTIONS_SHA256" \
+            '{
+              trigger_parent: $parent,
+              staged_commit: $commit,
+              tree: $tree,
+              deploy_sha256: $deploy,
+              command_sha256: $command,
+              instructions_sha256: $instructions,
+              validation: "PASS",
+              branch_ref_updated: false
+            }' > pr52-staging-evidence.json
+          cat pr52-staging-evidence.json
+
+      - name: Upload staging evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr52-staging-evidence-${{ github.sha }}
+          path: pr52-staging-evidence.json
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: Post staged commit receipt to PR52
+        env:
+          STAGED_COMMIT: ${{ steps.commit.outputs.commit_sha }}
+          TREE_SHA: ${{ steps.commit.outputs.tree_sha }}
+          DEPLOY_SHA256: ${{ steps.validate.outputs.deploy_sha256 }}
+          COMMAND_SHA256: ${{ steps.validate.outputs.command_sha256 }}
+          INSTRUCTIONS_SHA256: ${{ steps.validate.outputs.instructions_sha256 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(printf '%s\n' \
+            '## VETS PR52 staged implementation ready' \
+            '' \
+            "VETS_PR52_STAGED_COMMIT=$STAGED_COMMIT" \
+            "VETS_PR52_STAGED_TREE=$TREE_SHA" \
+            "deploy_sha256=$DEPLOY_SHA256" \
+            "command_sha256=$COMMAND_SHA256" \
+            "instructions_sha256=$INSTRUCTIONS_SHA256" \
+            '' \
+            'Validation: YAML PASS; embedded Bash PASS; credential-pattern scan PASS; hidden/bidirectional Unicode scan PASS.' \
+            'The staged commit deletes the temporary plan, staging payloads, trigger, and this workflow. The branch ref has not been moved by this workflow.')"
+          jq -n --arg body "$body" '{body: $body}' > /tmp/comment.json
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/52/comments" \
+            --data-binary @/tmp/comment.json > /dev/null
