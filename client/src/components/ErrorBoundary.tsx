@@ -14,6 +14,7 @@ interface Props {
 interface State {
   hasError: boolean;
   error: Error;
+  headingFocused: boolean;
 }
 
 /**
@@ -29,11 +30,16 @@ export class ErrorBoundary extends Component<Props, State> {
     this.state = {
       hasError: false,
       error: new Error("No application error has been captured"),
+      headingFocused: false,
     };
   }
 
   static getDerivedStateFromError(error: unknown): State {
-    return { hasError: true, error: normalizeThrownValue(error) };
+    return {
+      hasError: true,
+      error: normalizeThrownValue(error),
+      headingFocused: false,
+    };
   }
 
   componentDidMount() {
@@ -73,6 +79,13 @@ export class ErrorBoundary extends Component<Props, State> {
             id="application-error-title"
             ref={this.headingRef}
             tabIndex={-1}
+            onFocus={() => this.setState({ headingFocused: true })}
+            onBlur={() => this.setState({ headingFocused: false })}
+            style={
+              this.state.headingFocused
+                ? { outline: "2px solid currentColor", outlineOffset: "4px" }
+                : undefined
+            }
             className="mb-4 rounded-sm text-xl focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-primary focus:ring-2 focus:ring-primary focus:ring-offset-4 focus:ring-offset-background"
           >
             An unexpected application error occurred.
