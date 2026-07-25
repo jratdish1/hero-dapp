@@ -36,8 +36,8 @@ jobs:
         run: |
           set -euo pipefail
           test "$(git branch --show-current)" = "ops/vets-production-command-20260724"
-          test "$(git rev-parse HEAD^)" = "5cec1561f456de2c85fe6273e8eb195f5e305b09"
-          test "$(git log -1 --pretty=%s)" = "chore: diagnose PR47 final remediation"
+          test "$(git rev-parse HEAD^)" = "38d4416ce4d22d2df1bce7722019b10a22542e22"
+          test "$(git log -1 --pretty=%s)" = "chore: rerun PR47 final remediation"
           test -z "$(git status --porcelain)"
           test -f ops/pr47-final-remediation.py
 
