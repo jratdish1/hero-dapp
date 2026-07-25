@@ -4,6 +4,7 @@ import React, { Component, createRef, type ReactNode } from "react";
 import {
   DappRecoveryView,
   isDappLoadFailure,
+  normalizeThrownValue,
 } from "./DappLoadBoundary";
 
 interface Props {
@@ -12,7 +13,7 @@ interface Props {
 
 interface State {
   hasError: boolean;
-  error: Error | null;
+  error: Error;
 }
 
 /**
@@ -25,11 +26,14 @@ export class ErrorBoundary extends Component<Props, State> {
 
   constructor(props: Props) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = {
+      hasError: false,
+      error: new Error("No application error has been captured"),
+    };
   }
 
-  static getDerivedStateFromError(error: Error): State {
-    return { hasError: true, error };
+  static getDerivedStateFromError(error: unknown): State {
+    return { hasError: true, error: normalizeThrownValue(error) };
   }
 
   componentDidUpdate(_previousProps: Props, previousState: State) {
@@ -39,7 +43,7 @@ export class ErrorBoundary extends Component<Props, State> {
   }
 
   render() {
-    if (!this.state.hasError || !this.state.error) {
+    if (!this.state.hasError) {
       return this.props.children;
     }
 
