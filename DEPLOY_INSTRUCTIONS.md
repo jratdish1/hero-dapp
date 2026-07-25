@@ -59,7 +59,7 @@ Repository rules must require `test-build-scan` and `repository-safety` before m
 4. Add the exact owner command to open Issue #43.
 5. The command workflow binds correlation `issue-43-comment-<comment-id>`, validates owner/event/run provenance, records the exact authorizing CI and Security run IDs, rejects reuse, and calls the reusable deployment workflow in the same run.
 6. A designated reviewer approves the `production` environment request.
-7. Preserve the final Issue #43 receipt and the immutable artifact `production-result-<correlation>` in every outcome.
+7. Preserve the immutable artifact `production-result-<correlation>` in every outcome and preserve the final Issue #43 receipt when it is posted.
 
 The immutable artifact is controlling evidence. It records the exact authorizing workflow runs and whether the final Issue receipt posted successfully. A transient comment-API failure does not roll back an otherwise exact-SHA-verified application release; the artifact is uploaded with `receipt_posted: false`, and the workflow then fails its final receipt gate so the release cannot be reported fully verified.
 
