@@ -2,53 +2,101 @@ name: Deploy to VPS1
 run-name: VETS ${{ inputs.operation }} ${{ inputs.commit_sha }} / ${{ inputs.correlation_id }}
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
       commit_sha:
-        description: Exact lowercase 40-character commit SHA that is current main
         required: true
         type: string
       correlation_id:
-        description: Unique owner-approved deployment correlation identifier
         required: true
         type: string
       operation:
-        description: Deploy current main or intentionally roll back to a verified ancestor
         required: true
-        default: deploy
+        type: string
+      confirmation:
+        required: true
+        type: string
+      command_comment_id:
+        required: true
+        type: string
+      command_run_id:
+        required: true
+        type: string
+    outputs:
+      verified:
+        description: Whether the exact requested production state was verified
+        value: ${{ jobs.deploy.outputs.verified }}
+      result_artifact:
+        description: Immutable production result artifact name
+        value: ${{ jobs.deploy.outputs.result_artifact }}
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Exact lowercase 40-character verified ancestor SHA
+        required: true
+        type: string
+      correlation_id:
+        description: rollback-<ticket-or-UTC-identifier>
+        required: true
+        type: string
+      operation:
+        description: Protected manual operation
+        required: true
+        default: rollback
         type: choice
         options:
-          - deploy
           - rollback
       confirmation:
-        description: Type DEPLOY for a release or ROLLBACK for an intentional rollback
+        description: Type ROLLBACK
         required: true
+        type: string
+      command_comment_id:
+        description: Leave as 0 for manual rollback
+        required: false
+        default: '0'
+        type: string
+      command_run_id:
+        description: Leave as 0 for manual rollback
+        required: false
+        default: '0'
         type: string
 
 permissions:
   actions: read
   checks: read
   contents: read
-
-concurrency:
-  group: production-vps1
-  cancel-in-progress: false
+  issues: write
 
 jobs:
-  deploy:
-    name: Protected production deployment
+  authorize:
+    name: Verify immutable authorization outside production
     if: github.ref == 'refs/heads/main' && github.run_attempt == 1
     runs-on: ubuntu-latest
-    timeout-minutes: 45
-    environment: production
+    timeout-minutes: 20
+    concurrency:
+      group: production-authorization-${{ inputs.correlation_id }}
+      cancel-in-progress: false
+    outputs:
+      consumption_comment_id: ${{ steps.authorization.outputs.consumption_comment_id }}
+      authorization_mode: ${{ steps.authorization.outputs.authorization_mode }}
     env:
+      GH_TOKEN: ${{ github.token }}
       DEPLOY_SHA: ${{ inputs.commit_sha }}
       DEPLOY_CORRELATION_ID: ${{ inputs.correlation_id }}
       DEPLOY_OPERATION: ${{ inputs.operation }}
       DEPLOY_CONFIRMATION: ${{ inputs.confirmation }}
+      COMMAND_COMMENT_ID: ${{ inputs.command_comment_id }}
+      COMMAND_RUN_ID: ${{ inputs.command_run_id }}
+      TRACKER_ISSUE: '43'
 
     steps:
-      - name: Validate release authorization
+      - name: Checkout current main for ancestry verification
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify authorization and consume correlation
+        id: authorization
         shell: bash
         run: |
           set -euo pipefail
@@ -56,35 +104,13 @@ jobs:
           test "$GITHUB_RUN_ATTEMPT" = "1"
           test "$GITHUB_REF" = "refs/heads/main"
           [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$DEPLOY_CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,80}$ ]]
-          case "$DEPLOY_OPERATION" in
-            deploy)
-              test "$DEPLOY_CONFIRMATION" = "DEPLOY"
-              test "$GITHUB_SHA" = "$DEPLOY_SHA"
-              ;;
-            rollback)
-              test "$DEPLOY_CONFIRMATION" = "ROLLBACK"
-              test "$GITHUB_SHA" != "$DEPLOY_SHA"
-              ;;
-            *)
-              echo "Unsupported production operation: $DEPLOY_OPERATION" >&2
-              exit 64
-              ;;
-          esac
+          [[ "$DEPLOY_CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
 
-      - name: Require successful exact-main push workflows
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-
-          github_get() {
-            local url="$1"
-            local response=""
-            local attempt
+          api_get() {
+            local url="$1" response=""
             for attempt in $(seq 1 5); do
               if response="$(curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
                 -H "Authorization: Bearer $GH_TOKEN" \
                 -H "Accept: application/vnd.github+json" \
                 -H "X-GitHub-Api-Version: 2022-11-28" \
@@ -92,58 +118,189 @@ jobs:
                 printf '%s' "$response"
                 return 0
               fi
-              echo "Transient GitHub API failure (attempt $attempt/5): $url" >&2
               sleep $((attempt * 2))
             done
             return 1
           }
 
-          require_workflow_run() {
-            local workflow_file="$1"
-            local required_job="$2"
-            local workflow_id
-            local runs
-            local trusted_run
-            local run_id
-            local jobs
+          api_post() {
+            local url="$1" payload="$2" response=""
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                -H "X-GitHub-Api-Version: 2022-11-28" \
+                "$url" --data "$payload")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
 
-            workflow_id="$(github_get \
+          collect_issue_comments() {
+            local page response
+            : > "$RUNNER_TEMP/issue-comments.jsonl"
+            for page in $(seq 1 20); do
+              response="$(api_get \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100&page=$page")"
+              jq -c '.' <<<"$response" >> "$RUNNER_TEMP/issue-comments.jsonl"
+              [ "$(jq -r 'length' <<<"$response")" -lt 100 ] && break
+            done
+            jq -s 'add' "$RUNNER_TEMP/issue-comments.jsonl"
+          }
+
+          require_workflow_run() {
+            local workflow_file="$1" required_job="$2"
+            local workflow_id runs trusted_run run_id jobs
+            workflow_id="$(api_get \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_file" \
               | jq -r '.id')"
             [[ "$workflow_id" =~ ^[0-9]+$ ]]
-
-            runs="$(github_get \
-              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&per_page=100")"
-
+            runs="$(api_get \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=main&event=push&head_sha=$DEPLOY_SHA&per_page=100")"
             trusted_run="$(jq -c --arg sha "$DEPLOY_SHA" '
               [.workflow_runs[] | select(
-                .head_sha == $sha and
-                .head_branch == "main" and
-                .event == "push"
-              )]
-              | sort_by(.id)
-              | last // empty
+                .head_sha == $sha and .head_branch == "main" and .event == "push"
+              )] | sort_by(.id) | last // empty
             ' <<<"$runs")"
             test -n "$trusted_run"
-            jq -e '.status == "completed" and .conclusion == "success"' <<<"$trusted_run" >/dev/null
+            jq -e '.status == "completed" and .conclusion == "success"' \
+              <<<"$trusted_run" >/dev/null
             run_id="$(jq -r '.id' <<<"$trusted_run")"
-            [[ "$run_id" =~ ^[0-9]+$ ]]
-
-            jobs="$(github_get \
+            jobs="$(api_get \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
-
             jq -e --arg name "$required_job" '
               [.jobs[] | select(.name == $name)]
               | if length == 0 then false
                 else (max_by(.id) | .status == "completed" and .conclusion == "success")
                 end
             ' <<<"$jobs" >/dev/null
-
-            echo "Trusted $workflow_file push-to-main run $run_id passed for $DEPLOY_SHA"
           }
+
+          issue="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE")"
+          test "$(jq -r '.state' <<<"$issue")" = "open"
+          all_comments="$(collect_issue_comments)"
+
+          case "$DEPLOY_OPERATION" in
+            deploy)
+              test "$GITHUB_EVENT_NAME" = "issue_comment"
+              test "$DEPLOY_CONFIRMATION" = "DEPLOY"
+              test "$GITHUB_SHA" = "$DEPLOY_SHA"
+              test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              [[ "$COMMAND_COMMENT_ID" =~ ^[0-9]+$ ]]
+              [[ "$COMMAND_RUN_ID" =~ ^[0-9]+$ ]]
+              test "$GITHUB_RUN_ID" = "$COMMAND_RUN_ID"
+              test "$DEPLOY_CORRELATION_ID" = "issue-43-comment-$COMMAND_COMMENT_ID"
+              test "${{ github.event.comment.id }}" = "$COMMAND_COMMENT_ID"
+
+              owner_comment="$(api_get \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/comments/$COMMAND_COMMENT_ID")"
+              test "$(jq -r '.issue_url' <<<"$owner_comment")" = \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE"
+              test "$(jq -r '.user.login' <<<"$owner_comment")" = "$GITHUB_REPOSITORY_OWNER"
+              test "$(jq -r '.author_association' <<<"$owner_comment")" = "OWNER"
+              test "$(jq -r '.body' <<<"$owner_comment")" = "VETS DEPLOY $DEPLOY_SHA"
+
+              consumed_count="$(jq -r --arg correlation "$DEPLOY_CORRELATION_ID" '
+                [.[] | select(
+                  .user.login == "github-actions[bot]" and
+                  (.body | startswith("VETS_DEPLOY_CONSUMED v1\n")) and
+                  (.body | contains("correlation_id: " + $correlation + "\n"))
+                )] | length
+              ' <<<"$all_comments")"
+              test "$consumed_count" = "0"
+
+              printf -v consumption_body '%s\n' \
+                'VETS_DEPLOY_CONSUMED v1' \
+                "correlation_id: $DEPLOY_CORRELATION_ID" \
+                "command_comment_id: $COMMAND_COMMENT_ID" \
+                "command_run_id: $COMMAND_RUN_ID" \
+                "target_sha: $DEPLOY_SHA" \
+                'state: consumed'
+              authorization_mode="owner-issue-comment-reusable-workflow"
+              ;;
+            rollback)
+              test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+              test "$DEPLOY_CONFIRMATION" = "ROLLBACK"
+              test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              test "$GITHUB_SHA" != "$DEPLOY_SHA"
+              [[ "$DEPLOY_CORRELATION_ID" =~ ^rollback-[A-Za-z0-9._-]{1,80}$ ]]
+              git fetch --no-tags origin main
+              git cat-file -e "${DEPLOY_SHA}^{commit}"
+              git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+
+              rollback_count="$(jq -r --arg correlation "$DEPLOY_CORRELATION_ID" '
+                [.[] | select(
+                  .user.login == "github-actions[bot]" and
+                  (.body | startswith("VETS_ROLLBACK_AUTHORIZATION v1\n")) and
+                  (.body | contains("correlation_id: " + $correlation + "\n"))
+                )] | length
+              ' <<<"$all_comments")"
+              test "$rollback_count" = "0"
+              printf -v consumption_body '%s\n' \
+                'VETS_ROLLBACK_AUTHORIZATION v1' \
+                "correlation_id: $DEPLOY_CORRELATION_ID" \
+                "deployment_run_id: $GITHUB_RUN_ID" \
+                "target_sha: $DEPLOY_SHA" \
+                "authorized_by: $GITHUB_ACTOR" \
+                'state: consumed'
+              authorization_mode="owner-intentional-rollback"
+              ;;
+            *)
+              exit 64
+              ;;
+          esac
 
           require_workflow_run ci.yml test-build-scan
           require_workflow_run security-and-quality.yml repository-safety
+
+          response="$(api_post \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+            "$(jq -nc --arg body "$consumption_body" '{body:$body}')")"
+          consumption_comment_id="$(jq -r '.id' <<<"$response")"
+          [[ "$consumption_comment_id" =~ ^[0-9]+$ ]]
+          echo "consumption_comment_id=$consumption_comment_id" >> "$GITHUB_OUTPUT"
+          echo "authorization_mode=$authorization_mode" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Protected production mutation
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    environment: production
+    concurrency:
+      group: production-vps1
+      cancel-in-progress: false
+    outputs:
+      verified: ${{ steps.result.outputs.verified }}
+      result_artifact: production-result-${{ inputs.correlation_id }}
+    env:
+      DEPLOY_SHA: ${{ inputs.commit_sha }}
+      DEPLOY_CORRELATION_ID: ${{ inputs.correlation_id }}
+      DEPLOY_OPERATION: ${{ inputs.operation }}
+      AUTHORIZATION_MODE: ${{ needs.authorize.outputs.authorization_mode }}
+      CONSUMPTION_COMMENT_ID: ${{ needs.authorize.outputs.consumption_comment_id }}
+      TRACKER_ISSUE: '43'
+
+    steps:
+      - name: Validate protected mutation inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$DEPLOY_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$DEPLOY_CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
+          [[ "$CONSUMPTION_COMMENT_ID" =~ ^[0-9]+$ ]]
+          case "$AUTHORIZATION_MODE" in
+            owner-issue-comment-reusable-workflow|owner-intentional-rollback) ;;
+            *) exit 64 ;;
+          esac
 
       - name: Configure strict SSH trust
         env:
@@ -159,7 +316,7 @@ jobs:
           printf '%s\n' "$VPS1_SSH_KEY" > "$HOME/.ssh/id_ed25519"
           printf '%s\n' "$VPS1_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
 
-      - name: Deploy exact merged commit with frozen pnpm dependencies
+      - name: Deploy exact authorized commit with host writer lock
         id: deploy_app
         env:
           VPS1_HOST: ${{ secrets.VPS1_HOST }}
@@ -173,10 +330,12 @@ jobs:
 
           deploy_log="$RUNNER_TEMP/vps1-deploy.log"
           set +e
-          ssh \
+          timeout --signal=TERM --kill-after=30s 2700 ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
             -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS1_USER@$VPS1_HOST" \
@@ -187,49 +346,41 @@ jobs:
           APP_DIR="/var/www/hero-dapp"
           HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
 
-          for required_command in git node corepack pm2 curl; do
-            command -v "$required_command" >/dev/null || {
-              echo "Missing required command: $required_command" >&2
-              exit 1
-            }
+          for required_command in git node corepack pm2 curl flock; do
+            command -v "$required_command" >/dev/null || exit 1
           done
           test -d "$APP_DIR"
           test ! -L "$APP_DIR"
           test "$(stat -c '%U' "$APP_DIR")" = "$(id -un)"
           cd "$APP_DIR"
           test -d .git
+          exec 9>"$APP_DIR/.git/vets-production.lock"
+          flock -w 1800 9 || exit 75
 
           ORIGIN_URL="$(git remote get-url origin)"
           case "$ORIGIN_URL" in
-            https://github.com/jratdish1/hero-dapp.git|git@github.com:jratdish1/hero-dapp.git)
-              ;;
-            *)
-              echo "Unexpected origin URL" >&2
-              exit 1
-              ;;
+            https://github.com/jratdish1/hero-dapp.git|git@github.com:jratdish1/hero-dapp.git) ;;
+            *) exit 1 ;;
           esac
 
           PREVIOUS_SHA="$(git rev-parse HEAD)"
           [[ "$PREVIOUS_SHA" =~ ^[0-9a-f]{40}$ ]]
-          git cat-file -e "${PREVIOUS_SHA}^{commit}"
-          test -z "$(git status --porcelain)"
+          printf 'VETS_PREVIOUS_SHA=%s\n' "$PREVIOUS_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
           MUTATION_STARTED=false
 
           wait_for_health() {
-            local expected_sha="$1"
-            local healthy=false
-            local response=""
-            local attempt
+            local expected_sha="$1" response=""
             for attempt in $(seq 1 10); do
-              response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
+              response="$(curl --fail --silent --show-error \
+                --connect-timeout 5 --max-time 10 "$HEALTH_URL" || true)"
               if printf '%s' "$response" | grep -q '"ok":true' && \
                  printf '%s' "$response" | grep -q "\"releaseSha\":\"$expected_sha\""; then
-                healthy=true
-                break
+                return 0
               fi
               sleep 3
             done
-            test "$healthy" = true
+            return 1
           }
 
           verify_pm2_release_sha() {
@@ -242,10 +393,7 @@ jobs:
                 const processes = JSON.parse(input);
                 const app = processes.find(item => item.name === "hero-dapp");
                 const actual = app?.pm2_env?.env?.HERO_RELEASE_SHA ?? app?.pm2_env?.HERO_RELEASE_SHA;
-                if (actual !== process.env.EXPECTED_SHA) {
-                  console.error(`PM2 release SHA mismatch: expected ${process.env.EXPECTED_SHA}, got ${actual ?? "missing"}`);
-                  process.exit(1);
-                }
+                if (actual !== process.env.EXPECTED_SHA) process.exit(1);
               });
             '
           }
@@ -253,11 +401,7 @@ jobs:
           build_without_lifecycle_hooks() {
             pnpm exec vite build &&
             pnpm exec esbuild server/_core/index.ts \
-              --platform=node \
-              --packages=external \
-              --bundle \
-              --format=esm \
-              --outdir=dist
+              --platform=node --packages=external --bundle --format=esm --outdir=dist
           }
 
           rollback() {
@@ -265,7 +409,6 @@ jobs:
             trap - ERR
             if [ "$MUTATION_STARTED" = true ]; then
               printf 'VETS_INLINE_ROLLBACK_ATTEMPTED=true\n'
-              echo "Deployment failed; restoring previous SHA $PREVIOUS_SHA" >&2
               if git reset --hard "$PREVIOUS_SHA" &&
                  corepack enable &&
                  corepack prepare pnpm@10.34.4 --activate &&
@@ -278,6 +421,7 @@ jobs:
                  verify_pm2_release_sha "$PREVIOUS_SHA" &&
                  wait_for_health "$PREVIOUS_SHA"; then
                 printf 'VETS_INLINE_ROLLBACK_SUCCEEDED=true\n'
+                printf 'VETS_FINAL_SHA=%s\n' "$PREVIOUS_SHA"
               else
                 printf 'VETS_INLINE_ROLLBACK_SUCCEEDED=false\n'
                 exit 70
@@ -290,21 +434,17 @@ jobs:
           git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${DEPLOY_SHA}^{commit}"
           case "$DEPLOY_OPERATION" in
-            deploy)
-              test "$(git rev-parse origin/main)" = "$DEPLOY_SHA"
-              ;;
+            deploy) test "$(git rev-parse origin/main)" = "$DEPLOY_SHA" ;;
             rollback)
               test "$(git rev-parse origin/main)" != "$DEPLOY_SHA"
               git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
               ;;
-            *)
-              echo "Unsupported remote production operation: $DEPLOY_OPERATION" >&2
-              exit 64
-              ;;
+            *) exit 64 ;;
           esac
+
           MUTATION_STARTED=true
           git reset --hard "$DEPLOY_SHA"
-
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
           corepack enable
           corepack prepare pnpm@10.34.4 --activate
           test "$(pnpm --version)" = "10.34.4"
@@ -319,46 +459,26 @@ jobs:
 
           MUTATION_STARTED=false
           trap - ERR
-          printf 'VETS_PREVIOUS_SHA=%s\n' "$PREVIOUS_SHA"
+          printf 'VETS_FINAL_SHA=%s\n' "$DEPLOY_SHA"
           REMOTE
           ssh_status="${PIPESTATUS[0]}"
           set -e
 
-          previous_sha="$(sed -n 's/^VETS_PREVIOUS_SHA=//p' "$deploy_log" | tail -n 1)"
+          previous_sha="$(sed -n 's/^VETS_PREVIOUS_SHA=//p' "$deploy_log" | head -n 1)"
+          final_sha="$(sed -n 's/^VETS_FINAL_SHA=//p' "$deploy_log" | tail -n 1)"
           inline_attempted=false
           inline_succeeded=false
           inline_failed=false
-          if grep -q '^VETS_INLINE_ROLLBACK_ATTEMPTED=true$' "$deploy_log"; then
-            inline_attempted=true
-          fi
-          if grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=true$' "$deploy_log"; then
-            inline_succeeded=true
-          fi
-          if grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=false$' "$deploy_log"; then
-            inline_failed=true
-          fi
-
-          printf 'inline_rollback_attempted=%s\n' "$inline_attempted" >> "$GITHUB_OUTPUT"
-          printf 'inline_rollback_succeeded=%s\n' "$inline_succeeded" >> "$GITHUB_OUTPUT"
-          printf 'inline_rollback_failed=%s\n' "$inline_failed" >> "$GITHUB_OUTPUT"
-          printf 'deploy_exit_code=%s\n' "$ssh_status" >> "$GITHUB_OUTPUT"
-
-          if [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]]; then
-            printf 'previous_sha=%s\n' "$previous_sha" >> "$GITHUB_OUTPUT"
-          fi
+          grep -q '^VETS_INLINE_ROLLBACK_ATTEMPTED=true$' "$deploy_log" && inline_attempted=true
+          grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=true$' "$deploy_log" && inline_succeeded=true
+          grep -q '^VETS_INLINE_ROLLBACK_SUCCEEDED=false$' "$deploy_log" && inline_failed=true
+          [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && echo "previous_sha=$previous_sha" >> "$GITHUB_OUTPUT"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]] && echo "remote_final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          echo "inline_rollback_attempted=$inline_attempted" >> "$GITHUB_OUTPUT"
+          echo "inline_rollback_succeeded=$inline_succeeded" >> "$GITHUB_OUTPUT"
+          echo "inline_rollback_failed=$inline_failed" >> "$GITHUB_OUTPUT"
+          echo "deploy_exit_code=$ssh_status" >> "$GITHUB_OUTPUT"
           exit "$ssh_status"
-
-      - name: Record inline rollback attempted
-        if: always() && steps.deploy_app.outputs.inline_rollback_attempted == 'true'
-        run: echo "Inline deployment rollback was attempted"
-
-      - name: Record inline rollback succeeded
-        if: always() && steps.deploy_app.outputs.inline_rollback_succeeded == 'true'
-        run: echo "Inline deployment rollback restored the previous exact SHA"
-
-      - name: Record inline rollback attempted but failed
-        if: always() && steps.deploy_app.outputs.inline_rollback_failed == 'true'
-        run: echo "Inline deployment rollback was attempted but did not verify successfully"
 
       - name: Purge Cloudflare cache
         id: cloudflare_purge
@@ -371,43 +491,40 @@ jobs:
           set -euo pipefail
           test -n "$CF_API_TOKEN"
           test -n "$CF_ZONE_ID"
-          purge_verified=false
           for attempt in $(seq 1 3); do
-            if purge_response="$(curl --fail-with-body --silent --show-error \
+            if response="$(curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
               -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
               -H "Authorization: Bearer $CF_API_TOKEN" \
               -H "Content-Type: application/json" \
-              --data '{"purge_everything":true}')" && \
-               jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$purge_response" >/dev/null; then
-              purge_verified=true
-              break
+              --data '{"purge_everything":true}')" &&
+               jq -e '.success == true and ((.errors // []) | length == 0)' \
+                 <<<"$response" >/dev/null; then
+              exit 0
             fi
-            echo "Cloudflare purge attempt $attempt/3 did not verify" >&2
             sleep $((attempt * 3))
           done
-          test "$purge_verified" = true
-          echo "Cloudflare purge verified successful"
+          exit 1
 
       - name: Verify public deployment after purge
+        id: public_verify
         if: success()
         shell: bash
         run: |
           set -euo pipefail
-          verified=false
+          health_url='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
           for attempt in $(seq 1 10); do
-            health_response="$(curl --fail --silent --show-error --max-time 15 \
-              'https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D' || true)"
-            if printf '%s' "$health_response" | grep -q '"ok":true' && \
-               printf '%s' "$health_response" | grep -q "\"releaseSha\":\"$DEPLOY_SHA\"" && \
-               curl --fail --silent --show-error --max-time 15 \
-                 --output /dev/null https://herobase.io/; then
-              verified=true
-              break
+            response="$(curl --fail --silent --show-error \
+              --connect-timeout 5 --max-time 15 "$health_url" || true)"
+            if printf '%s' "$response" | grep -q '"ok":true' &&
+               printf '%s' "$response" | grep -q "\"releaseSha\":\"$DEPLOY_SHA\"" &&
+               curl --fail --silent --show-error \
+                 --connect-timeout 5 --max-time 15 --output /dev/null https://herobase.io/; then
+              exit 0
             fi
-            echo "Post-purge public verification pending (attempt $attempt/10)" >&2
             sleep 5
           done
-          test "$verified" = true
+          exit 1
 
       - name: Roll back application after post-deploy failure
         id: rollback_app
@@ -423,11 +540,12 @@ jobs:
           [[ "$VPS1_USER" =~ ^[a-z_][a-z0-9_-]{0,31}$ ]]
           [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
           test "$VPS1_USER" != "root"
-
-          ssh \
+          timeout --signal=TERM --kill-after=30s 1800 ssh \
             -i "$HOME/.ssh/id_ed25519" \
             -o BatchMode=yes \
             -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "$VPS1_USER@$VPS1_HOST" \
@@ -436,8 +554,9 @@ jobs:
           ROLLBACK_SHA="$1"
           APP_DIR="/var/www/hero-dapp"
           HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
-
           cd "$APP_DIR"
+          exec 9>"$APP_DIR/.git/vets-production.lock"
+          flock -w 1800 9 || exit 75
           git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${ROLLBACK_SHA}^{commit}"
           git reset --hard "$ROLLBACK_SHA"
@@ -448,11 +567,7 @@ jobs:
           rm -rf dist
           pnpm exec vite build
           pnpm exec esbuild server/_core/index.ts \
-            --platform=node \
-            --packages=external \
-            --bundle \
-            --format=esm \
-            --outdir=dist
+            --platform=node --packages=external --bundle --format=esm --outdir=dist
           HERO_RELEASE_SHA="$ROLLBACK_SHA" pm2 reload hero-dapp --update-env
           test "$(git rev-parse HEAD)" = "$ROLLBACK_SHA"
           pm2 jlist | EXPECTED_SHA="$ROLLBACK_SHA" node -e '
@@ -466,21 +581,20 @@ jobs:
               if (actual !== process.env.EXPECTED_SHA) process.exit(1);
             });
           '
-
-          healthy=false
           for attempt in $(seq 1 10); do
-            response="$(curl --fail --silent --show-error --max-time 10 "$HEALTH_URL" || true)"
-            if printf '%s' "$response" | grep -q '"ok":true' && \
+            response="$(curl --fail --silent --show-error \
+              --connect-timeout 5 --max-time 10 "$HEALTH_URL" || true)"
+            if printf '%s' "$response" | grep -q '"ok":true' &&
                printf '%s' "$response" | grep -q "\"releaseSha\":\"$ROLLBACK_SHA\""; then
-              healthy=true
-              break
+              exit 0
             fi
             sleep 3
           done
-          test "$healthy" = true
+          exit 1
           REMOTE
 
       - name: Purge Cloudflare after rollback
+        id: rollback_purge
         if: failure() && steps.rollback_app.outcome == 'success'
         env:
           CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
@@ -490,25 +604,186 @@ jobs:
           set -euo pipefail
           test -n "$CF_API_TOKEN"
           test -n "$CF_ZONE_ID"
-          rollback_purge_verified=false
           for attempt in $(seq 1 3); do
-            if rollback_purge_response="$(curl --fail-with-body --silent --show-error \
+            if response="$(curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
               -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
               -H "Authorization: Bearer $CF_API_TOKEN" \
               -H "Content-Type: application/json" \
-              --data '{"purge_everything":true}')" && \
-               jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$rollback_purge_response" >/dev/null; then
-              rollback_purge_verified=true
-              break
+              --data '{"purge_everything":true}')" &&
+               jq -e '.success == true and ((.errors // []) | length == 0)' \
+                 <<<"$response" >/dev/null; then
+              exit 0
             fi
-            echo "Rollback Cloudflare purge attempt $attempt/3 did not verify" >&2
             sleep $((attempt * 3))
           done
-          test "$rollback_purge_verified" = true
-          echo "Cloudflare purge after rollback verified successful"
+          exit 1
+
+      - name: Capture final active production state
+        id: final_state
+        if: always()
+        continue-on-error: true
+        env:
+          VPS1_HOST: ${{ secrets.VPS1_HOST }}
+          VPS1_USER: ${{ secrets.VPS1_USER }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          final_sha="$(timeout --signal=TERM --kill-after=10s 60 ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "$VPS1_USER@$VPS1_HOST" \
+            'cd /var/www/hero-dapp && git rev-parse HEAD')"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
+          echo "final_active_sha=$final_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Write immutable production result
+        id: result
+        if: always()
+        env:
+          PREVIOUS_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
+          FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
+          INLINE_ATTEMPTED: ${{ steps.deploy_app.outputs.inline_rollback_attempted }}
+          INLINE_SUCCEEDED: ${{ steps.deploy_app.outputs.inline_rollback_succeeded }}
+          INLINE_FAILED: ${{ steps.deploy_app.outputs.inline_rollback_failed }}
+          DEPLOY_OUTCOME: ${{ steps.deploy_app.outcome }}
+          PURGE_OUTCOME: ${{ steps.cloudflare_purge.outcome }}
+          VERIFY_OUTCOME: ${{ steps.public_verify.outcome }}
+          POST_ROLLBACK_OUTCOME: ${{ steps.rollback_app.outcome }}
+          ROLLBACK_PURGE_OUTCOME: ${{ steps.rollback_purge.outcome }}
+          FINAL_STATE_OUTCOME: ${{ steps.final_state.outcome }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          post_attempted=false
+          post_succeeded=false
+          post_failed=false
+          case "$POST_ROLLBACK_OUTCOME" in
+            success) post_attempted=true; post_succeeded=true ;;
+            failure|cancelled|timed_out|action_required|stale)
+              post_attempted=true; post_failed=true ;;
+          esac
+          inline_attempted="${INLINE_ATTEMPTED:-false}"
+          inline_succeeded="${INLINE_SUCCEEDED:-false}"
+          inline_failed="${INLINE_FAILED:-false}"
+          final_active_sha="${FINAL_ACTIVE_SHA:-unknown}"
+          previous_sha="${PREVIOUS_SHA:-unknown}"
+          verified=false
+          if [ "$DEPLOY_OUTCOME" = "success" ] &&
+             [ "$PURGE_OUTCOME" = "success" ] &&
+             [ "$VERIFY_OUTCOME" = "success" ] &&
+             [ "$FINAL_STATE_OUTCOME" = "success" ] &&
+             [ "$final_active_sha" = "$DEPLOY_SHA" ] &&
+             [ "$inline_attempted" = "false" ] &&
+             [ "$post_attempted" = "false" ]; then
+            verified=true
+          fi
+          jq -n \
+            --arg requested_sha "$DEPLOY_SHA" \
+            --arg previous_sha "$previous_sha" \
+            --arg final_active_sha "$final_active_sha" \
+            --arg correlation_id "$DEPLOY_CORRELATION_ID" \
+            --arg operation "$DEPLOY_OPERATION" \
+            --arg authorization_mode "$AUTHORIZATION_MODE" \
+            --arg consumption_comment_id "$CONSUMPTION_COMMENT_ID" \
+            --arg deploy_outcome "$DEPLOY_OUTCOME" \
+            --arg purge_outcome "$PURGE_OUTCOME" \
+            --arg verify_outcome "$VERIFY_OUTCOME" \
+            --arg rollback_purge_outcome "$ROLLBACK_PURGE_OUTCOME" \
+            --argjson inline_rollback_attempted "$inline_attempted" \
+            --argjson inline_rollback_succeeded "$inline_succeeded" \
+            --argjson inline_rollback_failed "$inline_failed" \
+            --argjson post_rollback_attempted "$post_attempted" \
+            --argjson post_rollback_succeeded "$post_succeeded" \
+            --argjson post_rollback_failed "$post_failed" \
+            --argjson verified "$verified" \
+            '{
+              requested_sha:$requested_sha,
+              previous_sha:$previous_sha,
+              final_active_sha:$final_active_sha,
+              correlation_id:$correlation_id,
+              operation:$operation,
+              authorization_mode:$authorization_mode,
+              consumption_comment_id:$consumption_comment_id,
+              deploy_outcome:$deploy_outcome,
+              purge_outcome:$purge_outcome,
+              verify_outcome:$verify_outcome,
+              rollback_purge_outcome:$rollback_purge_outcome,
+              inline_rollback_attempted:$inline_rollback_attempted,
+              inline_rollback_succeeded:$inline_rollback_succeeded,
+              inline_rollback_failed:$inline_rollback_failed,
+              post_rollback_attempted:$post_rollback_attempted,
+              post_rollback_succeeded:$post_rollback_succeeded,
+              post_rollback_failed:$post_rollback_failed,
+              verified:$verified
+            }' > production-result.json
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable production result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-result-${{ inputs.correlation_id }}
+          path: production-result.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Post final production receipt
+        if: always()
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERIFIED: ${{ steps.result.outputs.verified }}
+          FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
+          PREVIOUS_SHA: ${{ steps.deploy_app.outputs.previous_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF_BODY
+          ## VETS production result
+
+          - Requested SHA: \`$DEPLOY_SHA\`
+          - Previous SHA: \`${PREVIOUS_SHA:-unknown}\`
+          - Final active SHA: \`${FINAL_ACTIVE_SHA:-unknown}\`
+          - Correlation: \`$DEPLOY_CORRELATION_ID\`
+          - Operation: **$DEPLOY_OPERATION**
+          - Authorization mode: **$AUTHORIZATION_MODE**
+          - Consumption comment: \`$CONSUMPTION_COMMENT_ID\`
+          - Exact state verified: **${VERIFIED:-false}**
+          - Result artifact: \`production-result-$DEPLOY_CORRELATION_ID\`
+          EOF_BODY
+          )"
+          payload="$(jq -nc --arg body "$body" '{body:$body}')"
+          posted=false
+          for attempt in $(seq 1 5); do
+            if curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+              --data "$payload" >/dev/null; then
+              posted=true
+              break
+            fi
+            sleep $((attempt * 2))
+          done
+          test "$posted" = "true"
 
       - name: Remove ephemeral SSH material
         if: always()
         shell: bash
-        run: |
-          rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+        run: rm -f "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+
+      - name: Enforce verified production state
+        if: always()
+        env:
+          VERIFIED: ${{ steps.result.outputs.verified }}
+        shell: bash
+        run: test "$VERIFIED" = "true"
