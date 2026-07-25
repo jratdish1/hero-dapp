@@ -1,0 +1,156 @@
+name: Production controller v3 blob finalizer
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - .github/workflows/production-controller-v3-blob-finalizer.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: production-controller-v3-blob-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout exact staging branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/production-controller-v3-blob-stage-20260725
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify fenced staging state
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD^)" = "7a00241381998480df36d27b964142dd28df2f89"
+          mapfile -t files < <(git diff --name-only f3858025eab1e713096ed8b10d7d4e960659abdd...HEAD | sort)
+          printf '%s\n' "${files[@]}"
+          test "${#files[@]}" -eq 2
+          test "${files[0]}" = ".github/workflows/production-controller-v3-blob-finalizer.yml"
+          test "${files[1]}" = "ops/production-controller-v3.tgz.b64"
+
+      - name: Decode and verify exact files
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(sha256sum ops/production-controller-v3.tgz.b64 | awk '{print $1}')" = "5f9978ad5a0475c66d43b88e8004dfe5f86cf712f5a3146e466ebec6c9b7ff63"
+          base64 -d ops/production-controller-v3.tgz.b64 > "$RUNNER_TEMP/controller-v3.tgz"
+          test "$(sha256sum "$RUNNER_TEMP/controller-v3.tgz" | awk '{print $1}')" = "94184558281c24b75a551ded31279b86daf7dd9d64aee09664203d58a743d2e3"
+          mapfile -t members < <(tar -tzf "$RUNNER_TEMP/controller-v3.tgz" | sort)
+          test "${#members[@]}" -eq 6
+          test "${members[0]}" = "./"
+          test "${members[1]}" = "./.github/"
+          test "${members[2]}" = "./.github/workflows/"
+          test "${members[3]}" = "./.github/workflows/deploy.yml"
+          test "${members[4]}" = "./.github/workflows/vets-production-command.yml"
+          test "${members[5]}" = "./DEPLOY_INSTRUCTIONS.md"
+          tar -xzf "$RUNNER_TEMP/controller-v3.tgz" -C .
+          test "$(sha256sum .github/workflows/vets-production-command.yml | awk '{print $1}')" = "89b940cf31159aca8d3eb89b280d831271910f82a0bada1ba04570e15fd1eaa4"
+          test "$(sha256sum .github/workflows/deploy.yml | awk '{print $1}')" = "c6b4928c7769fc0e41b67462afc7a680682eb2e2477db308633421df5ee9f133"
+          test "$(sha256sum DEPLOY_INSTRUCTIONS.md | awk '{print $1}')" = "d04e6a3e9669fb27578d6f58b5c755ff8e4322277da011f0a4035251120387e3"
+
+      - name: Parse workflows and validate every shell block
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby - <<'RUBY'
+          require 'yaml'
+          index = 0
+          ['.github/workflows/vets-production-command.yml', '.github/workflows/deploy.yml'].each do |path|
+            doc = YAML.load_file(path)
+            raise "missing jobs in #{path}" unless doc['jobs'].is_a?(Hash)
+            doc['jobs'].each do |_job_name, job|
+              next unless job.is_a?(Hash) && job['steps'].is_a?(Array)
+              job['steps'].each do |step|
+                next unless step.is_a?(Hash) && step['run']
+                index += 1
+                File.write("/tmp/controller-v3-run-#{index}.sh", step['run'].gsub(/\$\{\{.*?\}\}/, 'EXPR'))
+              end
+            end
+          end
+          puts "extracted #{index} shell blocks"
+          RUBY
+          for script in /tmp/controller-v3-run-*.sh; do bash -n "$script"; done
+          python3 - <<'PY'
+          from pathlib import Path
+          for path in [Path('.github/workflows/vets-production-command.yml'), Path('.github/workflows/deploy.yml'), Path('DEPLOY_INSTRUCTIONS.md')]:
+              for ch in path.read_text():
+                  cp = ord(ch)
+                  if cp in {0x200B, 0x200C, 0x200D, 0x2060, 0xFEFF} or 0x202A <= cp <= 0x202E:
+                      raise SystemExit(f'hidden Unicode in {path}: U+{cp:04X}')
+          PY
+          git diff --check
+
+      - name: Enforce final security contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          command=.github/workflows/vets-production-command.yml
+          deploy=.github/workflows/deploy.yml
+          docs=DEPLOY_INSTRUCTIONS.md
+
+          grep -Fq 'uses: ./.github/workflows/deploy.yml' "$command"
+          grep -Fq 'production-command-${{ github.event.comment.id }}' "$command"
+          grep -Fq 'comments="$(collect_issue_comments)"' "$command"
+          grep -Fq 'Issue comment history exceeds the bounded replay-scan limit; fail closed.' "$command"
+          grep -Fq '.run_attempt == 1' "$command"
+          ! grep -Fiq 'capability' "$command"
+          ! grep -Fq 'actions: write' "$command"
+
+          grep -Fq 'workflow_call:' "$deploy"
+          grep -Fq 'test "$GITHUB_EVENT_NAME" = "issue_comment"' "$deploy"
+          grep -Fq 'test "$GITHUB_EVENT_NAME" = "workflow_dispatch"' "$deploy"
+          grep -Fq 'test "$GITHUB_RUN_ID" = "$COMMAND_RUN_ID"' "$deploy"
+          grep -Fq 'Issue comment history exceeds the bounded replay-scan limit; fail closed.' "$deploy"
+          grep -Fq '.run_attempt == 1' "$deploy"
+          grep -Fq 'VETS_DEPLOY_CONSUMED v1' "$deploy"
+          grep -Fq 'VETS_ROLLBACK_AUTHORIZATION v1' "$deploy"
+          grep -Fq 'environment: production' "$deploy"
+          grep -Fq 'flock -w 1800' "$deploy"
+          grep -Fq 'timeout --signal=TERM --kill-after=30s 2700 ssh' "$deploy"
+          grep -Fq 'test "$VPS1_USER" != "root"' "$deploy"
+          grep -Fq 'git status --porcelain=v1 --untracked-files=all' "$deploy"
+          grep -Fq 'pnpm@10.34.4' "$deploy"
+          grep -Fq 'pnpm install --frozen-lockfile' "$deploy"
+          grep -Fq '.success == true and ((.errors // []) | length == 0)' "$deploy"
+          grep -Fq 'id: result_artifact' "$deploy"
+          grep -Fq 'Result artifact upload: **$ARTIFACT_OUTCOME**' "$deploy"
+          grep -Fq 'Inline rollback attempted:' "$deploy"
+          grep -Fq 'Post-deploy rollback failed:' "$deploy"
+          grep -Fq 'test "$ARTIFACT_OUTCOME" = "success"' "$deploy"
+          grep -Fq 'Do not manually dispatch operation `deploy`.' "$docs"
+          if grep -A2 -F 'name: Post final production receipt' "$deploy" | grep -Fq 'continue-on-error: true'; then
+            echo 'Final receipt must fail closed' >&2
+            exit 1
+          fi
+          if grep -REn 'uses: [^[:space:]#]+@v[0-9]' "$command" "$deploy"; then
+            echo 'Mutable action tag found' >&2
+            exit 1
+          fi
+
+      - name: Commit candidate and attempt target push
+        id: candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'VETS Production Controller v3 Finalizer'
+          git config user.email '92892706+jratdish1@users.noreply.github.com'
+          git add .github/workflows/vets-production-command.yml .github/workflows/deploy.yml DEPLOY_INSTRUCTIONS.md
+          git rm ops/production-controller-v3.tgz.b64
+          git rm .github/workflows/production-controller-v3-blob-finalizer.yml
+          git commit -m 'fix: harden production controller evidence and replay gates'
+          candidate_sha="$(git rev-parse HEAD)"
+          mapfile -t files < <(git diff --name-only f3858025eab1e713096ed8b10d7d4e960659abdd...HEAD | sort)
+          test "${#files[@]}" -eq 3
+          test "${files[0]}" = ".github/workflows/deploy.yml"
+          test "${files[1]}" = ".github/workflows/vets-production-command.yml"
+          test "${files[2]}" = "DEPLOY_INSTRUCTIONS.md"
+          git push origin HEAD:fix/production-controller-hardening-v3-20260725
+          echo "candidate_sha=$candidate_sha" >> "$GITHUB_OUTPUT"
