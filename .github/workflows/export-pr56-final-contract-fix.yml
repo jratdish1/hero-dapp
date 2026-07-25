@@ -1,0 +1,217 @@
+name: Export PR56 final contract corrections
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: export-pr56-final-contract-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 56 &&
+      github.event.pull_request.head.ref == 'fix/production-controller-final-evidence-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/production-controller-final-evidence-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Build, validate, and export final contract corrections
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p pr56-contract
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from urllib.request import Request, urlopen
+
+          deploy_path = Path('.github/workflows/deploy.yml')
+          command_path = Path('.github/workflows/vets-production-command.yml')
+          docs_path = Path('DEPLOY_INSTRUCTIONS.md')
+          deploy = deploy_path.read_text()
+          command = command_path.read_text()
+          docs = docs_path.read_text()
+
+          old_filter = '.head_sha == $sha and .head_branch == "main" and .event == "push"'
+          new_filter = '.head_sha == $sha and .head_branch == "main" and .event == "push" and .run_attempt == 1'
+          if deploy.count(old_filter) != 1:
+              raise RuntimeError(f'deploy run-attempt filter count: {deploy.count(old_filter)}')
+          if command.count(old_filter) != 1:
+              raise RuntimeError(f'command run-attempt filter count: {command.count(old_filter)}')
+          deploy = deploy.replace(old_filter, new_filter, 1)
+          command = command.replace(old_filter, new_filter, 1)
+
+          old_comments = '''          comments="$(api_get \\
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100")"
+'''
+          new_comments = '''          collect_issue_comments() {
+            local page=1 response count exhausted=false
+            : > "$RUNNER_TEMP/command-issue-comments.jsonl"
+            while [ "$page" -le 200 ]; do
+              response="$(api_get \\
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100&page=$page")"
+              jq -c '.' <<<"$response" >> "$RUNNER_TEMP/command-issue-comments.jsonl"
+              count="$(jq -r 'length' <<<"$response")"
+              if [ "$count" -lt 100 ]; then
+                exhausted=true
+                break
+              fi
+              page=$((page + 1))
+            done
+            test "$exhausted" = "true"
+            jq -s 'add // []' "$RUNNER_TEMP/command-issue-comments.jsonl"
+          }
+
+          comments="$(collect_issue_comments)"
+'''
+          if command.count(old_comments) != 1:
+              raise RuntimeError(f'command bounded comment read count: {command.count(old_comments)}')
+          command = command.replace(old_comments, new_comments, 1)
+
+          docs_old = '''- exact target `push` CI and repository-safety workflow/job success;
+- preservation of the exact selected CI and Security workflow run IDs in the authorization marker, immutable result, and final receipt;
+'''
+          docs_new = '''- exact target `push` CI and repository-safety workflow/job success;
+- only first-attempt CI and Security workflow runs qualify; successful reruns never authorize production;
+- preservation of the exact selected CI and Security workflow run IDs in the authorization marker, immutable result, and final receipt;
+'''
+          if docs.count(docs_old) != 1:
+              raise RuntimeError(f'docs evidence bullet count: {docs.count(docs_old)}')
+          docs = docs.replace(docs_old, docs_new, 1)
+
+          docs_old_2 = '''- Deploy and rollback correlations remain single-use and fail closed on duplicate exact authorization markers.
+'''
+          docs_new_2 = '''- Deploy and rollback correlations remain single-use and fail closed on duplicate exact authorization markers.
+- Both the owner-command preflight and reusable authorization scan the Issue #43 ledger to exhaustion and fail closed at the bounded safety ceiling.
+'''
+          if docs.count(docs_old_2) != 1:
+              raise RuntimeError(f'docs exhaustive command bullet count: {docs.count(docs_old_2)}')
+          docs = docs.replace(docs_old_2, docs_new_2, 1)
+
+          outputs = {
+              'deploy.yml': deploy,
+              'vets-production-command.yml': command,
+              'DEPLOY_INSTRUCTIONS.md': docs,
+          }
+          for name, text in outputs.items():
+              Path('pr56-contract', name).write_text(text)
+
+          for name in ('deploy.yml', 'vets-production-command.yml'):
+              subprocess.run(
+                  ['ruby', '-e', 'require "yaml"; YAML.load_file(ARGV[0])', f'pr56-contract/{name}'],
+                  check=True,
+              )
+
+          expression = re.compile(r'\$\{\{.*?\}\}')
+          bash_counts = {}
+          for name in ('deploy.yml', 'vets-production-command.yml'):
+              text = outputs[name]
+              lines = text.splitlines()
+              index = 0
+              count = 0
+              while index < len(lines):
+                  line = lines[index]
+                  stripped = line.lstrip()
+                  indent = len(line) - len(stripped)
+                  if stripped not in {'run: |', 'run: |-'}:
+                      index += 1
+                      continue
+                  count += 1
+                  index += 1
+                  block = []
+                  while index < len(lines):
+                      candidate = lines[index]
+                      candidate_indent = len(candidate) - len(candidate.lstrip())
+                      if candidate.strip() and candidate_indent <= indent:
+                          break
+                      block.append(candidate[indent + 2:] if candidate.strip() else '')
+                      index += 1
+                  result = subprocess.run(
+                      ['bash', '-n'],
+                      input=expression.sub('VALUE', '\n'.join(block) + '\n'),
+                      text=True,
+                      capture_output=True,
+                  )
+                  if result.returncode:
+                      raise RuntimeError(f'{name} Bash block {count}: {result.stderr}')
+              bash_counts[name] = count
+
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
+          for name, text in outputs.items():
+              if any(char in forbidden for char in text):
+                  raise RuntimeError(f'{name}: hidden or bidirectional Unicode found')
+              if credential.search(text):
+                  raise RuntimeError(f'{name}: credential pattern found')
+
+          if deploy.count('.run_attempt == 1') < 2:
+              raise RuntimeError('deploy does not bind both command and evidence runs to first attempts')
+          if command.count('.run_attempt == 1') < 2:
+              raise RuntimeError('command does not bind both its own run and release evidence to first attempts')
+          if 'test "$exhausted" = "true"' not in command:
+              raise RuntimeError('command comment pagination does not fail closed')
+          if 'timeout-minutes: 120' not in deploy or 'timeout-minutes: 75' in deploy:
+              raise RuntimeError('protected recovery budget regressed')
+
+          def create_blob(content: bytes) -> str:
+              payload = json.dumps({
+                  'content': base64.b64encode(content).decode(),
+                  'encoding': 'base64',
+              }).encode()
+              request = Request(
+                  f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'VETS-PR56-Final-Contract-Exporter',
+                  },
+              )
+              with urlopen(request, timeout=60) as response:
+                  sha = json.loads(response.read())['sha']
+              if not re.fullmatch(r'[0-9a-f]{40}', sha):
+                  raise RuntimeError('invalid blob SHA')
+              return sha
+
+          blobs = {name: create_blob(text.encode()) for name, text in outputs.items()}
+          Path('pr56-contract/blob-shas.json').write_text(json.dumps({
+              'blobs': blobs,
+              'bash_blocks': bash_counts,
+              'validation': 'PASS',
+          }, indent=2) + '\n')
+          print(json.dumps({'blobs': blobs, 'bash_blocks': bash_counts}, sort_keys=True))
+          PY
+
+      - name: Upload exact validated final contract
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: pr56-final-contract-${{ github.event.pull_request.head.sha }}
+          path: pr56-contract
+          retention-days: 7
+          if-no-files-found: error
