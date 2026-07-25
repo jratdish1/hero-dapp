@@ -331,7 +331,10 @@ jobs:
     needs: authorize
     if: needs.authorize.result == 'success'
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    # The outer job budget must exceed the bounded 45.5-minute deployment SSH
+    # window plus the bounded 30.5-minute recovery SSH window, while reserving
+    # time for preflight, Cloudflare, final-state, receipt, and artifact steps.
+    timeout-minutes: 120
     environment: production
     concurrency:
       group: production-vps1

@@ -16,6 +16,8 @@ Normal deployment is not manually dispatchable. Manual workflow dispatch exists 
 
 Production mutation remains behind the protected `production` environment and its required human approval.
 
+The protected production job reserves 120 minutes so the bounded 45-minute deployment path, bounded 30-minute recovery path, kill grace, secret preflight, Cloudflare purge, public verification, final-state capture, receipt delivery, artifact upload, and runner overhead can complete without the outer job timer terminating recovery. The ceiling must not be reduced below the declared worst-case recovery path.
+
 ## Required GitHub configuration
 
 The `production` environment must:
