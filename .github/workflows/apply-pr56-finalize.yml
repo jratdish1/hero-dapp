@@ -45,7 +45,7 @@ jobs:
             test "$GITHUB_HEAD_REF" = "fix/production-controller-final-evidence-20260725"
             test "$(git rev-parse HEAD)" = "$APPLY_HEAD_SHA"
             test "$(git log -1 --pretty=%s)" = "chore: execute PR56 finalization"
-            python3 ops/pr56-finalize.py
+            python3 ops/pr56-finalize-v2.py
           } > pr56-finalize.log 2>&1
           status=$?
           cat pr56-finalize.log
