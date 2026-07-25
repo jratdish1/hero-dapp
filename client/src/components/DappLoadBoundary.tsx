@@ -1,4 +1,9 @@
-import { Component, type ErrorInfo, type ReactNode } from "react";
+import {
+  Component,
+  createRef,
+  type ErrorInfo,
+  type ReactNode,
+} from "react";
 
 interface DappLoadBoundaryProps {
   children: ReactNode;
@@ -28,17 +33,34 @@ export default class DappLoadBoundary extends Component<
   DappLoadBoundaryState
 > {
   state: DappLoadBoundaryState = { error: null };
+  private readonly headingRef = createRef<HTMLHeadingElement>();
 
   static getDerivedStateFromError(error: Error): DappLoadBoundaryState {
     return { error };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
-    console.error("[DApp bootstrap load failure]", {
-      name: error.name,
-      message: error.message,
-      componentStack: errorInfo.componentStack,
-    });
+    if (import.meta.env.DEV) {
+      console.error("[DApp bootstrap load failure]", {
+        name: error.name,
+        message: error.message,
+        componentStack: errorInfo.componentStack,
+      });
+      return;
+    }
+
+    // Do not expose provider endpoints, error messages, or component internals
+    // in production visitor consoles.
+    console.error("[DApp bootstrap load failure]");
+  }
+
+  componentDidUpdate(
+    _previousProps: DappLoadBoundaryProps,
+    previousState: DappLoadBoundaryState,
+  ) {
+    if (!previousState.error && this.state.error) {
+      this.headingRef.current?.focus();
+    }
   }
 
   render() {
@@ -47,19 +69,33 @@ export default class DappLoadBoundary extends Component<
     const staleChunk = isDappLoadFailure(this.state.error);
     return (
       <main
-        role="alert"
+        aria-labelledby="dapp-recovery-title"
+        aria-describedby="dapp-recovery-description"
         className="flex min-h-screen items-center justify-center bg-black px-6 text-white"
       >
         <section className="w-full max-w-lg rounded-2xl border border-amber-500/30 bg-zinc-950 p-8 text-center shadow-2xl">
           <p className="text-xs font-bold uppercase tracking-[0.25em] text-amber-500">
             HERO DApp recovery
           </p>
-          <h1 className="mt-4 text-2xl font-bold">
-            {staleChunk ? "A fresh application version is ready." : "The secure DApp did not load."}
+          <h1
+            id="dapp-recovery-title"
+            ref={this.headingRef}
+            tabIndex={-1}
+            className="mt-4 text-2xl font-bold focus:outline-none"
+          >
+            {staleChunk
+              ? "A fresh application version is ready."
+              : "The secure DApp did not load."}
           </h1>
-          <p className="mt-3 text-sm leading-6 text-zinc-300">
-            Reload to fetch the current verified application files. No wallet or
-            transaction action was submitted.
+          <p
+            id="dapp-recovery-description"
+            role="alert"
+            aria-live="assertive"
+            className="mt-3 text-sm leading-6 text-zinc-300"
+          >
+            Reload to fetch the current verified application files. Before
+            retrying any wallet action, confirm its status in your wallet or on
+            the appropriate block explorer.
           </p>
           <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-center">
             <button
