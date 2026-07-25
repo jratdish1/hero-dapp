@@ -153,6 +153,9 @@ jobs:
 
           deploy_blob = create_blob(deploy.encode())
           docs_blob = create_blob(docs.encode())
+          Path('pr56-timeout/blob-shas.txt').write_text(
+              f'deploy_blob={deploy_blob}\ndocs_blob={docs_blob}\nbash_blocks={block_count}\n'
+          )
           print(f'VETS_TIMEOUT_DEPLOY_BLOB={deploy_blob}')
           print(f'VETS_TIMEOUT_DOCS_BLOB={docs_blob}')
           print(f'VETS_TIMEOUT_BASH_BLOCKS={block_count}')
