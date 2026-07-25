@@ -29,18 +29,31 @@ export interface ReactRootErrorHandlers {
   onRecoverableError(error: unknown, errorInfo: ReactErrorInfo): void;
 }
 
-/** Normalize every JavaScript throw/rejection, including falsy non-Error values. */
+/** Normalize every JavaScript throw/rejection, including hostile proxies. */
 export function normalizeThrownValue(value: unknown): Error {
   if (value instanceof Error) return value;
   if (typeof value === "string") return new Error(value || "Empty string was thrown");
 
-  let serialized = "";
+  let serialized = "[unserializable value]";
   try {
-    serialized = JSON.stringify(value);
+    const json = JSON.stringify(value);
+    if (json) {
+      serialized = json;
+    } else {
+      try {
+        serialized = String(value) || "[empty value]";
+      } catch {
+        serialized = "[unconvertible value]";
+      }
+    }
   } catch {
-    serialized = "[unserializable value]";
+    try {
+      serialized = String(value) || "[empty value]";
+    } catch {
+      serialized = "[unconvertible value]";
+    }
   }
-  if (!serialized) serialized = String(value);
+
   return new Error(`Non-Error thrown value: ${serialized}`);
 }
 
