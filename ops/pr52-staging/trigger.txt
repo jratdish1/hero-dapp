@@ -1,1 +1,1 @@
-apply=pr52-exact-controller-v2
+apply=pr52-exact-controller-v2-pr-sync
