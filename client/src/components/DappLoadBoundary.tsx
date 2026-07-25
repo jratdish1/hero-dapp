@@ -1,4 +1,4 @@
-import {
+import React, {
   Component,
   createRef,
   type ErrorInfo,
