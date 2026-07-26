@@ -1,4 +1,4 @@
-name: Temporary export final PR63 cleanup and advisory validation fixes
+name: Temporary export advisory alias traversal de-duplication
 
 on:
   pull_request:
@@ -30,7 +30,7 @@ jobs:
           persist-credentials: false
           show-progress: false
 
-      - name: Patch, validate, and publish exact blobs
+      - name: Patch, validate, and publish exact blob
         shell: bash
         run: |
           set -euo pipefail
@@ -46,263 +46,78 @@ jobs:
           import subprocess
           from urllib.request import Request, urlopen
 
-          advisory_path = Path('scripts/check-production-advisories.mjs')
-          focus_path = Path('scripts/check-generic-error-focus.mjs')
-          advisory = advisory_path.read_text()
-          focus = focus_path.read_text()
+          source = Path('scripts/check-production-advisories.mjs')
+          text = source.read_text()
 
-          def replace_once(text: str, old: str, new: str, label: str) -> str:
-              count = text.count(old)
-              if count != 1:
-                  raise RuntimeError(f'{label} replacement count: {count}')
-              return text.replace(old, new, 1)
+          old_identity = '    const identity = `${node.path ?? ""}\\u0000${node.name ?? ""}\\u0000${node.version ?? ""}`;\n'
+          new_identity = '    const identity = `${node.path ?? ""}\\u0000${node.from ?? node.name ?? ""}\\u0000${node.version ?? ""}`;\n'
+          if text.count(old_identity) != 1:
+              raise RuntimeError(f'identity replacement count: {text.count(old_identity)}')
+          text = text.replace(old_identity, new_identity, 1)
 
-          advisory = replace_once(
-              advisory,
-              'function normalizeAdvisories(response) {\n',
-              'function requireAdvisoryString(value, field, packageName, advisoryId) {\n'
-              '  if (typeof value !== "string" || !value.trim()) {\n'
-              '    throw new Error(\n'
-              '      `npm advisory ${advisoryId} for ${packageName} had invalid ${field}`,\n'
-              '    );\n'
-              '  }\n'
-              '  return value.trim();\n'
-              '}\n\n'
-              'function normalizeAdvisories(response) {\n',
-              'advisory string helper',
-          )
+          old_add = '    add(node.name, node.version);\n    visitChildren(node);\n'
+          new_add = '    // The parent already added this node under its stable registry identity.\n    visitChildren(node);\n'
+          if text.count(old_add) != 1:
+              raise RuntimeError(f'redundant node-add replacement count: {text.count(old_add)}')
+          text = text.replace(old_add, new_add, 1)
 
-          advisory = replace_once(
-              advisory,
-              '      const severity = String(advisory.severity ?? "").toLowerCase();\n'
-              '      if (!KNOWN_SEVERITIES.has(severity)) {\n'
-              '        throw new Error(\n'
-              '          `npm advisory ${String(advisory.id ?? "unknown")} for ${packageName} had invalid severity ${JSON.stringify(severity)}`,\n'
-              '        );\n'
-              '      }\n\n'
-              '      advisories.push({\n'
-              '        packageName,\n'
-              '        id: normalizeAdvisoryId(advisory.id, packageName),\n'
-              '        severity,\n'
-              '        title: String(advisory.title ?? "Untitled advisory"),\n'
-              '        vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),\n'
-              '        url: String(advisory.url ?? ""),\n'
-              '      });\n',
-              '      const id = normalizeAdvisoryId(advisory.id, packageName);\n'
-              '      const severity = String(advisory.severity ?? "").toLowerCase();\n'
-              '      if (!KNOWN_SEVERITIES.has(severity)) {\n'
-              '        throw new Error(\n'
-              '          `npm advisory ${id} for ${packageName} had invalid severity ${JSON.stringify(severity)}`,\n'
-              '        );\n'
-              '      }\n'
-              '      const title = requireAdvisoryString(\n'
-              '        advisory.title,\n'
-              '        "title",\n'
-              '        packageName,\n'
-              '        id,\n'
-              '      );\n'
-              '      const vulnerableVersions = requireAdvisoryString(\n'
-              '        advisory.vulnerable_versions,\n'
-              '        "vulnerable_versions",\n'
-              '        packageName,\n'
-              '        id,\n'
-              '      );\n'
-              '      const url = requireAdvisoryString(\n'
-              '        advisory.url,\n'
-              '        "url",\n'
-              '        packageName,\n'
-              '        id,\n'
-              '      );\n\n'
-              '      advisories.push({\n'
-              '        packageName,\n'
-              '        id,\n'
-              '        severity,\n'
-              '        title,\n'
-              '        vulnerableVersions,\n'
-              '        url,\n'
-              '      });\n',
-              'required advisory fields',
-          )
+          out = Path('exported/check-production-advisories.mjs')
+          out.write_text(text)
+          subprocess.run(['node', '--check', str(out)], check=True)
 
-          focus = replace_once(
-              focus,
-              '    try {\n'
-              '      await stopChromeProcess(child, userDataDir);\n'
-              '    } catch (cleanupError) {\n'
-              "      throw new Error('Chrome cleanup failed after a startup error', { cause: cleanupError });\n"
-              '    }\n'
-              '    throw new ChromeStartupError(\n'
-              '      `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,\n'
-              '      { cause: error },\n'
-              '    );\n',
-              '    const startupError = new ChromeStartupError(\n'
-              '      `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,\n'
-              '      { cause: error },\n'
-              '    );\n'
-              '    try {\n'
-              '      await stopChromeProcess(child, userDataDir);\n'
-              '    } catch (cleanupError) {\n'
-              '      startupError.cleanupErrors = [\n'
-              '        `chrome-startup-cleanup: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,\n'
-              '      ];\n'
-              '    }\n'
-              '    throw startupError;\n',
-              'startup cleanup preservation',
-          )
-
-          focus = replace_once(
-              focus,
-              '  let client = null;\n\n'
-              '  try {\n',
-              '  let client = null;\n'
-              '  let primaryError = null;\n\n'
-              '  try {\n',
-              'primary error declaration',
-          )
-
-          focus = replace_once(
-              focus,
-              '    console.log(`Mounted generic error focus: PASS (${REPORT_PATH})`);\n'
-              '  } finally {\n'
-              '    client?.close();\n'
-              '    if (chrome) await chrome.close();\n'
-              '    if (server) await server.close();\n'
-              '    await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });\n'
-              '  }\n'
-              '}\n',
-              '    console.log(`Mounted generic error focus: PASS (${REPORT_PATH})`);\n'
-              '  } catch (error) {\n'
-              '    primaryError = error;\n'
-              '  }\n\n'
-              '  const cleanupErrors = [];\n'
-              '  try {\n'
-              '    client?.close();\n'
-              '  } catch (error) {\n'
-              '    cleanupErrors.push(`cdp-client: ${error instanceof Error ? error.message : String(error)}`);\n'
-              '  }\n'
-              '  try {\n'
-              '    if (chrome) await chrome.close();\n'
-              '  } catch (error) {\n'
-              '    cleanupErrors.push(`chrome: ${error instanceof Error ? error.message : String(error)}`);\n'
-              '  }\n'
-              '  try {\n'
-              '    if (server) await server.close();\n'
-              '  } catch (error) {\n'
-              '    cleanupErrors.push(`server: ${error instanceof Error ? error.message : String(error)}`);\n'
-              '  }\n'
-              '  try {\n'
-              '    await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });\n'
-              '    if (existsSync(workdir)) {\n'
-              '      throw new Error(`Harness workdir cleanup failed: ${workdir}`);\n'
-              '    }\n'
-              '  } catch (error) {\n'
-              '    cleanupErrors.push(`workdir: ${error instanceof Error ? error.message : String(error)}`);\n'
-              '  }\n\n'
-              '  if (primaryError !== null) {\n'
-              '    const primary =\n'
-              '      primaryError instanceof Error\n'
-              '        ? primaryError\n'
-              '        : new Error(String(primaryError));\n'
-              '    if (cleanupErrors.length > 0) primary.cleanupErrors = cleanupErrors;\n'
-              '    throw primary;\n'
-              '  }\n'
-              '  if (cleanupErrors.length > 0) {\n'
-              '    const cleanupFailure = new Error(`Generic focus cleanup failed: ${cleanupErrors.join("; ")}`);\n'
-              '    cleanupFailure.cleanupErrors = cleanupErrors;\n'
-              '    throw cleanupFailure;\n'
-              '  }\n'
-              '}\n',
-              'main cleanup preservation',
-          )
-
-          focus = replace_once(
-              focus,
-              "      errorKind: error instanceof ChromeStartupError ? 'chrome-startup' : 'assertion-or-runtime',\n"
-              '    };\n',
-              "      errorKind: error instanceof ChromeStartupError ? 'chrome-startup' : 'assertion-or-runtime',\n"
-              '      cleanupErrors: Array.isArray(error?.cleanupErrors)\n'
-              '        ? error.cleanupErrors.map(value => redact(String(value)))\n'
-              '        : [],\n'
-              '    };\n',
-              'cleanup evidence field',
-          )
-
-          outputs = {
-              'check-production-advisories.mjs': advisory,
-              'check-generic-error-focus.mjs': focus,
-          }
-          for name, text in outputs.items():
-              path = Path('exported', name)
-              path.write_text(text)
-              subprocess.run(['node', '--check', str(path)], check=True)
-
-          required = {
-              'check-production-advisories.mjs': [
-                  'requireAdvisoryString(',
-                  'advisory.vulnerable_versions',
-                  'had conflicting duplicate entries',
-                  'child?.from ?? child?.name ?? fallbackName',
-              ],
-              'check-generic-error-focus.mjs': [
-                  'let primaryError = null;',
-                  'cleanupErrors.push(`chrome:',
-                  'primary.cleanupErrors = cleanupErrors',
-                  'cleanupErrors: Array.isArray(error?.cleanupErrors)',
-              ],
-          }
-          for name, tokens in required.items():
-              for token in tokens:
-                  if token not in outputs[name]:
-                      raise RuntimeError(f'{name}: missing required token {token}')
+          required = [
+              'node.from ?? node.name ?? ""',
+              'The parent already added this node under its stable registry identity.',
+              'child?.from ?? child?.name ?? fallbackName',
+              'requireAdvisoryString(',
+          ]
+          for token in required:
+              if token not in text:
+                  raise RuntimeError(f'missing required token: {token}')
 
           forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
           credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
-          for name, text in outputs.items():
-              if any(char in forbidden for char in text):
-                  raise RuntimeError(f'{name}: hidden or bidirectional Unicode found')
-              if credential.search(text):
-                  raise RuntimeError(f'{name}: credential pattern found')
+          if any(char in forbidden for char in text):
+              raise RuntimeError('hidden or bidirectional Unicode found')
+          if credential.search(text):
+              raise RuntimeError('credential pattern found')
 
-          def create_blob(text: str) -> str:
-              payload = json.dumps({
-                  'content': base64.b64encode(text.encode()).decode(),
-                  'encoding': 'base64',
-              }).encode()
-              request = Request(
-                  f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
-                  data=payload,
-                  method='POST',
-                  headers={
-                      'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
-                      'Accept': 'application/vnd.github+json',
-                      'Content-Type': 'application/json',
-                      'X-GitHub-Api-Version': '2022-11-28',
-                      'User-Agent': 'VETS-PR63-Final-Fixes-Exporter',
-                  },
-              )
-              with urlopen(request, timeout=60) as response:
-                  sha = json.loads(response.read())['sha']
-              if not re.fullmatch(r'[0-9a-f]{40}', sha):
-                  raise RuntimeError('invalid blob SHA')
-              return sha
+          payload = json.dumps({
+              'content': base64.b64encode(text.encode()).decode(),
+              'encoding': 'base64',
+          }).encode()
+          request = Request(
+              f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
+              data=payload,
+              method='POST',
+              headers={
+                  'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'VETS-Advisory-Alias-DeDup-Exporter',
+              },
+          )
+          with urlopen(request, timeout=60) as response:
+              blob_sha = json.loads(response.read())['sha']
+          if not re.fullmatch(r'[0-9a-f]{40}', blob_sha):
+              raise RuntimeError('invalid blob SHA')
 
-          blobs = {name: create_blob(text) for name, text in outputs.items()}
           Path('exported/blob-shas.json').write_text(json.dumps({
-              'blobs': blobs,
-              'incomplete_advisory_rejection': 'PASS',
-              'primary_error_preservation': 'PASS',
-              'cleanup_evidence': 'PASS',
+              'path': 'scripts/check-production-advisories.mjs',
+              'blob_sha': blob_sha,
+              'alias_traversal_deduplicated': 'PASS',
               'node_check': 'PASS',
               'hidden_unicode': 'PASS',
               'credential_scan': 'PASS',
           }, indent=2) + '\n')
-          print(json.dumps(blobs, sort_keys=True))
+          print(f'ADVISORY_ALIAS_DEDUP_BLOB={blob_sha}')
           PY
 
-      - name: Upload validated corrections
+      - name: Upload validated correction
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: pr63-final-fixes-${{ github.event.pull_request.head.sha }}
+          name: advisory-alias-dedup-${{ github.event.pull_request.head.sha }}
           path: exported
           retention-days: 7
           if-no-files-found: error
