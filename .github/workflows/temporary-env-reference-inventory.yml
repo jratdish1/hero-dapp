@@ -1,0 +1,47 @@
+name: Temporary HeroBase environment reference inventory
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout current production-security candidate
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fix/dao-ownership-production-20260726
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Enumerate variable names only
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          {
+            printf '=== process.env dot references ===\n'
+            grep -RhoE 'process\.env\.[A-Z][A-Z0-9_]*' client server shared scripts vite.config.ts drizzle.config.ts 2>/dev/null \
+              | sed 's/^process\.env\.//' | sort -u || true
+            printf '=== import.meta.env dot references ===\n'
+            grep -RhoE 'import\.meta\.env\.[A-Z][A-Z0-9_]*' client server shared scripts vite.config.ts 2>/dev/null \
+              | sed 's/^import\.meta\.env\.//' | sort -u || true
+            printf '=== explicit VITE variables ===\n'
+            grep -RhoE 'VITE_[A-Z0-9_]+' client server shared scripts vite.config.ts .env.example 2>/dev/null | sort -u || true
+          } | tee evidence/env-references.txt
+      - name: Upload reference inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: herobase-env-references-${{ github.event.pull_request.head.sha }}
+          path: evidence/env-references.txt
+          retention-days: 7
+          if-no-files-found: error
