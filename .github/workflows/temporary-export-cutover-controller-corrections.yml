@@ -1,0 +1,273 @@
+name: Temporary export cutover controller corrections
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.actor == github.repository_owner &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact controller branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-pm2-cutover-controller-20260726
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Correct, validate, and publish controller blobs
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p exported
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from urllib.request import Request, urlopen
+
+          bootstrap_path = Path('ops/bootstrap-hero-dapp-host.sh')
+          helper_path = Path('ops/hero-dapp-pm2-cutover.sh')
+          bootstrap = bootstrap_path.read_text()
+          helper = helper_path.read_text()
+
+          def replace_once(text: str, old: str, new: str, label: str) -> str:
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label} replacement count: {count}')
+              return text.replace(old, new, 1)
+
+          bootstrap = replace_once(
+              bootstrap,
+              '    rm -rf "$NODE_INSTALL_DIR"\n'
+              '    tar -xJf "$work/$archive" -C /opt\n',
+              '    if [ -e "$TOOLCHAIN_LINK" ] && [ ! -L "$TOOLCHAIN_LINK" ]; then\n'
+              '      fatal "toolchain link path exists and is not a symlink"\n'
+              '    fi\n'
+              '    rm -rf "$NODE_INSTALL_DIR"\n'
+              '    tar -xJf "$work/$archive" -C /opt\n',
+              'toolchain link guard',
+          )
+
+          bootstrap = replace_once(
+              bootstrap,
+              '  install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$(dirname "$APP_DIR")"\n\n'
+              '  if [ ! -d "$APP_DIR/.git" ]; then\n'
+              '    rm -rf "$APP_DIR"\n'
+              '    runuser -u "$DEPLOY_USER" -- env HOME="$DEPLOY_HOME" PATH="$SAFE_PATH" \\\n'
+              '      git clone --no-tags "$REPO_URL" "$APP_DIR"\n'
+              '  fi\n',
+              '  install -d -o root -g root -m 755 "$(dirname "$APP_DIR")"\n\n'
+              '  if [ ! -d "$APP_DIR/.git" ]; then\n'
+              '    rm -rf "$APP_DIR"\n'
+              '    install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR"\n'
+              '    runuser -u "$DEPLOY_USER" -- env HOME="$DEPLOY_HOME" PATH="$SAFE_PATH" \\\n'
+              '      git clone --no-tags "$REPO_URL" "$APP_DIR"\n'
+              '  fi\n',
+              'application parent ownership',
+          )
+
+          helper = replace_once(
+              helper,
+              '  local target_sha="$1" legacy_sha="" first_cutover=false\n',
+              '  local target_sha="$1" legacy_sha=""\n',
+              'unused first-cutover variable declaration',
+          )
+          helper = replace_once(
+              helper,
+              '  first_cutover=true\n\n',
+              '',
+              'unused first-cutover assignment',
+          )
+
+          old_canary = '''run_canary() {
+            local sha="$1" cleanup_failed=false
+            require_sha "$sha"
+            assert_toolchain
+            assert_app_tree "$sha"
+            user_pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || true
+            wait_for_port_free "$CANARY_PORT" || fatal "canary port is occupied"
+
+            cleanup_canary() {
+              user_pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || cleanup_failed=true
+              wait_for_port_free "$CANARY_PORT" || cleanup_failed=true
+            }
+            trap cleanup_canary RETURN
+
+            start_user_process "$CANARY_NAME" "$CANARY_PORT" "$sha"
+            verify_user_process "$CANARY_NAME" "$CANARY_PORT" "$sha" || fatal "canary exact-SHA health verification failed"
+            cleanup_canary
+            trap - RETURN
+            [ "$cleanup_failed" = false ] || fatal "canary cleanup failed"
+            printf 'VETS_CANARY_VERIFIED_SHA=%s\n' "$sha"
+          }
+          '''
+          new_canary = '''run_canary() {
+            local sha="$1" primary_failed=false cleanup_failed=false
+            require_sha "$sha"
+            assert_toolchain
+            assert_app_tree "$sha"
+            user_pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || true
+            wait_for_port_free "$CANARY_PORT" || fatal "canary port is occupied"
+
+            if ! start_user_process "$CANARY_NAME" "$CANARY_PORT" "$sha" ||
+               ! verify_user_process "$CANARY_NAME" "$CANARY_PORT" "$sha"; then
+              primary_failed=true
+            fi
+
+            user_pm2 delete "$CANARY_NAME" >/dev/null 2>&1 || cleanup_failed=true
+            wait_for_port_free "$CANARY_PORT" || cleanup_failed=true
+
+            if [ "$primary_failed" = true ]; then
+              [ "$cleanup_failed" = false ] || printf 'VETS_CANARY_CLEANUP_AFTER_FAILURE=false\n' >&2
+              fatal "canary exact-SHA health verification failed"
+            fi
+            [ "$cleanup_failed" = false ] || fatal "canary cleanup failed"
+            printf 'VETS_CANARY_VERIFIED_SHA=%s\n' "$sha"
+          }
+          '''
+          import textwrap
+          helper = replace_once(
+              helper,
+              textwrap.dedent(old_canary),
+              textwrap.dedent(new_canary),
+              'explicit canary cleanup',
+          )
+
+          old_commit = '''    if pm2_process_exists root "$PROCESS_NAME"; then
+                root_pm2 delete "$PROCESS_NAME" >/dev/null
+                root_pm2 save --force >/dev/null
+              fi
+              write_state "$COMMITTED_STATE" "$legacy_sha" "$target_sha" "committed"
+              rm -f "$PENDING_STATE"
+          '''
+          new_commit = '''    if pm2_process_exists root "$PROCESS_NAME"; then
+                root_pm2 stop "$PROCESS_NAME" >/dev/null 2>&1 || true
+                root_pm2 save --force >/dev/null
+              fi
+              user_pm2 save --force >/dev/null
+              systemctl daemon-reload
+              systemctl enable pm2-hero-deploy.service >/dev/null
+              write_state "$COMMITTED_STATE" "$legacy_sha" "$target_sha" "committed"
+              rm -f "$PENDING_STATE"
+          '''
+          helper = replace_once(
+              helper,
+              textwrap.dedent(old_commit),
+              textwrap.dedent(new_commit),
+              'preserve stopped legacy PM2 entry',
+          )
+
+          helper = replace_once(
+              helper,
+              '  user_pm2 save --force >/dev/null\n'
+              '  systemctl daemon-reload\n'
+              '  systemctl enable pm2-hero-deploy.service >/dev/null\n'
+              '  printf \'VETS_PM2_CUTOVER_COMMITTED_SHA=%s\\n\' "$target_sha"\n',
+              '  if [ ! -f "$PENDING_STATE" ]; then\n'
+              '    user_pm2 save --force >/dev/null\n'
+              '    systemctl daemon-reload\n'
+              '    systemctl enable pm2-hero-deploy.service >/dev/null\n'
+              '  fi\n'
+              '  printf \'VETS_LEGACY_ROOT_ENTRY=PRESERVED_STOPPED\\n\'\n'
+              '  printf \'VETS_PM2_CUTOVER_COMMITTED_SHA=%s\\n\' "$target_sha"\n',
+              'avoid duplicate commit finalization',
+          )
+
+          outputs = {
+              'bootstrap-hero-dapp-host.sh': bootstrap,
+              'hero-dapp-pm2-cutover.sh': helper,
+          }
+          for name, text in outputs.items():
+              path = Path('exported', name)
+              path.write_text(text)
+              subprocess.run(['bash', '-n', str(path)], check=True)
+
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
+          for name, text in outputs.items():
+              if any(char in forbidden for char in text):
+                  raise RuntimeError(f'{name}: hidden or bidirectional Unicode found')
+              if credential.search(text):
+                  raise RuntimeError(f'{name}: credential pattern found')
+
+          required = {
+              'bootstrap-hero-dapp-host.sh': [
+                  'install -d -o root -g root -m 755 "$(dirname "$APP_DIR")"',
+                  'install -d -o "$DEPLOY_USER" -g "$DEPLOY_USER" -m 755 "$APP_DIR"',
+                  'toolchain link path exists and is not a symlink',
+              ],
+              'hero-dapp-pm2-cutover.sh': [
+                  'VETS_CANARY_CLEANUP_AFTER_FAILURE=false',
+                  'VETS_LEGACY_ROOT_ENTRY=PRESERVED_STOPPED',
+                  'root_pm2 stop "$PROCESS_NAME"',
+              ],
+          }
+          for name, tokens in required.items():
+              for token in tokens:
+                  if token not in outputs[name]:
+                      raise RuntimeError(f'{name}: missing required token {token}')
+
+          def create_blob(text: str) -> str:
+              payload = json.dumps({
+                  'content': base64.b64encode(text.encode()).decode(),
+                  'encoding': 'base64',
+              }).encode()
+              request = Request(
+                  f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
+                  data=payload,
+                  method='POST',
+                  headers={
+                      'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'VETS-Cutover-Controller-Correction-Exporter',
+                  },
+              )
+              with urlopen(request, timeout=60) as response:
+                  sha = json.loads(response.read())['sha']
+              if not re.fullmatch(r'[0-9a-f]{40}', sha):
+                  raise RuntimeError('invalid blob SHA')
+              return sha
+
+          blobs = {name: create_blob(text) for name, text in outputs.items()}
+          Path('exported/blob-shas.json').write_text(json.dumps({
+              'blobs': blobs,
+              'bash_syntax': 'PASS',
+              'parent_ownership': 'PASS',
+              'canary_cleanup': 'PASS',
+              'legacy_entry_preserved': 'PASS',
+              'hidden_unicode': 'PASS',
+              'credential_scan': 'PASS',
+          }, indent=2) + '\n')
+          print(json.dumps(blobs, sort_keys=True))
+          PY
+
+      - name: Upload validated corrections
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: cutover-controller-corrections-${{ github.event.pull_request.head.sha }}
+          path: exported
+          retention-days: 7
+          if-no-files-found: error
