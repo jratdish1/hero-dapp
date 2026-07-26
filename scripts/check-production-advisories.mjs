@@ -96,11 +96,11 @@ function collectInstalledProductionVersions() {
   function visit(node) {
     if (!node || typeof node !== "object") return;
 
-    const identity = `${node.path ?? ""}\u0000${node.name ?? ""}\u0000${node.version ?? ""}`;
+    const identity = `${node.path ?? ""}\u0000${node.from ?? node.name ?? ""}\u0000${node.version ?? ""}`;
     if (visited.has(identity)) return;
     visited.add(identity);
 
-    add(node.name, node.version);
+    // The parent already added this node under its stable registry identity.
     visitChildren(node);
   }
 
