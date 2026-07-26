@@ -11,6 +11,7 @@ const REPORT_PATH = "production-advisory-report.json";
 const MAX_ATTEMPTS = 3;
 const REQUEST_DEADLINE_MS = 45_000;
 const SOCKET_IDLE_TIMEOUT_MS = 20_000;
+const INVENTORY_DEADLINE_MS = 60_000;
 const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const KNOWN_SEVERITIES = new Set(["info", "low", "moderate", "high", "critical"]);
@@ -40,12 +41,24 @@ function writeReport(report) {
   });
 }
 
+function requirePlainString(value, description) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(`${description} was missing or invalid`);
+  }
+  const normalized = value.trim();
+  if (/[\u0000-\u001f\u007f]/u.test(normalized)) {
+    throw new Error(`${description} contained control characters`);
+  }
+  return normalized;
+}
+
 function collectInstalledProductionVersions() {
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
   const output = execFileSync(pnpm, INVENTORY_COMMAND, {
     encoding: "utf8",
     maxBuffer: 128 * 1024 * 1024,
     stdio: ["ignore", "pipe", "inherit"],
+    timeout: INVENTORY_DEADLINE_MS,
   });
 
   const roots = JSON.parse(output);
@@ -54,75 +67,120 @@ function collectInstalledProductionVersions() {
   }
 
   const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const requiredRootNames = new Set(Object.keys(manifest.dependencies ?? {}));
+  const optionalRootNames = new Set(Object.keys(manifest.optionalDependencies ?? {}));
   const productionRootNames = new Set([
-    ...Object.keys(manifest.dependencies ?? {}),
-    ...Object.keys(manifest.optionalDependencies ?? {}),
+    ...requiredRootNames,
+    ...optionalRootNames,
   ]);
   if (productionRootNames.size === 0) {
     throw new Error("package.json declared no production dependency roots");
   }
 
   const versions = new Map();
-  const visited = new Set();
+  const visited = new WeakSet();
+  const resolvedRootNames = new Set();
 
-  function add(name, version) {
-    if (typeof name !== "string" || typeof version !== "string") return;
-    if (!name || !version) return;
-    if (!versions.has(name)) versions.set(name, new Set());
-    versions.get(name).add(version);
-  }
-
-  function advisoryPackageName(child, fallbackName) {
-    const candidate = child?.from ?? child?.name ?? fallbackName;
-    if (typeof candidate !== "string" || !candidate.trim()) {
-      throw new Error(`production dependency ${fallbackName} had no stable registry package name`);
+  function add(name, version, context) {
+    const normalizedName = requirePlainString(
+      name,
+      `${context} registry package name`,
+    );
+    const normalizedVersion = requirePlainString(
+      version,
+      `${context} installed version`,
+    );
+    if (!versions.has(normalizedName)) {
+      versions.set(normalizedName, new Set());
     }
-    return candidate.trim();
+    versions.get(normalizedName).add(normalizedVersion);
   }
 
-  function visitChildren(node) {
+  function advisoryPackageName(child, fallbackName, context) {
+    const candidate = child?.from ?? child?.name ?? fallbackName;
+    return requirePlainString(
+      candidate,
+      `${context} stable registry package name`,
+    );
+  }
+
+  function visitChildren(node, context) {
     for (const field of ["dependencies", "optionalDependencies"]) {
-      const children = node?.[field];
-      if (!children || typeof children !== "object") continue;
+      const children = node[field];
+      if (children === undefined || children === null) continue;
+      if (
+        typeof children !== "object" ||
+        Array.isArray(children)
+      ) {
+        throw new Error(`${context}.${field} was not a dependency object`);
+      }
       for (const [fallbackName, child] of Object.entries(children)) {
-        if (!child || typeof child !== "object") continue;
-        const resolvedName = advisoryPackageName(child, fallbackName);
-        add(resolvedName, child.version);
-        visit(child);
+        const childContext = `${context}.${field}[${JSON.stringify(fallbackName)}]`;
+        if (!child || typeof child !== "object" || Array.isArray(child)) {
+          throw new Error(`${childContext} was not an installed dependency record`);
+        }
+        const resolvedName = advisoryPackageName(
+          child,
+          fallbackName,
+          childContext,
+        );
+        add(resolvedName, child.version, childContext);
+        visit(child, childContext);
       }
     }
   }
 
-  function visit(node) {
-    if (!node || typeof node !== "object") return;
-
-    const identity = `${node.path ?? ""}\u0000${node.from ?? node.name ?? ""}\u0000${node.version ?? ""}`;
-    if (visited.has(identity)) return;
-    visited.add(identity);
-
+  function visit(node, context) {
+    if (!node || typeof node !== "object" || Array.isArray(node)) {
+      throw new Error(`${context} was not an installed dependency record`);
+    }
+    if (visited.has(node)) return;
+    visited.add(node);
     // The parent already added this node under its stable registry identity.
-    visitChildren(node);
+    visitChildren(node, context);
   }
 
-  function visitProductionRootChildren(root) {
+  function visitProductionRootChildren(root, rootIndex) {
+    if (!root || typeof root !== "object" || Array.isArray(root)) {
+      throw new Error(`pnpm production root ${rootIndex} was invalid`);
+    }
+
     for (const field of ["dependencies", "optionalDependencies"]) {
-      const children = root?.[field];
-      if (!children || typeof children !== "object") continue;
+      const children = root[field];
+      if (children === undefined || children === null) continue;
+      if (
+        typeof children !== "object" ||
+        Array.isArray(children)
+      ) {
+        throw new Error(`pnpm production root ${rootIndex}.${field} was invalid`);
+      }
+
       for (const [fallbackName, child] of Object.entries(children)) {
-        if (!child || typeof child !== "object") continue;
+        const fallbackIsRoot = productionRootNames.has(fallbackName);
+        if (!child || typeof child !== "object" || Array.isArray(child)) {
+          if (fallbackIsRoot) {
+            throw new Error(
+              `declared production root ${fallbackName} had no installed dependency record`,
+            );
+          }
+          continue;
+        }
+
         const declaredName =
           typeof child.name === "string" && child.name.trim()
             ? child.name.trim()
             : fallbackName;
-        if (
-          !productionRootNames.has(fallbackName) &&
-          !productionRootNames.has(declaredName)
-        ) {
-          continue;
-        }
-        const advisoryName = advisoryPackageName(child, fallbackName);
-        add(advisoryName, child.version);
-        visit(child);
+        const declaredIsRoot = productionRootNames.has(declaredName);
+        if (!fallbackIsRoot && !declaredIsRoot) continue;
+
+        if (fallbackIsRoot) resolvedRootNames.add(fallbackName);
+        if (declaredIsRoot) resolvedRootNames.add(declaredName);
+
+        const context =
+          `production root ${rootIndex}.${field}[${JSON.stringify(fallbackName)}]`;
+        const advisoryName = advisoryPackageName(child, fallbackName, context);
+        add(advisoryName, child.version, context);
+        visit(child, context);
       }
     }
   }
@@ -131,7 +189,20 @@ function collectInstalledProductionVersions() {
   // retain peer-only root dev packages as non-leaf containers even with
   // --exclude-peers, so begin strictly from names declared in dependencies or
   // optionalDependencies and then traverse their production closure.
-  for (const root of roots) visitProductionRootChildren(root);
+  roots.forEach(visitProductionRootChildren);
+
+  const missingRequiredRoots = [...requiredRootNames]
+    .filter(name => !resolvedRootNames.has(name))
+    .sort();
+  if (missingRequiredRoots.length > 0) {
+    throw new Error(
+      `pnpm production inventory omitted required roots: ${missingRequiredRoots.join(", ")}`,
+    );
+  }
+
+  const missingOptionalRoots = [...optionalRootNames]
+    .filter(name => !resolvedRootNames.has(name))
+    .sort();
 
   const payload = Object.fromEntries(
     [...versions.entries()]
@@ -157,16 +228,33 @@ function collectInstalledProductionVersions() {
     pairCount,
     inventorySha256,
     productionRootCount: productionRootNames.size,
+    resolvedProductionRootCount: resolvedRootNames.size,
+    missingOptionalRootCount: missingOptionalRoots.length,
   };
 }
 
 function decompressResponse(buffer, contentEncoding) {
-  const encoding = String(contentEncoding ?? "").toLowerCase();
-  const isGzip =
-    encoding.includes("gzip") ||
-    (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b);
+  const encoding = String(contentEncoding ?? "").trim().toLowerCase();
+  const declaredEncodings = encoding
+    .split(",")
+    .map(value => value.trim())
+    .filter(Boolean)
+    .filter(value => value !== "identity");
+  const unsupported = declaredEncodings.filter(
+    value => value !== "gzip" && value !== "br",
+  );
+  if (unsupported.length > 0 || declaredEncodings.length > 1) {
+    throw new NonRetryableAuditError(
+      `npm advisory response used unsupported content encoding ${JSON.stringify(encoding)}`,
+    );
+  }
 
-  if (!isGzip && !encoding.includes("br")) return Promise.resolve(buffer);
+  const isGzip =
+    declaredEncodings[0] === "gzip" ||
+    (buffer.length >= 2 && buffer[0] === 0x1f && buffer[1] === 0x8b);
+  const isBrotli = declaredEncodings[0] === "br";
+
+  if (!isGzip && !isBrotli) return Promise.resolve(buffer);
 
   const decompressor = isGzip ? createGunzip() : createBrotliDecompress();
   const chunks = [];
@@ -217,7 +305,7 @@ async function requestAdvisories(payload) {
           "Accept-Encoding": "identity",
           "Content-Type": "application/json",
           "Content-Length": String(requestBody.length),
-          "User-Agent": "hero-dapp-production-advisory-check/1.2",
+          "User-Agent": "hero-dapp-production-advisory-check/1.3",
         },
       },
       response => {
@@ -251,7 +339,9 @@ async function requestAdvisories(payload) {
           }
           settle(
             reject,
-            new RetryableAuditError(`npm advisory response failed: ${error.message}`),
+            new RetryableAuditError(
+              `npm advisory response failed: ${error.message}`,
+            ),
           );
         });
 
@@ -264,7 +354,9 @@ async function requestAdvisories(payload) {
           if (RETRYABLE_STATUS.has(status)) {
             settle(
               reject,
-              new RetryableAuditError(`npm advisory endpoint returned HTTP ${status}`),
+              new RetryableAuditError(
+                `npm advisory endpoint returned HTTP ${status}`,
+              ),
             );
             return;
           }
@@ -295,7 +387,9 @@ async function requestAdvisories(payload) {
             settle(
               reject,
               new RetryableAuditError(
-                `npm advisory response was unreadable: ${error instanceof Error ? error.message : String(error)}`,
+                `npm advisory response was unreadable: ${
+                  error instanceof Error ? error.message : String(error)
+                }`,
               ),
             );
             return;
@@ -355,7 +449,9 @@ async function requestAdvisories(payload) {
       }
       settle(
         reject,
-        new RetryableAuditError(`npm advisory request failed: ${error.message}`),
+        new RetryableAuditError(
+          `npm advisory request failed: ${error.message}`,
+        ),
       );
     });
 
@@ -385,14 +481,25 @@ function requireAdvisoryString(value, field, packageName, advisoryId) {
   return value.trim();
 }
 
-function normalizeAdvisories(response) {
+function normalizeAdvisories(response, requestedPayload) {
   const advisories = [];
-  for (const [packageName, packageAdvisories] of Object.entries(response)) {
+  for (const [rawPackageName, packageAdvisories] of Object.entries(response)) {
+    const packageName = requirePlainString(
+      rawPackageName,
+      "npm advisory response package name",
+    );
+    if (!Object.hasOwn(requestedPayload, packageName)) {
+      throw new Error(
+        `npm advisory response included unrequested package ${packageName}`,
+      );
+    }
     if (!Array.isArray(packageAdvisories)) {
-      throw new Error(`npm advisory response for ${packageName} was not an array`);
+      throw new Error(
+        `npm advisory response for ${packageName} was not an array`,
+      );
     }
     for (const advisory of packageAdvisories) {
-      if (!advisory || typeof advisory !== "object") {
+      if (!advisory || typeof advisory !== "object" || Array.isArray(advisory)) {
         throw new Error(`npm advisory entry for ${packageName} was invalid`);
       }
 
@@ -453,9 +560,13 @@ async function main() {
     pairCount,
     inventorySha256,
     productionRootCount,
+    resolvedProductionRootCount,
+    missingOptionalRootCount,
   } = collectInstalledProductionVersions();
   inventoryEvidence = {
     productionRootCount,
+    resolvedProductionRootCount,
+    missingOptionalRootCount,
     inventorySha256,
     packageVersionPairs: pairCount,
   };
@@ -468,7 +579,10 @@ async function main() {
       break;
     } catch (error) {
       lastError = error;
-      if (!(error instanceof RetryableAuditError) || attempt === MAX_ATTEMPTS) {
+      if (
+        !(error instanceof RetryableAuditError) ||
+        attempt === MAX_ATTEMPTS
+      ) {
         throw error;
       }
       const delaySeconds = attempt * 5;
@@ -479,9 +593,11 @@ async function main() {
     }
   }
 
-  if (!response) throw lastError ?? new Error("npm advisory check produced no response");
+  if (!response) {
+    throw lastError ?? new Error("npm advisory check produced no response");
+  }
 
-  const advisories = normalizeAdvisories(response);
+  const advisories = normalizeAdvisories(response, payload);
   const blocking = advisories.filter(advisory =>
     FAIL_SEVERITIES.has(advisory.severity),
   );
@@ -494,12 +610,14 @@ async function main() {
   }, {});
 
   const report = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     registry: `https://${REGISTRY_HOST}`,
     endpoint: AUDIT_PATH,
     inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
     checkedAt: new Date().toISOString(),
     productionRootCount,
+    resolvedProductionRootCount,
+    missingOptionalRootCount,
     inventorySha256,
     packageVersionPairs: pairCount,
     matchingAdvisories: advisories.length,
@@ -511,7 +629,7 @@ async function main() {
   writeReport(report);
 
   console.log(
-    `Production advisory inventory: ${productionRootCount} declared roots, ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical; inventory sha256 ${inventorySha256}.`,
+    `Production advisory inventory: ${productionRootCount} declared roots, ${resolvedProductionRootCount} resolved roots, ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical; inventory sha256 ${inventorySha256}.`,
   );
 
   for (const advisory of blocking) {
@@ -519,7 +637,9 @@ async function main() {
   }
 
   if (informational.length > 0) {
-    console.log(`Non-blocking advisory counts: ${JSON.stringify(informationalCounts)}`);
+    console.log(
+      `Non-blocking advisory counts: ${JSON.stringify(informationalCounts)}`,
+    );
   }
 
   if (blocking.length > 0) {
@@ -537,7 +657,7 @@ main().catch(error => {
   const message = error instanceof Error ? error.message : String(error);
   try {
     writeReport({
-      schemaVersion: 1,
+      schemaVersion: 2,
       registry: `https://${REGISTRY_HOST}`,
       endpoint: AUDIT_PATH,
       inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
