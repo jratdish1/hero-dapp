@@ -1,4 +1,4 @@
-name: Temporary export final advisory evidence corrections
+name: Temporary export alias-safe advisory identity corrections
 
 on:
   pull_request:
@@ -51,33 +51,126 @@ jobs:
 
           replacements = [
               (
-                  'class RetryableAuditError extends Error {}\nclass NonRetryableAuditError extends Error {}\n',
-                  'class RetryableAuditError extends Error {}\nclass NonRetryableAuditError extends Error {}\n\nlet inventoryEvidence;\n',
-                  'inventory evidence declaration',
+                  '  function visitChildren(node) {\n',
+                  '''  function advisoryPackageName(child, fallbackName) {
+                    const candidate = child?.from ?? child?.name ?? fallbackName;
+                    if (typeof candidate !== "string" || !candidate.trim()) {
+                      throw new Error(`production dependency ${fallbackName} had no stable registry package name`);
+                    }
+                    return candidate.trim();
+                  }
+
+                  function visitChildren(node) {
+                  ''',
+                  'package-name helper',
               ),
               (
-                  'async function requestAdvisories(payload) {\n  const requestBody = Buffer.from(JSON.stringify(payload), "utf8");\n',
-                  'async function requestAdvisories(payload) {\n  const requestBody = Buffer.from(JSON.stringify(payload), "utf8");\n  const startedAt = Date.now();\n',
-                  'request start time',
+                  '''        add(child.name ?? fallbackName, child.version);
+                          visit(child);
+                  ''',
+                  '''        const resolvedName = advisoryPackageName(child, fallbackName);
+                          add(resolvedName, child.version);
+                          visit(child);
+                  ''',
+                  'nested alias identity',
               ),
               (
-                  '          settle(resolve, parsed);\n',
-                  '          const elapsedMs = Date.now() - startedAt;\n          if (elapsedMs >= REQUEST_DEADLINE_MS) {\n            settle(\n              reject,\n              new RetryableAuditError(\n                `npm advisory request completed after ${elapsedMs}ms, exceeding the ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,\n              ),\n            );\n            request.destroy();\n            return;\n          }\n\n          settle(resolve, parsed);\n',
-                  'pre-success elapsed deadline',
+                  '''        const resolvedName = child.name ?? fallbackName;
+                          if (
+                            !productionRootNames.has(fallbackName) &&
+                            !productionRootNames.has(resolvedName)
+                          ) {
+                            continue;
+                          }
+                          add(resolvedName, child.version);
+                  ''',
+                  '''        const declaredName =
+                            typeof child.name === "string" && child.name.trim()
+                              ? child.name.trim()
+                              : fallbackName;
+                          if (
+                            !productionRootNames.has(fallbackName) &&
+                            !productionRootNames.has(declaredName)
+                          ) {
+                            continue;
+                          }
+                          const advisoryName = advisoryPackageName(child, fallbackName);
+                          add(advisoryName, child.version);
+                  ''',
+                  'root alias identity',
               ),
               (
-                  '  } = collectInstalledProductionVersions();\n  let response;\n',
-                  '  } = collectInstalledProductionVersions();\n  inventoryEvidence = {\n    productionRootCount,\n    inventorySha256,\n    packageVersionPairs: pairCount,\n  };\n  let response;\n',
-                  'inventory evidence capture',
+                  'function normalizeAdvisories(response) {\n',
+                  '''function normalizeAdvisoryId(value, packageName) {
+                    if (typeof value === "number") {
+                      if (!Number.isSafeInteger(value) || value < 0) {
+                        throw new Error(`npm advisory for ${packageName} had invalid numeric ID`);
+                      }
+                      return String(value);
+                    }
+                    if (typeof value === "string" && value.trim()) {
+                      return value.trim();
+                    }
+                    throw new Error(`npm advisory for ${packageName} had no stable scalar ID`);
+                  }
+
+                  function normalizeAdvisories(response) {
+                  ''',
+                  'advisory-id helper',
               ),
               (
-                  '      checkedAt: new Date().toISOString(),\n      result: "ERROR",\n',
-                  '      checkedAt: new Date().toISOString(),\n      ...(inventoryEvidence ?? {}),\n      result: "ERROR",\n',
-                  'error evidence identity',
+                  '''      advisories.push({
+                            packageName,
+                            id: String(advisory.id ?? "unknown"),
+                            severity,
+                            title: String(advisory.title ?? "Untitled advisory"),
+                            vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
+                            url: String(advisory.url ?? ""),
+                          });
+                  ''',
+                  '''      advisories.push({
+                            packageName,
+                            id: normalizeAdvisoryId(advisory.id, packageName),
+                            severity,
+                            title: String(advisory.title ?? "Untitled advisory"),
+                            vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
+                            url: String(advisory.url ?? ""),
+                          });
+                  ''',
+                  'stable advisory ID',
+              ),
+              (
+                  '''  const unique = new Map();
+                    for (const advisory of advisories) {
+                      unique.set(`${advisory.packageName}\\u0000${advisory.id}`, advisory);
+                    }
+                    return [...unique.values()];
+                  ''',
+                  '''  const unique = new Map();
+                    for (const advisory of advisories) {
+                      const key = `${advisory.packageName}\\u0000${advisory.id}`;
+                      const existing = unique.get(key);
+                      if (existing && JSON.stringify(existing) !== JSON.stringify(advisory)) {
+                        throw new Error(
+                          `npm advisory ${advisory.id} for ${advisory.packageName} had conflicting duplicate entries`,
+                        );
+                      }
+                      if (!existing) unique.set(key, advisory);
+                    }
+                    return [...unique.values()];
+                  ''',
+                  'conflicting duplicate rejection',
               ),
           ]
 
+          # Dedent the JavaScript snippets embedded above without disturbing
+          # their intentional internal indentation.
+          import textwrap
+          normalized = []
           for old, new, label in replacements:
+              normalized.append((textwrap.dedent(old), textwrap.dedent(new), label))
+
+          for old, new, label in normalized:
               if text.count(old) != 1:
                   raise RuntimeError(f'{label} replacement count: {text.count(old)}')
               text = text.replace(old, new, 1)
@@ -87,12 +180,12 @@ jobs:
           subprocess.run(['node', '--check', str(out)], check=True)
 
           required = [
-              'let inventoryEvidence;',
-              'const startedAt = Date.now();',
+              'child?.from ?? child?.name ?? fallbackName',
+              'normalizeAdvisoryId(advisory.id, packageName)',
+              'had no stable scalar ID',
+              'had conflicting duplicate entries',
               'const elapsedMs = Date.now() - startedAt;',
-              'if (elapsedMs >= REQUEST_DEADLINE_MS)',
               '...(inventoryEvidence ?? {})',
-              'packageVersionPairs: pairCount',
           ]
           for token in required:
               if token not in text:
@@ -118,7 +211,7 @@ jobs:
                   'Accept': 'application/vnd.github+json',
                   'Content-Type': 'application/json',
                   'X-GitHub-Api-Version': '2022-11-28',
-                  'User-Agent': 'VETS-Advisory-Final-Evidence-Exporter',
+                  'User-Agent': 'VETS-Advisory-Alias-ID-Exporter',
               },
           )
           with urlopen(request, timeout=60) as response:
@@ -129,19 +222,20 @@ jobs:
           Path('exported/blob-shas.json').write_text(json.dumps({
               'path': 'scripts/check-production-advisories.mjs',
               'blob_sha': blob_sha,
-              'elapsed_deadline_recheck': 'PASS',
-              'error_inventory_identity': 'PASS',
+              'npm_alias_identity': 'PASS',
+              'stable_advisory_id': 'PASS',
+              'conflicting_duplicate_rejection': 'PASS',
               'node_check': 'PASS',
               'hidden_unicode': 'PASS',
               'credential_scan': 'PASS',
           }, indent=2) + '\n')
-          print(f'ADVISORY_FINAL_BLOB={blob_sha}')
+          print(f'ADVISORY_ALIAS_ID_BLOB={blob_sha}')
           PY
 
       - name: Upload validated correction
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: advisory-final-evidence-${{ github.event.pull_request.head.sha }}
+          name: advisory-alias-id-${{ github.event.pull_request.head.sha }}
           path: exported
           retention-days: 7
           if-no-files-found: error
