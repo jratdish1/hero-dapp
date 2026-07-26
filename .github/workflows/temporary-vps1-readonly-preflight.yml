@@ -60,6 +60,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          mkdir -p preflight
           ssh \
             -i "$HOME/.ssh/vds_key" \
             -o BatchMode=yes \
@@ -69,7 +70,7 @@ jobs:
             -o IdentitiesOnly=yes \
             -o StrictHostKeyChecking=yes \
             "root@$VDS_HOST" \
-            bash -s -- "$CF_ZONE_ID" <<'VDS'
+            bash -s -- "$CF_ZONE_ID" <<'VDS' | tee preflight/preflight.txt
           set -euo pipefail
           CF_ZONE_ID="$1"
 
@@ -234,6 +235,15 @@ jobs:
           done
           VPS1
           VDS
+
+      - name: Upload read-only preflight evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-vps1-readonly-preflight-${{ github.event.pull_request.head.sha }}
+          path: preflight/preflight.txt
+          retention-days: 7
+          if-no-files-found: error
 
       - name: Remove ephemeral SSH material
         if: always()
