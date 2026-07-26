@@ -1,0 +1,602 @@
+name: Temporary bounded HeroBase production bootstrap
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: temporary-herobase-production-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact monitor head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-deploy-monitor-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate workflow contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' .github/workflows/temporary-herobase-production-bootstrap.yml
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import subprocess
+
+          path = Path('.github/workflows/temporary-herobase-production-bootstrap.yml')
+          text = path.read_text()
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          if any(ch in forbidden for ch in text):
+              raise SystemExit('hidden/bidirectional Unicode found')
+          credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
+          if credential.search(text):
+              raise SystemExit('credential-like material found')
+
+          expression = re.compile(r'\$\{\{.*?\}\}')
+          lines = text.splitlines()
+          index = 0
+          count = 0
+          while index < len(lines):
+              line = lines[index]
+              stripped = line.lstrip()
+              indent = len(line) - len(stripped)
+              if stripped not in {'run: |', 'run: |-'}:
+                  index += 1
+                  continue
+              count += 1
+              index += 1
+              block = []
+              while index < len(lines):
+                  candidate = lines[index]
+                  candidate_indent = len(candidate) - len(candidate.lstrip())
+                  if candidate.strip() and candidate_indent <= indent:
+                      break
+                  block.append(candidate[indent + 2:] if candidate.strip() else '')
+                  index += 1
+              result = subprocess.run(
+                  ['bash', '-n'],
+                  input=expression.sub('VALUE', '\n'.join(block) + '\n'),
+                  text=True,
+                  capture_output=True,
+              )
+              if result.returncode:
+                  raise SystemExit(f'Bash block {count} failed: {result.stderr}')
+          print(f'VALIDATED_BASH_BLOCKS={count}')
+          PY
+          grep -q "github.event.head_commit.message == 'VETS EXECUTE HEROBASE BOOTSTRAP 26d60888fe3410951f422cb7a68cee10661c2eaf'" .github/workflows/temporary-herobase-production-bootstrap.yml
+          grep -q 'environment: production' .github/workflows/temporary-herobase-production-bootstrap.yml
+          grep -q 'EXPECTED_VDS_ED25519_FINGERPRINT' .github/workflows/temporary-herobase-production-bootstrap.yml
+          grep -q 'VETS_BOOTSTRAP_MUTATION_STARTED=true' .github/workflows/temporary-herobase-production-bootstrap.yml
+          grep -q 'VETS_BOOTSTRAP_ROLLBACK_SUCCEEDED=true' .github/workflows/temporary-herobase-production-bootstrap.yml
+
+  bootstrap:
+    name: Protected HeroBase host bootstrap
+    needs: validate
+    if: >-
+      needs.validate.result == 'success' &&
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725' &&
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      github.run_attempt == 1 &&
+      github.event.head_commit.message == 'VETS EXECUTE HEROBASE BOOTSTRAP 26d60888fe3410951f422cb7a68cee10661c2eaf'
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    environment: production
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      VPS1_HOST: ${{ secrets.VPS1_HOST }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+      TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
+      EXPECTED_VDS_ED25519_FINGERPRINT: SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY
+      REPOSITORY_NAME: jratdish1/hero-dapp
+
+    steps:
+      - name: Validate protected bootstrap inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$VDS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$VPS1_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+          [ -n "$VDS_SSH_KEY" ]
+          test "$GITHUB_EVENT_NAME" = 'pull_request'
+
+      - name: Establish pinned VDS-M SSH trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          timeout --signal=TERM --kill-after=5s 15s ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          : > "$HOME/.ssh/known_hosts"
+          ssh-keyscan -T 10 -t ed25519 "$VDS_HOST" > "$RUNNER_TEMP/vds-keyscan" 2>/dev/null
+          [ -s "$RUNNER_TEMP/vds-keyscan" ]
+          actual_fingerprint="$(ssh-keygen -lf "$RUNNER_TEMP/vds-keyscan" | awk '{print $2}')"
+          test "$actual_fingerprint" = "$EXPECTED_VDS_ED25519_FINGERPRINT"
+          ssh-keyscan -T 10 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+
+      - name: Bootstrap canonical non-root HeroBase production host
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/herobase-bootstrap.log"
+          set +e
+          timeout --signal=TERM --kill-after=30s 4800 ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s -- "$TARGET_SHA" "$VPS1_HOST" "$CF_ZONE_ID" "$REPOSITORY_NAME" <<'VDS' 2>&1 | tee "$log"
+          set -Eeuo pipefail
+          TARGET_SHA="$1"
+          VPS1_HOST="$2"
+          CF_ZONE_ID="$3"
+          REPOSITORY_NAME="$4"
+          DEPLOY_USER='hero-deploy'
+          LOCK_FILE='/var/lock/vets-herobase-bootstrap.lock'
+          WORK_ROOT='/root/.vets-herobase-bootstrap'
+          mkdir -p "$WORK_ROOT"
+          chmod 700 "$WORK_ROOT"
+          exec 9>"$LOCK_FILE"
+          flock -w 300 9 || exit 75
+
+          cleanup() {
+            rm -f "$WORK_ROOT/id_ed25519" "$WORK_ROOT/id_ed25519.pub" "$WORK_ROOT/cf-token"
+          }
+          trap cleanup EXIT
+
+          for required in ssh ssh-keygen curl jq gh flock python3; do
+            command -v "$required" >/dev/null || { echo "Missing VDS-M command: $required" >&2; exit 1; }
+          done
+          test "$(gh api user --jq .login)" = 'jratdish1'
+          gh api "repos/$REPOSITORY_NAME/environments/production" >/dev/null
+          ssh -G vps1 >/dev/null
+          vps1_resolved="$(ssh -G vps1 | awk '$1 == "hostname" {print $2; exit}')"
+          test -n "$vps1_resolved"
+          ssh-keygen -F "$vps1_resolved" >/dev/null
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o StrictHostKeyChecking=yes vps1 true
+
+          discover_token() {
+            local candidate value response
+            for candidate in \
+              /opt/apex-agent/.cf_token_cache \
+              /opt/apex-agent/.cf_token \
+              /opt/apex-agent/.cf_token_dns; do
+              if [ -s "$candidate" ]; then
+                value="$(tr -d '\r\n' < "$candidate")"
+                if [ -n "$value" ]; then
+                  printf '%s' "$value" > "$WORK_ROOT/cf-token"
+                  chmod 600 "$WORK_ROOT/cf-token"
+                  response="$(curl -4 --fail-with-body --silent --show-error \
+                    --connect-timeout 10 --max-time 30 \
+                    -H "Authorization: Bearer $value" \
+                    -H 'Content-Type: application/json' \
+                    https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
+                  if jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$response" >/dev/null 2>&1; then
+                    return 0
+                  fi
+                fi
+              fi
+            done
+
+            python3 - "$WORK_ROOT/cf-token" <<'PY'
+          from pathlib import Path
+          import os
+          import re
+          import sys
+
+          destination = Path(sys.argv[1])
+          names = {
+              'CF_API_TOKEN', 'CLOUDFLARE_API_TOKEN', 'CF_TOKEN',
+              'CLOUDFLARE_TOKEN', 'CLOUDFLARE_CACHE_TOKEN',
+          }
+          candidates = [
+              Path('/root/.env_architecture'),
+              Path('/opt/apex-agent/.env'),
+              Path('/root/.cloudflare_creds'),
+          ]
+          for path in candidates:
+              if not path.is_file():
+                  continue
+              try:
+                  lines = path.read_text(errors='ignore').splitlines()
+              except OSError:
+                  continue
+              for raw in lines:
+                  line = raw.strip()
+                  if not line or line.startswith('#') or '=' not in line:
+                      continue
+                  key, value = line.split('=', 1)
+                  key = key.strip().removeprefix('export ').strip()
+                  if key not in names:
+                      continue
+                  value = value.strip().strip('"').strip("'")
+                  if value and '\n' not in value and '\r' not in value:
+                      destination.write_text(value)
+                      os.chmod(destination, 0o600)
+                      raise SystemExit(0)
+          raise SystemExit(1)
+          PY
+            value="$(cat "$WORK_ROOT/cf-token")"
+            response="$(curl -4 --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $value" \
+              -H 'Content-Type: application/json' \
+              https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null || true)"
+            jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$response" >/dev/null
+          }
+
+          discover_token || { echo 'No valid scoped Cloudflare API token was found on VDS-M' >&2; exit 78; }
+          CF_API_TOKEN="$(cat "$WORK_ROOT/cf-token")"
+          zone_response="$(curl -4 --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID")"
+          jq -e '.success == true and .result.name == "herobase.io" and .result.status == "active" and ((.errors // []) | length == 0)' \
+            <<<"$zone_response" >/dev/null
+          printf 'VETS_CF_TOKEN_VERIFIED=true\n'
+
+          rm -f "$WORK_ROOT/id_ed25519" "$WORK_ROOT/id_ed25519.pub"
+          ssh-keygen -q -t ed25519 -N '' -C 'github-actions-herobase-production' -f "$WORK_ROOT/id_ed25519"
+          chmod 600 "$WORK_ROOT/id_ed25519"
+          deploy_public_key="$(cat "$WORK_ROOT/id_ed25519.pub")"
+          [[ "$deploy_public_key" == ssh-ed25519\ * ]]
+
+          vps1_host_public_key="$(ssh -o BatchMode=yes -o StrictHostKeyChecking=yes vps1 \
+            'cat /etc/ssh/ssh_host_ed25519_key.pub')"
+          [[ "$vps1_host_public_key" == ssh-ed25519\ * ]]
+          known_hosts_line="$VPS1_HOST $vps1_host_public_key"
+
+          printf '%s' "$VPS1_HOST" | gh secret set VPS1_HOST --env production --repo "$REPOSITORY_NAME"
+          printf '%s' "$DEPLOY_USER" | gh secret set VPS1_USER --env production --repo "$REPOSITORY_NAME"
+          gh secret set VPS1_SSH_KEY --env production --repo "$REPOSITORY_NAME" < "$WORK_ROOT/id_ed25519"
+          printf '%s\n' "$known_hosts_line" | gh secret set VPS1_KNOWN_HOSTS --env production --repo "$REPOSITORY_NAME"
+          gh secret set CF_API_TOKEN --env production --repo "$REPOSITORY_NAME" < "$WORK_ROOT/cf-token"
+          printf '%s' "$CF_ZONE_ID" | gh secret set CF_ZONE_ID --env production --repo "$REPOSITORY_NAME"
+          required='CF_API_TOKEN CF_ZONE_ID VPS1_HOST VPS1_KNOWN_HOSTS VPS1_SSH_KEY VPS1_USER'
+          actual="$(gh secret list --env production --repo "$REPOSITORY_NAME" --json name --jq 'map(.name) | sort | join(" ")')"
+          test "$actual" = "$required"
+          printf 'VETS_PRODUCTION_SECRET_NAMES_READY=true\n'
+
+          set +e
+          ssh_status=0
+          ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 \
+            -o ServerAliveCountMax=3 -o StrictHostKeyChecking=yes vps1 \
+            bash -s -- "$TARGET_SHA" "$DEPLOY_USER" "$deploy_public_key" <<'VPS1' || ssh_status=$?
+          set -Eeuo pipefail
+          TARGET_SHA="$1"
+          DEPLOY_USER="$2"
+          DEPLOY_PUBLIC_KEY="$3"
+          APP_DIR='/var/www/hero-dapp'
+          REPO_URL='https://github.com/jratdish1/hero-dapp.git'
+          HEALTH_URL='http://127.0.0.1:3000/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+          TS="$(date -u +%Y%m%dT%H%M%SZ)"
+          BACKUP_ROOT="/var/backups/vets-herobase-$TS"
+          LOCK_FILE='/var/lock/vets-herobase-host-bootstrap.lock'
+          MUTATION_STARTED=false
+          ROOT_PM2_WAS_ONLINE=false
+          MOVED_APP=false
+          USER_PM2_STARTED=false
+
+          mkdir -p "$BACKUP_ROOT"
+          chmod 700 "$BACKUP_ROOT"
+          exec 8>"$LOCK_FILE"
+          flock -w 300 8 || exit 75
+
+          wait_for_health() {
+            local expected_sha="$1" response
+            for attempt in $(seq 1 20); do
+              response="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 "$HEALTH_URL" 2>/dev/null || true)"
+              if printf '%s' "$response" | grep -q '"ok":true' && \
+                 printf '%s' "$response" | grep -q "\"releaseSha\":\"$expected_sha\""; then
+                return 0
+              fi
+              sleep 3
+            done
+            return 1
+          }
+
+          rollback() {
+            original_status="$?"
+            trap - ERR
+            if [ "$MUTATION_STARTED" = true ]; then
+              printf 'VETS_BOOTSTRAP_ROLLBACK_ATTEMPTED=true\n'
+              set +e
+              if [ "$USER_PM2_STARTED" = true ]; then
+                sudo -u "$DEPLOY_USER" -H env PM2_HOME="/home/$DEPLOY_USER/.pm2" pm2 delete hero-dapp >/dev/null 2>&1
+                sudo -u "$DEPLOY_USER" -H env PM2_HOME="/home/$DEPLOY_USER/.pm2" pm2 save --force >/dev/null 2>&1
+              fi
+              if [ "$ROOT_PM2_WAS_ONLINE" = true ]; then
+                pm2 restart hero-dapp --update-env >/dev/null 2>&1
+              fi
+              if [ "$MOVED_APP" = true ] && [ -d "$BACKUP_ROOT/var-www-hero-dapp" ]; then
+                rm -rf "$APP_DIR"
+                mv "$BACKUP_ROOT/var-www-hero-dapp" "$APP_DIR"
+              fi
+              if curl --fail --silent --show-error --connect-timeout 5 --max-time 15 \
+                   http://127.0.0.1:3000/ >/dev/null 2>&1; then
+                printf 'VETS_BOOTSTRAP_ROLLBACK_SUCCEEDED=true\n'
+              else
+                printf 'VETS_BOOTSTRAP_ROLLBACK_SUCCEEDED=false\n'
+              fi
+              set -e
+            fi
+            exit "$original_status"
+          }
+          trap rollback ERR
+
+          for required in git node corepack pnpm pm2 curl flock sudo systemctl ssh-keygen; do
+            command -v "$required" >/dev/null || { echo "Missing VPS1 command: $required" >&2; exit 1; }
+          done
+          git ls-remote "$REPO_URL" "$TARGET_SHA" | grep -q "$TARGET_SHA" || \
+            git cat-file -e "${TARGET_SHA}^{commit}" 2>/dev/null || true
+
+          mkdir -p "$BACKUP_ROOT/evidence"
+          hostname > "$BACKUP_ROOT/evidence/hostname.txt"
+          date -Is > "$BACKUP_ROOT/evidence/created-at.txt"
+          pm2 jlist > "$BACKUP_ROOT/evidence/root-pm2-jlist.json" 2>/dev/null || printf '[]\n' > "$BACKUP_ROOT/evidence/root-pm2-jlist.json"
+          pm2 save >/dev/null 2>&1 || true
+          [ -f /root/.pm2/dump.pm2 ] && cp -a /root/.pm2/dump.pm2 "$BACKUP_ROOT/evidence/root-pm2-dump.pm2"
+          for path in /root/hero-dapp /var/www/hero-dapp; do
+            if [ -d "$path/.git" ]; then
+              safe_name="$(printf '%s' "$path" | tr '/' '-')"
+              git -C "$path" rev-parse HEAD > "$BACKUP_ROOT/evidence/${safe_name}-head.txt" || true
+              git -C "$path" status --porcelain=v1 --untracked-files=all > "$BACKUP_ROOT/evidence/${safe_name}-status.txt" || true
+              git -C "$path" diff --binary > "$BACKUP_ROOT/evidence/${safe_name}-diff.patch" || true
+            fi
+          done
+
+          if pm2 jlist | node -e '
+            let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{
+              const p=JSON.parse(s||"[]").find(x=>x.name==="hero-dapp");
+              process.exit(p?.pm2_env?.status==="online"?0:1);
+            });
+          '; then
+            ROOT_PM2_WAS_ONLINE=true
+          fi
+
+          if ! id "$DEPLOY_USER" >/dev/null 2>&1; then
+            useradd --create-home --shell /bin/bash "$DEPLOY_USER"
+          fi
+          test "$(id -u "$DEPLOY_USER")" -ge 1000
+          install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/home/$DEPLOY_USER/.ssh"
+          authorized_keys="/home/$DEPLOY_USER/.ssh/authorized_keys"
+          touch "$authorized_keys"
+          chown "$DEPLOY_USER:$DEPLOY_USER" "$authorized_keys"
+          chmod 600 "$authorized_keys"
+          grep -Fqx "$DEPLOY_PUBLIC_KEY" "$authorized_keys" || printf '%s\n' "$DEPLOY_PUBLIC_KEY" >> "$authorized_keys"
+          chown "$DEPLOY_USER:$DEPLOY_USER" "$authorized_keys"
+
+          root_pm2_env="$BACKUP_ROOT/evidence/root-pm2-env.json"
+          node - "$BACKUP_ROOT/evidence/root-pm2-jlist.json" "$root_pm2_env" <<'NODE'
+          const fs = require('fs');
+          const [inputPath, outputPath] = process.argv.slice(2);
+          const list = JSON.parse(fs.readFileSync(inputPath, 'utf8') || '[]');
+          const processInfo = list.find(item => item.name === 'hero-dapp');
+          const source = processInfo?.pm2_env?.env ?? processInfo?.pm2_env ?? {};
+          const blocked = new Set([
+            'HOME','USER','LOGNAME','PWD','OLDPWD','SHLVL','_','PM2_HOME','PM2_USAGE',
+            'SSH_CLIENT','SSH_CONNECTION','SSH_TTY','TERM','PATH','SHELL','INIT_CWD',
+          ]);
+          const env = {};
+          for (const [key, value] of Object.entries(source)) {
+            if (blocked.has(key) || key.startsWith('PM2_') || typeof value === 'object') continue;
+            if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean') env[key] = String(value);
+          }
+          fs.writeFileSync(outputPath, JSON.stringify(env, null, 2) + '\n', {mode: 0o600});
+          NODE
+
+          printf 'VETS_BOOTSTRAP_MUTATION_STARTED=true\n'
+          MUTATION_STARTED=true
+          if [ -e "$APP_DIR" ]; then
+            mv "$APP_DIR" "$BACKUP_ROOT/var-www-hero-dapp"
+            MOVED_APP=true
+          fi
+          install -d -m 755 -o "$DEPLOY_USER" -g "$DEPLOY_USER" /var/www
+          sudo -u "$DEPLOY_USER" -H git clone --no-tags --single-branch --branch main "$REPO_URL" "$APP_DIR"
+          git -C "$APP_DIR" fetch --no-tags origin main
+          git -C "$APP_DIR" cat-file -e "${TARGET_SHA}^{commit}"
+          git -C "$APP_DIR" reset --hard "$TARGET_SHA"
+          test "$(git -C "$APP_DIR" rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git -C "$APP_DIR" status --porcelain=v1 --untracked-files=all)"
+          chown -R "$DEPLOY_USER:$DEPLOY_USER" "$APP_DIR"
+
+          for env_file in .env .env.production .env.local; do
+            if [ -f "/root/hero-dapp/$env_file" ]; then
+              install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/root/hero-dapp/$env_file" "$APP_DIR/$env_file"
+            fi
+          done
+
+          install -d -m 700 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "/home/$DEPLOY_USER/.config/herobase"
+          install -m 600 -o "$DEPLOY_USER" -g "$DEPLOY_USER" "$root_pm2_env" "/home/$DEPLOY_USER/.config/herobase/env.json"
+          TARGET_SHA="$TARGET_SHA" DEPLOY_USER="$DEPLOY_USER" node - <<'NODE'
+          const fs = require('fs');
+          const user = process.env.DEPLOY_USER;
+          const target = process.env.TARGET_SHA;
+          const path = `/home/${user}/.config/herobase/ecosystem.cjs`;
+          const content = `const baseEnv = require('./env.json');\nmodule.exports = {\n  apps: [{\n    name: 'hero-dapp',\n    cwd: '/var/www/hero-dapp',\n    script: '/bin/bash',\n    args: ['-lc', 'exec pnpm start'],\n    env: { ...baseEnv, NODE_ENV: 'production', PORT: '3000', HERO_RELEASE_SHA: '${target}' },\n    autorestart: true,\n    max_restarts: 10,\n    restart_delay: 3000,\n  }],\n};\n`;
+          fs.writeFileSync(path, content, {mode: 0o600});
+          NODE
+          chown "$DEPLOY_USER:$DEPLOY_USER" "/home/$DEPLOY_USER/.config/herobase/ecosystem.cjs"
+
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = '10.34.4'
+          sudo -u "$DEPLOY_USER" -H bash -lc "cd '$APP_DIR' && pnpm install --frozen-lockfile"
+          sudo -u "$DEPLOY_USER" -H bash -lc "cd '$APP_DIR' && rm -rf dist && pnpm build"
+          sudo -u "$DEPLOY_USER" -H bash -lc 'corepack enable'
+          sudo -u "$DEPLOY_USER" -H bash -lc 'test "$(pnpm --version)" = "10.34.4"'
+
+          if [ "$ROOT_PM2_WAS_ONLINE" = true ]; then
+            pm2 stop hero-dapp
+          fi
+          sudo -u "$DEPLOY_USER" -H env PM2_HOME="/home/$DEPLOY_USER/.pm2" \
+            pm2 start "/home/$DEPLOY_USER/.config/herobase/ecosystem.cjs" --only hero-dapp
+          USER_PM2_STARTED=true
+          wait_for_health "$TARGET_SHA"
+
+          sudo -u "$DEPLOY_USER" -H env PM2_HOME="/home/$DEPLOY_USER/.pm2" pm2 save --force
+          env PATH="$PATH:/usr/bin" pm2 startup systemd -u "$DEPLOY_USER" --hp "/home/$DEPLOY_USER" >/dev/null
+          systemctl enable "pm2-$DEPLOY_USER.service" >/dev/null
+          systemctl restart "pm2-$DEPLOY_USER.service"
+          systemctl is-active --quiet "pm2-$DEPLOY_USER.service"
+          wait_for_health "$TARGET_SHA"
+
+          if [ "$ROOT_PM2_WAS_ONLINE" = true ]; then
+            pm2 delete hero-dapp >/dev/null
+            pm2 save --force >/dev/null
+          fi
+          test "$(stat -c '%U' "$APP_DIR")" = "$DEPLOY_USER"
+          test -z "$(git -C "$APP_DIR" status --porcelain=v1 --untracked-files=all)"
+          sudo -u "$DEPLOY_USER" -H env PM2_HOME="/home/$DEPLOY_USER/.pm2" pm2 jlist | \
+            EXPECTED_SHA="$TARGET_SHA" node -e '
+              let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{
+                const p=JSON.parse(s||"[]").find(x=>x.name==="hero-dapp");
+                const actual=p?.pm2_env?.env?.HERO_RELEASE_SHA ?? p?.pm2_env?.HERO_RELEASE_SHA;
+                if(p?.pm2_env?.status!=="online" || actual!==process.env.EXPECTED_SHA) process.exit(1);
+              });
+            '
+          wait_for_health "$TARGET_SHA"
+          jq -n \
+            --arg target_sha "$TARGET_SHA" \
+            --arg deploy_user "$DEPLOY_USER" \
+            --arg app_dir "$APP_DIR" \
+            --arg backup_root "$BACKUP_ROOT" \
+            --arg completed_at "$(date -Is)" \
+            '{target_sha:$target_sha,deploy_user:$deploy_user,app_dir:$app_dir,backup_root:$backup_root,completed_at:$completed_at,verified:true}' \
+            > "$BACKUP_ROOT/bootstrap-result.json"
+          chmod 600 "$BACKUP_ROOT/bootstrap-result.json"
+          MUTATION_STARTED=false
+          trap - ERR
+          printf 'VETS_BOOTSTRAP_HOST_VERIFIED=true\n'
+          printf 'VETS_BOOTSTRAP_TARGET_SHA=%s\n' "$TARGET_SHA"
+          printf 'VETS_BOOTSTRAP_DEPLOY_USER=%s\n' "$DEPLOY_USER"
+          printf 'VETS_BOOTSTRAP_BACKUP_ROOT=%s\n' "$BACKUP_ROOT"
+          VPS1
+          if [ "$ssh_status" -ne 0 ]; then
+            echo "VPS1 bootstrap failed with exit $ssh_status" >&2
+            exit "$ssh_status"
+          fi
+
+          ssh -i "$WORK_ROOT/id_ed25519" -o BatchMode=yes -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "$DEPLOY_USER@$VPS1_HOST" \
+            bash -s -- "$TARGET_SHA" <<'VERIFY'
+          set -euo pipefail
+          TARGET_SHA="$1"
+          test "$(id -un)" = 'hero-deploy'
+          cd /var/www/hero-dapp
+          test "$(git rev-parse HEAD)" = "$TARGET_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = '10.34.4'
+          pm2 jlist | EXPECTED_SHA="$TARGET_SHA" node -e '
+            let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{
+              const p=JSON.parse(s||"[]").find(x=>x.name==="hero-dapp");
+              const actual=p?.pm2_env?.env?.HERO_RELEASE_SHA ?? p?.pm2_env?.HERO_RELEASE_SHA;
+              if(p?.pm2_env?.status!=="online" || actual!==process.env.EXPECTED_SHA) process.exit(1);
+            });
+          '
+          VERIFY
+          printf 'VETS_BOOTSTRAP_DIRECT_DEPLOY_USER_VERIFY=true\n'
+          VDS
+          ssh_status="${PIPESTATUS[0]}"
+          set -e
+          echo "bootstrap_exit_code=$ssh_status" >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_CF_TOKEN_VERIFIED=true$' "$log" && echo 'cf_token_verified=true' >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_PRODUCTION_SECRET_NAMES_READY=true$' "$log" && echo 'secret_names_ready=true' >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_BOOTSTRAP_HOST_VERIFIED=true$' "$log" && echo 'host_verified=true' >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_BOOTSTRAP_DIRECT_DEPLOY_USER_VERIFY=true$' "$log" && echo 'deploy_user_verified=true' >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_BOOTSTRAP_ROLLBACK_ATTEMPTED=true$' "$log" && echo 'rollback_attempted=true' >> "$GITHUB_OUTPUT" || echo 'rollback_attempted=false' >> "$GITHUB_OUTPUT"
+          grep -q '^VETS_BOOTSTRAP_ROLLBACK_SUCCEEDED=true$' "$log" && echo 'rollback_succeeded=true' >> "$GITHUB_OUTPUT" || echo 'rollback_succeeded=false' >> "$GITHUB_OUTPUT"
+          exit "$ssh_status"
+
+      - name: Write immutable bootstrap result
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.bootstrap.outputs.bootstrap_exit_code }}
+          CF_TOKEN_VERIFIED: ${{ steps.bootstrap.outputs.cf_token_verified }}
+          SECRET_NAMES_READY: ${{ steps.bootstrap.outputs.secret_names_ready }}
+          HOST_VERIFIED: ${{ steps.bootstrap.outputs.host_verified }}
+          DEPLOY_USER_VERIFIED: ${{ steps.bootstrap.outputs.deploy_user_verified }}
+          ROLLBACK_ATTEMPTED: ${{ steps.bootstrap.outputs.rollback_attempted }}
+          ROLLBACK_SUCCEEDED: ${{ steps.bootstrap.outputs.rollback_succeeded }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          jq -n \
+            --arg target_sha "$TARGET_SHA" \
+            --arg exit_code "${EXIT_CODE:-unknown}" \
+            --argjson cf_token_verified "${CF_TOKEN_VERIFIED:-false}" \
+            --argjson secret_names_ready "${SECRET_NAMES_READY:-false}" \
+            --argjson host_verified "${HOST_VERIFIED:-false}" \
+            --argjson deploy_user_verified "${DEPLOY_USER_VERIFIED:-false}" \
+            --argjson rollback_attempted "${ROLLBACK_ATTEMPTED:-false}" \
+            --argjson rollback_succeeded "${ROLLBACK_SUCCEEDED:-false}" \
+            --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{target_sha:$target_sha,exit_code:$exit_code,cf_token_verified:$cf_token_verified,secret_names_ready:$secret_names_ready,host_verified:$host_verified,deploy_user_verified:$deploy_user_verified,rollback_attempted:$rollback_attempted,rollback_succeeded:$rollback_succeeded,completed_at:$completed_at}' \
+            > herobase-bootstrap-result.json
+
+      - name: Upload immutable bootstrap result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-bootstrap-result-${{ github.sha }}
+          path: herobase-bootstrap-result.json
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Remove ephemeral runner SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts" "$RUNNER_TEMP/vds-keyscan"
+
+      - name: Enforce verified bootstrap
+        if: always()
+        env:
+          EXIT_CODE: ${{ steps.bootstrap.outputs.bootstrap_exit_code }}
+          CF_TOKEN_VERIFIED: ${{ steps.bootstrap.outputs.cf_token_verified }}
+          SECRET_NAMES_READY: ${{ steps.bootstrap.outputs.secret_names_ready }}
+          HOST_VERIFIED: ${{ steps.bootstrap.outputs.host_verified }}
+          DEPLOY_USER_VERIFIED: ${{ steps.bootstrap.outputs.deploy_user_verified }}
+          ROLLBACK_ATTEMPTED: ${{ steps.bootstrap.outputs.rollback_attempted }}
+        shell: bash
+        run: |
+          test "$EXIT_CODE" = '0'
+          test "$CF_TOKEN_VERIFIED" = 'true'
+          test "$SECRET_NAMES_READY" = 'true'
+          test "$HOST_VERIFIED" = 'true'
+          test "$DEPLOY_USER_VERIFIED" = 'true'
+          test "${ROLLBACK_ATTEMPTED:-false}" = 'false'
