@@ -1,0 +1,113 @@
+name: HeroBase completion supervisor observer
+
+on:
+  push:
+    branches:
+      - ops/herobase-final-status-probe-20260726
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+
+concurrency:
+  group: herobase-completion-supervisor-observer
+  cancel-in-progress: true
+
+jobs:
+  observe:
+    if: github.event_name == 'workflow_dispatch' || github.event.head_commit.message != 'ops: publish HeroBase supervisor diagnostic'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_BRANCH: ops/herobase-final-status-probe-20260726
+      EXECUTOR_BRANCH: ops/herobase-deploy-monitor-20260725
+
+    steps:
+      - name: Wait for supervisor and publish sanitized diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          api_get(){ local u="$1" r=""; for a in $(seq 1 5); do if r="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$u")"; then printf '%s' "$r"; return 0; fi; sleep $((a*2)); done; return 1; }
+          api_write(){ curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 60 -X "$1" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -H 'X-GitHub-Api-Version: 2022-11-28' "$2" --data "$3"; }
+
+          run=''
+          for attempt in $(seq 1 540); do
+            runs="$(api_get "$repo_api/actions/runs?branch=$EXECUTOR_BRANCH&per_page=100")"
+            run="$(jq -c '[.workflow_runs[] | select(.name == "HeroBase production completion supervisor")] | sort_by(.id) | last // empty' <<<"$runs")"
+            if [ -n "$run" ]; then
+              status="$(jq -r '.status' <<<"$run")"
+              case "$status" in completed) break;; esac
+            fi
+            sleep 20
+          done
+          test -n "$run"
+          run_id="$(jq -r '.id' <<<"$run")"
+          status="$(jq -r '.status' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // "unknown"' <<<"$run")"
+          html_url="$(jq -r '.html_url' <<<"$run")"
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          test "$status" = completed
+
+          mkdir -p diagnostic/raw diagnostic/extracted
+          jobs="$(api_get "$repo_api/actions/runs/$run_id/jobs?per_page=100")"
+          printf '%s\n' "$jobs" > diagnostic/raw/jobs.json
+          artifacts="$(api_get "$repo_api/actions/runs/$run_id/artifacts")"
+          printf '%s\n' "$artifacts" > diagnostic/raw/artifacts.json
+          artifact_id="$(jq -r '[.artifacts[] | select(.name | startswith("herobase-completion-supervisor-"))] | sort_by(.id) | last.id // 0' <<<"$artifacts")"
+          if [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+            curl --fail-with-body --silent --show-error --location --connect-timeout 10 --max-time 120 \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$repo_api/actions/artifacts/$artifact_id/zip" -o diagnostic/supervisor.zip
+            unzip -q diagnostic/supervisor.zip -d diagnostic/extracted
+          fi
+
+          python3 <<'PY'
+          from pathlib import Path
+          import json,re
+          root=Path('diagnostic/extracted')
+          patterns=[
+            (re.compile(r'-----BEGIN [^-]*PRIVATE KEY-----.*?-----END [^-]*PRIVATE KEY-----',re.S),'[REDACTED_PRIVATE_KEY]'),
+            (re.compile(r'\bgh[pousr]_[A-Za-z0-9_]{20,}\b'),'[REDACTED_GITHUB_TOKEN]'),
+            (re.compile(r'\bsk-[A-Za-z0-9_-]{20,}\b'),'[REDACTED_API_TOKEN]'),
+            (re.compile(r'\bAKIA[0-9A-Z]{16}\b'),'[REDACTED_AWS_KEY]'),
+            (re.compile(r'(?i)(authorization:\s*(?:bearer|token)\s+)[^\s]+'),r'\1[REDACTED]'),
+          ]
+          chunks=[]
+          for path in sorted(root.rglob('*')):
+            if not path.is_file() or path.suffix.lower() not in {'.log','.err','.txt','.json'}: continue
+            try: text=path.read_text(errors='replace')
+            except Exception: continue
+            for regex,repl in patterns: text=regex.sub(repl,text)
+            lines=text.splitlines()[-160:]
+            chunks.append(f'===== {path.relative_to(root)} =====\n'+'\n'.join(lines))
+          Path('diagnostic/SANITIZED_TAILS.txt').write_text('\n\n'.join(chunks)[-60000:]+'\n')
+          PY
+
+          state=BLOCKED
+          reason='completion supervisor failed; inspect sanitized evidence'
+          if [ "$conclusion" = success ]; then state=VERIFIED_COMPLETE; reason='completion supervisor completed all production and verification gates'; fi
+          failed_steps="$(jq -c '[.jobs[] | {id,name,status,conclusion,failed_steps:[.steps[]? | select(.conclusion == "failure") | .name]}]' <<<"$jobs")"
+          jq -n --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --arg state "$state" --arg reason "$reason" --arg run_id "$run_id" --arg run_url "$html_url" --arg conclusion "$conclusion" --arg artifact_id "$artifact_id" --argjson jobs "$failed_steps" '{observed_at:$observed_at,state:$state,reason:$reason,supervisor_run_id:$run_id,supervisor_run_url:$run_url,conclusion:$conclusion,artifact_id:$artifact_id,jobs:$jobs}' > diagnostic/HEROBASE_SUPERVISOR_DIAGNOSTIC.json
+          {
+            echo '# HeroBase Completion Supervisor Diagnostic'
+            echo
+            echo "- State: **$state**"
+            echo "- Reason: $reason"
+            echo "- Supervisor run: $run_id"
+            echo "- Conclusion: $conclusion"
+            echo "- Artifact ID: $artifact_id"
+            echo
+            echo '## Job results'
+            jq -r '.jobs[] | "- \(.name): \(.status) / \(.conclusion); failed steps: \(.failed_steps | join(", "))"' diagnostic/HEROBASE_SUPERVISOR_DIAGNOSTIC.json
+          } > diagnostic/HEROBASE_SUPERVISOR_DIAGNOSTIC.md
+
+          for file in diagnostic/HEROBASE_SUPERVISOR_DIAGNOSTIC.json diagnostic/HEROBASE_SUPERVISOR_DIAGNOSTIC.md diagnostic/SANITIZED_TAILS.txt; do
+            dest="ops/$(basename "$file")"
+            current="$(api_get "$repo_api/contents/$dest?ref=$STATUS_BRANCH" 2>/dev/null | jq -r '.sha // empty' || true)"
+            payload="$(jq -nc --arg message 'ops: publish HeroBase supervisor diagnostic' --arg content "$(base64 -w0 < "$file")" --arg branch "$STATUS_BRANCH" --arg sha "$current" 'if $sha == "" then {message:$message,content:$content,branch:$branch} else {message:$message,content:$content,branch:$branch,sha:$sha} end')"
+            api_write PUT "$repo_api/contents/$dest" "$payload" >/dev/null
+          done
