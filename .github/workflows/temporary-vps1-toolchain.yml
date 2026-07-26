@@ -1,0 +1,73 @@
+name: Temporary VPS1 non-root toolchain inventory
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+    steps:
+      - name: Configure route
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+      - name: Capture toolchain
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          ssh -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes -o ConnectTimeout=15 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            ssh -o BatchMode=yes -o ConnectTimeout=15 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              vps1 bash -s <<'VPS1' | tee evidence/toolchain.txt
+          set -euo pipefail
+          printf '=== ROOT RESOLUTION ===\n'
+          for command_name in node npm npx corepack pnpm pm2 git; do
+            printf '%s_PATH=%s\n' "$command_name" "$(command -v "$command_name" 2>/dev/null || echo missing)"
+            "$command_name" --version 2>/dev/null | head -n 1 | sed "s/^/${command_name}_VERSION=/" || true
+          done
+          printf '=== SYSTEM FILES ===\n'
+          for path in /usr/bin/node /usr/bin/npm /usr/bin/npx /usr/bin/corepack /usr/bin/pnpm /usr/bin/pm2 /usr/local/bin/node /usr/local/bin/npm /usr/local/bin/corepack /usr/local/bin/pnpm /usr/local/bin/pm2; do
+            if [ -e "$path" ] || [ -L "$path" ]; then ls -ld "$path"; else printf '%s MISSING\n' "$path"; fi
+          done
+          printf '=== CLEAN ENVIRONMENT ===\n'
+          for command_name in node npm npx corepack pnpm pm2 git; do
+            resolved="$(env -i HOME=/tmp PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin sh -c "command -v $command_name" 2>/dev/null || true)"
+            printf '%s_PATH=%s\n' "$command_name" "${resolved:-missing}"
+            if [ -n "$resolved" ]; then
+              env -i HOME=/tmp PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin "$resolved" --version 2>/dev/null | head -n 1 | sed "s/^/${command_name}_VERSION=/" || true
+            fi
+          done
+          printf '=== NVM INSTALLS ===\n'
+          find /root/.nvm/versions/node -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null | sort || true
+          VPS1
+      - name: Upload inventory
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: herobase-vps1-toolchain-${{ github.event.pull_request.head.sha }}
+          path: evidence/toolchain.txt
+          retention-days: 7
+          if-no-files-found: error
+      - name: Remove route material
+        if: always()
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
