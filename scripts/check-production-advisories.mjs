@@ -15,6 +15,14 @@ const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
 const KNOWN_SEVERITIES = new Set(["info", "low", "moderate", "high", "critical"]);
 const FAIL_SEVERITIES = new Set(["high", "critical"]);
+const INVENTORY_COMMAND = [
+  "list",
+  "--prod",
+  "--exclude-peers",
+  "--depth",
+  "Infinity",
+  "--json",
+];
 
 class RetryableAuditError extends Error {}
 class NonRetryableAuditError extends Error {}
@@ -32,15 +40,11 @@ function writeReport(report) {
 
 function collectInstalledProductionVersions() {
   const pnpm = process.platform === "win32" ? "pnpm.cmd" : "pnpm";
-  const output = execFileSync(
-    pnpm,
-    ["list", "--prod", "--depth", "Infinity", "--json"],
-    {
-      encoding: "utf8",
-      maxBuffer: 128 * 1024 * 1024,
-      stdio: ["ignore", "pipe", "inherit"],
-    },
-  );
+  const output = execFileSync(pnpm, INVENTORY_COMMAND, {
+    encoding: "utf8",
+    maxBuffer: 128 * 1024 * 1024,
+    stdio: ["ignore", "pipe", "inherit"],
+  });
 
   const roots = JSON.parse(output);
   if (!Array.isArray(roots) || roots.length === 0) {
@@ -57,17 +61,9 @@ function collectInstalledProductionVersions() {
     versions.get(name).add(version);
   }
 
-  function visit(node) {
-    if (!node || typeof node !== "object") return;
-
-    const identity = `${node.path ?? ""}\u0000${node.name ?? ""}\u0000${node.version ?? ""}`;
-    if (visited.has(identity)) return;
-    visited.add(identity);
-
-    add(node.name, node.version);
-
+  function visitChildren(node) {
     for (const field of ["dependencies", "optionalDependencies"]) {
-      const children = node[field];
+      const children = node?.[field];
       if (!children || typeof children !== "object") continue;
       for (const [fallbackName, child] of Object.entries(children)) {
         if (!child || typeof child !== "object") continue;
@@ -77,7 +73,21 @@ function collectInstalledProductionVersions() {
     }
   }
 
-  for (const root of roots) visit(root);
+  function visit(node) {
+    if (!node || typeof node !== "object") return;
+
+    const identity = `${node.path ?? ""}\u0000${node.name ?? ""}\u0000${node.version ?? ""}`;
+    if (visited.has(identity)) return;
+    visited.add(identity);
+
+    add(node.name, node.version);
+    visitChildren(node);
+  }
+
+  // The workspace/project root is not an installed production dependency and
+  // must never be sent to npm's bulk advisory endpoint. Traverse only its
+  // dependencies and optionalDependencies.
+  for (const root of roots) visitChildren(root);
 
   const payload = Object.fromEntries(
     [...versions.entries()]
@@ -359,6 +369,7 @@ async function main() {
     schemaVersion: 1,
     registry: `https://${REGISTRY_HOST}`,
     endpoint: AUDIT_PATH,
+    inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
     checkedAt: new Date().toISOString(),
     inventorySha256,
     packageVersionPairs: pairCount,
@@ -383,9 +394,11 @@ async function main() {
   }
 
   if (blocking.length > 0) {
-    throw new Error(
+    console.error(
       `Production advisory gate failed with ${blocking.length} high/critical advisories`,
     );
+    process.exitCode = 1;
+    return;
   }
 
   console.log("Production advisory gate: PASS");
@@ -398,6 +411,7 @@ main().catch(error => {
       schemaVersion: 1,
       registry: `https://${REGISTRY_HOST}`,
       endpoint: AUDIT_PATH,
+      inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
       checkedAt: new Date().toISOString(),
       result: "ERROR",
       error: message,
