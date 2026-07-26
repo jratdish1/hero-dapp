@@ -1,18 +1,28 @@
 import { execFileSync } from "node:child_process";
+import { writeFileSync } from "node:fs";
 import { createGunzip, createBrotliDecompress } from "node:zlib";
 import https from "node:https";
 import process from "node:process";
 
 const REGISTRY_HOST = "registry.npmjs.org";
 const AUDIT_PATH = "/-/npm/v1/security/advisories/bulk";
+const REPORT_PATH = "production-advisory-report.json";
 const MAX_ATTEMPTS = 3;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
+const KNOWN_SEVERITIES = new Set(["low", "moderate", "high", "critical"]);
 const FAIL_SEVERITIES = new Set(["high", "critical"]);
 
 class RetryableAuditError extends Error {}
 
 function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
+}
+
+function writeReport(report) {
+  writeFileSync(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
 }
 
 function collectInstalledProductionVersions() {
@@ -181,10 +191,18 @@ function normalizeAdvisories(response) {
       if (!advisory || typeof advisory !== "object") {
         throw new Error(`npm advisory entry for ${packageName} was invalid`);
       }
+
+      const severity = String(advisory.severity ?? "").toLowerCase();
+      if (!KNOWN_SEVERITIES.has(severity)) {
+        throw new Error(
+          `npm advisory ${String(advisory.id ?? "unknown")} for ${packageName} had invalid severity ${JSON.stringify(severity)}`,
+        );
+      }
+
       advisories.push({
         packageName,
         id: String(advisory.id ?? "unknown"),
-        severity: String(advisory.severity ?? "unknown").toLowerCase(),
+        severity,
         title: String(advisory.title ?? "Untitled advisory"),
         vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
         url: String(advisory.url ?? ""),
@@ -230,30 +248,35 @@ async function main() {
   const informational = advisories.filter(
     advisory => !FAIL_SEVERITIES.has(advisory.severity),
   );
+  const informationalCounts = informational.reduce((result, advisory) => {
+    result[advisory.severity] = (result[advisory.severity] ?? 0) + 1;
+    return result;
+  }, {});
+
+  const report = {
+    schemaVersion: 1,
+    registry: `https://${REGISTRY_HOST}`,
+    endpoint: AUDIT_PATH,
+    checkedAt: new Date().toISOString(),
+    packageVersionPairs: pairCount,
+    matchingAdvisories: advisories.length,
+    blockingAdvisories: blocking.length,
+    informationalCounts,
+    blocking,
+    result: blocking.length === 0 ? "PASS" : "FAIL",
+  };
+  writeReport(report);
 
   console.log(
     `Production advisory inventory: ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical.`,
   );
 
   for (const advisory of blocking) {
-    console.error(
-      JSON.stringify({
-        package: advisory.packageName,
-        id: advisory.id,
-        severity: advisory.severity,
-        title: advisory.title,
-        vulnerableVersions: advisory.vulnerableVersions,
-        url: advisory.url,
-      }),
-    );
+    console.error(JSON.stringify(advisory));
   }
 
   if (informational.length > 0) {
-    const counts = informational.reduce((result, advisory) => {
-      result[advisory.severity] = (result[advisory.severity] ?? 0) + 1;
-      return result;
-    }, {});
-    console.log(`Non-blocking advisory counts: ${JSON.stringify(counts)}`);
+    console.log(`Non-blocking advisory counts: ${JSON.stringify(informationalCounts)}`);
   }
 
   if (blocking.length > 0) {
@@ -266,6 +289,19 @@ async function main() {
 }
 
 main().catch(error => {
-  console.error(error instanceof Error ? error.message : String(error));
+  const message = error instanceof Error ? error.message : String(error);
+  try {
+    writeReport({
+      schemaVersion: 1,
+      registry: `https://${REGISTRY_HOST}`,
+      endpoint: AUDIT_PATH,
+      checkedAt: new Date().toISOString(),
+      result: "ERROR",
+      error: message,
+    });
+  } catch {
+    // The primary failure remains authoritative if evidence persistence also fails.
+  }
+  console.error(message);
   process.exitCode = 1;
 });
