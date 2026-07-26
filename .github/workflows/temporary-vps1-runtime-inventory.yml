@@ -1,0 +1,156 @@
+name: Temporary VPS1 HeroBase runtime inventory
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+    steps:
+      - name: Configure ephemeral VDS-M route
+        shell: bash
+        run: |
+          set -euo pipefail
+          [ -n "$VDS_HOST" ]
+          [ -n "$VDS_SSH_KEY" ]
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          [ -s "$HOME/.ssh/known_hosts" ]
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+
+      - name: Capture sanitized VPS1 runtime inventory
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          ssh -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 \
+              -o ServerAliveCountMax=2 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              vps1 bash -s <<'VPS1' | tee evidence/runtime-inventory.txt
+          set -euo pipefail
+          printf '=== IDENTITY ===\n'
+          hostname
+          date -Is
+          printf 'USER=%s UID=%s GID=%s\n' "$(id -un)" "$(id -u)" "$(id -g)"
+
+          printf '=== HERO PROCESS ===\n'
+          pid="$(pm2 pid hero-dapp 2>/dev/null | tail -n 1 || true)"
+          if [[ "$pid" =~ ^[0-9]+$ ]] && [ "$pid" -gt 0 ]; then
+            ps -o user=,uid=,gid=,pid=,ppid=,etimes=,cmd= -p "$pid"
+            printf 'PROCESS_CWD=%s\n' "$(readlink -f "/proc/$pid/cwd")"
+            printf 'PROCESS_EXE=%s\n' "$(readlink -f "/proc/$pid/exe")"
+            printf 'PROCESS_PORT_3000='
+            if ss -ltnp 2>/dev/null | grep -qE ':3000[[:space:]]'; then printf 'LISTENING\n'; else printf 'NOT_LISTENING\n'; fi
+          else
+            printf 'hero-dapp=NO_VALID_PID\n'
+          fi
+
+          printf '=== PM2 SANITIZED ===\n'
+          pm2 jlist | node -e '
+            let input="";
+            process.stdin.setEncoding("utf8");
+            process.stdin.on("data",c=>input+=c);
+            process.stdin.on("end",()=>{
+              const list=JSON.parse(input||"[]");
+              const item=list.find(x=>x.name==="hero-dapp");
+              if(!item){console.log(JSON.stringify({found:false}));return;}
+              const e=item.pm2_env||{};
+              const env=e.env||{};
+              const safe={
+                found:true,name:item.name,pid:item.pid,status:e.status,
+                pm_cwd:e.pm_cwd,pm_exec_path:e.pm_exec_path,
+                exec_interpreter:e.exec_interpreter,exec_mode:e.exec_mode,
+                node_version:e.node_version,restart_time:e.restart_time,
+                unstable_restarts:e.unstable_restarts,
+                safe_env:{NODE_ENV:env.NODE_ENV??e.NODE_ENV??null,PORT:env.PORT??e.PORT??null,HERO_RELEASE_SHA:env.HERO_RELEASE_SHA??e.HERO_RELEASE_SHA??null},
+                env_keys:Object.keys(env).sort()
+              };
+              console.log(JSON.stringify(safe,null,2));
+            });
+          '
+
+          printf '=== ROOT REPOSITORY ===\n'
+          app=/root/hero-dapp
+          if [ -d "$app/.git" ]; then
+            cd "$app"
+            printf 'HEAD=%s\n' "$(git rev-parse HEAD)"
+            printf 'BRANCH=%s\n' "$(git branch --show-current || true)"
+            printf 'DIRTY_COUNT=%s\n' "$(git status --porcelain=v1 --untracked-files=all | wc -l)"
+            printf 'ORIGIN_SCHEME='
+            case "$(git remote get-url origin 2>/dev/null || true)" in
+              git@github.com:*) printf 'SSH\n' ;;
+              https://*) printf 'HTTPS\n' ;;
+              *) printf 'OTHER_OR_MISSING\n' ;;
+            esac
+            printf 'TOP_LEVEL_FILES:\n'
+            find . -maxdepth 1 -mindepth 1 -printf '%f\n' | sort
+            printf 'ENV_FILES_METADATA:\n'
+            find . -maxdepth 2 -type f -name '.env*' -printf '%p owner=%u group=%g mode=%m size=%s\n' | sort
+            printf 'UNTRACKED_NONIGNORED_NAMES:\n'
+            git ls-files --others --exclude-standard | sed -E 's#(^|/)([^/]*(key|token|secret|credential|password)[^/]*)#\1REDACTED-SENSITIVE-NAME#gI' | head -n 200
+          else
+            printf 'ROOT_REPOSITORY=MISSING\n'
+          fi
+
+          printf '=== VAR WWW REPOSITORY DIRTY INVENTORY ===\n'
+          app=/var/www/hero-dapp
+          if [ -d "$app/.git" ]; then
+            cd "$app"
+            printf 'HEAD=%s\n' "$(git rev-parse HEAD)"
+            printf 'DIRTY_COUNT=%s\n' "$(git status --porcelain=v1 --untracked-files=all | wc -l)"
+            git status --porcelain=v1 --untracked-files=all \
+              | sed -E 's#(^.. )(.*/)?([^/]*(key|token|secret|credential|password)[^/]*)#\1\2REDACTED-SENSITIVE-NAME#gI' \
+              | head -n 300
+          fi
+
+          printf '=== SYSTEMD PM2 UNITS ===\n'
+          systemctl list-unit-files 'pm2-*' --no-legend 2>/dev/null || true
+          systemctl list-units 'pm2-*' --all --no-legend 2>/dev/null || true
+
+          printf '=== DATABASE/APP CONFIG PRESENCE ONLY ===\n'
+          for p in /root/.env_architecture /root/hero-dapp/.env /root/hero-dapp/.env.production /var/www/hero-dapp/.env /var/www/hero-dapp/.env.production; do
+            if [ -s "$p" ]; then
+              stat -c '%n PRESENT_NONEMPTY owner=%U group=%G mode=%a size=%s' "$p"
+              printf 'VARIABLE_NAMES %s: ' "$p"
+              sed -nE 's/^[[:space:]]*(export[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*)=.*/\2/p' "$p" \
+                | sort -u \
+                | tr '\n' ' '
+              printf '\n'
+            else
+              printf '%s MISSING_OR_EMPTY\n' "$p"
+            fi
+          done
+          VPS1
+
+      - name: Upload sanitized runtime evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: herobase-runtime-inventory-${{ github.event.pull_request.head.sha }}
+          path: evidence/runtime-inventory.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
