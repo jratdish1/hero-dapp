@@ -1,0 +1,61 @@
+name: Temporary production dependency audit diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout narrow production-security head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: fix/dao-ownership-production-20260726
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: 22
+      - name: Activate pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+      - name: Install frozen dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Capture production audit JSON
+        shell: bash
+        run: |
+          set +e
+          pnpm audit --prod --json > production-audit.json 2> production-audit.stderr
+          status=$?
+          set -e
+          jq . production-audit.json > production-audit.pretty.json
+          jq '{metadata, advisories: (.advisories // {}), vulnerabilities: (.vulnerabilities // {})}' production-audit.json > production-audit-summary.json
+          printf '%s\n' "$status" > production-audit.exit
+          cat production-audit-summary.json
+          exit 0
+      - name: Upload dependency audit evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: production-audit-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: |
+            production-audit.pretty.json
+            production-audit-summary.json
+            production-audit.stderr
+            production-audit.exit
+          retention-days: 7
+          if-no-files-found: error
