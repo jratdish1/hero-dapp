@@ -1,0 +1,265 @@
+name: Temporary DAO ownership narrow-lane publisher
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  publish:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      PATCH_BRANCH: fix/dao-ownership-production-20260726
+
+    steps:
+      - name: Build exact one-file correction and open bounded PR
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          import re
+          from urllib.error import HTTPError
+          from urllib.parse import quote
+          from urllib.request import Request, urlopen
+
+          repo = os.environ['GITHUB_REPOSITORY']
+          token = os.environ['GH_TOKEN']
+          branch = os.environ['PATCH_BRANCH']
+          owner = repo.split('/', 1)[0]
+
+          def api(method: str, path: str, payload=None):
+              body = None if payload is None else json.dumps(payload).encode()
+              request = Request(
+                  f'https://api.github.com/repos/{repo}{path}',
+                  data=body,
+                  method=method,
+                  headers={
+                      'Authorization': f'Bearer {token}',
+                      'Accept': 'application/vnd.github+json',
+                      'Content-Type': 'application/json',
+                      'X-GitHub-Api-Version': '2022-11-28',
+                      'User-Agent': 'VETS-DAO-Narrow-Lane-Publisher',
+                  },
+              )
+              try:
+                  with urlopen(request, timeout=60) as response:
+                      raw = response.read()
+                      return json.loads(raw) if raw else {}
+              except HTTPError as exc:
+                  raw = exc.read().decode(errors='replace')
+                  raise RuntimeError(f'GitHub API {method} {path} failed: HTTP {exc.code}: {raw[:1000]}') from exc
+
+          def api_optional(method: str, path: str, payload=None):
+              try:
+                  return api(method, path, payload)
+              except RuntimeError as exc:
+                  if 'HTTP 404:' in str(exc):
+                      return None
+                  raise
+
+          main_ref = api('GET', '/git/ref/heads/main')
+          main_sha = main_ref['object']['sha']
+          main_commit = api('GET', f'/git/commits/{main_sha}')
+          main_tree = main_commit['tree']['sha']
+
+          file_info = api('GET', '/contents/server/routers.ts?ref=main')
+          source = base64.b64decode(file_info['content']).decode()
+
+          proposal_old = '''      updateStatus: protectedProcedure
+                .input(z.object({
+                  proposalId: z.string().min(1),
+                  status: z.enum(["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]),
+                }))
+                .mutation(async ({ input }) => {
+                  const proposal = await getProposalById(input.proposalId);
+                  if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+                  await updateProposal(proposal.id, { status: input.status });
+          '''
+          proposal_new = '''      updateStatus: protectedProcedure
+                .input(z.object({
+                  proposalId: z.string().min(1),
+                  status: z.enum(["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]),
+                }))
+                .mutation(async ({ ctx, input }) => {
+                  const proposal = await getProposalById(input.proposalId);
+                  if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+                  if (proposal.proposerId !== ctx.user.id) {
+                    createStandardError("FORBIDDEN", "Only the proposal creator may update its status");
+                  }
+                  await updateProposal(proposal.id, { status: input.status });
+          '''
+
+          delegate_old = '''      update: protectedProcedure
+                .input(z.object({
+                address: ethAddressSchema,
+                displayName: safeStringSchema(128).optional(),
+                statement: safeStringSchema(5000).optional(),
+              }))
+              .mutation(async ({ input }) => {
+                  const delegate = await getDelegateByAddress(input.address);
+                  if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
+                  await updateDelegate(delegate.id, {
+          '''
+          delegate_new = '''      update: protectedProcedure
+                .input(z.object({
+                address: ethAddressSchema,
+                displayName: safeStringSchema(128).optional(),
+                statement: safeStringSchema(5000).optional(),
+              }))
+              .mutation(async ({ ctx, input }) => {
+                  const delegate = await getDelegateByAddress(input.address);
+                  if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
+                  if (delegate.userId !== ctx.user.id) {
+                    createStandardError("FORBIDDEN", "Only the delegate owner may update this profile");
+                  }
+                  await updateDelegate(delegate.id, {
+          '''
+
+          already_patched = (
+              'proposal.proposerId !== ctx.user.id' in source and
+              'delegate.userId !== ctx.user.id' in source
+          )
+          if not already_patched:
+              if source.count(proposal_old) != 1:
+                  raise RuntimeError(f'proposal patch anchor count was {source.count(proposal_old)}, expected 1')
+              if source.count(delegate_old) != 1:
+                  raise RuntimeError(f'delegate patch anchor count was {source.count(delegate_old)}, expected 1')
+              source = source.replace(proposal_old, proposal_new, 1)
+              source = source.replace(delegate_old, delegate_new, 1)
+
+          if source.count('proposal.proposerId !== ctx.user.id') != 1:
+              raise RuntimeError('proposal ownership guard missing or duplicated')
+          if source.count('delegate.userId !== ctx.user.id') != 1:
+              raise RuntimeError('delegate ownership guard missing or duplicated')
+          if re.search(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}', source):
+              raise RuntimeError('credential-like content detected')
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          if any(char in forbidden for char in source):
+              raise RuntimeError('hidden or bidirectional Unicode detected')
+
+          branch_ref = api_optional('GET', f'/git/ref/heads/{quote(branch, safe="/")}')
+          if branch_ref:
+              branch_sha = branch_ref['object']['sha']
+              branch_file = api('GET', f'/contents/server/routers.ts?ref={quote(branch, safe="/")}')
+              branch_source = base64.b64decode(branch_file['content']).decode()
+              if (
+                  'proposal.proposerId !== ctx.user.id' in branch_source and
+                  'delegate.userId !== ctx.user.id' in branch_source
+              ):
+                  final_sha = branch_sha
+                  action = 'existing-patched-branch'
+              else:
+                  if branch_sha != main_sha:
+                      raise RuntimeError(f'patch branch exists at unexpected divergent SHA {branch_sha}')
+                  action = 'fast-forward-existing-branch'
+                  final_sha = None
+          else:
+              branch_sha = None
+              action = 'create-branch'
+              final_sha = None
+
+          if final_sha is None:
+              blob = api('POST', '/git/blobs', {
+                  'content': base64.b64encode(source.encode()).decode(),
+                  'encoding': 'base64',
+              })['sha']
+              tree = api('POST', '/git/trees', {
+                  'base_tree': main_tree,
+                  'tree': [{
+                      'path': 'server/routers.ts',
+                      'mode': '100644',
+                      'type': 'blob',
+                      'sha': blob,
+                  }],
+              })['sha']
+              final_sha = api('POST', '/git/commits', {
+                  'message': 'fix(security): enforce DAO proposal and delegate ownership',
+                  'tree': tree,
+                  'parents': [main_sha],
+              })['sha']
+              if branch_ref:
+                  api('PATCH', f'/git/refs/heads/{quote(branch, safe="/")}', {
+                      'sha': final_sha,
+                      'force': False,
+                  })
+              else:
+                  api('POST', '/git/refs', {
+                      'ref': f'refs/heads/{branch}',
+                      'sha': final_sha,
+                  })
+
+          pulls = api('GET', f'/pulls?state=open&head={owner}:{quote(branch, safe="/")}&base=main&per_page=100')
+          if pulls:
+              pr = pulls[0]
+              pr_action = 'existing'
+          else:
+              pr = api('POST', '/pulls', {
+                  'title': 'fix(security): enforce DAO proposal and delegate ownership',
+                  'head': branch,
+                  'base': 'main',
+                  'draft': True,
+                  'body': '''## Mission
+
+Narrow production security correction extracted from broad draft PR #61.
+
+## Exact scope
+
+One file only: `server/routers.ts`.
+
+## Corrections
+
+- require proposal ownership before `dao.proposals.updateStatus`;
+- require delegate-record ownership before `dao.delegates.update`.
+
+Single-sided staking and binding/snapshot DAO governance remain explicitly deferred under the current VETS GO. This PR fixes authorization defects only.
+
+## Gates
+
+Exact-head CI, Security and Quality, fresh Codex review, independent ChatGPT Grade A, zero unresolved P0/P1/P2 findings, and expected-head squash merge.
+
+No deployment, wallet transaction, contract action, Cloudflare mutation, DNS change, or production-host mutation is performed by this PR.''',
+              })
+              pr_action = 'created'
+
+          evidence = {
+              'main_sha': main_sha,
+              'branch': branch,
+              'branch_head': final_sha,
+              'branch_action': action,
+              'pr_number': pr['number'],
+              'pr_url': pr['html_url'],
+              'pr_action': pr_action,
+              'changed_file': 'server/routers.ts',
+              'proposal_guard': True,
+              'delegate_guard': True,
+          }
+          with open('evidence/dao-narrow-lane.json', 'w') as handle:
+              json.dump(evidence, handle, indent=2)
+              handle.write('\n')
+          print(json.dumps(evidence, indent=2))
+          PY
+
+      - name: Upload immutable publisher evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: dao-narrow-lane-${{ github.event.pull_request.head.sha }}
+          path: evidence
+          retention-days: 7
+          if-no-files-found: error
