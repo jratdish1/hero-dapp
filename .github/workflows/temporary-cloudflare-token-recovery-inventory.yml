@@ -1,0 +1,181 @@
+name: Temporary Cloudflare token recovery inventory
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  inventory:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+
+    steps:
+      - name: Establish pinned VDS-M route
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VDS_HOST"
+          test -n "$VDS_SSH_KEY"
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -t ed25519 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk '{print $2}')"
+          test "$actual" = 'SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY'
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+
+      - name: Locate and validate candidate scoped tokens without printing values
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s -- "$CF_ZONE_ID" <<'VDS'
+          set -euo pipefail
+          ZONE_ID="$1"
+          work="$(mktemp -d)"
+          trap 'rm -rf "$work"' EXIT
+
+          validate_token() {
+            local host_label="$1" source_label="$2" token="$3"
+            token="$(printf '%s' "$token" | tr -d '\r\n')"
+            [ "${#token}" -ge 30 ] || return 0
+
+            local verify zone verify_ok=false zone_ok=false
+            if verify="$(curl -4 --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/json' \
+              https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null)" &&
+               jq -e '.success == true and .result.status == "active" and ((.errors // []) | length == 0)' <<<"$verify" >/dev/null 2>&1; then
+              verify_ok=true
+            fi
+
+            if [ "$verify_ok" = true ] &&
+               zone="$(curl -4 --silent --show-error \
+                 --connect-timeout 10 --max-time 30 \
+                 -H "Authorization: Bearer $token" \
+                 -H 'Content-Type: application/json' \
+                 "https://api.cloudflare.com/client/v4/zones/$ZONE_ID" 2>/dev/null)" &&
+               jq -e '.success == true and .result.name == "herobase.io" and .result.status == "active" and ((.errors // []) | length == 0)' <<<"$zone" >/dev/null 2>&1; then
+              zone_ok=true
+            fi
+
+            printf 'TOKEN_CANDIDATE host=%s source=%s verify=%s zone_read=%s\n' \
+              "$host_label" "$source_label" "$verify_ok" "$zone_ok"
+            unset token verify zone
+          }
+
+          inventory_host() {
+            local host_label="$1"
+            printf '=== %s FILE CANDIDATES ===\n' "$host_label"
+            while IFS= read -r path; do
+              [ -f "$path" ] || continue
+              [ -s "$path" ] || continue
+              case "$path" in
+                */node_modules/*|*/.git/*|*/proc/*|*/sys/*) continue ;;
+              esac
+              printf 'CANDIDATE_PATH host=%s path=%s\n' "$host_label" "$path"
+              validate_token "$host_label" "$path" "$(head -n 1 "$path" 2>/dev/null || true)"
+            done < <(find /root /opt /etc -xdev -type f \
+              \( -name '.cf_token*' -o -iname '*cloudflare*token*' -o -iname '*cf*token*' \) \
+              2>/dev/null | sort -u)
+
+            for env_file in /root/.env_architecture /opt/apex-agent/.env /root/.env; do
+              [ -s "$env_file" ] || continue
+              for name in CF_API_TOKEN CLOUDFLARE_API_TOKEN CLOUDFLARE_TOKEN CF_TOKEN; do
+                value="$(awk -F= -v key="$name" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file" 2>/dev/null || true)"
+                value="${value%\"}"; value="${value#\"}"
+                value="${value%\'}"; value="${value#\'}"
+                [ -n "$value" ] || continue
+                validate_token "$host_label" "$env_file:$name" "$value"
+                unset value
+              done
+            done
+          }
+
+          inventory_host VDS_M
+
+          printf '=== VPS1 CANDIDATES ===\n'
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            vps1 bash -s -- "$ZONE_ID" <<'VPS1'
+          set -euo pipefail
+          ZONE_ID="$1"
+
+          validate_token() {
+            local source_label="$1" token="$2"
+            token="$(printf '%s' "$token" | tr -d '\r\n')"
+            [ "${#token}" -ge 30 ] || return 0
+            local verify zone verify_ok=false zone_ok=false
+            if verify="$(curl -4 --silent --show-error --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+              https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null)" &&
+               jq -e '.success == true and .result.status == "active" and ((.errors // []) | length == 0)' <<<"$verify" >/dev/null 2>&1; then
+              verify_ok=true
+            fi
+            if [ "$verify_ok" = true ] &&
+               zone="$(curl -4 --silent --show-error --connect-timeout 10 --max-time 30 \
+                 -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
+                 "https://api.cloudflare.com/client/v4/zones/$ZONE_ID" 2>/dev/null)" &&
+               jq -e '.success == true and .result.name == "herobase.io" and .result.status == "active" and ((.errors // []) | length == 0)' <<<"$zone" >/dev/null 2>&1; then
+              zone_ok=true
+            fi
+            printf 'TOKEN_CANDIDATE host=VPS1 source=%s verify=%s zone_read=%s\n' "$source_label" "$verify_ok" "$zone_ok"
+            unset token verify zone
+          }
+
+          while IFS= read -r path; do
+            [ -f "$path" ] || continue
+            [ -s "$path" ] || continue
+            case "$path" in */node_modules/*|*/.git/*) continue ;; esac
+            printf 'CANDIDATE_PATH host=VPS1 path=%s\n' "$path"
+            validate_token "$path" "$(head -n 1 "$path" 2>/dev/null || true)"
+          done < <(find /root /opt /etc -xdev -type f \
+            \( -name '.cf_token*' -o -iname '*cloudflare*token*' -o -iname '*cf*token*' \) \
+            2>/dev/null | sort -u)
+
+          for env_file in /root/.env_architecture /opt/apex-agent/.env /root/.env; do
+            [ -s "$env_file" ] || continue
+            for name in CF_API_TOKEN CLOUDFLARE_API_TOKEN CLOUDFLARE_TOKEN CF_TOKEN; do
+              value="$(awk -F= -v key="$name" '$1 == key {sub(/^[^=]*=/, ""); print; exit}' "$env_file" 2>/dev/null || true)"
+              value="${value%\"}"; value="${value#\"}"
+              value="${value%\'}"; value="${value#\'}"
+              [ -n "$value" ] || continue
+              validate_token "$env_file:$name" "$value"
+              unset value
+            done
+          done
+          VPS1
+          VDS
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
