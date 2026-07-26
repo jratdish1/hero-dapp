@@ -150,8 +150,12 @@ jobs:
           printf 'LIVE_PM2_UNCHANGED=true\n'
           VPS1
 
-          trusted_fingerprint="$(ssh -o BatchMode=yes -o ConnectTimeout=15 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes vps1 \
-            "ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print \\\$2}'")"
+          trusted_fingerprint="$(ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            vps1 'ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub' | awk '{print $2}')"
           [[ "$trusted_fingerprint" =~ ^SHA256: ]]
 
           known_hosts="$work/vps1_known_hosts"
