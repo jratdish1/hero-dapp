@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { writeFileSync } from "node:fs";
 import { createGunzip, createBrotliDecompress } from "node:zlib";
 import https from "node:https";
@@ -8,11 +9,15 @@ const REGISTRY_HOST = "registry.npmjs.org";
 const AUDIT_PATH = "/-/npm/v1/security/advisories/bulk";
 const REPORT_PATH = "production-advisory-report.json";
 const MAX_ATTEMPTS = 3;
+const REQUEST_DEADLINE_MS = 45_000;
+const SOCKET_IDLE_TIMEOUT_MS = 20_000;
+const MAX_RESPONSE_BYTES = 16 * 1024 * 1024;
 const RETRYABLE_STATUS = new Set([429, 500, 502, 503, 504]);
-const KNOWN_SEVERITIES = new Set(["low", "moderate", "high", "critical"]);
+const KNOWN_SEVERITIES = new Set(["info", "low", "moderate", "high", "critical"]);
 const FAIL_SEVERITIES = new Set(["high", "critical"]);
 
 class RetryableAuditError extends Error {}
+class NonRetryableAuditError extends Error {}
 
 function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
@@ -89,7 +94,11 @@ function collectInstalledProductionVersions() {
     throw new Error("production dependency inventory was empty");
   }
 
-  return { payload, pairCount };
+  const inventorySha256 = createHash("sha256")
+    .update(JSON.stringify(payload))
+    .digest("hex");
+
+  return { payload, pairCount, inventorySha256 };
 }
 
 function decompressResponse(buffer, contentEncoding) {
@@ -102,8 +111,21 @@ function decompressResponse(buffer, contentEncoding) {
 
   const decompressor = isGzip ? createGunzip() : createBrotliDecompress();
   const chunks = [];
+  let decodedBytes = 0;
+
   return new Promise((resolve, reject) => {
-    decompressor.on("data", chunk => chunks.push(chunk));
+    decompressor.on("data", chunk => {
+      decodedBytes += chunk.length;
+      if (decodedBytes > MAX_RESPONSE_BYTES) {
+        decompressor.destroy(
+          new NonRetryableAuditError(
+            `npm advisory response exceeded ${MAX_RESPONSE_BYTES} decoded bytes`,
+          ),
+        );
+        return;
+      }
+      chunks.push(chunk);
+    });
     decompressor.on("error", reject);
     decompressor.on("end", () => resolve(Buffer.concat(chunks)));
     decompressor.end(buffer);
@@ -114,69 +136,148 @@ async function requestAdvisories(payload) {
   const requestBody = Buffer.from(JSON.stringify(payload), "utf8");
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    let deadline;
+
+    const settle = (callback, value) => {
+      if (settled) return;
+      settled = true;
+      if (deadline) clearTimeout(deadline);
+      callback(value);
+    };
+
     const request = https.request(
       {
         hostname: REGISTRY_HOST,
         port: 443,
         path: AUDIT_PATH,
         method: "POST",
-        timeout: 45_000,
         headers: {
           Accept: "application/json",
           "Accept-Encoding": "identity",
           "Content-Type": "application/json",
           "Content-Length": String(requestBody.length),
-          "User-Agent": "hero-dapp-production-advisory-check/1.0",
+          "User-Agent": "hero-dapp-production-advisory-check/1.1",
         },
       },
       response => {
         const chunks = [];
-        response.on("data", chunk => chunks.push(chunk));
-        response.on("error", reject);
+        let receivedBytes = 0;
+
+        response.on("data", chunk => {
+          receivedBytes += chunk.length;
+          if (receivedBytes > MAX_RESPONSE_BYTES) {
+            response.destroy(
+              new NonRetryableAuditError(
+                `npm advisory response exceeded ${MAX_RESPONSE_BYTES} encoded bytes`,
+              ),
+            );
+            return;
+          }
+          chunks.push(chunk);
+        });
+
+        response.on("error", error => {
+          if (error instanceof NonRetryableAuditError) {
+            settle(reject, error);
+            return;
+          }
+          settle(
+            reject,
+            new RetryableAuditError(`npm advisory response failed: ${error.message}`),
+          );
+        });
+
         response.on("end", async () => {
+          if (settled) return;
+
           const status = response.statusCode ?? 0;
           const rawBody = Buffer.concat(chunks);
 
           if (RETRYABLE_STATUS.has(status)) {
-            reject(new RetryableAuditError(`npm advisory endpoint returned HTTP ${status}`));
+            settle(
+              reject,
+              new RetryableAuditError(`npm advisory endpoint returned HTTP ${status}`),
+            );
             return;
           }
           if (status !== 200) {
-            reject(new Error(`npm advisory endpoint returned HTTP ${status}`));
+            settle(
+              reject,
+              new NonRetryableAuditError(
+                `npm advisory endpoint returned non-retryable HTTP ${status}`,
+              ),
+            );
             return;
           }
 
+          let parsed;
           try {
             const decoded = await decompressResponse(
               rawBody,
               response.headers["content-encoding"],
             );
-            const parsed = JSON.parse(decoded.toString("utf8"));
-            if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-              throw new Error("npm advisory response was not an object");
-            }
-            resolve(parsed);
+            parsed = JSON.parse(decoded.toString("utf8"));
           } catch (error) {
-            reject(
+            if (error instanceof NonRetryableAuditError) {
+              settle(reject, error);
+              return;
+            }
+            settle(
+              reject,
               new RetryableAuditError(
                 `npm advisory response was unreadable: ${error instanceof Error ? error.message : String(error)}`,
               ),
             );
+            return;
           }
+
+          if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+            settle(
+              reject,
+              new NonRetryableAuditError(
+                "npm advisory response was not an object",
+              ),
+            );
+            return;
+          }
+
+          settle(resolve, parsed);
         });
       },
     );
 
-    request.on("timeout", () => {
-      request.destroy(new RetryableAuditError("npm advisory request timed out"));
+    deadline = setTimeout(() => {
+      request.destroy(
+        new RetryableAuditError(
+          `npm advisory request exceeded ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,
+        ),
+      );
+    }, REQUEST_DEADLINE_MS);
+    deadline.unref?.();
+
+    request.setTimeout(SOCKET_IDLE_TIMEOUT_MS, () => {
+      request.destroy(
+        new RetryableAuditError(
+          `npm advisory request exceeded ${SOCKET_IDLE_TIMEOUT_MS}ms socket-idle timeout`,
+        ),
+      );
     });
+
     request.on("error", error => {
-      if (error instanceof RetryableAuditError) {
-        reject(error);
+      if (
+        error instanceof RetryableAuditError ||
+        error instanceof NonRetryableAuditError
+      ) {
+        settle(reject, error);
         return;
       }
-      reject(new RetryableAuditError(`npm advisory request failed: ${error.message}`));
+      settle(
+        reject,
+        new RetryableAuditError(`npm advisory request failed: ${error.message}`),
+      );
     });
+
     request.end(requestBody);
   });
 }
@@ -218,7 +319,8 @@ function normalizeAdvisories(response) {
 }
 
 async function main() {
-  const { payload, pairCount } = collectInstalledProductionVersions();
+  const { payload, pairCount, inventorySha256 } =
+    collectInstalledProductionVersions();
   let response;
   let lastError;
 
@@ -258,6 +360,7 @@ async function main() {
     registry: `https://${REGISTRY_HOST}`,
     endpoint: AUDIT_PATH,
     checkedAt: new Date().toISOString(),
+    inventorySha256,
     packageVersionPairs: pairCount,
     matchingAdvisories: advisories.length,
     blockingAdvisories: blocking.length,
@@ -268,7 +371,7 @@ async function main() {
   writeReport(report);
 
   console.log(
-    `Production advisory inventory: ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical.`,
+    `Production advisory inventory: ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical; inventory sha256 ${inventorySha256}.`,
   );
 
   for (const advisory of blocking) {
