@@ -72,13 +72,22 @@ function collectInstalledProductionVersions() {
     versions.get(name).add(version);
   }
 
+  function advisoryPackageName(child, fallbackName) {
+    const candidate = child?.from ?? child?.name ?? fallbackName;
+    if (typeof candidate !== "string" || !candidate.trim()) {
+      throw new Error(`production dependency ${fallbackName} had no stable registry package name`);
+    }
+    return candidate.trim();
+  }
+
   function visitChildren(node) {
     for (const field of ["dependencies", "optionalDependencies"]) {
       const children = node?.[field];
       if (!children || typeof children !== "object") continue;
       for (const [fallbackName, child] of Object.entries(children)) {
         if (!child || typeof child !== "object") continue;
-        add(child.name ?? fallbackName, child.version);
+        const resolvedName = advisoryPackageName(child, fallbackName);
+        add(resolvedName, child.version);
         visit(child);
       }
     }
@@ -101,14 +110,18 @@ function collectInstalledProductionVersions() {
       if (!children || typeof children !== "object") continue;
       for (const [fallbackName, child] of Object.entries(children)) {
         if (!child || typeof child !== "object") continue;
-        const resolvedName = child.name ?? fallbackName;
+        const declaredName =
+          typeof child.name === "string" && child.name.trim()
+            ? child.name.trim()
+            : fallbackName;
         if (
           !productionRootNames.has(fallbackName) &&
-          !productionRootNames.has(resolvedName)
+          !productionRootNames.has(declaredName)
         ) {
           continue;
         }
-        add(resolvedName, child.version);
+        const advisoryName = advisoryPackageName(child, fallbackName);
+        add(advisoryName, child.version);
         visit(child);
       }
     }
@@ -350,6 +363,19 @@ async function requestAdvisories(payload) {
   });
 }
 
+function normalizeAdvisoryId(value, packageName) {
+  if (typeof value === "number") {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error(`npm advisory for ${packageName} had invalid numeric ID`);
+    }
+    return String(value);
+  }
+  if (typeof value === "string" && value.trim()) {
+    return value.trim();
+  }
+  throw new Error(`npm advisory for ${packageName} had no stable scalar ID`);
+}
+
 function normalizeAdvisories(response) {
   const advisories = [];
   for (const [packageName, packageAdvisories] of Object.entries(response)) {
@@ -370,7 +396,7 @@ function normalizeAdvisories(response) {
 
       advisories.push({
         packageName,
-        id: String(advisory.id ?? "unknown"),
+        id: normalizeAdvisoryId(advisory.id, packageName),
         severity,
         title: String(advisory.title ?? "Untitled advisory"),
         vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
@@ -381,7 +407,14 @@ function normalizeAdvisories(response) {
 
   const unique = new Map();
   for (const advisory of advisories) {
-    unique.set(`${advisory.packageName}\u0000${advisory.id}`, advisory);
+    const key = `${advisory.packageName}\u0000${advisory.id}`;
+    const existing = unique.get(key);
+    if (existing && JSON.stringify(existing) !== JSON.stringify(advisory)) {
+      throw new Error(
+        `npm advisory ${advisory.id} for ${advisory.packageName} had conflicting duplicate entries`,
+      );
+    }
+    if (!existing) unique.set(key, advisory);
   }
   return [...unique.values()];
 }
