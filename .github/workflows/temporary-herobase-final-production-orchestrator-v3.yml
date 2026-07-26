@@ -1,0 +1,558 @@
+name: Temporary HeroBase final production orchestrator v3
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: temporary-herobase-final-production-orchestrator-v3
+  cancel-in-progress: true
+
+jobs:
+  finalize:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725' &&
+      github.actor == github.repository_owner &&
+      github.triggering_actor == github.repository_owner &&
+      github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 280
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
+      TRACKER_ISSUE: '43'
+      MONITOR_PR: '59'
+      EXPECTED_VDS_ED25519_FINGERPRINT: SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY
+      ARMED_BOOTSTRAP_MESSAGE: VETS EXECUTE HEROBASE BOOTSTRAP V4 26d60888fe3410951f422cb7a68cee10661c2eaf
+
+    steps:
+      - name: Checkout exact monitor lane
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-deploy-monitor-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate finalizer, pin VDS-M, and cancel superseded orchestrators
+        id: preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = '1'
+          test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [ -n "$VDS_HOST" ]
+          [ -n "$VDS_SSH_KEY" ]
+          bash -n ops/herobase-production-bootstrap-v4.sh
+          node --check ops/herobase-live-e2e.mjs
+          ruby -e 'require "yaml"; YAML.load_file(ARGV[0])' .github/workflows/temporary-herobase-final-production-orchestrator-v3.yml
+          started_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "started_at=$started_at" >> "$GITHUB_OUTPUT"
+
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          timeout --signal=TERM --kill-after=5s 15s ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -t ed25519 "$VDS_HOST" > "$RUNNER_TEMP/vds-keyscan-final-v3" 2>/dev/null
+          [ -s "$RUNNER_TEMP/vds-keyscan-final-v3" ]
+          actual="$(ssh-keygen -lf "$RUNNER_TEMP/vds-keyscan-final-v3" | awk '{print $2}')"
+          test "$actual" = "$EXPECTED_VDS_ED25519_FINGERPRINT"
+          ssh-keyscan -T 10 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+          ssh -i "$HOME/.ssh/vds_key" -o BatchMode=yes -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "root@$VDS_HOST" \
+            'test "$(gh api user --jq .login)" = "jratdish1"'
+
+          runs="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/herobase-deploy-monitor-20260725&event=pull_request&per_page=100")"
+          mapfile -t stale_ids < <(jq -r --argjson current "$GITHUB_RUN_ID" '
+            .workflow_runs[] | select(
+              .id != $current and
+              (
+                .name == "Temporary HeroBase final production orchestrator" or
+                .name == "Temporary HeroBase final production orchestrator v2"
+              ) and
+              (.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending")
+            ) | .id
+          ' <<<"$runs")
+          for stale_id in "${stale_ids[@]}"; do
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$stale_id/cancel" >/dev/null || true
+          done
+
+      - name: Wait for and validate exact bootstrap v4 artifact
+        id: bootstrap
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_get() {
+            local url="$1" response=''
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$url")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+          approve_pending() {
+            local run_id="$1" pending ids payload
+            pending="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/pending_deployments" || printf '[]')"
+            ids="$(jq -c '[.[] | select(.current_user_can_approve == true) | .environment.id]' <<<"$pending" 2>/dev/null || printf '[]')"
+            if [ "$(jq -r 'length' <<<"$ids")" -gt 0 ]; then
+              payload="$(jq -nc --argjson environment_ids "$ids" '{environment_ids:$environment_ids,state:"approved",comment:"VETS GO approved idempotent HeroBase bootstrap v4"}')"
+              curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/pending_deployments" \
+                --data "$payload" >/dev/null || true
+            fi
+          }
+
+          mkdir -p final-evidence/bootstrap
+          run=''
+          for attempt in $(seq 1 220); do
+            runs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/herobase-deploy-monitor-20260725&event=pull_request&per_page=100")"
+            run="$(jq -c --arg message "$ARMED_BOOTSTRAP_MESSAGE" '
+              [.workflow_runs[] | select(
+                .name == "Temporary idempotent HeroBase production bootstrap v4" and
+                .head_branch == "ops/herobase-deploy-monitor-20260725" and
+                .run_attempt == 1 and
+                .head_commit.message == $message
+              )] | sort_by(.id) | last // empty
+            ' <<<"$runs")"
+            if [ -n "$run" ]; then
+              run_id="$(jq -r '.id' <<<"$run")"
+              approve_pending "$run_id"
+              status="$(jq -r '.status' <<<"$run")"
+              if [ "$status" = 'completed' ]; then break; fi
+            fi
+            sleep 30
+          done
+          test -n "$run"
+          run_id="$(jq -r '.id' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // "unknown"' <<<"$run")"
+          test "$conclusion" = 'success'
+          artifacts="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact="$(jq -c '[.artifacts[] | select(.name | startswith("herobase-bootstrap-v4-"))] | sort_by(.id) | last // empty' <<<"$artifacts")"
+          test -n "$artifact"
+          download_url="$(jq -r '.archive_download_url' <<<"$artifact")"
+          curl --fail-with-body --silent --show-error --location \
+            --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$download_url" > final-evidence/bootstrap/bootstrap-v4.zip
+          unzip -q final-evidence/bootstrap/bootstrap-v4.zip -d final-evidence/bootstrap/unpacked
+          result="$(find final-evidence/bootstrap/unpacked -name herobase-bootstrap-v4-result.json -type f -print -quit)"
+          test -n "$result"
+          jq -e --arg sha "$TARGET_SHA" '
+            .target_sha == $sha and
+            .exit_code == "0" and
+            .cf_token_verified == true and
+            .secret_names_ready == true and
+            .host_verified == true and
+            .deploy_user_verified == true and
+            .rollback_attempted == false
+          ' "$result" >/dev/null
+          cp "$result" final-evidence/bootstrap-result.json
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+      - name: Reconcile or post fresh owner deployment command
+        id: command
+        env:
+          ORCHESTRATOR_STARTED_AT: ${{ steps.preflight.outputs.started_at }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          result="$(ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s -- "$TARGET_SHA" "$GITHUB_REPOSITORY" "$TRACKER_ISSUE" "$ORCHESTRATOR_STARTED_AT" <<'VDS'
+          set -euo pipefail
+          TARGET_SHA="$1"
+          REPOSITORY="$2"
+          ISSUE="$3"
+          STARTED_AT="$4"
+          test "$(gh api user --jq .login)" = 'jratdish1'
+          test "$(gh api "repos/$REPOSITORY/git/ref/heads/main" --jq '.object.sha')" = "$TARGET_SHA"
+          issue_state="$(gh api "repos/$REPOSITORY/issues/$ISSUE" --jq '.state')"
+          if [ "$issue_state" != 'open' ]; then
+            gh api --method PATCH "repos/$REPOSITORY/issues/$ISSUE" -f state='open' >/dev/null
+          fi
+          tmp="$(mktemp)"
+          trap 'rm -f "$tmp"' EXIT
+          page=1
+          while [ "$page" -le 1000 ]; do
+            response="$(gh api "repos/$REPOSITORY/issues/$ISSUE/comments?per_page=100&page=$page")"
+            jq -c '.[]' <<<"$response" >> "$tmp"
+            [ "$(jq -r 'length' <<<"$response")" -lt 100 ] && break
+            page=$((page + 1))
+          done
+          [ "$page" -le 1000 ]
+          existing="$(jq -sc --arg body "VETS DEPLOY $TARGET_SHA" --arg start "$STARTED_AT" '
+            [ .[] | select(
+              .user.login == "jratdish1" and
+              .author_association == "OWNER" and
+              .body == $body and
+              .created_at >= $start
+            )] | sort_by(.id) | last // empty
+          ' "$tmp")"
+          if [ -n "$existing" ]; then
+            id="$(jq -r '.id' <<<"$existing")"
+            created="$(jq -r '.created_at' <<<"$existing")"
+          else
+            response="$(gh api --method POST "repos/$REPOSITORY/issues/$ISSUE/comments" -f body="VETS DEPLOY $TARGET_SHA")"
+            id="$(jq -r '.id' <<<"$response")"
+            created="$(jq -r '.created_at' <<<"$response")"
+          fi
+          printf '%s\t%s\n' "$id" "$created"
+          VDS
+          )"
+          command_comment_id="${result%%$'\t'*}"
+          command_created_at="${result#*$'\t'}"
+          [[ "$command_comment_id" =~ ^[0-9]+$ ]]
+          [[ "$command_created_at" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}T ]]
+          echo "command_comment_id=$command_comment_id" >> "$GITHUB_OUTPUT"
+          echo "command_created_at=$command_created_at" >> "$GITHUB_OUTPUT"
+          echo "correlation_id=issue-43-comment-$command_comment_id" >> "$GITHUB_OUTPUT"
+
+      - name: Bind exact consumed command run, monitor deployment, and validate result
+        id: deploy
+        env:
+          COMMAND_COMMENT_ID: ${{ steps.command.outputs.command_comment_id }}
+          COMMAND_CREATED_AT: ${{ steps.command.outputs.command_created_at }}
+          CORRELATION_ID: ${{ steps.command.outputs.correlation_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_get() {
+            local url="$1" response=''
+            for attempt in $(seq 1 5); do
+              if response="$(curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "$url")"; then
+                printf '%s' "$response"
+                return 0
+              fi
+              sleep $((attempt * 2))
+            done
+            return 1
+          }
+          collect_comments() {
+            local page=1 response count exhausted=false
+            : > "$RUNNER_TEMP/final-issue-comments.jsonl"
+            while [ "$page" -le 1000 ]; do
+              response="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100&page=$page")"
+              jq -c '.[]' <<<"$response" >> "$RUNNER_TEMP/final-issue-comments.jsonl"
+              count="$(jq -r 'length' <<<"$response")"
+              if [ "$count" -lt 100 ]; then exhausted=true; break; fi
+              page=$((page + 1))
+            done
+            test "$exhausted" = 'true'
+          }
+          approve_pending_runner() {
+            local run_id="$1" pending ids payload
+            pending="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/pending_deployments" || printf '[]')"
+            ids="$(jq -c '[.[] | select(.current_user_can_approve == true) | .environment.id]' <<<"$pending" 2>/dev/null || printf '[]')"
+            if [ "$(jq -r 'length' <<<"$ids")" -gt 0 ]; then
+              payload="$(jq -nc --argjson environment_ids "$ids" '{environment_ids:$environment_ids,state:"approved",comment:"VETS GO final HeroBase production approval"}')"
+              curl --fail-with-body --silent --show-error \
+                --connect-timeout 10 --max-time 30 \
+                -X POST \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H 'Accept: application/vnd.github+json' \
+                -H 'X-GitHub-Api-Version: 2022-11-28' \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/pending_deployments" \
+                --data "$payload" >/dev/null || true
+            fi
+          }
+          approve_pending_owner() {
+            local run_id="$1"
+            ssh -i "$HOME/.ssh/vds_key" -o BatchMode=yes -o ConnectTimeout=15 \
+              -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "root@$VDS_HOST" \
+              bash -s -- "$run_id" "$GITHUB_REPOSITORY" <<'VDS'
+          set -euo pipefail
+          RUN_ID="$1"
+          REPOSITORY="$2"
+          pending="$(gh api "repos/$REPOSITORY/actions/runs/$RUN_ID/pending_deployments" 2>/dev/null || printf '[]')"
+          ids="$(jq -c '[.[] | select(.current_user_can_approve == true) | .environment.id]' <<<"$pending" 2>/dev/null || printf '[]')"
+          if [ "$(jq -r 'length' <<<"$ids")" -gt 0 ]; then
+            jq -nc --argjson environment_ids "$ids" '{environment_ids:$environment_ids,state:"approved",comment:"VETS GO final HeroBase production approval"}' \
+              | gh api --method POST "repos/$REPOSITORY/actions/runs/$RUN_ID/pending_deployments" --input - >/dev/null
+          fi
+          VDS
+          }
+
+          workflow_id="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/vets-production-command.yml" | jq -r '.id')"
+          [[ "$workflow_id" =~ ^[0-9]+$ ]]
+          run=''
+          marker=''
+          for attempt in $(seq 1 140); do
+            runs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?event=issue_comment&branch=main&per_page=100")"
+            candidates="$(jq -c --arg sha "$TARGET_SHA" --arg created "$COMMAND_CREATED_AT" '
+              [.workflow_runs[] | select(
+                .head_sha == $sha and
+                .head_branch == "main" and
+                .event == "issue_comment" and
+                .run_attempt == 1 and
+                .actor.login == "jratdish1" and
+                .triggering_actor.login == "jratdish1" and
+                .created_at >= $created
+              )] | sort_by(.id) | reverse
+            ' <<<"$runs")"
+            collect_comments
+            while IFS= read -r candidate; do
+              [ -n "$candidate" ] || continue
+              candidate_id="$(jq -r '.id' <<<"$candidate")"
+              marker="$(jq -sc --arg correlation "$CORRELATION_ID" --arg comment "$COMMAND_COMMENT_ID" --arg run "$candidate_id" '
+                [ .[] | select(
+                  .user.login == "github-actions[bot]" and
+                  (.body | startswith("VETS_DEPLOY_CONSUMED v1\n")) and
+                  (.body | contains("correlation_id: " + $correlation + "\n")) and
+                  (.body | contains("command_comment_id: " + $comment + "\n")) and
+                  (.body | contains("command_run_id: " + $run + "\n"))
+                )] | if length == 1 then .[0] else empty end
+              ' "$RUNNER_TEMP/final-issue-comments.jsonl")"
+              if [ -n "$marker" ]; then run="$candidate"; break 2; fi
+            done < <(jq -c '.[]' <<<"$candidates")
+            sleep 15
+          done
+          test -n "$run"
+          test -n "$marker"
+          run_id="$(jq -r '.id' <<<"$run")"
+          marker_id="$(jq -r '.id' <<<"$marker")"
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          [[ "$marker_id" =~ ^[0-9]+$ ]]
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "consumption_comment_id=$marker_id" >> "$GITHUB_OUTPUT"
+
+          for attempt in $(seq 1 620); do
+            run="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id")"
+            status="$(jq -r '.status' <<<"$run")"
+            approve_pending_runner "$run_id"
+            approve_pending_owner "$run_id" || true
+            [ "$status" = 'completed' ] && break
+            sleep 20
+          done
+          conclusion="$(jq -r '.conclusion // "unknown"' <<<"$run")"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+          test "$conclusion" = 'success'
+
+          mkdir -p final-evidence/production
+          jobs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+          printf '%s\n' "$jobs" > final-evidence/production/jobs.json
+          artifacts="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+          artifact="$(jq -c --arg name "production-result-$CORRELATION_ID" '[.artifacts[] | select(.name == $name)] | sort_by(.id) | last // empty' <<<"$artifacts")"
+          test -n "$artifact"
+          download_url="$(jq -r '.archive_download_url' <<<"$artifact")"
+          curl --fail-with-body --silent --show-error --location \
+            --connect-timeout 10 --max-time 60 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "$download_url" > final-evidence/production/production-result.zip
+          unzip -q final-evidence/production/production-result.zip -d final-evidence/production/unpacked
+          result="$(find final-evidence/production/unpacked -name production-result.json -type f -print -quit)"
+          test -n "$result"
+          jq -e --arg sha "$TARGET_SHA" --arg correlation "$CORRELATION_ID" --arg marker "$marker_id" '
+            .requested_sha == $sha and
+            .final_active_sha == $sha and
+            .correlation_id == $correlation and
+            .consumption_comment_id == $marker and
+            .operation == "deploy" and
+            .deploy_outcome == "success" and
+            .purge_outcome == "success" and
+            .verify_outcome == "success" and
+            .final_state_outcome == "success" and
+            .inline_rollback_attempted == false and
+            .post_rollback_attempted == false and
+            .receipt_posted == true and
+            .verified == true
+          ' "$result" >/dev/null
+          cp "$result" final-evidence/production-result.json
+
+      - name: Verify live routes, TLS, edge, API, and browser behavior
+        id: e2e
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p final-evidence/live
+          routes=(/ /swap /portfolio /dashboard /dca /limits /approvals /bootcamp /stake /community /dao)
+          : > final-evidence/live/routes.tsv
+          for route in "${routes[@]}"; do
+            output="$(curl --fail --silent --show-error --location \
+              --connect-timeout 10 --max-time 30 \
+              --output /dev/null \
+              --write-out '%{http_code}\t%{time_namelookup}\t%{time_connect}\t%{time_appconnect}\t%{time_starttransfer}\t%{time_total}\t%{size_download}' \
+              "https://herobase.io$route")"
+            printf '%s\t%s\n' "$route" "$output" >> final-evidence/live/routes.tsv
+            code="${output%%$'\t'*}"
+            [[ "$code" =~ ^2[0-9][0-9]$|^3[0-9][0-9]$ ]]
+          done
+
+          curl --fail --silent --show-error --location \
+            --connect-timeout 10 --max-time 30 \
+            --dump-header final-evidence/live/home-headers.txt \
+            --output final-evidence/live/home.html \
+            https://herobase.io/
+          grep -Eiq '^strict-transport-security:' final-evidence/live/home-headers.txt
+          grep -Eiq '^content-security-policy:' final-evidence/live/home-headers.txt
+          grep -Eiq '^x-content-type-options:[[:space:]]*nosniff' final-evidence/live/home-headers.txt
+          grep -Eiq '^cf-ray:' final-evidence/live/home-headers.txt
+          grep -Eiq '^server:[[:space:]]*cloudflare' final-evidence/live/home-headers.txt
+
+          openssl s_client -connect herobase.io:443 -servername herobase.io </dev/null 2>/dev/null \
+            | openssl x509 -noout -subject -issuer -dates > final-evidence/live/tls.txt
+          openssl s_client -connect herobase.io:443 -servername herobase.io </dev/null 2>/dev/null \
+            | openssl x509 -checkend 1209600 -noout
+
+          HEROBASE_URL='https://herobase.io' \
+          HEROBASE_EXPECTED_SHA="$TARGET_SHA" \
+          HEROBASE_EVIDENCE_DIR='final-evidence/live/browser' \
+            node ops/herobase-live-e2e.mjs
+          jq -e '.pass == true and .health.pass == true and (.routes | length) == 11' \
+            final-evidence/live/browser/browser-e2e.json >/dev/null
+          jq -e '
+            .approvedDeferredExceptions.singleSidedStaking == "deferred" and
+            .approvedDeferredExceptions.bindingDaoGovernanceAndSnapshotVoting == "deferred"
+          ' final-evidence/live/browser/browser-e2e.json >/dev/null
+          echo 'verified=true' >> "$GITHUB_OUTPUT"
+
+      - name: Write final immutable production evidence
+        if: always()
+        env:
+          BOOTSTRAP_RUN_ID: ${{ steps.bootstrap.outputs.run_id }}
+          COMMAND_COMMENT_ID: ${{ steps.command.outputs.command_comment_id }}
+          CORRELATION_ID: ${{ steps.command.outputs.correlation_id }}
+          DEPLOY_RUN_ID: ${{ steps.deploy.outputs.run_id }}
+          CONSUMPTION_COMMENT_ID: ${{ steps.deploy.outputs.consumption_comment_id }}
+          DEPLOY_CONCLUSION: ${{ steps.deploy.outputs.conclusion }}
+          LIVE_E2E_VERIFIED: ${{ steps.e2e.outputs.verified }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p final-evidence
+          jq -n \
+            --arg target_sha "$TARGET_SHA" \
+            --arg bootstrap_run_id "${BOOTSTRAP_RUN_ID:-unknown}" \
+            --arg command_comment_id "${COMMAND_COMMENT_ID:-unknown}" \
+            --arg correlation_id "${CORRELATION_ID:-unknown}" \
+            --arg consumption_comment_id "${CONSUMPTION_COMMENT_ID:-unknown}" \
+            --arg deployment_run_id "${DEPLOY_RUN_ID:-unknown}" \
+            --arg deployment_conclusion "${DEPLOY_CONCLUSION:-unknown}" \
+            --argjson live_e2e_verified "${LIVE_E2E_VERIFIED:-false}" \
+            --arg completed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{target_sha:$target_sha,bootstrap_run_id:$bootstrap_run_id,command_comment_id:$command_comment_id,correlation_id:$correlation_id,consumption_comment_id:$consumption_comment_id,deployment_run_id:$deployment_run_id,deployment_conclusion:$deployment_conclusion,live_e2e_verified:$live_e2e_verified,deferred:{single_sided_staking:true,binding_dao_governance_and_snapshot_voting:true},completed_at:$completed_at}' \
+            > final-evidence/final-summary.json
+          find final-evidence -type f -print0 | sort -z | xargs -0 sha256sum > final-evidence/SHA256SUMS
+
+      - name: Preserve final evidence bundle
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-final-production-v3-${{ github.sha }}
+          path: final-evidence
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Post owner finality receipt and close incident
+        if: steps.e2e.outputs.verified == 'true' && steps.deploy.outputs.conclusion == 'success'
+        env:
+          COMMAND_COMMENT_ID: ${{ steps.command.outputs.command_comment_id }}
+          CORRELATION_ID: ${{ steps.command.outputs.correlation_id }}
+          DEPLOY_RUN_ID: ${{ steps.deploy.outputs.run_id }}
+          CONSUMPTION_COMMENT_ID: ${{ steps.deploy.outputs.consumption_comment_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/vds_key" -o BatchMode=yes -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes "root@$VDS_HOST" \
+            bash -s -- "$TARGET_SHA" "$GITHUB_REPOSITORY" "$TRACKER_ISSUE" "$MONITOR_PR" \
+              "$COMMAND_COMMENT_ID" "$CORRELATION_ID" "$DEPLOY_RUN_ID" "$CONSUMPTION_COMMENT_ID" <<'VDS'
+          set -euo pipefail
+          TARGET_SHA="$1"
+          REPOSITORY="$2"
+          ISSUE="$3"
+          MONITOR_PR="$4"
+          COMMAND_COMMENT_ID="$5"
+          CORRELATION_ID="$6"
+          DEPLOY_RUN_ID="$7"
+          CONSUMPTION_COMMENT_ID="$8"
+          body="$(cat <<EOF_BODY
+          ## VETS HeroBase production finality receipt
+
+          - Production SHA: \`$TARGET_SHA\`
+          - Owner command comment: \`$COMMAND_COMMENT_ID\`
+          - Consumption marker: \`$CONSUMPTION_COMMENT_ID\`
+          - Correlation: \`$CORRELATION_ID\`
+          - Protected deployment run: \`$DEPLOY_RUN_ID\`
+          - Git/PM2/public health exact-SHA identity: **VERIFIED**
+          - Cloudflare purge: **SUCCESS / API success true / zero errors**
+          - Live route, API, TLS, edge-header, and headless-browser E2E: **PASS**
+          - Single-sided staking: **AUTHORIZED DEFERRED**
+          - Binding DAO governance and snapshot voting: **AUTHORIZED DEFERRED**
+          - Wallet, contract, and trading transactions during verification: **NONE**
+          - Final production state: **VERIFIED**
+
+          The temporary monitoring PR is closed without merge. Immutable workflow artifacts preserve the deployment and E2E receipts.
+          EOF_BODY
+          )"
+          gh api --method POST "repos/$REPOSITORY/issues/$ISSUE/comments" -f body="$body" >/dev/null
+          gh api --method PATCH "repos/$REPOSITORY/issues/$ISSUE" -f state='closed' -f state_reason='completed' >/dev/null
+          gh api --method PATCH "repos/$REPOSITORY/pulls/$MONITOR_PR" -f state='closed' >/dev/null
+          VDS
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts" "$RUNNER_TEMP/vds-keyscan-final-v3"
+
+      - name: Enforce final verified production state
+        if: always()
+        env:
+          DEPLOY_CONCLUSION: ${{ steps.deploy.outputs.conclusion }}
+          LIVE_E2E_VERIFIED: ${{ steps.e2e.outputs.verified }}
+        shell: bash
+        run: |
+          test "$DEPLOY_CONCLUSION" = 'success'
+          test "$LIVE_E2E_VERIFIED" = 'true'
