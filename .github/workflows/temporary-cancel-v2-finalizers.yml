@@ -1,0 +1,42 @@
+name: Temporary cancel superseded HeroBase v2 runs
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  cancel:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel superseded v2 orchestration runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          runs="$(curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$repo_api/actions/runs?branch=ops/herobase-deploy-monitor-20260725&per_page=100")"
+          count=0
+          while IFS=$'\t' read -r id name status; do
+            [[ "$id" =~ ^[0-9]+$ ]] || continue
+            [ "$id" != "$GITHUB_RUN_ID" ] || continue
+            case "$name" in
+              'Temporary DAO one-file production finalizer v2'|'Temporary HeroBase production host finalizer v2'|'Temporary HeroBase production final verification v2')
+                case "$status" in queued|in_progress|pending|waiting|requested)
+                  curl --silent --show-error --connect-timeout 10 --max-time 30 -X POST -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$repo_api/actions/runs/$id/cancel" >/dev/null || true
+                  count=$((count+1));;
+                esac;;
+            esac
+          done < <(jq -r '.workflow_runs[]|[.id,.name,.status]|@tsv' <<<"$runs")
+          printf 'CANCELLED_V2_COUNT=%s\n' "$count"
