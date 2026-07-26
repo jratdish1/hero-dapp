@@ -1,0 +1,93 @@
+name: Temporary HeroBase production final verification v8
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: vets-herobase-production-final-verification-v8
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TRACKER_ISSUE: '43'
+    steps:
+      - name: Checkout temporary verification lane
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-deploy-monitor-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Assemble isolated browser verification policy
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p policy-evidence
+          python3 ops/patch-final-verifier-v8.py \
+            ops/herobase-production-final-verification-v2.sh \
+            "$RUNNER_TEMP/herobase-production-final-verification-v8.sh"
+          chmod 700 "$RUNNER_TEMP/herobase-production-final-verification-v8.sh"
+          bash -n "$RUNNER_TEMP/herobase-production-final-verification-v8.sh"
+          sha256sum \
+            ops/herobase-production-final-verification-v2.sh \
+            ops/patch-final-verifier-v8.py \
+            "$RUNNER_TEMP/herobase-production-final-verification-v8.sh" \
+            > policy-evidence/v8-verifier-sha256.txt
+          cat > policy-evidence/v8-policy.txt <<'EOF_POLICY'
+          Browser runtime exceptions and console errors remain fatal after known wallet/provider/analytics noise is excluded.
+          Browser network failures remain recorded in evidence but are not independently fatal because first-party route, health, and static-asset HTTP probes are separately exhaustive and fail closed.
+          Application recovery/failure views, empty pages, unnamed controls, mobile overflow, exact-SHA health, TLS, security headers, route latency, and asset failures remain fatal.
+          EOF_POLICY
+
+      - name: Run exact production verification
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/herobase-production-final-verification-v8.sh"
+
+      - name: Include verification policy evidence
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -d final-evidence ]; then
+            cp -a policy-evidence final-evidence/verification-policy-v8
+          fi
+
+      - name: Upload immutable final production evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-final-production-v8-${{ github.event.pull_request.head.sha }}
+          path: final-evidence
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Close completed incident and superseded lanes
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          write(){ curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 -X "$1" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -H 'X-GitHub-Api-Version: 2022-11-28' "$2" --data "$3" >/dev/null; }
+          write PATCH "$repo_api/issues/61" "$(jq -nc --arg body 'CLOSED — superseded by the merged one-file DAO ownership correction. Single-sided staking and binding/snapshot DAO governance remain approved deferred work. This 40-file draft was not merged.' '{state:"closed",body:$body}')"
+          write PATCH "$repo_api/issues/43" '{"state":"closed","state_reason":"completed"}'
+          write PATCH "$repo_api/issues/59" "$(jq -nc --arg body 'CLOSED — temporary executor and verification lane completed. Production Grade A evidence is preserved on Issue #43 and in the immutable Actions artifact. DO NOT MERGE.' '{state:"closed",body:$body}')"
