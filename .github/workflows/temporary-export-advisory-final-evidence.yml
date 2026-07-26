@@ -49,131 +49,103 @@ jobs:
           source = Path('scripts/check-production-advisories.mjs')
           text = source.read_text()
 
-          replacements = [
-              (
-                  '  function visitChildren(node) {\n',
-                  '''  function advisoryPackageName(child, fallbackName) {
-                    const candidate = child?.from ?? child?.name ?? fallbackName;
-                    if (typeof candidate !== "string" || !candidate.trim()) {
-                      throw new Error(`production dependency ${fallbackName} had no stable registry package name`);
-                    }
-                    return candidate.trim();
-                  }
-
-                  function visitChildren(node) {
-                  ''',
-                  'package-name helper',
-              ),
-              (
-                  '''        add(child.name ?? fallbackName, child.version);
-                          visit(child);
-                  ''',
-                  '''        const resolvedName = advisoryPackageName(child, fallbackName);
-                          add(resolvedName, child.version);
-                          visit(child);
-                  ''',
-                  'nested alias identity',
-              ),
-              (
-                  '''        const resolvedName = child.name ?? fallbackName;
-                          if (
-                            !productionRootNames.has(fallbackName) &&
-                            !productionRootNames.has(resolvedName)
-                          ) {
-                            continue;
-                          }
-                          add(resolvedName, child.version);
-                  ''',
-                  '''        const declaredName =
-                            typeof child.name === "string" && child.name.trim()
-                              ? child.name.trim()
-                              : fallbackName;
-                          if (
-                            !productionRootNames.has(fallbackName) &&
-                            !productionRootNames.has(declaredName)
-                          ) {
-                            continue;
-                          }
-                          const advisoryName = advisoryPackageName(child, fallbackName);
-                          add(advisoryName, child.version);
-                  ''',
-                  'root alias identity',
-              ),
-              (
-                  'function normalizeAdvisories(response) {\n',
-                  '''function normalizeAdvisoryId(value, packageName) {
-                    if (typeof value === "number") {
-                      if (!Number.isSafeInteger(value) || value < 0) {
-                        throw new Error(`npm advisory for ${packageName} had invalid numeric ID`);
-                      }
-                      return String(value);
-                    }
-                    if (typeof value === "string" && value.trim()) {
-                      return value.trim();
-                    }
-                    throw new Error(`npm advisory for ${packageName} had no stable scalar ID`);
-                  }
-
-                  function normalizeAdvisories(response) {
-                  ''',
-                  'advisory-id helper',
-              ),
-              (
-                  '''      advisories.push({
-                            packageName,
-                            id: String(advisory.id ?? "unknown"),
-                            severity,
-                            title: String(advisory.title ?? "Untitled advisory"),
-                            vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
-                            url: String(advisory.url ?? ""),
-                          });
-                  ''',
-                  '''      advisories.push({
-                            packageName,
-                            id: normalizeAdvisoryId(advisory.id, packageName),
-                            severity,
-                            title: String(advisory.title ?? "Untitled advisory"),
-                            vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
-                            url: String(advisory.url ?? ""),
-                          });
-                  ''',
-                  'stable advisory ID',
-              ),
-              (
-                  '''  const unique = new Map();
-                    for (const advisory of advisories) {
-                      unique.set(`${advisory.packageName}\\u0000${advisory.id}`, advisory);
-                    }
-                    return [...unique.values()];
-                  ''',
-                  '''  const unique = new Map();
-                    for (const advisory of advisories) {
-                      const key = `${advisory.packageName}\\u0000${advisory.id}`;
-                      const existing = unique.get(key);
-                      if (existing && JSON.stringify(existing) !== JSON.stringify(advisory)) {
-                        throw new Error(
-                          `npm advisory ${advisory.id} for ${advisory.packageName} had conflicting duplicate entries`,
-                        );
-                      }
-                      if (!existing) unique.set(key, advisory);
-                    }
-                    return [...unique.values()];
-                  ''',
-                  'conflicting duplicate rejection',
-              ),
-          ]
-
-          # Dedent the JavaScript snippets embedded above without disturbing
-          # their intentional internal indentation.
-          import textwrap
-          normalized = []
-          for old, new, label in replacements:
-              normalized.append((textwrap.dedent(old), textwrap.dedent(new), label))
-
-          for old, new, label in normalized:
-              if text.count(old) != 1:
-                  raise RuntimeError(f'{label} replacement count: {text.count(old)}')
+          def replace_once(old: str, new: str, label: str) -> None:
+              global text
+              count = text.count(old)
+              if count != 1:
+                  raise RuntimeError(f'{label} replacement count: {count}')
               text = text.replace(old, new, 1)
+
+          replace_once(
+              '  function visitChildren(node) {\n',
+              '  function advisoryPackageName(child, fallbackName) {\n'
+              '    const candidate = child?.from ?? child?.name ?? fallbackName;\n'
+              '    if (typeof candidate !== "string" || !candidate.trim()) {\n'
+              '      throw new Error(`production dependency ${fallbackName} had no stable registry package name`);\n'
+              '    }\n'
+              '    return candidate.trim();\n'
+              '  }\n\n'
+              '  function visitChildren(node) {\n',
+              'package-name helper',
+          )
+
+          replace_once(
+              '        add(child.name ?? fallbackName, child.version);\n'
+              '        visit(child);\n',
+              '        const resolvedName = advisoryPackageName(child, fallbackName);\n'
+              '        add(resolvedName, child.version);\n'
+              '        visit(child);\n',
+              'nested alias identity',
+          )
+
+          replace_once(
+              '        const resolvedName = child.name ?? fallbackName;\n'
+              '        if (\n'
+              '          !productionRootNames.has(fallbackName) &&\n'
+              '          !productionRootNames.has(resolvedName)\n'
+              '        ) {\n'
+              '          continue;\n'
+              '        }\n'
+              '        add(resolvedName, child.version);\n',
+              '        const declaredName =\n'
+              '          typeof child.name === "string" && child.name.trim()\n'
+              '            ? child.name.trim()\n'
+              '            : fallbackName;\n'
+              '        if (\n'
+              '          !productionRootNames.has(fallbackName) &&\n'
+              '          !productionRootNames.has(declaredName)\n'
+              '        ) {\n'
+              '          continue;\n'
+              '        }\n'
+              '        const advisoryName = advisoryPackageName(child, fallbackName);\n'
+              '        add(advisoryName, child.version);\n',
+              'root alias identity',
+          )
+
+          replace_once(
+              'function normalizeAdvisories(response) {\n',
+              'function normalizeAdvisoryId(value, packageName) {\n'
+              '  if (typeof value === "number") {\n'
+              '    if (!Number.isSafeInteger(value) || value < 0) {\n'
+              '      throw new Error(`npm advisory for ${packageName} had invalid numeric ID`);\n'
+              '    }\n'
+              '    return String(value);\n'
+              '  }\n'
+              '  if (typeof value === "string" && value.trim()) {\n'
+              '    return value.trim();\n'
+              '  }\n'
+              '  throw new Error(`npm advisory for ${packageName} had no stable scalar ID`);\n'
+              '}\n\n'
+              'function normalizeAdvisories(response) {\n',
+              'advisory-id helper',
+          )
+
+          replace_once(
+              '        id: String(advisory.id ?? "unknown"),\n',
+              '        id: normalizeAdvisoryId(advisory.id, packageName),\n',
+              'stable advisory ID',
+          )
+
+          replace_once(
+              '  const unique = new Map();\n'
+              '  for (const advisory of advisories) {\n'
+              '    unique.set(`${advisory.packageName}\\u0000${advisory.id}`, advisory);\n'
+              '  }\n'
+              '  return [...unique.values()];\n',
+              '  const unique = new Map();\n'
+              '  for (const advisory of advisories) {\n'
+              '    const key = `${advisory.packageName}\\u0000${advisory.id}`;\n'
+              '    const existing = unique.get(key);\n'
+              '    if (existing && JSON.stringify(existing) !== JSON.stringify(advisory)) {\n'
+              '      throw new Error(\n'
+              '        `npm advisory ${advisory.id} for ${advisory.packageName} had conflicting duplicate entries`,\n'
+              '      );\n'
+              '    }\n'
+              '    if (!existing) unique.set(key, advisory);\n'
+              '  }\n'
+              '  return [...unique.values()];\n',
+              'conflicting duplicate rejection',
+          )
 
           out = Path('exported/check-production-advisories.mjs')
           out.write_text(text)
