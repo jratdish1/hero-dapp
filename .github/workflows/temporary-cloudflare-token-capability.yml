@@ -1,0 +1,94 @@
+name: Temporary Cloudflare token capability check
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  capability:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+
+    steps:
+      - name: Validate route secrets
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$VDS_HOST"
+          test -n "$VDS_SSH_KEY"
+          [[ "$VDS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+
+      - name: Establish pinned VDS-M trust
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -t ed25519 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          test -s "$HOME/.ssh/known_hosts"
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk '{print $2}')"
+          test "$actual" = 'SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY'
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+
+      - name: Test permission-group listing with existing Cloudflare account authentication
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s <<'REMOTE'
+          set -euo pipefail
+          test -s /root/.env_architecture
+          set -a
+          . /root/.env_architecture
+          set +a
+
+          email="${CF_AUTH_HEADER_EMAIL:-${CLOUDFLARE_EMAIL:-}}"
+          key="${CF_GLOBAL_API_KEY:-${CF_AUTH_HEADER_KEY:-}}"
+          test -n "$email"
+          test -n "$key"
+
+          response="$(curl -4 --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "X-Auth-Email: $email" \
+            -H "X-Auth-Key: $key" \
+            -H 'Content-Type: application/json' \
+            'https://api.cloudflare.com/client/v4/user/tokens/permission_groups')"
+
+          success="$(jq -r '.success == true and ((.errors // []) | length == 0)' <<<"$response")"
+          test "$success" = true
+
+          zone_read_count="$(jq -r '[.result[] | select(.name == "Zone Read" and (.scopes | index("com.cloudflare.api.account.zone")))] | length' <<<"$response")"
+          cache_purge_count="$(jq -r '[.result[] | select((.name == "Cache Purge" or .name == "Cache Purge Edit") and (.scopes | index("com.cloudflare.api.account.zone")))] | length' <<<"$response")"
+
+          printf 'CF_PERMISSION_GROUP_LIST=PASS\n'
+          printf 'ZONE_READ_GROUP_COUNT=%s\n' "$zone_read_count"
+          printf 'CACHE_PURGE_GROUP_COUNT=%s\n' "$cache_purge_count"
+          printf 'CF_USER_TOKEN_CREATION_CAPABILITY=%s\n' "$([ "$zone_read_count" -eq 1 ] && [ "$cache_purge_count" -eq 1 ] && printf READY || printf BLOCKED)"
+          unset email key response
+          REMOTE
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
