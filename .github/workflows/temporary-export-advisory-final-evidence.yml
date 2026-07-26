@@ -1,0 +1,147 @@
+name: Temporary export final advisory evidence corrections
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  export:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.actor == github.repository_owner &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout exact PR63 branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: fix/ci-audit-retry-20260726
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Patch, validate, and publish exact blob
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p exported
+          python3 <<'PY'
+          from __future__ import annotations
+
+          import base64
+          import json
+          import os
+          from pathlib import Path
+          import re
+          import subprocess
+          from urllib.request import Request, urlopen
+
+          source = Path('scripts/check-production-advisories.mjs')
+          text = source.read_text()
+
+          replacements = [
+              (
+                  'class RetryableAuditError extends Error {}\nclass NonRetryableAuditError extends Error {}\n',
+                  'class RetryableAuditError extends Error {}\nclass NonRetryableAuditError extends Error {}\n\nlet inventoryEvidence;\n',
+                  'inventory evidence declaration',
+              ),
+              (
+                  'async function requestAdvisories(payload) {\n  const requestBody = Buffer.from(JSON.stringify(payload), "utf8");\n',
+                  'async function requestAdvisories(payload) {\n  const requestBody = Buffer.from(JSON.stringify(payload), "utf8");\n  const startedAt = Date.now();\n',
+                  'request start time',
+              ),
+              (
+                  '          settle(resolve, parsed);\n',
+                  '          const elapsedMs = Date.now() - startedAt;\n          if (elapsedMs >= REQUEST_DEADLINE_MS) {\n            settle(\n              reject,\n              new RetryableAuditError(\n                `npm advisory request completed after ${elapsedMs}ms, exceeding the ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,\n              ),\n            );\n            request.destroy();\n            return;\n          }\n\n          settle(resolve, parsed);\n',
+                  'pre-success elapsed deadline',
+              ),
+              (
+                  '  } = collectInstalledProductionVersions();\n  let response;\n',
+                  '  } = collectInstalledProductionVersions();\n  inventoryEvidence = {\n    productionRootCount,\n    inventorySha256,\n    packageVersionPairs: pairCount,\n  };\n  let response;\n',
+                  'inventory evidence capture',
+              ),
+              (
+                  '      checkedAt: new Date().toISOString(),\n      result: "ERROR",\n',
+                  '      checkedAt: new Date().toISOString(),\n      ...(inventoryEvidence ?? {}),\n      result: "ERROR",\n',
+                  'error evidence identity',
+              ),
+          ]
+
+          for old, new, label in replacements:
+              if text.count(old) != 1:
+                  raise RuntimeError(f'{label} replacement count: {text.count(old)}')
+              text = text.replace(old, new, 1)
+
+          out = Path('exported/check-production-advisories.mjs')
+          out.write_text(text)
+          subprocess.run(['node', '--check', str(out)], check=True)
+
+          required = [
+              'let inventoryEvidence;',
+              'const startedAt = Date.now();',
+              'const elapsedMs = Date.now() - startedAt;',
+              'if (elapsedMs >= REQUEST_DEADLINE_MS)',
+              '...(inventoryEvidence ?? {})',
+              'packageVersionPairs: pairCount',
+          ]
+          for token in required:
+              if token not in text:
+                  raise RuntimeError(f'missing required token: {token}')
+
+          forbidden = set('\u061c\u200e\u200f\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069')
+          credential = re.compile(r'BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY|gh[pousr]_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{20,}|AKIA[0-9A-Z]{16}')
+          if any(char in forbidden for char in text):
+              raise RuntimeError('hidden or bidirectional Unicode found')
+          if credential.search(text):
+              raise RuntimeError('credential pattern found')
+
+          payload = json.dumps({
+              'content': base64.b64encode(text.encode()).decode(),
+              'encoding': 'base64',
+          }).encode()
+          request = Request(
+              f'https://api.github.com/repos/{os.environ["GITHUB_REPOSITORY"]}/git/blobs',
+              data=payload,
+              method='POST',
+              headers={
+                  'Authorization': f'Bearer {os.environ["GH_TOKEN"]}',
+                  'Accept': 'application/vnd.github+json',
+                  'Content-Type': 'application/json',
+                  'X-GitHub-Api-Version': '2022-11-28',
+                  'User-Agent': 'VETS-Advisory-Final-Evidence-Exporter',
+              },
+          )
+          with urlopen(request, timeout=60) as response:
+              blob_sha = json.loads(response.read())['sha']
+          if not re.fullmatch(r'[0-9a-f]{40}', blob_sha):
+              raise RuntimeError('invalid blob SHA')
+
+          Path('exported/blob-shas.json').write_text(json.dumps({
+              'path': 'scripts/check-production-advisories.mjs',
+              'blob_sha': blob_sha,
+              'elapsed_deadline_recheck': 'PASS',
+              'error_inventory_identity': 'PASS',
+              'node_check': 'PASS',
+              'hidden_unicode': 'PASS',
+              'credential_scan': 'PASS',
+          }, indent=2) + '\n')
+          print(f'ADVISORY_FINAL_BLOB={blob_sha}')
+          PY
+
+      - name: Upload validated correction
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: advisory-final-evidence-${{ github.event.pull_request.head.sha }}
+          path: exported
+          retention-days: 7
+          if-no-files-found: error
