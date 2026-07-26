@@ -376,6 +376,15 @@ function normalizeAdvisoryId(value, packageName) {
   throw new Error(`npm advisory for ${packageName} had no stable scalar ID`);
 }
 
+function requireAdvisoryString(value, field, packageName, advisoryId) {
+  if (typeof value !== "string" || !value.trim()) {
+    throw new Error(
+      `npm advisory ${advisoryId} for ${packageName} had invalid ${field}`,
+    );
+  }
+  return value.trim();
+}
+
 function normalizeAdvisories(response) {
   const advisories = [];
   for (const [packageName, packageAdvisories] of Object.entries(response)) {
@@ -387,20 +396,39 @@ function normalizeAdvisories(response) {
         throw new Error(`npm advisory entry for ${packageName} was invalid`);
       }
 
+      const id = normalizeAdvisoryId(advisory.id, packageName);
       const severity = String(advisory.severity ?? "").toLowerCase();
       if (!KNOWN_SEVERITIES.has(severity)) {
         throw new Error(
-          `npm advisory ${String(advisory.id ?? "unknown")} for ${packageName} had invalid severity ${JSON.stringify(severity)}`,
+          `npm advisory ${id} for ${packageName} had invalid severity ${JSON.stringify(severity)}`,
         );
       }
+      const title = requireAdvisoryString(
+        advisory.title,
+        "title",
+        packageName,
+        id,
+      );
+      const vulnerableVersions = requireAdvisoryString(
+        advisory.vulnerable_versions,
+        "vulnerable_versions",
+        packageName,
+        id,
+      );
+      const url = requireAdvisoryString(
+        advisory.url,
+        "url",
+        packageName,
+        id,
+      );
 
       advisories.push({
         packageName,
-        id: normalizeAdvisoryId(advisory.id, packageName),
+        id,
         severity,
-        title: String(advisory.title ?? "Untitled advisory"),
-        vulnerableVersions: String(advisory.vulnerable_versions ?? "unknown"),
-        url: String(advisory.url ?? ""),
+        title,
+        vulnerableVersions,
+        url,
       });
     }
   }
