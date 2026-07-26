@@ -1,0 +1,119 @@
+name: HeroBase final production status probe
+
+on:
+  push:
+    branches:
+      - ops/herobase-final-status-probe-20260726
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: write
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: herobase-final-status-probe
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GH_TOKEN: ${{ github.token }}
+      STATUS_BRANCH: ops/herobase-final-status-probe-20260726
+    steps:
+      - name: Capture and publish authoritative status
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          api_get(){ curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$1"; }
+          api_write(){ curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 60 -X "$1" -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'Content-Type: application/json' -H 'X-GitHub-Api-Version: 2022-11-28' "$2" --data "$3"; }
+
+          main_sha="$(api_get "$repo_api/git/ref/heads/main" | jq -r '.object.sha')"
+          source="$(api_get "$repo_api/contents/server/routers.ts?ref=$main_sha" | jq -r '.content' | tr -d '\n' | base64 -d)"
+          proposal_guard=false; delegate_guard=false
+          grep -Fq 'proposal.proposerId !== ctx.user.id' <<<"$source" && proposal_guard=true
+          grep -Fq 'delegate.userId !== ctx.user.id' <<<"$source" && delegate_guard=true
+
+          issue="$(api_get "$repo_api/issues/43")"
+          issue_state="$(jq -r '.state' <<<"$issue")"
+          comments="$(api_get "$repo_api/issues/43/comments?per_page=100")"
+          final_comment="$(jq -c '[.[]|select(.body|contains("VETS HeroBase production final receipt — GRADE A"))]|sort_by(.id)|last//empty' <<<"$comments")"
+          final_comment_id="$(jq -r '.id//0' <<<"${final_comment:-{}}")"
+
+          workflow_id="$(api_get "$repo_api/actions/workflows/vets-production-command.yml" | jq -r '.id')"
+          runs="$(api_get "$repo_api/actions/workflows/$workflow_id/runs?event=issue_comment&branch=main&per_page=100")"
+          owner_run="$(jq -c --arg sha "$main_sha" '[.workflow_runs[]|select(.head_sha==$sha and .event=="issue_comment")]|sort_by(.id)|last//empty' <<<"$runs")"
+          owner_run_id="$(jq -r '.id//0' <<<"${owner_run:-{}}")"
+          owner_run_status="$(jq -r '.status//"not-found"' <<<"${owner_run:-{}}")"
+          owner_run_conclusion="$(jq -r '.conclusion//"pending"' <<<"${owner_run:-{}}")"
+
+          artifact_verified=false; artifact_id=0; production_result='{}'
+          if [[ "$owner_run_id" =~ ^[1-9][0-9]*$ ]]; then
+            artifacts="$(api_get "$repo_api/actions/runs/$owner_run_id/artifacts")"
+            artifact_id="$(jq -r '[.artifacts[]|select(.name|startswith("production-result-"))]|sort_by(.id)|last.id//0' <<<"$artifacts")"
+            if [[ "$artifact_id" =~ ^[1-9][0-9]*$ ]]; then
+              curl --fail-with-body --silent --show-error --location --connect-timeout 10 --max-time 120 -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' -H 'X-GitHub-Api-Version: 2022-11-28' "$repo_api/actions/artifacts/$artifact_id/zip" -o /tmp/result.zip
+              rm -rf /tmp/result && mkdir /tmp/result && unzip -q /tmp/result.zip -d /tmp/result
+              result_file="$(find /tmp/result -type f -name production-result.json -print -quit)"
+              if [ -n "$result_file" ]; then
+                production_result="$(cat "$result_file")"
+                if jq -e --arg sha "$main_sha" '.verified==true and .requested_sha==$sha and .final_active_sha==$sha and .deploy_outcome=="success" and .purge_outcome=="success" and .verify_outcome=="success" and .receipt_posted==true' <<<"$production_result" >/dev/null; then artifact_verified=true; fi
+              fi
+            fi
+          fi
+
+          health_body="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 20 'https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D' 2>/dev/null || true)"
+          health_ok=false; health_sha='unknown'
+          grep -q '"ok":true' <<<"$health_body" && health_ok=true
+          health_sha="$(jq -r '..|objects|.releaseSha?//empty' <<<"$health_body" 2>/dev/null | head -n1)"; health_sha="${health_sha:-unknown}"
+
+          final_receipt_present=false
+          if [ "$final_comment_id" -gt 0 ] && jq -e '.body|contains("FINAL DECISION: VERIFIED COMPLETE / OPERATIONAL")' <<<"$final_comment" >/dev/null; then final_receipt_present=true; fi
+
+          state='BLOCKED_OR_IN_PROGRESS'; grade='UNASSIGNED'; reason='terminal production receipt not yet satisfied'
+          if [ "$proposal_guard" = true ] && [ "$delegate_guard" = true ] && [ "$owner_run_conclusion" = success ] && [ "$artifact_verified" = true ] && [ "$health_ok" = true ] && [ "$health_sha" = "$main_sha" ] && [ "$final_receipt_present" = true ] && [ "$issue_state" = closed ]; then
+            state='VERIFIED_COMPLETE'; grade='A'; reason='all exact-SHA deployment, purge, health, E2E, and receipt gates satisfied'
+          elif [ "$owner_run_status" = in_progress ] || [ "$owner_run_status" = queued ]; then
+            state='IN_PROGRESS'; reason='protected production workflow is still executing'
+          elif [ "$owner_run_conclusion" = failure ]; then
+            state='BLOCKED'; reason='latest exact-main owner production workflow failed; inspect jobs and receipt'
+          fi
+
+          mkdir -p ops
+          jq -n \
+            --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg state "$state" --arg grade "$grade" --arg reason "$reason" \
+            --arg main_sha "$main_sha" --arg issue_state "$issue_state" \
+            --argjson proposal_guard "$proposal_guard" --argjson delegate_guard "$delegate_guard" \
+            --arg owner_run_id "$owner_run_id" --arg owner_run_status "$owner_run_status" --arg owner_run_conclusion "$owner_run_conclusion" \
+            --arg artifact_id "$artifact_id" --argjson artifact_verified "$artifact_verified" \
+            --argjson health_ok "$health_ok" --arg health_sha "$health_sha" \
+            --arg final_comment_id "$final_comment_id" --argjson final_receipt_present "$final_receipt_present" \
+            '{observed_at:$observed_at,state:$state,grade:$grade,reason:$reason,main_sha:$main_sha,dao_security:{proposal_guard:$proposal_guard,delegate_guard:$delegate_guard},issue_43:{state:$issue_state,final_comment_id:$final_comment_id,final_receipt_present:$final_receipt_present},owner_workflow:{run_id:$owner_run_id,status:$owner_run_status,conclusion:$owner_run_conclusion},production_artifact:{id:$artifact_id,verified:$artifact_verified},public_health:{ok:$health_ok,release_sha:$health_sha},deferred_exceptions:["single-sided staking business functionality","binding/snapshot DAO governance"]}' > ops/HEROBASE_FINAL_STATUS.json
+          cat > ops/HEROBASE_FINAL_STATUS.md <<EOF
+          # HeroBase Production Status
+
+          - Observed: $(date -u +%Y-%m-%dT%H:%M:%SZ)
+          - State: **$state**
+          - Grade: **$grade**
+          - Reason: $reason
+          - Main SHA: \`$main_sha\`
+          - DAO ownership guards: proposal=$proposal_guard, delegate=$delegate_guard
+          - Issue #43: $issue_state
+          - Owner workflow: $owner_run_id / $owner_run_status / $owner_run_conclusion
+          - Production artifact: $artifact_id / verified=$artifact_verified
+          - Public health: ok=$health_ok / releaseSha=$health_sha
+          - Final receipt present: $final_receipt_present
+          - Deferred exceptions: single-sided staking business functionality; binding/snapshot DAO governance
+          EOF
+
+          for file in ops/HEROBASE_FINAL_STATUS.json ops/HEROBASE_FINAL_STATUS.md; do
+            path="${file//\//%2F}"
+            current_sha="$(api_get "$repo_api/contents/$file?ref=$STATUS_BRANCH" 2>/dev/null | jq -r '.sha//empty' || true)"
+            payload="$(jq -nc --arg message 'ops: refresh HeroBase production status' --arg content "$(base64 -w0 < "$file")" --arg branch "$STATUS_BRANCH" --arg sha "$current_sha" 'if $sha=="" then {message:$message,content:$content,branch:$branch} else {message:$message,content:$content,branch:$branch,sha:$sha} end')"
+            api_write PUT "$repo_api/contents/$file" "$payload" >/dev/null
+          done
