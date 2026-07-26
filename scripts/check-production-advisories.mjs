@@ -1,6 +1,6 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { createGunzip, createBrotliDecompress } from "node:zlib";
 import https from "node:https";
 import process from "node:process";
@@ -51,6 +51,15 @@ function collectInstalledProductionVersions() {
     throw new Error("pnpm returned no production dependency roots");
   }
 
+  const manifest = JSON.parse(readFileSync("package.json", "utf8"));
+  const productionRootNames = new Set([
+    ...Object.keys(manifest.dependencies ?? {}),
+    ...Object.keys(manifest.optionalDependencies ?? {}),
+  ]);
+  if (productionRootNames.size === 0) {
+    throw new Error("package.json declared no production dependency roots");
+  }
+
   const versions = new Map();
   const visited = new Set();
 
@@ -84,10 +93,30 @@ function collectInstalledProductionVersions() {
     visitChildren(node);
   }
 
-  // The workspace/project root is not an installed production dependency and
-  // must never be sent to npm's bulk advisory endpoint. Traverse only its
-  // dependencies and optionalDependencies.
-  for (const root of roots) visitChildren(root);
+  function visitProductionRootChildren(root) {
+    for (const field of ["dependencies", "optionalDependencies"]) {
+      const children = root?.[field];
+      if (!children || typeof children !== "object") continue;
+      for (const [fallbackName, child] of Object.entries(children)) {
+        if (!child || typeof child !== "object") continue;
+        const resolvedName = child.name ?? fallbackName;
+        if (
+          !productionRootNames.has(fallbackName) &&
+          !productionRootNames.has(resolvedName)
+        ) {
+          continue;
+        }
+        add(resolvedName, child.version);
+        visit(child);
+      }
+    }
+  }
+
+  // The workspace/project root is not an installed dependency. pnpm can also
+  // retain peer-only root dev packages as non-leaf containers even with
+  // --exclude-peers, so begin strictly from names declared in dependencies or
+  // optionalDependencies and then traverse their production closure.
+  for (const root of roots) visitProductionRootChildren(root);
 
   const payload = Object.fromEntries(
     [...versions.entries()]
@@ -108,7 +137,12 @@ function collectInstalledProductionVersions() {
     .update(JSON.stringify(payload))
     .digest("hex");
 
-  return { payload, pairCount, inventorySha256 };
+  return {
+    payload,
+    pairCount,
+    inventorySha256,
+    productionRootCount: productionRootNames.size,
+  };
 }
 
 function decompressResponse(buffer, contentEncoding) {
@@ -167,7 +201,7 @@ async function requestAdvisories(payload) {
           "Accept-Encoding": "identity",
           "Content-Type": "application/json",
           "Content-Length": String(requestBody.length),
-          "User-Agent": "hero-dapp-production-advisory-check/1.1",
+          "User-Agent": "hero-dapp-production-advisory-check/1.2",
         },
       },
       response => {
@@ -185,6 +219,13 @@ async function requestAdvisories(payload) {
             return;
           }
           chunks.push(chunk);
+        });
+
+        response.on("aborted", () => {
+          settle(
+            reject,
+            new RetryableAuditError("npm advisory response was aborted"),
+          );
         });
 
         response.on("error", error => {
@@ -227,8 +268,10 @@ async function requestAdvisories(payload) {
               rawBody,
               response.headers["content-encoding"],
             );
+            if (settled) return;
             parsed = JSON.parse(decoded.toString("utf8"));
           } catch (error) {
+            if (settled) return;
             if (error instanceof NonRetryableAuditError) {
               settle(reject, error);
               return;
@@ -258,20 +301,20 @@ async function requestAdvisories(payload) {
     );
 
     deadline = setTimeout(() => {
-      request.destroy(
-        new RetryableAuditError(
-          `npm advisory request exceeded ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,
-        ),
+      const error = new RetryableAuditError(
+        `npm advisory request exceeded ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,
       );
+      settle(reject, error);
+      request.destroy();
     }, REQUEST_DEADLINE_MS);
     deadline.unref?.();
 
     request.setTimeout(SOCKET_IDLE_TIMEOUT_MS, () => {
-      request.destroy(
-        new RetryableAuditError(
-          `npm advisory request exceeded ${SOCKET_IDLE_TIMEOUT_MS}ms socket-idle timeout`,
-        ),
+      const error = new RetryableAuditError(
+        `npm advisory request exceeded ${SOCKET_IDLE_TIMEOUT_MS}ms socket-idle timeout`,
       );
+      settle(reject, error);
+      request.destroy();
     });
 
     request.on("error", error => {
@@ -329,8 +372,12 @@ function normalizeAdvisories(response) {
 }
 
 async function main() {
-  const { payload, pairCount, inventorySha256 } =
-    collectInstalledProductionVersions();
+  const {
+    payload,
+    pairCount,
+    inventorySha256,
+    productionRootCount,
+  } = collectInstalledProductionVersions();
   let response;
   let lastError;
 
@@ -371,6 +418,7 @@ async function main() {
     endpoint: AUDIT_PATH,
     inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
     checkedAt: new Date().toISOString(),
+    productionRootCount,
     inventorySha256,
     packageVersionPairs: pairCount,
     matchingAdvisories: advisories.length,
@@ -382,7 +430,7 @@ async function main() {
   writeReport(report);
 
   console.log(
-    `Production advisory inventory: ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical; inventory sha256 ${inventorySha256}.`,
+    `Production advisory inventory: ${productionRootCount} declared roots, ${pairCount} package/version pairs; ${advisories.length} matching advisories; ${blocking.length} high/critical; inventory sha256 ${inventorySha256}.`,
   );
 
   for (const advisory of blocking) {
