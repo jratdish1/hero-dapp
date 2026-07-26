@@ -27,6 +27,8 @@ const INVENTORY_COMMAND = [
 class RetryableAuditError extends Error {}
 class NonRetryableAuditError extends Error {}
 
+let inventoryEvidence;
+
 function sleep(milliseconds) {
   return new Promise(resolve => setTimeout(resolve, milliseconds));
 }
@@ -178,6 +180,7 @@ function decompressResponse(buffer, contentEncoding) {
 
 async function requestAdvisories(payload) {
   const requestBody = Buffer.from(JSON.stringify(payload), "utf8");
+  const startedAt = Date.now();
 
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -295,6 +298,18 @@ async function requestAdvisories(payload) {
             return;
           }
 
+          const elapsedMs = Date.now() - startedAt;
+          if (elapsedMs >= REQUEST_DEADLINE_MS) {
+            settle(
+              reject,
+              new RetryableAuditError(
+                `npm advisory request completed after ${elapsedMs}ms, exceeding the ${REQUEST_DEADLINE_MS}ms wall-clock deadline`,
+              ),
+            );
+            request.destroy();
+            return;
+          }
+
           settle(resolve, parsed);
         });
       },
@@ -378,6 +393,11 @@ async function main() {
     inventorySha256,
     productionRootCount,
   } = collectInstalledProductionVersions();
+  inventoryEvidence = {
+    productionRootCount,
+    inventorySha256,
+    packageVersionPairs: pairCount,
+  };
   let response;
   let lastError;
 
@@ -461,6 +481,7 @@ main().catch(error => {
       endpoint: AUDIT_PATH,
       inventoryCommand: `pnpm ${INVENTORY_COMMAND.join(" ")}`,
       checkedAt: new Date().toISOString(),
+      ...(inventoryEvidence ?? {}),
       result: "ERROR",
       error: message,
     });
