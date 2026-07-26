@@ -1,0 +1,69 @@
+name: Temporary cancel superseded HeroBase finalizer runs
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+
+jobs:
+  cancel:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TRACKER_ISSUE: '43'
+    steps:
+      - name: Cancel older superseded temporary orchestration runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          repo_api="https://api.github.com/repos/$GITHUB_REPOSITORY"
+          runs="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$repo_api/actions/runs?branch=ops/herobase-deploy-monitor-20260725&per_page=100")"
+          cancelled=()
+          while IFS=$'\t' read -r id name status; do
+            [[ "$id" =~ ^[0-9]+$ ]] || continue
+            [ "$id" != "$GITHUB_RUN_ID" ] || continue
+            case "$name" in
+              'Temporary HeroBase production host finalizer'|
+              'Temporary HeroBase production final verification'|
+              'Temporary DAO narrow-lane gate and expected-head merge'|
+              'Temporary DAO ownership narrow-lane publisher')
+                case "$status" in
+                  queued|in_progress|pending|waiting|requested)
+                    curl --fail-with-body --silent --show-error \
+                      --connect-timeout 10 --max-time 30 -X POST \
+                      -H "Authorization: Bearer $GH_TOKEN" \
+                      -H "Accept: application/vnd.github+json" \
+                      -H "X-GitHub-Api-Version: 2022-11-28" \
+                      "$repo_api/actions/runs/$id/cancel" >/dev/null || true
+                    cancelled+=("$id:$name")
+                    ;;
+                esac
+                ;;
+            esac
+          done < <(jq -r '.workflow_runs[] | [.id,.name,.status] | @tsv' <<<"$runs")
+          printf 'CANCELLED_COUNT=%s\n' "${#cancelled[@]}"
+          printf '%s\n' "${cancelled[@]:-none}"
+          body="$(printf 'VETS_TEMPORARY_RUN_RESET v1\ncontroller_run_id: %s\ncancelled_count: %s\nstate: stale-finalizers-cancelled\n' "$GITHUB_RUN_ID" "${#cancelled[@]}")"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "Content-Type: application/json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "$repo_api/issues/$TRACKER_ISSUE/comments" \
+            --data "$(jq -nc --arg body "$body" '{body:$body}')" >/dev/null
