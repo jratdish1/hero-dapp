@@ -1,0 +1,241 @@
+name: Temporary VPS1 read-only production preflight
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+
+    steps:
+      - name: Validate bounded route inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$VDS_HOST" ] || missing+=(VDS_HOST)
+          [ -n "$VDS_SSH_KEY" ] || missing+=(VDS_SSH_KEY)
+          [ -n "$CF_ZONE_ID" ] || missing+=(CF_ZONE_ID)
+          if [ "${#missing[@]}" -ne 0 ]; then
+            printf 'Missing route input: %s\n' "${missing[@]}" >&2
+            exit 78
+          fi
+          [[ "$VDS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+
+      - name: Establish ephemeral SSH trust and key
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          : > "$HOME/.ssh/known_hosts"
+          for attempt in 1 2 3; do
+            ssh-keyscan -T 10 -H "$VDS_HOST" >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+            [ -s "$HOME/.ssh/known_hosts" ] && break
+            sleep $((attempt * 2))
+          done
+          [ -s "$HOME/.ssh/known_hosts" ]
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+          printf 'RUNNER_SCANNED_VDS_HOST_KEYS\n'
+          ssh-keygen -lf "$HOME/.ssh/known_hosts"
+
+      - name: Inspect VDS-M and VPS1 without mutation
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s -- "$CF_ZONE_ID" <<'VDS'
+          set -euo pipefail
+          CF_ZONE_ID="$1"
+
+          printf '=== VDS-M IDENTITY ===\n'
+          hostname
+          printf 'REMOTE_USER=%s\n' "$(id -un)"
+          date -Is
+          if [ -r /etc/ssh/ssh_host_ed25519_key.pub ]; then
+            printf 'VDS_ED25519_HOST_FINGERPRINT='
+            ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub | awk '{print $2}'
+          fi
+
+          printf 'VDS_GITHUB_AUTH='
+          if command -v gh >/dev/null 2>&1 && login="$(gh api user --jq .login 2>/dev/null)" && [ -n "$login" ]; then
+            printf 'READY:%s\n' "$login"
+          else
+            printf 'UNAVAILABLE\n'
+          fi
+          printf 'VDS_CF_CACHE_TOKEN='
+          if [ -s /opt/apex-agent/.cf_token_cache ]; then printf 'PRESENT\n'; else printf 'MISSING\n'; fi
+          printf 'VDS_VPS1_ALIAS='
+          if ssh -G vps1 >/dev/null 2>&1; then printf 'PRESENT\n'; else printf 'MISSING\n'; fi
+          printf 'VDS_VPS1_KNOWN_HOST='
+          vps1_host="$(ssh -G vps1 2>/dev/null | awk '$1 == "hostname" {print $2; exit}')"
+          if [ -n "$vps1_host" ] && ssh-keygen -F "$vps1_host" >/dev/null 2>&1; then
+            printf 'PRESENT:%s\n' "$vps1_host"
+          else
+            printf 'MISSING:%s\n' "${vps1_host:-unknown}"
+          fi
+
+          if [ -s /opt/apex-agent/.cf_token_cache ]; then
+            token="$(cat /opt/apex-agent/.cf_token_cache)"
+            printf 'CF_TOKEN_VERIFY='
+            if response="$(curl -4 --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/json' \
+              https://api.cloudflare.com/client/v4/user/tokens/verify 2>/dev/null)" &&
+               jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$response" >/dev/null; then
+              printf 'PASS\n'
+            else
+              printf 'FAIL\n'
+            fi
+            printf 'CF_ZONE_READ='
+            if response="$(curl -4 --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $token" \
+              -H 'Content-Type: application/json' \
+              "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID" 2>/dev/null)" &&
+               jq -e '.success == true and .result.name == "herobase.io" and .result.status == "active" and ((.errors // []) | length == 0)' <<<"$response" >/dev/null; then
+              printf 'PASS:herobase.io:active\n'
+            else
+              printf 'FAIL\n'
+            fi
+            unset token response
+          fi
+
+          printf '=== VPS1 READ-ONLY INSPECTION ===\n'
+          ssh \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            vps1 bash -s <<'VPS1'
+          set -euo pipefail
+          hostname
+          printf 'REMOTE_USER=%s\n' "$(id -un)"
+          date -Is
+
+          printf '=== TOOLING ===\n'
+          for command_name in git node corepack pm2 curl flock nginx ssh-keygen; do
+            if command -v "$command_name" >/dev/null 2>&1; then
+              printf '%s=PRESENT\n' "$command_name"
+            else
+              printf '%s=MISSING\n' "$command_name"
+            fi
+          done
+
+          printf '=== CANDIDATE USERS ===\n'
+          for candidate in hero-deploy herobase deploy www-data; do
+            if getent passwd "$candidate" >/dev/null; then
+              getent passwd "$candidate" | awk -F: '{printf "%s uid=%s gid=%s home=%s shell=%s\n",$1,$3,$4,$6,$7}'
+            else
+              printf '%s=ABSENT\n' "$candidate"
+            fi
+          done
+
+          printf '=== APP PATHS ===\n'
+          for app_dir in /var/www/hero-dapp /root/hero-dapp /opt/hero-dapp-project /var/www/herobase.io /var/www/herobase.io-static; do
+            if [ -e "$app_dir" ]; then
+              stat -c 'PATH=%n TYPE=%F OWNER=%U GROUP=%G MODE=%a' "$app_dir"
+              if [ -d "$app_dir/.git" ]; then
+                (
+                  cd "$app_dir"
+                  printf 'GIT_PATH=%s\n' "$app_dir"
+                  printf 'GIT_HEAD=%s\n' "$(git rev-parse HEAD)"
+                  printf 'GIT_BRANCH=%s\n' "$(git branch --show-current || true)"
+                  printf 'GIT_DIRTY_COUNT=%s\n' "$(git status --porcelain=v1 --untracked-files=all | wc -l)"
+                  origin="$(git remote get-url origin 2>/dev/null || true)"
+                  origin="$(printf '%s' "$origin" | sed -E 's#(https://)[^/@]+@#\1REDACTED@#; s#(https://)[^:]+:[^@]+@#\1REDACTED@#')"
+                  printf 'GIT_ORIGIN=%s\n' "$origin"
+                )
+              fi
+            else
+              printf 'PATH=%s ABSENT\n' "$app_dir"
+            fi
+          done
+
+          printf '=== PM2 ===\n'
+          if command -v pm2 >/dev/null 2>&1; then
+            pm2 jlist > /tmp/vets-pm2-jlist.json
+            node - /tmp/vets-pm2-jlist.json <<'NODE'
+          const fs = require('fs');
+          const list = JSON.parse(fs.readFileSync(process.argv[2], 'utf8') || '[]');
+          for (const item of list) {
+            const env = item.pm2_env || {};
+            if (item.name === 'hero-dapp' || String(env.pm_cwd || '').includes('hero')) {
+              const release = env.env?.HERO_RELEASE_SHA ?? env.HERO_RELEASE_SHA ?? 'unset';
+              console.log(JSON.stringify({
+                name: item.name,
+                status: env.status,
+                cwd: env.pm_cwd,
+                exec_interpreter: env.exec_interpreter,
+                releaseSha: release,
+              }));
+            }
+          }
+          NODE
+            rm -f /tmp/vets-pm2-jlist.json
+          fi
+
+          printf '=== CONFIG PRESENCE ===\n'
+          for path in /root/.cloudflare_creds /root/.env_architecture /opt/apex-agent/.cf_token_cache; do
+            if [ -s "$path" ]; then printf '%s=PRESENT_NONEMPTY\n' "$path"; else printf '%s=MISSING_OR_EMPTY\n' "$path"; fi
+          done
+
+          printf '=== NGINX ===\n'
+          if command -v nginx >/dev/null 2>&1; then
+            if nginx -t >/dev/null 2>&1; then printf 'NGINX_CONFIG=PASS\n'; else printf 'NGINX_CONFIG=FAIL\n'; fi
+            nginx -T 2>/dev/null | awk '
+              /server_name/ && /herobase\.io/ {print "NGINX_SERVER_NAME=" $0}
+              /proxy_pass/ && /3000/ {print "NGINX_PROXY_PASS=" $0}
+            ' | head -n 20
+          fi
+
+          printf '=== HEALTH ===\n'
+          local_health='http://127.0.0.1:3000/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+          public_health='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+          for label_url in "LOCAL:$local_health" "PUBLIC:$public_health"; do
+            label="${label_url%%:*}"
+            url="${label_url#*:}"
+            response="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 "$url" 2>/dev/null || true)"
+            if [ -n "$response" ]; then
+              ok="$(jq -r '.. | objects | .ok? // empty' <<<"$response" 2>/dev/null | head -n 1)"
+              sha="$(jq -r '.. | objects | .releaseSha? // empty' <<<"$response" 2>/dev/null | head -n 1)"
+              printf '%s_HEALTH=HTTP_OK ok=%s releaseSha=%s\n' "$label" "${ok:-unknown}" "${sha:-unknown}"
+            else
+              printf '%s_HEALTH=FAIL\n' "$label"
+            fi
+          done
+          VPS1
+          VDS
+
+      - name: Remove ephemeral SSH material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
