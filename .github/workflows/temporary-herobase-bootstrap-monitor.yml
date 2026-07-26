@@ -1,0 +1,122 @@
+name: Temporary HeroBase bootstrap receipt monitor
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  monitor:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 95
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: 26d60888fe3410951f422cb7a68cee10661c2eaf
+      TRACKER_ISSUE: '43'
+
+    steps:
+      - name: Wait for armed bootstrap run and collect receipt
+        id: monitor
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_get() {
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "$1"
+          }
+
+          workflow_id="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/temporary-herobase-production-bootstrap-v3.yml" | jq -r '.id')"
+          [[ "$workflow_id" =~ ^[0-9]+$ ]]
+          run=''
+          for attempt in $(seq 1 180); do
+            runs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$workflow_id/runs?branch=ops/herobase-deploy-monitor-20260725&event=pull_request&per_page=100")"
+            run="$(jq -c '
+              [.workflow_runs[] | select(
+                .head_branch == "ops/herobase-deploy-monitor-20260725" and
+                .run_attempt == 1 and
+                .head_commit.message == "VETS EXECUTE HEROBASE BOOTSTRAP V3 26d60888fe3410951f422cb7a68cee10661c2eaf"
+              )] | sort_by(.id) | last // empty
+            ' <<<"$runs")"
+            if [ -n "$run" ]; then
+              status="$(jq -r '.status' <<<"$run")"
+              if [ "$status" = 'completed' ]; then
+                break
+              fi
+            fi
+            sleep 30
+          done
+          test -n "$run"
+          run_id="$(jq -r '.id' <<<"$run")"
+          conclusion="$(jq -r '.conclusion // "unknown"' <<<"$run")"
+          [[ "$run_id" =~ ^[0-9]+$ ]]
+          jobs="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100")"
+          artifacts="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/artifacts?per_page=100")"
+          mkdir -p receipt
+          jq -n \
+            --arg target_sha "$TARGET_SHA" \
+            --arg run_id "$run_id" \
+            --arg conclusion "$conclusion" \
+            --argjson run "$run" \
+            --argjson jobs "$jobs" \
+            --argjson artifacts "$artifacts" \
+            --arg observed_at "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{target_sha:$target_sha,run_id:$run_id,conclusion:$conclusion,run:$run,jobs:$jobs,artifacts:$artifacts,observed_at:$observed_at}' \
+            > receipt/bootstrap-monitor.json
+          echo "run_id=$run_id" >> "$GITHUB_OUTPUT"
+          echo "conclusion=$conclusion" >> "$GITHUB_OUTPUT"
+
+          summary="$(jq -r '
+            .jobs.jobs[] | "- " + .name + ": **" + (.status // "unknown") + " / " + (.conclusion // "pending") + "**"
+          ' receipt/bootstrap-monitor.json)"
+          body="$(cat <<EOF_BODY
+          ## VETS HeroBase host-bootstrap receipt
+
+          - Target SHA: \`$TARGET_SHA\`
+          - Bootstrap run: \`$run_id\`
+          - Conclusion: **$conclusion**
+          - Observed: \`$(date -u +%Y-%m-%dT%H:%M:%SZ)\`
+
+          ### Jobs
+          $summary
+
+          Production deployment and Cloudflare purge are not claimed by this receipt. The normal protected deployment controller remains required after a successful bootstrap.
+          EOF_BODY
+          )"
+          payload="$(jq -nc --arg body "$body" '{body:$body}')"
+          curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+            --data "$payload" >/dev/null
+
+      - name: Upload bootstrap monitor receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-bootstrap-monitor-${{ github.sha }}
+          path: receipt
+          retention-days: 30
+          if-no-files-found: warn
+
+      - name: Enforce successful bootstrap
+        if: always()
+        env:
+          CONCLUSION: ${{ steps.monitor.outputs.conclusion }}
+        shell: bash
+        run: test "$CONCLUSION" = 'success'
