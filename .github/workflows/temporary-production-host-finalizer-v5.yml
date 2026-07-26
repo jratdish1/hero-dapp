@@ -1,0 +1,132 @@
+name: Temporary HeroBase production host finalizer v5
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  issues: read
+  pull-requests: read
+
+concurrency:
+  group: vets-herobase-production-host-finalizer-v5
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      VPS1_HOST: ${{ secrets.VPS1_HOST }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+      PATCH_BRANCH: fix/dao-ownership-production-final-v4-20260726
+      TRACKER_ISSUE: '43'
+      EXPECTED_VDS_ED25519: SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY
+
+    steps:
+      - name: Checkout temporary executor lane
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-deploy-monitor-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate and patch consumption-aware finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          python3 ops/patch-host-finalizer-v5.py \
+            ops/herobase-production-host-finalizer-v2.sh \
+            "$RUNNER_TEMP/herobase-production-host-finalizer-v5.sh"
+          chmod 700 "$RUNNER_TEMP/herobase-production-host-finalizer-v5.sh"
+          bash -n "$RUNNER_TEMP/herobase-production-host-finalizer-v5.sh"
+          sha256sum \
+            ops/cloudflare-token-recovery-v5.sh \
+            ops/patch-host-finalizer-v5.py \
+            "$RUNNER_TEMP/herobase-production-host-finalizer-v5.sh" \
+            > evidence/v5-script-sha256.txt
+
+      - name: Establish pinned VDS route and recover scoped Cloudflare bearer token
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$VDS_HOST" =~ ^[A-Za-z0-9.-]+$ ]]
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          timeout --signal=TERM --kill-after=5s 15s \
+            ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          : > "$HOME/.ssh/known_hosts"
+          for attempt in 1 2 3; do
+            ssh-keyscan -T 10 -t ed25519 -H "$VDS_HOST" \
+              >> "$HOME/.ssh/known_hosts" 2>/dev/null || true
+            [ -s "$HOME/.ssh/known_hosts" ] && break
+            sleep $((attempt * 2))
+          done
+          [ -s "$HOME/.ssh/known_hosts" ]
+          actual="$(ssh-keygen -lf "$HOME/.ssh/known_hosts" | awk 'NR==1 {print $2}')"
+          test "$actual" = "$EXPECTED_VDS_ED25519"
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+          printf 'VDS_HOST_IDENTITY=PASS:%s\n' "$actual" \
+            | tee evidence/v5-vds-host-identity.txt
+
+          remote_helper="/tmp/vets-cloudflare-token-recovery-v5-$GITHUB_RUN_ID.sh"
+          scp \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            ops/cloudflare-token-recovery-v5.sh \
+            "root@$VDS_HOST:$remote_helper"
+          ssh \
+            -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes \
+            -o ConnectTimeout=15 \
+            -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 \
+            -o IdentitiesOnly=yes \
+            -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            bash -s -- "$remote_helper" "$CF_ZONE_ID" <<'REMOTE'
+          set -euo pipefail
+          helper="$1"
+          zone_id="$2"
+          chmod 700 "$helper"
+          CF_ZONE_ID="$zone_id" "$helper"
+          rm -f "$helper"
+          REMOTE
+
+      - name: Execute idempotent locked host finalizer
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/herobase-production-host-finalizer-v5.sh"
+
+      - name: Upload immutable host-finalizer v5 evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-host-finalizer-v5-${{ github.event.pull_request.head.sha }}
+          path: evidence
+          retention-days: 30
+          if-no-files-found: error
+
+      - name: Remove ephemeral route material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
