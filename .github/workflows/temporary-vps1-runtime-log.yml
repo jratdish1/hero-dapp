@@ -1,0 +1,102 @@
+name: Temporary HeroBase PM2 diagnostics
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  diagnostics:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+    steps:
+      - name: Configure ephemeral route
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 10 -H "$VDS_HOST" > "$HOME/.ssh/known_hosts" 2>/dev/null
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
+
+      - name: Capture sanitized diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          ssh -i "$HOME/.ssh/vds_key" \
+            -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 \
+            -o ServerAliveCountMax=2 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            "root@$VDS_HOST" \
+            ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=10 \
+              -o ServerAliveCountMax=2 -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+              vps1 bash -s <<'VPS1' | tee evidence/diagnostics.txt
+          set -euo pipefail
+          redact() {
+            sed -E \
+              -e 's#(gh[pousr]_[A-Za-z0-9_]{10,})#[REDACTED_GITHUB_TOKEN]#g' \
+              -e 's#(sk-[A-Za-z0-9_-]{10,})#[REDACTED_API_KEY]#g' \
+              -e 's#(Bearer[[:space:]]+)[A-Za-z0-9._~+/-]+#\1[REDACTED]#g' \
+              -e 's#((password|secret|token|private[_-]?key)[=:][[:space:]]*)[^[:space:]]+#\1[REDACTED]#gI' \
+              -e 's#(mysql://[^:]+:)[^@]+@#\1[REDACTED]@#g'
+          }
+
+          printf '=== LISTENERS 2995-3020 ===\n'
+          ss -ltnp 2>/dev/null | awk '$4 ~ /:(299[5-9]|30[01][0-9]|3020)$/ {print}' | redact || true
+
+          printf '=== PORT PROBES ===\n'
+          for port in $(seq 3000 3019); do
+            code="$(curl --silent --show-error --connect-timeout 1 --max-time 2 --output /dev/null --write-out '%{http_code}' "http://127.0.0.1:$port/" 2>/dev/null || true)"
+            [ "$code" = "000" ] || printf 'PORT=%s HTTP=%s\n' "$port" "$code"
+          done
+
+          printf '=== PM2 LOG PATHS ===\n'
+          pm2 jlist | node -e '
+            let input="";
+            process.stdin.on("data",c=>input+=c);
+            process.stdin.on("end",()=>{
+              const item=JSON.parse(input||"[]").find(x=>x.name==="hero-dapp");
+              if(!item){console.log("NOT_FOUND");return;}
+              const e=item.pm2_env||{};
+              console.log(`OUT_LOG=${e.pm_out_log_path||"unknown"}`);
+              console.log(`ERR_LOG=${e.pm_err_log_path||"unknown"}`);
+            });
+          '
+
+          printf '=== RECENT PM2 OUTPUT SANITIZED ===\n'
+          pm2 logs hero-dapp --lines 250 --nostream 2>&1 | redact | tail -n 350 || true
+
+          printf '=== APP DIRECT START PREFLIGHT (NO START) ===\n'
+          cd /root/hero-dapp
+          printf 'DIST_INDEX='; [ -s dist/index.js ] && printf 'PRESENT size=%s\n' "$(stat -c %s dist/index.js)" || printf 'MISSING\n'
+          printf 'PACKAGE_LOCK='; [ -e package-lock.json ] && printf 'PRESENT\n' || printf 'ABSENT\n'
+          printf 'PNPM_LOCK='; [ -e pnpm-lock.yaml ] && printf 'PRESENT\n' || printf 'ABSENT\n'
+          printf 'NODE_VERSION=%s\n' "$(node --version)"
+          printf 'PNPM_VERSION='; corepack pnpm --version 2>/dev/null || printf 'UNAVAILABLE\n'
+          VPS1
+
+      - name: Upload diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: herobase-pm2-diagnostics-${{ github.event.pull_request.head.sha }}
+          path: evidence/diagnostics.txt
+          retention-days: 7
+          if-no-files-found: error
+
+      - name: Remove ephemeral route material
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/known_hosts"
