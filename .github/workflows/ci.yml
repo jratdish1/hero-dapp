@@ -146,13 +146,15 @@ jobs:
           node scripts/check-production-advisories.mjs \
             2>&1 | tee production-advisory-report.log
 
-      - name: Upload production-advisory diagnostics
-        if: failure() && hashFiles('production-advisory-report.log') != ''
+      - name: Upload exact-head production advisory evidence
+        if: always() && hashFiles('production-advisory-report.log', 'production-advisory-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: production-advisory-diagnostics-${{ github.sha }}
-          path: production-advisory-report.log
-          retention-days: 7
+          name: production-advisory-evidence-${{ github.sha }}
+          path: |
+            production-advisory-report.log
+            production-advisory-report.json
+          retention-days: 14
           if-no-files-found: error
 
       - name: Verify security-sensitive dependency resolutions
