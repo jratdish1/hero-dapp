@@ -142,7 +142,7 @@ function buildCspDirectives() {
   return {
     defaultSrc: ["'self'"],
     scriptSrc,
-    styleSrc: ["'self'", "'unsafe-inline'"],
+    styleSrc: ["'self'"],
     fontSrc: ["'self'", "data:"],
     imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
     connectSrc,
