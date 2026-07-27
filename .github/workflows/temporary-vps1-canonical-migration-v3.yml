@@ -1,0 +1,137 @@
+name: Temporary VPS1 canonical HeroBase migration v3
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: read
+  contents: read
+  issues: write
+
+jobs:
+  migrate:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 75
+    concurrency:
+      group: temporary-vps1-canonical-herobase-migration-v3
+      cancel-in-progress: false
+    env:
+      GH_TOKEN: ${{ github.token }}
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      TRACKER_ISSUE: '43'
+
+    steps:
+      - name: Checkout exact temporary operations branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ops/herobase-deploy-monitor-20260725
+          fetch-depth: 1
+          persist-credentials: false
+          show-progress: false
+
+      - name: Validate migration executor syntax
+        shell: bash
+        run: bash -n ops/herobase_vps1_migration_v3.sh
+
+      - name: Require audited current main and credential receipt v2
+        id: gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          api_get() {
+            curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 \
+              -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' "$1"
+          }
+          deadline=$((SECONDS + 3000))
+          while [ "$SECONDS" -lt "$deadline" ]; do
+            sha="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/git/ref/heads/main" | jq -r '.object.sha')"
+            [[ "$sha" =~ ^[0-9a-f]{40}$ ]]
+            ci_id="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml" | jq -r '.id')"
+            sec_id="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/security-and-quality.yml" | jq -r '.id')"
+            ci="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$ci_id/runs?branch=main&event=push&head_sha=$sha&per_page=100" | jq -c --arg sha "$sha" '[.workflow_runs[]|select(.head_sha==$sha and .event=="push" and .run_attempt==1)]|sort_by(.id)|last//empty')"
+            sec="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/workflows/$sec_id/runs?branch=main&event=push&head_sha=$sha&per_page=100" | jq -c --arg sha "$sha" '[.workflow_runs[]|select(.head_sha==$sha and .event=="push" and .run_attempt==1)]|sort_by(.id)|last//empty')"
+            comments="$(api_get "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100")"
+            receipt="$(jq -c --arg sha "$sha" '[.[]|select(
+              .user.login=="github-actions[bot]" and
+              (.body|startswith("## VETS production credential preparation v2 — COMPLETE")) and
+              (.body|contains("Release SHA: `"+$sha+"`")) and
+              (.body|contains("Required production environment secret names: **6/6 present**"))
+            )]|sort_by(.id)|last//empty' <<<"$comments")"
+            if [ -n "$ci" ] && [ -n "$sec" ] && [ -n "$receipt" ] && \
+               [ "$(jq -r '.status+":"+(.conclusion//"")' <<<"$ci")" = completed:success ] && \
+               [ "$(jq -r '.status+":"+(.conclusion//"")' <<<"$sec")" = completed:success ]; then
+              echo "release_sha=$sha" >> "$GITHUB_OUTPUT"
+              echo "ci_run_id=$(jq -r '.id' <<<"$ci")" >> "$GITHUB_OUTPUT"
+              echo "security_run_id=$(jq -r '.id' <<<"$sec")" >> "$GITHUB_OUTPUT"
+              echo "credential_receipt_id=$(jq -r '.id' <<<"$receipt")" >> "$GITHUB_OUTPUT"
+              printf 'MIGRATION_V3_GATE=PASS sha=%s\n' "$sha"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Migration v3 gate timed out' >&2
+          exit 75
+
+      - name: Execute bounded migration v3
+        id: migration
+        env:
+          RELEASE_SHA: ${{ steps.gate.outputs.release_sha }}
+          AUTH_CI_RUN_ID: ${{ steps.gate.outputs.ci_run_id }}
+          AUTH_SECURITY_RUN_ID: ${{ steps.gate.outputs.security_run_id }}
+          CREDENTIAL_RECEIPT_ID: ${{ steps.gate.outputs.credential_receipt_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          chmod 700 ops/herobase_vps1_migration_v3.sh
+          ops/herobase_vps1_migration_v3.sh 2>&1 | tee vps1-migration-v3-receipt.txt
+          grep -q '^VETS_CANONICAL_MIGRATION_COMPLETE_V3$' vps1-migration-v3-receipt.txt
+          echo 'complete=true' >> "$GITHUB_OUTPUT"
+
+      - name: Post durable migration v3 receipt
+        if: steps.migration.outputs.complete == 'true'
+        env:
+          RELEASE_SHA: ${{ steps.gate.outputs.release_sha }}
+          CI_RUN: ${{ steps.gate.outputs.ci_run_id }}
+          SECURITY_RUN: ${{ steps.gate.outputs.security_run_id }}
+          CREDENTIAL_RECEIPT: ${{ steps.gate.outputs.credential_receipt_id }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(cat <<EOF
+          ## VETS VPS1 canonical runtime migration v3 — COMPLETE
+
+          - Release SHA: \`$RELEASE_SHA\`
+          - Exact-main CI/Security: \`$CI_RUN\` / \`$SECURITY_RUN\`
+          - Credential receipt: \`$CREDENTIAL_RECEIPT\`
+          - Canonical path / owner: \`/var/www/hero-dapp\` / **hero-deploy**
+          - Clean exact-SHA tree: **PASS**
+          - User-owned PM2 systemd service: **PASS**
+          - PM2 release identity: **PASS**
+          - Local/public exact-SHA health: **PASS**
+          - 660-second conflict/watchdog soak: **PASS**
+          - Previous application and dirty-tree evidence preserved: **YES**
+          - Rollback invoked: **NO**
+          EOF
+          )"
+          curl --fail-with-body --silent --show-error --connect-timeout 10 --max-time 30 -X POST \
+            -H "Authorization: Bearer $GH_TOKEN" -H 'Accept: application/vnd.github+json' \
+            -H 'Content-Type: application/json' -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+            --data "$(jq -nc --arg body "$body" '{body:$body}')" >/dev/null
+
+      - name: Upload immutable migration v3 receipt
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: herobase-vps1-migration-v3-${{ github.event.pull_request.head.sha }}
+          path: vps1-migration-v3-receipt.txt
+          retention-days: 30
+          if-no-files-found: error
