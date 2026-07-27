@@ -1,0 +1,1 @@
+import{an as e,o}from"./DappBootstrap-BZPMqtQV.js";function d(s,r){if(!e(s,{strict:!1}))throw new o({address:s});if(!e(r,{strict:!1}))throw new o({address:r});return s.toLowerCase()===r.toLowerCase()}export{d as i};

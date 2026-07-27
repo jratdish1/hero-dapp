@@ -172,6 +172,7 @@ export const proposals = mysqlTable("proposals", {
   quorum: bigint("quorum", { mode: "number" }).default(5000000).notNull(),
   startTime: timestamp("startTime").notNull(),
   endTime: timestamp("endTime").notNull(),
+  snapshotBlock: bigint("snapshotBlock", { mode: "number" }).notNull(),
   executionTxHash: varchar("executionTxHash", { length: 66 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),

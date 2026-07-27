@@ -1,0 +1,1 @@
+import{a9 as e}from"./index-BI52sKAf.js";import{aN as i}from"./DappBootstrap-BZPMqtQV.js";function a(n){return n.state.chainId}function c(n,t){const{onChange:r}=t;return n.subscribe(o=>o.chainId,r)}function f(n={}){const t=i(n);return e.useSyncExternalStore(r=>c(t,{onChange:r}),()=>a(t),()=>a(t))}export{f as u};

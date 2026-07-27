@@ -75,13 +75,21 @@ const HERO_TOKENS: Record<string, `0x${string}`> = {
   base: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
 };
 
-async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
+async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base", snapshotBlock?: number): Promise<number> {
   const client = chain === "pulsechain" ? pulsechainClient : baseClient;
   const tokenAddress = HERO_TOKENS[chain];
   const RPC_TIMEOUT_MS = 10_000;
   const startTime = Date.now();
   try {
-    const balancePromise = client.readContract({
+    // SECURITY FIX (cert/m2-dao-snapshot-remediation-20260727): use immutable snapshot block
+    // If the token doesn't support getPastVotes, we must fail closed or use a verified historical balance.
+    // For now, we simulate the historical call. If the contract lacks it, this reverts.
+    const balancePromise = snapshotBlock ? client.readContract({
+      address: tokenAddress,
+      abi: [{ type: 'function', name: 'getPastVotes', inputs: [{ name: 'account', type: 'address' }, { name: 'blockNumber', type: 'uint256' }], outputs: [{ type: 'uint256' }], stateMutability: 'view' }],
+      functionName: "getPastVotes",
+      args: [voterAddress as `0x${string}`, BigInt(snapshotBlock)],
+    }) : client.readContract({
       address: tokenAddress,
       abi: erc20Abi,
       functionName: "balanceOf",
@@ -808,6 +816,7 @@ export const appRouter = router({
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
           const endTime = new Date(now.getTime() + durationMs);
+          const snapshotBlock = Number(await (input.chain === "base" ? baseClient : pulsechainClient).getBlockNumber());
           // AUDIT FIX #3 (May 27, 2026): Generate content hash for tamper detection
           const contentHash = generateProposalHash(
             proposalId, input.title, input.description,
@@ -822,7 +831,7 @@ export const appRouter = router({
             chain: input.chain || "both",
             category: input.category || "protocol",
             startTime: now,
-            endTime,
+            endTime, snapshotBlock,
           });
           // AUDIT FIX #3: Anchor on-chain (non-blocking — don't fail proposal creation)
           let anchorTxHash: string | null = null;
@@ -897,8 +906,13 @@ export const appRouter = router({
           }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
+          
+          const proposal = await getProposalById(input.proposalId);
+          if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+
+          // SECURITY FIX (cert/m2-dao-snapshot-remediation-20260727): use immutable snapshot block
           // AUDIT FIX: Server-side on-chain verification of voting power
-          const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
+          const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain, proposal.snapshotBlock);
           if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
           // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
           const trustedPower = Math.min(input.votingPower, verifiedPower);
@@ -912,7 +926,6 @@ export const appRouter = router({
             txHash: input.txHash || null,
           });
           // Update proposal vote tallies
-          const proposal = await getProposalById(input.proposalId);
           if (proposal) {
             const newFor = input.choice === "for" ? proposal.votesFor + trustedPower : proposal.votesFor;
             const newAgainst = input.choice === "against" ? proposal.votesAgainst + trustedPower : proposal.votesAgainst;
