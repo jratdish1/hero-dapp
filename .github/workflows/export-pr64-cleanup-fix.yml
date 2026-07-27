@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: write
+  issues: write
 
 concurrency:
   group: export-pr64-cleanup-fix
@@ -17,7 +18,7 @@ jobs:
     if: >-
       github.repository == 'jratdish1/hero-dapp' &&
       github.ref == 'refs/heads/fix/production-ci-advisory-final-20260726' &&
-      github.event.head_commit.message == 'chore: export PR64 cleanup fix'
+      github.event.head_commit.message == 'chore: export PR64 cleanup fix receipt'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     env:
@@ -115,3 +116,18 @@ jobs:
           path: pr64-cleanup-fix
           retention-days: 7
           if-no-files-found: error
+
+      - name: Post exact blob receipt
+        shell: bash
+        run: |
+          set -euo pipefail
+          blob_sha="$(jq -r '.blob_sha' pr64-cleanup-fix/evidence.json)"
+          [[ "$blob_sha" =~ ^[0-9a-f]{40}$ ]]
+          printf '%s\n' \
+            'VETS_PR64_CLEANUP_FIX v1' \
+            "source_head: $GITHUB_SHA" \
+            "blob_sha: $blob_sha" \
+            'validation: PASS' \
+            'behavior: startup cleanup failure is fatal and cannot be retried away' \
+            > pr64-cleanup-fix/receipt.txt
+          gh issue comment 64 --repo "$GITHUB_REPOSITORY" --body-file pr64-cleanup-fix/receipt.txt
