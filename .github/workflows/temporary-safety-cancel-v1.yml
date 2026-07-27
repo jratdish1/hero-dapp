@@ -1,0 +1,48 @@
+name: Temporary safety cancel superseded production runs
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  cancel:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Cancel only superseded v1 credential and migration runs
+        shell: bash
+        run: |
+          set -euo pipefail
+          runs="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs?branch=ops/herobase-deploy-monitor-20260725&per_page=100")"
+          jq -r --arg current "$GITHUB_RUN_ID" '.workflow_runs[] | select(
+            (.status == "queued" or .status == "in_progress" or .status == "waiting" or .status == "pending") and
+            (.id | tostring) != $current and
+            (.name == "Temporary HeroBase production credential preparation" or
+             .name == "Temporary VPS1 canonical HeroBase migration")
+          ) | .id' <<<"$runs" | while read -r run_id; do
+            [ -n "$run_id" ] || continue
+            curl --fail-with-body --silent --show-error \
+              --connect-timeout 10 --max-time 30 \
+              -X POST \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H 'Accept: application/vnd.github+json' \
+              -H 'X-GitHub-Api-Version: 2022-11-28' \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$run_id/cancel" >/dev/null || true
+            printf 'CANCEL_REQUESTED run_id=%s\n' "$run_id"
+          done
