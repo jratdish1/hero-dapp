@@ -316,6 +316,9 @@ async function launchChromeWithRetry(chromeBin, attempts = 3) {
       return await launchChrome(chromeBin);
     } catch (error) {
       if (!(error instanceof ChromeStartupError)) throw error;
+      if (Array.isArray(error.cleanupErrors) && error.cleanupErrors.length > 0) {
+        throw error;
+      }
       lastError = error;
       console.error(`Chrome startup attempt ${attempt}/${attempts} failed: ${error.message}`);
       if (attempt < attempts) await sleep(attempt * 1_000);
