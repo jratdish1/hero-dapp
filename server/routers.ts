@@ -844,9 +844,14 @@ export const appRouter = router({
           proposalId: z.string().min(1),
           status: z.enum(["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]),
         }))
-        .mutation(async ({ input }) => {
+        .mutation(async ({ ctx, input }) => {
           const proposal = await getProposalById(input.proposalId);
           if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+          // SECURITY FIX (cert/hero-wallet-staking-dao-20260725): enforce proposer ownership.
+          // Previously any authenticated user could change any proposal's status.
+          if (proposal.proposerId !== ctx.user.id) {
+            createStandardError("FORBIDDEN", "Only the proposal creator may update its status");
+          }
           await updateProposal(proposal.id, { status: input.status });
           return { success: true };
         }),
@@ -952,9 +957,14 @@ export const appRouter = router({
         displayName: safeStringSchema(128).optional(),
         statement: safeStringSchema(5000).optional(),
       }))
-      .mutation(async ({ input }) => {
+      .mutation(async ({ ctx, input }) => {
           const delegate = await getDelegateByAddress(input.address);
           if (!delegate) createStandardError("NOT_FOUND", "Delegate not found");
+          // SECURITY FIX (cert/hero-wallet-staking-dao-20260725): enforce delegate ownership.
+          // Previously any authenticated user could update any delegate profile by address.
+          if (delegate.userId !== ctx.user.id) {
+            createStandardError("FORBIDDEN", "Only the delegate owner may update this profile");
+          }
           await updateDelegate(delegate.id, {
             displayName: input.displayName || delegate.displayName,
             statement: input.statement || delegate.statement,
