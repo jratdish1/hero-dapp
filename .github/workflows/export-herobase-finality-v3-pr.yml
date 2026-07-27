@@ -1,4 +1,4 @@
-name: Export HeroBase finality v3 on PR
+name: Export HeroBase finality v5 on PR
 
 on:
   pull_request:
@@ -9,13 +9,14 @@ permissions:
   contents: write
 
 concurrency:
-  group: export-herobase-finality-v3-pr-${{ github.event.pull_request.number }}
+  group: export-herobase-finality-v5-pr-${{ github.event.pull_request.number }}
   cancel-in-progress: false
 
 jobs:
   export:
     if: >-
       github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 66 &&
       github.event.pull_request.head.ref == 'ops/herobase-production-finality-20260727'
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -32,12 +33,12 @@ jobs:
           show-progress: false
 
       - name: Generate and validate exact finalizer
-        run: python3 ops/export-herobase-finality-v3.py
+        run: python3 ops/export-herobase-finality-v5.py
 
       - name: Upload exact finalizer evidence
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: herobase-finality-v3-${{ github.event.pull_request.head.sha }}
-          path: finality-export
+          name: herobase-finality-v5-${{ github.event.pull_request.head.sha }}
+          path: finality-export-v5
           retention-days: 7
           if-no-files-found: error
