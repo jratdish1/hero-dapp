@@ -1,0 +1,64 @@
+name: Temporary remove superseded v2 workflows
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, reopened, synchronize]
+
+permissions:
+  contents: read
+
+jobs:
+  remove:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.event.pull_request.number == 59 &&
+      github.event.pull_request.head.ref == 'ops/herobase-deploy-monitor-20260725'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      VDS_HOST: ${{ secrets.VDS_HOST }}
+      VDS_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+    steps:
+      - name: Establish pinned VDS-M route
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDS_SSH_KEY" > "$HOME/.ssh/vds_key"
+          ssh-keygen -y -f "$HOME/.ssh/vds_key" >/dev/null
+          ssh-keyscan -T 15 -t ed25519 "$VDS_HOST" > "$HOME/.ssh/vds_known_hosts" 2>/dev/null
+          test "$(ssh-keygen -lf "$HOME/.ssh/vds_known_hosts" | awk '{print $2}')" = \
+            'SHA256:EdmFXzo/0Tw9jlbH+tNfBGcRGDf1TQu8m0LWiobRXFY'
+          chmod 600 "$HOME/.ssh/vds_key" "$HOME/.ssh/vds_known_hosts"
+
+      - name: Delete only invalid or superseded temporary files
+        shell: bash
+        run: |
+          set -euo pipefail
+          ssh -i "$HOME/.ssh/vds_key" -o BatchMode=yes -o ConnectTimeout=15 \
+            -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o UserKnownHostsFile="$HOME/.ssh/vds_known_hosts" "root@$VDS_HOST" bash -s <<'VDS'
+          set -euo pipefail
+          repo='jratdish1/hero-dapp'
+          branch='ops/herobase-deploy-monitor-20260725'
+          test "$(gh api user --jq .login)" = jratdish1
+          for path in \
+            .github/workflows/temporary-production-secret-prep.yml \
+            .github/workflows/temporary-vps1-canonical-migration.yml \
+            .github/workflows/temporary-vps1-canonical-migration-v2.yml; do
+            sha="$(gh api "repos/$repo/contents/$path?ref=$branch" --jq .sha 2>/dev/null || true)"
+            if [[ "$sha" =~ ^[0-9a-f]{40}$ ]]; then
+              gh api -X DELETE "repos/$repo/contents/$path" \
+                -f message='chore: remove superseded temporary workflow' \
+                -f sha="$sha" -f branch="$branch" >/dev/null
+              printf 'REMOVED=%s\n' "$path"
+            fi
+          done
+          VDS
+
+      - name: Remove ephemeral VDS key
+        if: always()
+        shell: bash
+        run: rm -f "$HOME/.ssh/vds_key" "$HOME/.ssh/vds_known_hosts"
