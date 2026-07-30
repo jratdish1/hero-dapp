@@ -1,0 +1,417 @@
+name: vets-one-shot-m1-csp
+
+on:
+  push:
+    branches:
+      - cert/m1-csp-clean-20260730
+    paths:
+      - .github/workflows/vets-one-shot-m1-csp.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vets-one-shot-m1-csp
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor == 'jratdish1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout clean M-1 branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cert/m1-csp-clean-20260730
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded CSP remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path_name: str, old: str, new: str) -> None:
+              path = Path(path_name)
+              text = path.read_text(encoding='utf-8')
+              if text.count(old) != 1:
+                  raise SystemExit(f'FAIL-CLOSED: {path_name} expected block count={text.count(old)}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          nginx_old = '''# CSP: Allow self + WalletConnect + Cloudflare + inline styles (Tailwind)
+          add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://*.walletconnect.com https://*.walletconnect.org; style-src 'self' 'unsafe-inline'; img-src 'self' data: https: blob:; connect-src 'self' https://*.walletconnect.com https://*.walletconnect.org wss://*.walletconnect.com wss://*.walletconnect.org https://rpc.pulsechain.com https://mainnet.base.org https://*.cloudflare.com; font-src 'self' data:; frame-src 'self' https://*.walletconnect.com;" always;
+          '''
+          nginx_new = '''# CSP: strict external scripts/styles; transitional inline style attributes only.
+          # Remove style-src-attr 'unsafe-inline' after the tracked application/third-party style inventory reaches zero.
+          add_header Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self'; style-src-elem 'self'; style-src-attr 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob: https: https://*.manus.computer https://*.manus.space; connect-src 'self' https://rpc.pulsechain.com https://mainnet.base.org https://api.dexscreener.com wss://relay.walletconnect.com wss://relay.walletconnect.org https://*.walletconnect.com https://*.walletconnect.org https://*.reown.com https://*.manus.computer https://*.manus.space https://api.manus.im https://switch.win https://*.switch.win; frame-src 'self' https://*.walletconnect.com https://*.walletconnect.org https://app.safe.global https://app.squirrelswap.pro https://*.squirrelswap.pro https://transferto.xyz https://*.transferto.xyz https://www.youtube.com https://youtube.com https://libertyswap.finance https://switch.win https://*.switch.win; media-src 'self' https: blob:; object-src 'none'; base-uri 'self'; form-action 'self'; frame-ancestors 'self' https://app.safe.global; upgrade-insecure-requests;" always;
+          '''
+          replace_exact('nginx/herobase-cache-headers.conf', nginx_old, nginx_new)
+
+          security_comment_old = '''  // Base script sources — dev needs 'unsafe-eval' for Vite HMR + React Refresh
+            // Production uses 'unsafe-inline' since the SPA serves pre-built static JS bundles
+            // via <script> tags in index.html without server-side nonce injection.
+            // NOTE: strict-dynamic requires nonce attributes on all script tags at render time;
+            // until a full SSR nonce pipeline is implemented, 'unsafe-inline' is the correct policy.
+          '''
+          security_comment_new = '''  // Development permits Vite HMR/React Refresh only. Production serves
+            // pre-built external bundles and does not permit inline or eval-based scripts.
+          '''
+          replace_exact('server/_core/security.ts', security_comment_old, security_comment_new)
+          replace_exact(
+              'server/_core/security.ts',
+              '''    styleSrc: ["'self'", "'unsafe-inline'"],
+          ''',
+              '''    styleSrc: ["'self'"],
+              styleSrcElem: ["'self'"],
+              // Transitional: application and audited third-party components still emit style attributes.
+              styleSrcAttr: ["'unsafe-inline'"],
+          ''',
+          )
+
+          error_focus_old = '''  private focusHeading() {
+              const heading = this.headingRef.current;
+              if (!heading) return;
+          
+              // Tailwind focus utilities remain the primary styling contract. Apply a
+              // direct lifecycle fallback before focus so the initial error-boundary
+              // mount has a visible indicator even when the production stylesheet has
+              // not finished resolving its focus ring variables.
+              heading.style.outline = "2px solid currentColor";
+              heading.style.outlineOffset = "4px";
+              heading.focus();
+            }
+          '''
+          error_focus_new = '''  private focusHeading() {
+              this.headingRef.current?.focus();
+            }
+          '''
+          replace_exact('client/src/components/ErrorBoundary.tsx', error_focus_old, error_focus_new)
+          error_handlers = '''            onFocus={(event) => {
+                        event.currentTarget.style.outline = "2px solid currentColor";
+                        event.currentTarget.style.outlineOffset = "4px";
+                      }}
+                      onBlur={(event) => {
+                        event.currentTarget.style.removeProperty("outline");
+                        event.currentTarget.style.removeProperty("outline-offset");
+                      }}
+          '''
+          replace_exact('client/src/components/ErrorBoundary.tsx', error_handlers, '')
+
+          dapp_focus_old = '''  private focusHeading() {
+              const heading = this.headingRef.current;
+              if (!heading) return;
+          
+              if (heading.style) {
+                heading.style.outline = "2px solid currentColor";
+                heading.style.outlineOffset = "4px";
+              }
+              heading.focus();
+            }
+          '''
+          dapp_focus_new = '''  private focusHeading() {
+              this.headingRef.current?.focus();
+            }
+          '''
+          replace_exact('client/src/components/DappLoadBoundary.tsx', dapp_focus_old, dapp_focus_new)
+          dapp_handlers = '''            onFocus={(event) => {
+                        event.currentTarget.style.outline = "2px solid currentColor";
+                        event.currentTarget.style.outlineOffset = "4px";
+                      }}
+                      onBlur={(event) => {
+                        event.currentTarget.style.removeProperty("outline");
+                        event.currentTarget.style.removeProperty("outline-offset");
+                      }}
+          '''
+          replace_exact('client/src/components/DappLoadBoundary.tsx', dapp_handlers, '')
+
+          contract_script = r'''#!/usr/bin/env node
+          import { readFileSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+          import path from 'node:path';
+
+          const root = process.cwd();
+          const nginxPath = path.join(root, 'nginx/herobase-cache-headers.conf');
+          const securityPath = path.join(root, 'server/_core/security.ts');
+          const recoveryPaths = [
+            path.join(root, 'client/src/components/ErrorBoundary.tsx'),
+            path.join(root, 'client/src/components/DappLoadBoundary.tsx'),
+          ];
+
+          function fail(message) {
+            throw new Error(message);
+          }
+
+          const nginx = readFileSync(nginxPath, 'utf8');
+          const policy = nginx.match(/add_header Content-Security-Policy "([^"]+)" always;/)?.[1];
+          if (!policy) fail('Nginx CSP header was not found');
+          const directives = new Map(
+            policy.split(';').map(item => item.trim()).filter(Boolean).map(item => {
+              const [name, ...values] = item.split(/\s+/);
+              return [name, values];
+            }),
+          );
+          const script = directives.get('script-src') ?? [];
+          if (script.includes("'unsafe-inline'") || script.includes("'unsafe-eval'")) {
+            fail('Production script-src permits unsafe inline/eval execution');
+          }
+          if ((directives.get('style-src-elem') ?? []).join(' ') !== "'self'") {
+            fail("style-src-elem must be exactly 'self'");
+          }
+          if ((directives.get('style-src-attr') ?? []).join(' ') !== "'unsafe-inline'") {
+            fail('Transitional style-src-attr boundary is missing or broadened');
+          }
+
+          const security = readFileSync(securityPath, 'utf8');
+          for (const required of [
+            'scriptSrc,',
+            'styleSrc: ["\'self\'"],',
+            'styleSrcElem: ["\'self\'"],',
+            'styleSrcAttr: ["\'unsafe-inline\'"],',
+          ]) {
+            if (!security.includes(required)) fail(`Helmet CSP contract missing: ${required}`);
+          }
+          for (const forbidden of [
+            'styleSrc: ["\'self\'", "\'unsafe-inline\'"]',
+            'Production uses \'unsafe-inline\'',
+          ]) {
+            if (security.includes(forbidden)) fail(`Stale or unsafe Helmet contract remains: ${forbidden}`);
+          }
+
+          for (const file of recoveryPaths) {
+            const text = readFileSync(file, 'utf8');
+            if (/\.style\.|onFocus=|onBlur=/.test(text)) {
+              fail(`Application-owned inline focus styling remains in ${path.relative(root, file)}`);
+            }
+          }
+
+          const styleFiles = [];
+          const clientRoot = path.join(root, 'client/src');
+          function walk(directory) {
+            for (const name of readdirSync(directory)) {
+              const full = path.join(directory, name);
+              const stat = statSync(full);
+              if (stat.isDirectory()) walk(full);
+              else if (/\.(?:ts|tsx|js|jsx)$/.test(name)) {
+                const text = readFileSync(full, 'utf8');
+                if (/style\s*=\s*\{\{|\.style\./.test(text)) styleFiles.push(path.relative(root, full));
+              }
+            }
+          }
+          walk(clientRoot);
+          styleFiles.sort();
+          if (styleFiles.length === 0) {
+            fail("style-src-attr 'unsafe-inline' is no longer justified; remove it instead");
+          }
+
+          const report = {
+            timestamp: new Date().toISOString(),
+            result: 'PASS',
+            policy,
+            scriptSrc: script,
+            styleSrcElem: directives.get('style-src-elem'),
+            styleSrcAttr: directives.get('style-src-attr'),
+            transitionalStyleAttributeFiles: styleFiles,
+            removalCondition: 'Remove style-src-attr unsafe-inline after this inventory reaches zero and browser gates remain green.',
+          };
+          writeFileSync('csp-contract-report.json', `${JSON.stringify(report, null, 2)}\n`);
+          console.log(`Production CSP contract: PASS; transitional style-attribute files=${styleFiles.length}`);
+          '''
+          Path('scripts/check-csp-contract.mjs').write_text(contract_script, encoding='utf-8')
+
+          routes_script = r'''#!/usr/bin/env node
+          import { spawn } from 'node:child_process';
+          import { createServer } from 'node:http';
+          import { closeSync, existsSync, openSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+          import { mkdtemp, readFile, rm } from 'node:fs/promises';
+          import os from 'node:os';
+          import path from 'node:path';
+
+          const ROOT = process.cwd();
+          const OUTPUT = path.join(ROOT, 'dist/public');
+          const REPORT = path.join(ROOT, 'csp-browser-report.json');
+          const ROUTES = ['/', '/wallet', '/stake', '/dao', '/dao/proposals'];
+
+          function sleep(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+          function contentType(file) {
+            return ({
+              '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8',
+              '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
+              '.svg': 'image/svg+xml', '.png': 'image/png', '.jpg': 'image/jpeg',
+              '.jpeg': 'image/jpeg', '.webp': 'image/webp', '.woff': 'font/woff', '.woff2': 'font/woff2',
+            })[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
+          }
+          function cspPolicy() {
+            const config = readFileSync(path.join(ROOT, 'nginx/herobase-cache-headers.conf'), 'utf8');
+            const policy = config.match(/add_header Content-Security-Policy "([^"]+)" always;/)?.[1];
+            if (!policy) throw new Error('Production CSP was not found');
+            return policy;
+          }
+          class Cdp {
+            constructor(url) { this.url = url; this.socket = null; this.id = 1; this.pending = new Map(); this.listeners = new Map(); }
+            async connect() {
+              this.socket = new WebSocket(this.url);
+              await new Promise((resolve, reject) => {
+                const timer = setTimeout(() => reject(new Error('CDP connection timeout')), 15000);
+                this.socket.addEventListener('open', () => { clearTimeout(timer); resolve(); }, { once: true });
+                this.socket.addEventListener('error', event => { clearTimeout(timer); reject(new Error(event.message ?? 'CDP error')); }, { once: true });
+              });
+              this.socket.addEventListener('message', event => void this.handle(event.data));
+            }
+            async handle(data) {
+              const message = JSON.parse(typeof data === 'string' ? data : await data.text());
+              if (message.id) {
+                const pending = this.pending.get(message.id); if (!pending) return;
+                this.pending.delete(message.id); message.error ? pending.reject(new Error(message.error.message)) : pending.resolve(message.result ?? {}); return;
+              }
+              for (const listener of this.listeners.get(message.method) ?? []) listener(message.params ?? {});
+            }
+            send(method, params = {}) {
+              const id = this.id++;
+              return new Promise((resolve, reject) => {
+                const timer = setTimeout(() => { this.pending.delete(id); reject(new Error(`CDP timeout: ${method}`)); }, 30000);
+                this.pending.set(id, { resolve(value) { clearTimeout(timer); resolve(value); }, reject(error) { clearTimeout(timer); reject(error); } });
+                this.socket.send(JSON.stringify({ id, method, params }));
+              });
+            }
+            on(method, listener) { const values = this.listeners.get(method) ?? new Set(); values.add(listener); this.listeners.set(method, values); }
+            close() { this.socket?.close(); }
+          }
+          async function launch(bin) {
+            const profile = await mkdtemp(path.join(os.tmpdir(), 'vets-csp-browser-'));
+            const log = path.join(profile, 'chrome.log'); const fd = openSync(log, 'a');
+            const child = spawn(bin, ['--headless=new','--no-sandbox','--disable-dev-shm-usage','--disable-gpu','--disable-background-networking','--disable-component-update','--disable-default-apps','--disable-sync','--metrics-recording-only','--no-first-run','--no-default-browser-check','--remote-debugging-address=127.0.0.1','--remote-debugging-port=0',`--user-data-dir=${profile}`,'--window-size=1280,900','about:blank'], { stdio: ['ignore', fd, fd] });
+            closeSync(fd);
+            const portFile = path.join(profile, 'DevToolsActivePort');
+            for (let i = 0; i < 200 && !existsSync(portFile); i += 1) { if (child.exitCode !== null) throw new Error(`Chrome exited ${child.exitCode}`); await sleep(100); }
+            const [port] = (await readFile(portFile, 'utf8')).trim().split(/\r?\n/);
+            const response = await fetch(`http://127.0.0.1:${port}/json/new?about:blank`, { method: 'PUT' });
+            const target = await response.json();
+            return { url: target.webSocketDebuggerUrl, async close() { child.kill('SIGTERM'); await sleep(500); if (child.exitCode === null) child.kill('SIGKILL'); await rm(profile, { recursive: true, force: true }); } };
+          }
+          async function evaluate(client, expression) {
+            const result = await client.send('Runtime.evaluate', { expression, awaitPromise: true, returnByValue: true });
+            if (result.exceptionDetails) throw new Error(result.exceptionDetails.text ?? 'Browser evaluation failed');
+            return result.result?.value;
+          }
+          async function main() {
+            if (!existsSync(path.join(OUTPUT, 'index.html'))) throw new Error('Production build is missing');
+            const policy = cspPolicy();
+            const index = readFileSync(path.join(OUTPUT, 'index.html'));
+            const server = createServer((request, response) => {
+              response.setHeader('content-security-policy', policy);
+              response.setHeader('cache-control', 'no-store');
+              const pathname = decodeURIComponent(new URL(request.url ?? '/', 'http://127.0.0.1').pathname);
+              if (pathname.startsWith('/api/')) { response.writeHead(200, { 'content-type': 'application/json; charset=utf-8' }); response.end('{"result":{"data":{"json":null}}}'); return; }
+              const candidate = path.resolve(OUTPUT, `.${pathname}`);
+              if (candidate.startsWith(`${OUTPUT}${path.sep}`) && existsSync(candidate) && statSync(candidate).isFile()) { response.writeHead(200, { 'content-type': contentType(candidate) }); response.end(readFileSync(candidate)); return; }
+              response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' }); response.end(index);
+            });
+            await new Promise((resolve, reject) => { server.once('error', reject); server.listen(0, '127.0.0.1', resolve); });
+            const address = server.address(); if (!address || typeof address === 'string') throw new Error('CSP server address missing');
+            const chromeBin = process.env.CHROME_BIN; if (!chromeBin || !existsSync(chromeBin)) throw new Error('CHROME_BIN is required');
+            const chrome = await launch(chromeBin); const client = new Cdp(chrome.url); await client.connect();
+            const consoleErrors = [];
+            client.on('Runtime.consoleAPICalled', params => { const text = (params.args ?? []).map(arg => arg.value ?? arg.description ?? '').join(' '); if (/content security policy|refused to/i.test(text)) consoleErrors.push(text); });
+            await Promise.all([client.send('Page.enable'), client.send('Runtime.enable'), client.send('Network.enable')]);
+            await client.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__vetsCspViolations=[];document.addEventListener('securitypolicyviolation',event=>window.__vetsCspViolations.push({blockedURI:event.blockedURI,effectiveDirective:event.effectiveDirective,violatedDirective:event.violatedDirective,sourceFile:event.sourceFile,lineNumber:event.lineNumber}));` });
+            const results = [];
+            try {
+              for (const route of ROUTES) {
+                await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}${route}` });
+                const deadline = Date.now() + 20000; let body = '';
+                while (Date.now() < deadline) { body = await evaluate(client, 'document.body?.innerText?.trim().slice(0,500) || ""').catch(() => ''); if (body) break; await sleep(250); }
+                await sleep(1000);
+                const violations = await evaluate(client, 'window.__vetsCspViolations || []');
+                if (!body) throw new Error(`${route}: body did not render`);
+                if (violations.length) throw new Error(`${route}: CSP violations: ${JSON.stringify(violations)}`);
+                results.push({ route, body: body.slice(0, 160), violations });
+              }
+              if (consoleErrors.length) throw new Error(`CSP console errors: ${JSON.stringify(consoleErrors)}`);
+              writeFileSync(REPORT, `${JSON.stringify({ timestamp: new Date().toISOString(), result: 'PASS', policy, routes: results, consoleErrors }, null, 2)}\n`);
+              console.log(`Production CSP route matrix: PASS (${ROUTES.join(', ')})`);
+            } finally { client.close(); await chrome.close().catch(() => {}); await new Promise(resolve => server.close(resolve)); }
+          }
+          main().catch(error => { writeFileSync(REPORT, `${JSON.stringify({ timestamp: new Date().toISOString(), result: 'FAIL', error: error instanceof Error ? error.message : String(error) }, null, 2)}\n`); console.error(error); process.exitCode = 1; });
+          '''
+          Path('scripts/check-csp-routes.mjs').write_text(routes_script, encoding='utf-8')
+
+          ci_path = Path('.github/workflows/ci.yml')
+          ci = ci_path.read_text(encoding='utf-8')
+          build_step = '''      - name: Build
+                  run: pnpm build
+          '''
+          csp_steps = '''      - name: Build
+                  run: pnpm build
+          
+                - name: Verify production CSP contract
+                  run: node scripts/check-csp-contract.mjs
+          '''
+          if ci.count(build_step) != 1:
+              raise SystemExit('FAIL-CLOSED: CI build step not found exactly once')
+          ci = ci.replace(build_step, csp_steps, 1)
+          landing_step = '''      - name: Verify public landing critical path
+                  shell: bash
+          '''
+          route_step = '''      - name: Exercise production CSP route matrix
+                  env:
+                    CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+                  run: node scripts/check-csp-routes.mjs
+          
+                - name: Verify public landing critical path
+                  shell: bash
+          '''
+          if ci.count(landing_step) != 1:
+              raise SystemExit('FAIL-CLOSED: landing step not found exactly once')
+          ci = ci.replace(landing_step, route_step, 1)
+          ci = ci.replace(
+              "if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json') != ''",
+              "if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json') != ''",
+              1,
+          )
+          ci = ci.replace(
+              '''            generic-error-focus-report.json
+                      dist/public/.vite/manifest.json
+          ''',
+              '''            generic-error-focus-report.json
+                      csp-contract-report.json
+                      csp-browser-report.json
+                      dist/public/.vite/manifest.json
+          ''',
+              1,
+          )
+          ci_path.write_text(ci, encoding='utf-8')
+          PY
+
+      - name: Validate generated source
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check scripts/check-csp-contract.mjs
+          node --check scripts/check-csp-routes.mjs
+          node scripts/check-csp-contract.mjs
+          grep -Fq "styleSrcAttr: [\"'unsafe-inline'\"]" server/_core/security.ts
+          ! grep -Fq "script-src 'self' 'unsafe-inline'" nginx/herobase-cache-headers.conf
+          ! grep -Eq '\.style\.|onFocus=|onBlur=' client/src/components/ErrorBoundary.tsx client/src/components/DappLoadBoundary.tsx
+          git diff --check
+
+      - name: Commit clean M-1 candidate and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/vets-one-shot-m1-csp.yml
+          git config user.name 'VETS GitHub automation'
+          git config user.email 'jratdish1@users.noreply.github.com'
+          git add \
+            .github/workflows/ci.yml \
+            .github/workflows/vets-one-shot-m1-csp.yml \
+            client/src/components/ErrorBoundary.tsx \
+            client/src/components/DappLoadBoundary.tsx \
+            nginx/herobase-cache-headers.conf \
+            server/_core/security.ts \
+            scripts/check-csp-contract.mjs \
+            scripts/check-csp-routes.mjs
+          git diff --cached --check
+          git commit -m 'fix(security): enforce audited production CSP boundary'
+          git push origin HEAD:cert/m1-csp-clean-20260730
