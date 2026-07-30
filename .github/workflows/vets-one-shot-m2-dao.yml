@@ -1,0 +1,595 @@
+name: vets-one-shot-m2-dao
+
+on:
+  push:
+    branches:
+      - cert/m2-dao-snapshot-clean-20260730
+    paths:
+      - .github/workflows/vets-one-shot-m2-dao.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vets-one-shot-m2-dao
+  cancel-in-progress: false
+
+jobs:
+  patch:
+    if: github.actor == 'jratdish1'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout clean M-2 branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cert/m2-dao-snapshot-clean-20260730
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Apply bounded snapshot and feature-fence remediation
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          def replace_exact(path_name: str, old: str, new: str) -> None:
+              path = Path(path_name)
+              text = path.read_text(encoding='utf-8')
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'FAIL-CLOSED: {path_name} expected block count={count}')
+              path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+          schema_old = '''  startTime: timestamp("startTime").notNull(),
+            endTime: timestamp("endTime").notNull(),
+            executionTxHash: varchar("executionTxHash", { length: 66 }),
+          '''
+          schema_new = '''  startTime: timestamp("startTime").notNull(),
+            endTime: timestamp("endTime").notNull(),
+            // Snapshot v2: legacy records remain advisory until explicitly recreated.
+            governanceMode: mysqlEnum("governanceMode", ["advisory", "binding"]).default("advisory").notNull(),
+            snapshotVersion: int("snapshotVersion").default(2).notNull(),
+            snapshotConfirmations: int("snapshotConfirmations"),
+            snapshotBaseBlock: bigint("snapshotBaseBlock", { mode: "number" }),
+            snapshotPulsechainBlock: bigint("snapshotPulsechainBlock", { mode: "number" }),
+            snapshotBaseTotalSupply: varchar("snapshotBaseTotalSupply", { length: 78 }),
+            snapshotPulsechainTotalSupply: varchar("snapshotPulsechainTotalSupply", { length: 78 }),
+            snapshotVerifiedAt: timestamp("snapshotVerifiedAt"),
+            bindingDisabledReason: varchar("bindingDisabledReason", { length: 512 }),
+            executionTxHash: varchar("executionTxHash", { length: 66 }),
+          '''
+          replace_exact('drizzle/schema.ts', schema_old, schema_new)
+
+          policy = '''export type ProposalChain = "base" | "pulsechain" | "both";
+          export type VoteChain = Exclude<ProposalChain, "both">;
+          
+          export interface SnapshotRecord {
+            chain: ProposalChain;
+            governanceMode: "advisory" | "binding";
+            snapshotBaseBlock: number | null;
+            snapshotPulsechainBlock: number | null;
+          }
+          
+          export function parseFinalityBlocks(value: string | undefined, fallback: bigint): bigint {
+            if (value === undefined || value.trim() === "") return fallback;
+            if (!/^[0-9]+$/.test(value)) throw new Error("Finality depth must be a positive integer");
+            const parsed = BigInt(value);
+            if (parsed < 1n || parsed > 10_000n) throw new Error("Finality depth is outside the approved range");
+            return parsed;
+          }
+          
+          export function finalizedPriorBlock(head: bigint, confirmations: bigint): bigint {
+            if (confirmations < 1n) throw new Error("At least one confirmation is required");
+            if (head <= confirmations) throw new Error("Chain head is too young for a finalized prior snapshot");
+            return head - confirmations;
+          }
+          
+          export function resolveBindingVoteChain(proposalChain: ProposalChain, requested: VoteChain): VoteChain {
+            if (proposalChain === "both") {
+              throw new Error("Binding multi-chain proposals must be split into chain-specific proposals");
+            }
+            if (proposalChain !== requested) {
+              throw new Error(`Vote chain ${requested} does not match proposal chain ${proposalChain}`);
+            }
+            return proposalChain;
+          }
+          
+          export function snapshotBlockForChain(record: SnapshotRecord, chain: VoteChain): number {
+            if (record.governanceMode !== "binding") throw new Error("Proposal is advisory and has no binding snapshot");
+            const block = chain === "base" ? record.snapshotBaseBlock : record.snapshotPulsechainBlock;
+            if (!Number.isSafeInteger(block) || Number(block) <= 0) throw new Error(`Missing trustworthy ${chain} snapshot block`);
+            return Number(block);
+          }
+          '''
+          Path('server/dao-snapshot-policy.ts').write_text(policy, encoding='utf-8')
+
+          tests = '''import { describe, expect, it } from "vitest";
+          import {
+            finalizedPriorBlock,
+            parseFinalityBlocks,
+            resolveBindingVoteChain,
+            snapshotBlockForChain,
+          } from "./dao-snapshot-policy";
+          
+          describe("DAO snapshot policy", () => {
+            it("uses a finalized prior block rather than the current head", () => {
+              expect(finalizedPriorBlock(100n, 20n)).toBe(80n);
+            });
+          
+            it("fails closed when the chain is too young", () => {
+              expect(() => finalizedPriorBlock(20n, 20n)).toThrow(/too young/);
+            });
+          
+            it("validates finality configuration", () => {
+              expect(parseFinalityBlocks(undefined, 64n)).toBe(64n);
+              expect(() => parseFinalityBlocks("0", 64n)).toThrow(/approved range/);
+              expect(() => parseFinalityBlocks("nope", 64n)).toThrow(/positive integer/);
+            });
+          
+            it("binds single-chain votes to the proposal chain", () => {
+              expect(resolveBindingVoteChain("base", "base")).toBe("base");
+              expect(() => resolveBindingVoteChain("base", "pulsechain")).toThrow(/does not match/);
+            });
+          
+            it("requires both-chain binding proposals to be split", () => {
+              expect(() => resolveBindingVoteChain("both", "base")).toThrow(/split/);
+            });
+          
+            it("selects only the chain-specific immutable snapshot", () => {
+              const proposal = {
+                chain: "base" as const,
+                governanceMode: "binding" as const,
+                snapshotBaseBlock: 123,
+                snapshotPulsechainBlock: null,
+              };
+              expect(snapshotBlockForChain(proposal, "base")).toBe(123);
+              expect(() => snapshotBlockForChain(proposal, "pulsechain")).toThrow(/Missing trustworthy/);
+            });
+          
+            it("does not treat advisory proposals as binding", () => {
+              expect(() => snapshotBlockForChain({
+                chain: "base",
+                governanceMode: "advisory",
+                snapshotBaseBlock: 123,
+                snapshotPulsechainBlock: null,
+              }, "base")).toThrow(/advisory/);
+            });
+          });
+          '''
+          Path('server/dao-snapshot-policy.test.ts').write_text(tests, encoding='utf-8')
+
+          db_old = '''export async function castVote(vote: InsertVote) {
+            const db = await getDb();
+            if (!db) throw new Error("Database not available");
+            return db.insert(votes).values(vote);
+          }
+          '''
+          db_new = '''export async function castVoteAndIncrementTallies(vote: InsertVote) {
+            const db = await getDb();
+            if (!db) throw new Error("Database not available");
+            return db.transaction(async (tx) => {
+              await tx.insert(votes).values(vote);
+              const increments = vote.choice === "for"
+                ? { votesFor: sql`${proposals.votesFor} + ${vote.votingPower}` }
+                : vote.choice === "against"
+                  ? { votesAgainst: sql`${proposals.votesAgainst} + ${vote.votingPower}` }
+                  : { votesAbstain: sql`${proposals.votesAbstain} + ${vote.votingPower}` };
+              await tx.update(proposals).set(increments).where(eq(proposals.id, vote.proposalId));
+            });
+          }
+          '''
+          replace_exact('server/db.ts', db_old, db_new)
+
+          router_import_old = '''  updateProposal,
+            updateProposalVotes,
+            castVote,
+            getVotesByProposal,
+          '''
+          router_import_new = '''  updateProposal,
+            castVoteAndIncrementTallies,
+            getVotesByProposal,
+          '''
+          replace_exact('server/routers.ts', router_import_old, router_import_new)
+          replace_exact(
+              'server/routers.ts',
+              '''import { fetchSnapshotProposalById, fetchSnapshotProposals } from "./snapshot-integration";
+          ''',
+              '''import { fetchSnapshotProposalById, fetchSnapshotProposals } from "./snapshot-integration";
+              import {
+                finalizedPriorBlock,
+                parseFinalityBlocks,
+                resolveBindingVoteChain,
+                snapshotBlockForChain,
+                type VoteChain,
+              } from "./dao-snapshot-policy";
+          ''',
+          )
+
+          verify_old = '''async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
+            const client = chain === "pulsechain" ? pulsechainClient : baseClient;
+            const tokenAddress = HERO_TOKENS[chain];
+            const RPC_TIMEOUT_MS = 10_000;
+            const startTime = Date.now();
+            try {
+              const balancePromise = client.readContract({
+                address: tokenAddress,
+                abi: erc20Abi,
+                functionName: "balanceOf",
+                args: [voterAddress as `0x${string}`],
+              });
+              const timeoutPromise = new Promise<never>((_, reject) =>
+                setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)
+              );
+              const balance = await Promise.race([balancePromise, timeoutPromise]);
+              const durationMs = Date.now() - startTime;
+              logRpcEvent(chain, "call", durationMs);
+              return Math.floor(Number(balance) / 1e18);
+            } catch (err: any) {
+              const durationMs = Date.now() - startTime;
+              const isTimeout = err?.message?.includes("timeout") || durationMs >= RPC_TIMEOUT_MS;
+              logRpcEvent(chain, isTimeout ? "timeout" : "error", durationMs, err?.message);
+              return 0;
+            }
+          }
+          '''
+          verify_new = '''const HISTORICAL_VOTES_ABI = [
+            {
+              type: "function", name: "getPastVotes", stateMutability: "view",
+              inputs: [{ name: "account", type: "address" }, { name: "blockNumber", type: "uint256" }],
+              outputs: [{ name: "", type: "uint256" }],
+            },
+            {
+              type: "function", name: "getPastTotalSupply", stateMutability: "view",
+              inputs: [{ name: "blockNumber", type: "uint256" }],
+              outputs: [{ name: "", type: "uint256" }],
+            },
+          ] as const;
+          
+          const DAO_BINDING_VOTING_ENABLED = process.env.DAO_BINDING_VOTING_ENABLED === "true";
+          const RPC_TIMEOUT_MS = 10_000;
+          
+          function clientForChain(chain: VoteChain) {
+            return chain === "pulsechain" ? pulsechainClient : baseClient;
+          }
+          
+          function wholeTokenNumber(raw: bigint): number {
+            const whole = raw / 10n ** 18n;
+            if (whole > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Voting power exceeds safe integer range");
+            return Number(whole);
+          }
+          
+          async function withRpcTimeout<T>(chain: VoteChain, task: Promise<T>): Promise<T> {
+            const startTime = Date.now();
+            try {
+              const value = await Promise.race([
+                task,
+                new Promise<never>((_, reject) => setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)),
+              ]);
+              logRpcEvent(chain, "call", Date.now() - startTime);
+              return value;
+            } catch (err: any) {
+              const durationMs = Date.now() - startTime;
+              const isTimeout = err?.message?.includes("timeout") || durationMs >= RPC_TIMEOUT_MS;
+              logRpcEvent(chain, isTimeout ? "timeout" : "error", durationMs, err?.message);
+              throw err;
+            }
+          }
+          
+          async function captureBindingSnapshot(chain: VoteChain) {
+            const client = clientForChain(chain);
+            const confirmations = parseFinalityBlocks(
+              chain === "base" ? process.env.DAO_BASE_FINALITY_BLOCKS : process.env.DAO_PULSECHAIN_FINALITY_BLOCKS,
+              chain === "base" ? 20n : 64n,
+            );
+            const head = await withRpcTimeout(chain, client.getBlockNumber());
+            const block = finalizedPriorBlock(head, confirmations);
+            const totalSupply = await withRpcTimeout(chain, client.readContract({
+              address: HERO_TOKENS[chain],
+              abi: HISTORICAL_VOTES_ABI,
+              functionName: "getPastTotalSupply",
+              args: [block],
+            }));
+            const totalSupplyTokens = wholeTokenNumber(totalSupply);
+            if (totalSupplyTokens <= 0) throw new Error("Historical total supply is unavailable");
+            return {
+              block: Number(block),
+              confirmations: Number(confirmations),
+              totalSupplyRaw: totalSupply.toString(),
+              quorum: Math.max(1, Math.floor(totalSupplyTokens * 0.04)),
+            };
+          }
+          
+          async function verifyHistoricalVotingPower(voterAddress: string, chain: VoteChain, snapshotBlock: number): Promise<number> {
+            try {
+              const votes = await withRpcTimeout(chain, clientForChain(chain).readContract({
+                address: HERO_TOKENS[chain],
+                abi: HISTORICAL_VOTES_ABI,
+                functionName: "getPastVotes",
+                args: [voterAddress as `0x${string}`, BigInt(snapshotBlock)],
+              }));
+              return wholeTokenNumber(votes);
+            } catch {
+              return 0;
+            }
+          }
+          
+          async function verifyAdvisoryVotingPower(voterAddress: string, chain: VoteChain): Promise<number> {
+            try {
+              const balance = await withRpcTimeout(chain, clientForChain(chain).readContract({
+                address: HERO_TOKENS[chain],
+                abi: erc20Abi,
+                functionName: "balanceOf",
+                args: [voterAddress as `0x${string}`],
+              }));
+              return wholeTokenNumber(balance);
+            } catch {
+              return 0;
+            }
+          }
+          '''
+          replace_exact('server/routers.ts', verify_old, verify_new)
+
+          replace_exact(
+              'server/routers.ts',
+              '''          confirmBinding: z.boolean().optional(),
+          ''',
+              '''          confirmBinding: z.boolean().optional(),
+                        governanceMode: z.enum(["advisory", "binding"]).default("advisory"),
+          ''',
+          )
+
+          create_old = '''          const now = new Date();
+                      const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
+                      const endTime = new Date(now.getTime() + durationMs);
+                      // AUDIT FIX #3 (May 27, 2026): Generate content hash for tamper detection
+                      const contentHash = generateProposalHash(
+                        proposalId, input.title, input.description,
+                        input.walletAddress, input.chain || "both", now, endTime
+                      );
+                      await createProposal({
+                        proposalId,
+                        title: input.title,
+                        description: input.description,
+                        proposerId: ctx.user.id,
+                        proposerAddress: input.walletAddress,
+                        chain: input.chain || "both",
+                        category: input.category || "protocol",
+                        startTime: now,
+                        endTime,
+                      });
+          '''
+          create_new = '''          const now = new Date();
+                      const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
+                      const endTime = new Date(now.getTime() + durationMs);
+                      const proposalChain = input.chain || "both";
+                      let snapshotBaseBlock: number | null = null;
+                      let snapshotPulsechainBlock: number | null = null;
+                      let snapshotBaseTotalSupply: string | null = null;
+                      let snapshotPulsechainTotalSupply: string | null = null;
+                      let snapshotConfirmations: number | null = null;
+                      let snapshotVerifiedAt: Date | null = null;
+                      let bindingDisabledReason: string | null = "Advisory proposal: historical voting power is not binding.";
+                      let quorum = 5_000_000;
+          
+                      if (input.governanceMode === "binding") {
+                        if (!DAO_BINDING_VOTING_ENABLED) {
+                          createStandardError("PRECONDITION_FAILED", "Binding DAO voting is feature-fenced until snapshot capability is enabled");
+                        }
+                        if (proposalChain === "both") {
+                          createStandardError("BAD_REQUEST", "Binding multi-chain proposals must be split into Base and PulseChain proposals");
+                        }
+                        try {
+                          const snapshot = await captureBindingSnapshot(proposalChain);
+                          snapshotConfirmations = snapshot.confirmations;
+                          snapshotVerifiedAt = new Date();
+                          bindingDisabledReason = null;
+                          quorum = snapshot.quorum;
+                          if (proposalChain === "base") {
+                            snapshotBaseBlock = snapshot.block;
+                            snapshotBaseTotalSupply = snapshot.totalSupplyRaw;
+                          } else {
+                            snapshotPulsechainBlock = snapshot.block;
+                            snapshotPulsechainTotalSupply = snapshot.totalSupplyRaw;
+                          }
+                        } catch (error) {
+                          routerLogger.error("Binding snapshot capture failed closed", {
+                            chain: proposalChain,
+                            error: error instanceof Error ? error.message : String(error),
+                          });
+                          createStandardError("PRECONDITION_FAILED", "Token historical voting capability or finalized snapshot is unavailable");
+                        }
+                      }
+          
+                      // AUDIT FIX #3 (May 27, 2026): Generate content hash for tamper detection
+                      const contentHash = generateProposalHash(
+                        proposalId, input.title, input.description,
+                        input.walletAddress, proposalChain, now, endTime
+                      );
+                      await createProposal({
+                        proposalId,
+                        title: input.title,
+                        description: input.description,
+                        proposerId: ctx.user.id,
+                        proposerAddress: input.walletAddress,
+                        chain: proposalChain,
+                        category: input.category || "protocol",
+                        startTime: now,
+                        endTime,
+                        quorum,
+                        governanceMode: input.governanceMode,
+                        snapshotVersion: 2,
+                        snapshotConfirmations,
+                        snapshotBaseBlock,
+                        snapshotPulsechainBlock,
+                        snapshotBaseTotalSupply,
+                        snapshotPulsechainTotalSupply,
+                        snapshotVerifiedAt,
+                        bindingDisabledReason,
+                      });
+          '''
+          replace_exact('server/routers.ts', create_old, create_new)
+          replace_exact(
+              'server/routers.ts',
+              '''          return { success: true, proposalId, contentHash, anchorTxHash };
+          ''',
+              '''          return {
+                        success: true,
+                        proposalId,
+                        contentHash,
+                        anchorTxHash,
+                        governanceMode: input.governanceMode,
+                        snapshotBaseBlock,
+                        snapshotPulsechainBlock,
+                      };
+          ''',
+          )
+
+          vote_old = '''          const existing = await getUserVote(input.proposalDbId, ctx.user.id);
+                      if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
+                      // AUDIT FIX: Server-side on-chain verification of voting power
+                      const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
+                      if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
+                      // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
+                      const trustedPower = Math.min(input.votingPower, verifiedPower);
+                      await castVote({
+                        proposalId: input.proposalDbId,
+                        voterId: ctx.user.id,
+                        voterAddress: input.voterAddress,
+                        choice: input.choice,
+                        votingPower: trustedPower,
+                        chain: input.chain,
+                        txHash: input.txHash || null,
+                      });
+                      // Update proposal vote tallies
+                      const proposal = await getProposalById(input.proposalId);
+                      if (proposal) {
+                        const newFor = input.choice === "for" ? proposal.votesFor + trustedPower : proposal.votesFor;
+                        const newAgainst = input.choice === "against" ? proposal.votesAgainst + trustedPower : proposal.votesAgainst;
+                        const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + trustedPower : proposal.votesAbstain;
+                        await updateProposalVotes(input.proposalId, newFor, newAgainst, newAbstain);
+                      }
+                      return { success: true };
+          '''
+          vote_new = '''          const proposal = await getProposalById(input.proposalId);
+                      if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+                      if (proposal.id !== input.proposalDbId) {
+                        createStandardError("BAD_REQUEST", "Proposal database and public identifiers do not match");
+                      }
+                      const existing = await getUserVote(input.proposalDbId, ctx.user.id);
+                      if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
+          
+                      let verifiedPower: number;
+                      let snapshotBlock: number | null = null;
+                      if (proposal.governanceMode === "binding") {
+                        let boundChain: VoteChain;
+                        try {
+                          boundChain = resolveBindingVoteChain(proposal.chain, input.chain);
+                          snapshotBlock = snapshotBlockForChain(proposal, boundChain);
+                        } catch (error) {
+                          createStandardError("PRECONDITION_FAILED", error instanceof Error ? error.message : "Invalid binding snapshot");
+                        }
+                        verifiedPower = await verifyHistoricalVotingPower(input.voterAddress, boundChain!, snapshotBlock!);
+                        if (verifiedPower <= 0) {
+                          createStandardError("PRECONDITION_FAILED", "No historical HERO voting power at the proposal snapshot");
+                        }
+                      } else {
+                        if (proposal.chain !== "both" && proposal.chain !== input.chain) {
+                          createStandardError("BAD_REQUEST", "Vote chain does not match proposal chain");
+                        }
+                        verifiedPower = await verifyAdvisoryVotingPower(input.voterAddress, input.chain);
+                        if (verifiedPower <= 0) {
+                          createStandardError("PRECONDITION_FAILED", "No current HERO balance found for this advisory vote");
+                        }
+                      }
+          
+                      const trustedPower = Math.min(input.votingPower, verifiedPower);
+                      await castVoteAndIncrementTallies({
+                        proposalId: input.proposalDbId,
+                        voterId: ctx.user.id,
+                        voterAddress: input.voterAddress,
+                        choice: input.choice,
+                        votingPower: trustedPower,
+                        chain: input.chain,
+                        txHash: input.txHash || null,
+                      });
+                      return {
+                        success: true,
+                        governanceMode: proposal.governanceMode,
+                        snapshotBlock,
+                        trustedPower,
+                      };
+          '''
+          replace_exact('server/routers.ts', vote_old, vote_new)
+
+          migration = '''-- HERO DAO immutable voting snapshot v2
+          -- Existing proposals remain advisory. Binding mode is opt-in and feature-fenced.
+          ALTER TABLE proposals
+            ADD COLUMN governanceMode ENUM('advisory','binding') NOT NULL DEFAULT 'advisory' AFTER endTime,
+            ADD COLUMN snapshotVersion INT NOT NULL DEFAULT 2 AFTER governanceMode,
+            ADD COLUMN snapshotConfirmations INT NULL AFTER snapshotVersion,
+            ADD COLUMN snapshotBaseBlock BIGINT NULL AFTER snapshotConfirmations,
+            ADD COLUMN snapshotPulsechainBlock BIGINT NULL AFTER snapshotBaseBlock,
+            ADD COLUMN snapshotBaseTotalSupply VARCHAR(78) NULL AFTER snapshotPulsechainBlock,
+            ADD COLUMN snapshotPulsechainTotalSupply VARCHAR(78) NULL AFTER snapshotBaseTotalSupply,
+            ADD COLUMN snapshotVerifiedAt TIMESTAMP NULL AFTER snapshotPulsechainTotalSupply,
+            ADD COLUMN bindingDisabledReason VARCHAR(512) NULL AFTER snapshotVerifiedAt;
+          
+          UPDATE proposals
+          SET governanceMode = 'advisory',
+              snapshotVersion = 2,
+              bindingDisabledReason = COALESCE(bindingDisabledReason, 'Legacy proposal without a verified historical snapshot')
+          WHERE snapshotBaseBlock IS NULL AND snapshotPulsechainBlock IS NULL;
+          '''
+          rollback = '''-- Rollback for HERO DAO immutable voting snapshot v2
+          -- Run only after confirming no binding proposals exist.
+          ALTER TABLE proposals
+            DROP COLUMN bindingDisabledReason,
+            DROP COLUMN snapshotVerifiedAt,
+            DROP COLUMN snapshotPulsechainTotalSupply,
+            DROP COLUMN snapshotBaseTotalSupply,
+            DROP COLUMN snapshotPulsechainBlock,
+            DROP COLUMN snapshotBaseBlock,
+            DROP COLUMN snapshotConfirmations,
+            DROP COLUMN snapshotVersion,
+            DROP COLUMN governanceMode;
+          '''
+          Path('drizzle/migrations/dao_snapshot_v2.sql').write_text(migration, encoding='utf-8')
+          Path('drizzle/migrations/dao_snapshot_v2.rollback.sql').write_text(rollback, encoding='utf-8')
+          PY
+
+      - name: Validate candidate source
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'governanceMode: mysqlEnum' drizzle/schema.ts
+          grep -Fq 'getPastVotes' server/routers.ts
+          grep -Fq 'getPastTotalSupply' server/routers.ts
+          grep -Fq 'Binding multi-chain proposals must be split' server/routers.ts
+          grep -Fq 'db.transaction' server/db.ts
+          ! grep -Fq 'await verifyVotingPower' server/routers.ts
+          ! grep -Fq 'await updateProposalVotes' server/routers.ts
+          test -s drizzle/migrations/dao_snapshot_v2.sql
+          test -s drizzle/migrations/dao_snapshot_v2.rollback.sql
+          git diff --check
+
+      - name: Commit clean M-2 candidate and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          rm .github/workflows/vets-one-shot-m2-dao.yml
+          git config user.name 'VETS GitHub automation'
+          git config user.email 'jratdish1@users.noreply.github.com'
+          git add \
+            .github/workflows/vets-one-shot-m2-dao.yml \
+            drizzle/schema.ts \
+            drizzle/migrations/dao_snapshot_v2.sql \
+            drizzle/migrations/dao_snapshot_v2.rollback.sql \
+            server/db.ts \
+            server/routers.ts \
+            server/dao-snapshot-policy.ts \
+            server/dao-snapshot-policy.test.ts
+          git diff --cached --check
+          git commit -m 'fix(dao): add fail-closed chain-bound historical snapshots'
+          git push origin HEAD:cert/m2-dao-snapshot-clean-20260730
