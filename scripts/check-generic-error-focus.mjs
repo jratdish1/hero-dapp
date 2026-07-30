@@ -545,7 +545,12 @@ async function main() {
       primaryError instanceof Error
         ? primaryError
         : new Error(String(primaryError));
-    if (cleanupErrors.length > 0) primary.cleanupErrors = cleanupErrors;
+    if (cleanupErrors.length > 0) {
+    const existingCleanupErrors = Array.isArray(primary.cleanupErrors)
+      ? primary.cleanupErrors.map(value => String(value))
+      : [];
+    primary.cleanupErrors = [...existingCleanupErrors, ...cleanupErrors];
+  }
     throw primary;
   }
   if (cleanupErrors.length > 0) {
