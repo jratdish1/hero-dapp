@@ -7,6 +7,7 @@ import DappLoadBoundary, {
 import { installAnalytics } from "./lib/analytics";
 import LandingApp from "./LandingApp";
 import "./index.css";
+import "./security-recovery.css";
 
 const DappBootstrap = lazy(() => import("./DappBootstrap"));
 
