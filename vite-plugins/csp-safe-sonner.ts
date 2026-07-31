@@ -37,6 +37,64 @@ function findAllMarkerPositions(code: string): number[] {
   return positions;
 }
 
+function skipQuoted(code: string, start: number): number {
+  const quote = code[start];
+  for (let index = start + 1; index < code.length; index += 1) {
+    if (code[index] === quote && !isEscaped(code, index)) return index + 1;
+  }
+  return -1;
+}
+
+function findMatchingCallClose(
+  code: string,
+  openParen: number,
+  stylesheetStart: number,
+  stylesheetEnd: number,
+): number {
+  let depth = 1;
+  let index = openParen + 1;
+
+  while (index < code.length) {
+    if (index === stylesheetStart) {
+      index = stylesheetEnd + 1;
+      continue;
+    }
+
+    const char = code[index];
+    const next = code[index + 1];
+
+    if (char === "'" || char === '"' || char === "`") {
+      const afterQuote = skipQuoted(code, index);
+      if (afterQuote < 0) return -1;
+      index = afterQuote;
+      continue;
+    }
+
+    if (char === "/" && next === "/") {
+      const newline = code.indexOf("\n", index + 2);
+      index = newline < 0 ? code.length : newline + 1;
+      continue;
+    }
+
+    if (char === "/" && next === "*") {
+      const commentEnd = code.indexOf("*/", index + 2);
+      if (commentEnd < 0) return -1;
+      index = commentEnd + 2;
+      continue;
+    }
+
+    if (char === "(") depth += 1;
+    if (char === ")") {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+
+    index += 1;
+  }
+
+  return -1;
+}
+
 /**
  * Remove Sonner's one top-level runtime stylesheet injection while preserving
  * the component implementation. Repeated selector markers are expected inside
@@ -64,7 +122,7 @@ export function stripSonnerRuntimeStyles(code: string): string {
   }
 
   const openParen = code.lastIndexOf("(", templateStart);
-  if (openParen < 1) {
+  if (openParen < 1 || code.slice(openParen + 1, templateStart).trim() !== "") {
     throw new Error("FAIL-CLOSED: Sonner stylesheet injection call was not found");
   }
 
@@ -76,12 +134,25 @@ export function stripSonnerRuntimeStyles(code: string): string {
     throw new Error("FAIL-CLOSED: Sonner stylesheet injector callee changed");
   }
 
-  const callEnd = code.indexOf(";", templateEnd);
-  if (callEnd < 0 || code.slice(templateEnd + 1, callEnd).trim() !== ")") {
+  const closeParen = findMatchingCallClose(code, openParen, templateStart, templateEnd);
+  if (closeParen < 0) {
+    throw new Error("FAIL-CLOSED: Sonner stylesheet injection call did not close");
+  }
+
+  const trailingArguments = code.slice(templateEnd + 1, closeParen).trim();
+  if (trailingArguments !== "" && !trailingArguments.startsWith(",")) {
+    throw new Error("FAIL-CLOSED: Sonner stylesheet injection arguments changed");
+  }
+
+  let statementEnd = closeParen + 1;
+  while (statementEnd < code.length && /[ \t]/.test(code[statementEnd])) statementEnd += 1;
+  if (code[statementEnd] === ";") {
+    statementEnd += 1;
+  } else if (statementEnd < code.length && code[statementEnd] !== "\n" && code[statementEnd] !== "\r") {
     throw new Error("FAIL-CLOSED: Sonner stylesheet injection statement changed");
   }
 
-  const transformed = `${code.slice(0, callStart)}/* VETS CSP: static sonner/dist/styles.css */${code.slice(callEnd + 1)}`;
+  const transformed = `${code.slice(0, callStart)}/* VETS CSP: static sonner/dist/styles.css */${code.slice(statementEnd)}`;
   if (transformed.includes(SONNER_CSS_MARKER)) {
     throw new Error("FAIL-CLOSED: Sonner runtime CSS remained after transform");
   }
