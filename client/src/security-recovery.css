@@ -2,13 +2,12 @@
  * Security and accessibility recovery styles.
  * These rules remain in the compiled stylesheet so strict style-src-elem
  * enforcement does not depend on inline style mutation during an error.
- * Explicit important values prevent framework focus utilities from silently
- * suppressing the visible recovery focus indicator in the production bundle.
  */
-.vets-recovery-heading:focus {
-  outline-color: #f59e0b !important;
-  outline-style: solid !important;
-  outline-width: 2px !important;
+#application-error-title.vets-recovery-heading:focus,
+#application-error-title.vets-recovery-heading:focus-visible,
+.vets-recovery-heading:focus,
+.vets-recovery-heading:focus-visible {
+  outline: 3px solid #f59e0b !important;
   outline-offset: 4px !important;
-  box-shadow: 0 0 0 4px rgba(245, 158, 11, 0.35) !important;
+  box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 5px #f59e0b !important;
 }
