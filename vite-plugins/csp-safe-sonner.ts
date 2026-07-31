@@ -39,15 +39,14 @@ function findAllMarkerPositions(code: string): number[] {
 
 /**
  * Neutralize Sonner's one bundled runtime stylesheet without depending on the
- * surrounding bundler-generated call shape. The pinned package also publishes
- * sonner/dist/styles.css, which the application imports statically.
+ * surrounding bundler-generated call or tag shape. The pinned package also
+ * publishes sonner/dist/styles.css, which the application imports statically.
  *
- * Sonner's injector is called with the bundled CSS value. Replacing the single
- * static template with an empty string preserves module syntax and causes the
- * injector's falsy-input guard to return before creating a <style> element.
- * The production browser CSP matrix independently verifies that no inline
- * stylesheet is created. Any ambiguous or interpolated package shape fails the
- * build closed.
+ * Preserve the original template delimiters and remove only their static CSS
+ * body. This remains syntactically valid whether the template is assigned,
+ * passed to a function, or tagged. Package-shape drift, multiple templates, or
+ * interpolation fails the build closed. The production browser CSP matrix then
+ * proves that the emptied runtime path does not create an inline stylesheet.
  */
 export function stripSonnerRuntimeStyles(code: string): string {
   const markerPositions = findAllMarkerPositions(code);
@@ -73,8 +72,7 @@ export function stripSonnerRuntimeStyles(code: string): string {
     throw new Error("FAIL-CLOSED: Sonner bundled stylesheet became interpolated");
   }
 
-  const replacement = '/* VETS CSP: static sonner/dist/styles.css */""';
-  const transformed = `${code.slice(0, templateStart)}${replacement}${code.slice(templateEnd + 1)}`;
+  const transformed = `${code.slice(0, templateStart + 1)}${code.slice(templateEnd)}`;
 
   if (transformed.includes(SONNER_CSS_MARKER)) {
     throw new Error("FAIL-CLOSED: Sonner runtime CSS remained after transform");
@@ -86,7 +84,7 @@ export function stripSonnerRuntimeStyles(code: string): string {
 /**
  * Sonner 2.0.7 publishes a static stylesheet and also bundles that CSS for
  * runtime injection. The runtime <style> violates strict style-src-elem.
- * Neutralize only the pinned Sonner stylesheet value and load
+ * Empty only the pinned Sonner stylesheet template and load
  * sonner/dist/styles.css from application source. Package-shape drift fails the
  * build and the mounted browser tests enforce the CSP result.
  */
