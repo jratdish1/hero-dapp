@@ -41,7 +41,7 @@ describe("CSP-safe Sonner transform", () => {
     expect(() => stripSonnerRuntimeStyles("export const ok = true;")).toThrow(/FAIL-CLOSED/);
     expect(() => stripSonnerRuntimeStyles(
       `const a = "${marker}{a:b}"; const b = "${marker}{c:d}";`,
-    )).toThrow(/FAIL-CLOSED/);
+    )).toThrow(/found 2/);
     expect(() => stripSonnerRuntimeStyles(
       `const css = \`${marker}{color:\${runtimeColor}}\`;`,
     )).toThrow(/FAIL-CLOSED/);
