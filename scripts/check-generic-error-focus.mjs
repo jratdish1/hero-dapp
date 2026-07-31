@@ -234,7 +234,12 @@ async function stopChromeProcess(child, userDataDir) {
     }
   }
   if (userDataDir) {
-    await rm(userDataDir, { recursive: true, force: true });
+    await rm(userDataDir, {
+      recursive: true,
+      force: true,
+      maxRetries: 12,
+      retryDelay: 250,
+    });
     if (existsSync(userDataDir)) {
       throw new Error(`Chrome profile cleanup failed: ${userDataDir}`);
     }
