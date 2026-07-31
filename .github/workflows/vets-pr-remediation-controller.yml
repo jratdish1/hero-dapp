@@ -1,0 +1,134 @@
+name: VETS PR remediation controller
+
+on:
+  pull_request_target:
+    types: [synchronize]
+
+permissions:
+  contents: write
+  pull-requests: read
+
+concurrency:
+  group: vets-pr-remediation-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  execute:
+    if: >-
+      github.repository == 'jratdish1/hero-dapp' &&
+      github.actor == 'jratdish1' &&
+      (github.event.pull_request.number == 70 || github.event.pull_request.number == 71)
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Resolve exact bounded lane
+        id: lane
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$PR_NUMBER" in
+            70)
+              echo 'branch=cert/m1-csp-clean-20260730' >> "$GITHUB_OUTPUT"
+              echo 'expected_parent=686aaff569023dae608d0f1dfc1b47f7f758b009' >> "$GITHUB_OUTPUT"
+              echo 'workflow=.github/workflows/vets-one-shot-m1-csp.yml' >> "$GITHUB_OUTPUT"
+              echo 'prefix=/tmp/vets-m1-step' >> "$GITHUB_OUTPUT"
+              echo 'apply=Apply bounded CSP remediation' >> "$GITHUB_OUTPUT"
+              echo 'commit=Commit clean M-1 candidate and self-remove' >> "$GITHUB_OUTPUT"
+              ;;
+            71)
+              echo 'branch=cert/m2-dao-snapshot-clean-20260730' >> "$GITHUB_OUTPUT"
+              echo 'expected_parent=ba4918cb478d60ce9bf4306fd0b1efc03c5b65f8' >> "$GITHUB_OUTPUT"
+              echo 'workflow=.github/workflows/vets-one-shot-m2-dao.yml' >> "$GITHUB_OUTPUT"
+              echo 'prefix=/tmp/vets-m2-step' >> "$GITHUB_OUTPUT"
+              echo 'apply=Apply bounded snapshot and feature-fence remediation' >> "$GITHUB_OUTPUT"
+              echo 'commit=Commit clean M-2 candidate and self-remove' >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo 'FAIL-CLOSED: unsupported PR' >&2
+              exit 1
+              ;;
+          esac
+
+      - name: Checkout exact owner branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ steps.lane.outputs.branch }}
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Verify one-child exact-parent trigger
+        env:
+          EXPECTED_PARENT: ${{ steps.lane.outputs.expected_parent }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          actual_parent="$(git rev-parse HEAD^)"
+          test "$actual_parent" = "$EXPECTED_PARENT" || {
+            echo "FAIL-CLOSED: expected parent $EXPECTED_PARENT, found $actual_parent" >&2
+            exit 1
+          }
+
+      - name: Recover original bounded remediation steps
+        env:
+          WORKFLOW_PATH: ${{ steps.lane.outputs.workflow }}
+          SCRIPT_PREFIX: ${{ steps.lane.outputs.prefix }}
+          APPLY_STEP: ${{ steps.lane.outputs.apply }}
+          COMMIT_STEP: ${{ steps.lane.outputs.commit }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import os
+          import subprocess
+
+          workflow_path = os.environ['WORKFLOW_PATH']
+          prefix = os.environ['SCRIPT_PREFIX']
+          original = subprocess.check_output(
+              ['git', 'show', f'HEAD^^:{workflow_path}'],
+              text=True,
+          )
+          step_names = [
+              os.environ['APPLY_STEP'],
+              'Validate generated source',
+              os.environ['COMMIT_STEP'],
+          ]
+
+          for index, name in enumerate(step_names, start=1):
+              marker = f'      - name: {name}\n'
+              marker_at = original.find(marker)
+              if marker_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original step not found: {name}')
+              run_marker = '        run: |\n'
+              run_at = original.find(run_marker, marker_at)
+              if run_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original run block not found: {name}')
+              start = run_at + len(run_marker)
+              end = original.find('\n      - name:', start)
+              if end < 0:
+                  end = len(original)
+              raw_lines = original[start:end].splitlines()
+              block_lines = []
+              for line in raw_lines:
+                  if line and not line.startswith('          '):
+                      raise SystemExit(f'FAIL-CLOSED: unexpected indentation in {name}: {line!r}')
+                  block_lines.append(line[10:] if line else '')
+              target = Path(f'{prefix}-{index}.sh')
+              target.write_text(
+                  '#!/usr/bin/env bash\n' + '\n'.join(block_lines).rstrip() + '\n',
+                  encoding='utf-8',
+              )
+              target.chmod(0o700)
+          PY
+
+      - name: Execute bounded remediation
+        env:
+          SCRIPT_PREFIX: ${{ steps.lane.outputs.prefix }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "${SCRIPT_PREFIX}-1.sh"
+          "${SCRIPT_PREFIX}-2.sh"
+          "${SCRIPT_PREFIX}-3.sh"
