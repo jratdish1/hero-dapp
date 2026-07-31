@@ -342,6 +342,7 @@ async function waitForHarness(client) {
         const style = heading ? getComputedStyle(heading) : null;
         return {
           ready: document.body?.dataset.ready || '',
+          readyError: document.body?.dataset.readyError || '',
           focusedId: document.activeElement?.id || '',
           heading: document.body?.dataset.heading || '',
           focusClass: document.body?.dataset.focusClass || '',
@@ -351,8 +352,14 @@ async function waitForHarness(client) {
           boxShadow: style?.boxShadow || '',
         };
       })()`);
+      if (state.readyError) {
+        throw new Error(`Generic focus harness readiness failed: ${state.readyError}`);
+      }
       if (state.ready === 'true') return state;
-    } catch {
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith('Generic focus harness readiness failed:')) {
+        throw error;
+      }
       // Navigation can briefly invalidate the execution context.
     }
     await sleep(100);
@@ -394,13 +401,51 @@ async function main() {
         <ErrorBoundary><ThrowOnInitialRender /></ErrorBoundary>,
       );
 
-      setTimeout(() => {
+      function waitForWindowLoad() {
+        if (document.readyState === 'complete') return Promise.resolve();
+        return new Promise(resolve => {
+          window.addEventListener('load', resolve, { once: true });
+        });
+      }
+
+      function waitForStylesheet(link) {
+        if (link.sheet) return Promise.resolve();
+        return new Promise((resolve, reject) => {
+          const timeout = window.setTimeout(() => {
+            reject(new Error('Timed out loading stylesheet: ' + link.href));
+          }, 15_000);
+          link.addEventListener('load', () => {
+            window.clearTimeout(timeout);
+            resolve();
+          }, { once: true });
+          link.addEventListener('error', () => {
+            window.clearTimeout(timeout);
+            reject(new Error('Failed to load stylesheet: ' + link.href));
+          }, { once: true });
+        });
+      }
+
+      function waitForPaint() {
+        return new Promise(resolve => {
+          requestAnimationFrame(() => requestAnimationFrame(resolve));
+        });
+      }
+
+      async function markHarnessReady() {
+        await waitForWindowLoad();
+        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'));
+        await Promise.all(links.map(waitForStylesheet));
+        await waitForPaint();
         const heading = document.getElementById(${JSON.stringify(EXPECTED_HEADING_ID)});
-        document.body.dataset.ready = 'true';
         document.body.dataset.focusedId = document.activeElement?.id || '';
         document.body.dataset.heading = heading?.textContent?.trim() || '';
         document.body.dataset.focusClass = heading?.className || '';
-      }, 100);
+        document.body.dataset.ready = 'true';
+      }
+
+      void markHarnessReady().catch(error => {
+        document.body.dataset.readyError = error instanceof Error ? error.message : String(error);
+      });
     `;
 
     await writeFile(entryPath, entry);
