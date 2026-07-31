@@ -174,7 +174,7 @@ export const proposals = mysqlTable("proposals", {
   endTime: timestamp("endTime").notNull(),
   // Snapshot v2: legacy records remain advisory until explicitly recreated.
   governanceMode: mysqlEnum("governanceMode", ["advisory", "binding"]).default("advisory").notNull(),
-  snapshotVersion: int("snapshotVersion").default(2).notNull(),
+  snapshotVersion: int("snapshotVersion").default(1).notNull(),
   snapshotConfirmations: int("snapshotConfirmations"),
   snapshotBaseBlock: bigint("snapshotBaseBlock", { mode: "number" }),
   snapshotPulsechainBlock: bigint("snapshotPulsechainBlock", { mode: "number" }),

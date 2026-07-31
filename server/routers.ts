@@ -88,7 +88,6 @@ const HISTORICAL_VOTES_ABI = [
   },
 ] as const;
 
-const DAO_BINDING_VOTING_ENABLED = process.env.DAO_BINDING_VOTING_ENABLED === "true";
 const RPC_TIMEOUT_MS = 10_000;
 
 function clientForChain(chain: VoteChain) {
@@ -118,7 +117,7 @@ async function withRpcTimeout<T>(chain: VoteChain, task: Promise<T>): Promise<T>
   }
 }
 
-async function captureBindingSnapshot(chain: VoteChain) {
+async function captureBindingSnapshot(chain: VoteChain, proposerAddress: string) {
   const client = clientForChain(chain);
   const confirmations = parseFinalityBlocks(
     chain === "base" ? process.env.DAO_BASE_FINALITY_BLOCKS : process.env.DAO_PULSECHAIN_FINALITY_BLOCKS,
@@ -126,12 +125,20 @@ async function captureBindingSnapshot(chain: VoteChain) {
   );
   const head = await withRpcTimeout(chain, client.getBlockNumber());
   const block = finalizedPriorBlock(head, confirmations);
-  const totalSupply = await withRpcTimeout(chain, client.readContract({
-    address: HERO_TOKENS[chain],
-    abi: HISTORICAL_VOTES_ABI,
-    functionName: "getPastTotalSupply",
-    args: [block],
-  }));
+  const [totalSupply] = await Promise.all([
+    withRpcTimeout(chain, client.readContract({
+      address: HERO_TOKENS[chain],
+      abi: HISTORICAL_VOTES_ABI,
+      functionName: "getPastTotalSupply",
+      args: [block],
+    })),
+    withRpcTimeout(chain, client.readContract({
+      address: HERO_TOKENS[chain],
+      abi: HISTORICAL_VOTES_ABI,
+      functionName: "getPastVotes",
+      args: [proposerAddress as `0x${string}`, block],
+    })),
+  ]);
   const totalSupplyTokens = wholeTokenNumber(totalSupply);
   if (totalSupplyTokens <= 0) throw new Error("Historical total supply is unavailable");
   return {
@@ -276,6 +283,7 @@ import { fetchSnapshotProposalById, fetchSnapshotProposals } from "./snapshot-in
 import {
   finalizedPriorBlock,
   parseFinalityBlocks,
+  requireBindingVotingEnabled,
   resolveBindingVoteChain,
   snapshotBlockForChain,
   type VoteChain,
@@ -894,14 +902,16 @@ export const appRouter = router({
           let quorum = 5_000_000;
 
           if (input.governanceMode === "binding") {
-            if (!DAO_BINDING_VOTING_ENABLED) {
-              createStandardError("PRECONDITION_FAILED", "Binding DAO voting is feature-fenced until snapshot capability is enabled");
+            try {
+              requireBindingVotingEnabled(process.env.DAO_BINDING_VOTING_ENABLED);
+            } catch (error) {
+              createStandardError("PRECONDITION_FAILED", error instanceof Error ? error.message : "Binding DAO voting is disabled");
             }
             if (proposalChain === "both") {
               createStandardError("BAD_REQUEST", "Binding multi-chain proposals must be split into Base and PulseChain proposals");
             }
             try {
-              const snapshot = await captureBindingSnapshot(proposalChain);
+              const snapshot = await captureBindingSnapshot(proposalChain, input.walletAddress);
               snapshotConfirmations = snapshot.confirmations;
               snapshotVerifiedAt = new Date();
               bindingDisabledReason = null;
@@ -1011,6 +1021,12 @@ export const appRouter = router({
           txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
+          const proposal = await getProposalById(input.proposalId);
+          if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+          if (proposal.id !== input.proposalDbId) {
+            createStandardError("BAD_REQUEST", "Proposal database and public identifiers do not match");
+          }
+
           // AUDIT FIX 1.4: Verify wallet address belongs to authenticated user
           // If user has a registered wallet, it MUST match. If not registered, bind it on first vote.
           if (ctx.user.walletAddress) {
@@ -1027,17 +1043,17 @@ export const appRouter = router({
               proposalId: input.proposalId,
             });
           }
-          const proposal = await getProposalById(input.proposalId);
-          if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
-          if (proposal.id !== input.proposalDbId) {
-            createStandardError("BAD_REQUEST", "Proposal database and public identifiers do not match");
-          }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
 
           let verifiedPower: number;
           let snapshotBlock: number | null = null;
           if (proposal.governanceMode === "binding") {
+            try {
+              requireBindingVotingEnabled(process.env.DAO_BINDING_VOTING_ENABLED);
+            } catch (error) {
+              createStandardError("PRECONDITION_FAILED", error instanceof Error ? error.message : "Binding DAO voting is disabled");
+            }
             let boundChain: VoteChain;
             try {
               boundChain = resolveBindingVoteChain(proposal.chain, input.chain);
