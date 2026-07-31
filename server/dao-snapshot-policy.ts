@@ -20,6 +20,12 @@ export interface VerifiedBindingSnapshot {
   totalSupplyRaw: string;
 }
 
+export function requireBindingVotingEnabled(value: string | undefined): void {
+  if (value !== "true") {
+    throw new Error("Binding DAO voting is feature-fenced until snapshot capability is enabled");
+  }
+}
+
 export function parseFinalityBlocks(value: string | undefined, fallback: bigint): bigint {
   if (value === undefined || value.trim() === "") return fallback;
   if (!/^[0-9]+$/.test(value)) throw new Error("Finality depth must be a positive integer");
