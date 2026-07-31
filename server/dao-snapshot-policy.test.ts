@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   assertBindingSnapshotMetadata,
+  assertProposalVoteable,
   finalizedPriorBlock,
+  generateProposalSnapshotCommitment,
   parseFinalityBlocks,
   requireBindingVotingEnabled,
   resolveBindingVoteChain,
   snapshotBlockForChain,
+  type SnapshotCommitmentInput,
   type SnapshotRecord,
 } from "./dao-snapshot-policy";
 
@@ -21,6 +24,37 @@ function bindingBase(overrides: Partial<SnapshotRecord> = {}): SnapshotRecord {
     snapshotPulsechainTotalSupply: null,
     snapshotVerifiedAt: new Date("2026-07-30T00:00:00.000Z"),
     bindingDisabledReason: null,
+    ...overrides,
+  };
+}
+
+function bindingCommitment(
+  overrides: Partial<SnapshotCommitmentInput> = {},
+): SnapshotCommitmentInput {
+  return {
+    baseContentHash: "a".repeat(64),
+    quorum: 40_000,
+    ...bindingBase(),
+    ...overrides,
+  };
+}
+
+function advisoryCommitment(
+  overrides: Partial<SnapshotCommitmentInput> = {},
+): SnapshotCommitmentInput {
+  return {
+    baseContentHash: "b".repeat(64),
+    quorum: 5_000_000,
+    chain: "both",
+    governanceMode: "advisory",
+    snapshotVersion: 1,
+    snapshotConfirmations: null,
+    snapshotBaseBlock: null,
+    snapshotPulsechainBlock: null,
+    snapshotBaseTotalSupply: null,
+    snapshotPulsechainTotalSupply: null,
+    snapshotVerifiedAt: null,
+    bindingDisabledReason: "Advisory proposal: historical voting power is not binding.",
     ...overrides,
   };
 }
@@ -69,6 +103,13 @@ describe("DAO snapshot policy", () => {
     expect(() => snapshotBlockForChain(bindingBase(), "pulsechain")).toThrow(/does not match/);
   });
 
+  it("rejects conflicting opposite-chain snapshot metadata", () => {
+    expect(() => snapshotBlockForChain(bindingBase({ snapshotPulsechainBlock: 456 }), "base"))
+      .toThrow(/conflicting cross-chain/);
+    expect(() => snapshotBlockForChain(bindingBase({ snapshotPulsechainTotalSupply: "1" }), "base"))
+      .toThrow(/conflicting cross-chain/);
+  });
+
   it("does not treat advisory proposals as binding", () => {
     expect(() => snapshotBlockForChain(bindingBase({ governanceMode: "advisory" }), "base"))
       .toThrow(/advisory/);
@@ -105,5 +146,69 @@ describe("DAO snapshot policy", () => {
       .toThrow(/historical total supply/);
     expect(() => snapshotBlockForChain(bindingBase({ snapshotBaseTotalSupply: "1.5" }), "base"))
       .toThrow(/historical total supply/);
+  });
+
+  it("allows voting only while an active proposal is inside its window", () => {
+    const proposal = {
+      status: "active",
+      startTime: "2026-07-30T00:00:00.000Z",
+      endTime: "2026-08-01T00:00:00.000Z",
+    };
+
+    expect(() => assertProposalVoteable(proposal, new Date("2026-07-31T00:00:00.000Z")))
+      .not.toThrow();
+    expect(() => assertProposalVoteable({ ...proposal, status: "pending" }, new Date("2026-07-31T00:00:00.000Z")))
+      .toThrow(/requires active status/);
+    expect(() => assertProposalVoteable(proposal, new Date("2026-07-29T23:59:59.000Z")))
+      .toThrow(/not started/);
+    expect(() => assertProposalVoteable(proposal, new Date("2026-08-01T00:00:01.000Z")))
+      .toThrow(/ended/);
+  });
+
+  it("rejects malformed or inverted voting windows", () => {
+    expect(() => assertProposalVoteable({
+      status: "active",
+      startTime: "not-a-date",
+      endTime: "2026-08-01T00:00:00.000Z",
+    })).toThrow(/invalid voting window/);
+
+    expect(() => assertProposalVoteable({
+      status: "active",
+      startTime: "2026-08-01T00:00:00.000Z",
+      endTime: "2026-07-30T00:00:00.000Z",
+    })).toThrow(/invalid voting window/);
+  });
+
+  it("produces a deterministic snapshot commitment", () => {
+    const input = bindingCommitment();
+    const first = generateProposalSnapshotCommitment(input);
+    const second = generateProposalSnapshotCommitment(input);
+
+    expect(first).toMatch(/^[0-9a-f]{64}$/);
+    expect(second).toBe(first);
+  });
+
+  it("changes the commitment when binding trust metadata changes", () => {
+    const baseline = generateProposalSnapshotCommitment(bindingCommitment());
+
+    expect(generateProposalSnapshotCommitment(bindingCommitment({ snapshotBaseBlock: 124 })))
+      .not.toBe(baseline);
+    expect(generateProposalSnapshotCommitment(bindingCommitment({ quorum: 40_001 })))
+      .not.toBe(baseline);
+    expect(generateProposalSnapshotCommitment(bindingCommitment({ snapshotBaseTotalSupply: "1000000000000000000000001" })))
+      .not.toBe(baseline);
+  });
+
+  it("commits advisory proposals only as snapshot version 1 without binding metadata", () => {
+    const first = generateProposalSnapshotCommitment(advisoryCommitment());
+    const second = generateProposalSnapshotCommitment(advisoryCommitment());
+
+    expect(first).toBe(second);
+    expect(() => generateProposalSnapshotCommitment(advisoryCommitment({ snapshotVersion: 2 })))
+      .toThrow(/snapshot version 1/);
+    expect(() => generateProposalSnapshotCommitment(advisoryCommitment({ snapshotBaseBlock: 123 })))
+      .toThrow(/must not carry binding snapshot metadata/);
+    expect(() => generateProposalSnapshotCommitment(advisoryCommitment({ bindingDisabledReason: "" })))
+      .toThrow(/record why binding is disabled/);
   });
 });
