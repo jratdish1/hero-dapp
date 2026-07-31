@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 export type ProposalChain = "base" | "pulsechain" | "both";
 export type VoteChain = Exclude<ProposalChain, "both">;
 
@@ -14,10 +16,21 @@ export interface SnapshotRecord {
   bindingDisabledReason: string | null;
 }
 
+export interface VoteableProposalRecord {
+  status: string;
+  startTime: Date | string;
+  endTime: Date | string;
+}
+
 export interface VerifiedBindingSnapshot {
   block: number;
   confirmations: number;
   totalSupplyRaw: string;
+}
+
+export interface SnapshotCommitmentInput extends SnapshotRecord {
+  baseContentHash: string;
+  quorum: number;
 }
 
 export function requireBindingVotingEnabled(value: string | undefined): void {
@@ -50,6 +63,26 @@ export function resolveBindingVoteChain(proposalChain: ProposalChain, requested:
   return proposalChain;
 }
 
+export function assertProposalVoteable(
+  record: VoteableProposalRecord,
+  at: Date = new Date(),
+): void {
+  const startTime = new Date(record.startTime);
+  const endTime = new Date(record.endTime);
+  if (Number.isNaN(startTime.getTime()) || Number.isNaN(endTime.getTime()) || startTime >= endTime) {
+    throw new Error("Proposal has an invalid voting window");
+  }
+  if (record.status !== "active") {
+    throw new Error(`Proposal status is ${record.status}; voting requires active status`);
+  }
+  if (at < startTime) {
+    throw new Error("Voting has not started");
+  }
+  if (at > endTime) {
+    throw new Error("Voting period has ended");
+  }
+}
+
 export function assertBindingSnapshotMetadata(
   record: SnapshotRecord,
   chain: VoteChain,
@@ -77,7 +110,14 @@ export function assertBindingSnapshotMetadata(
   const totalSupplyRaw = chain === "base"
     ? record.snapshotBaseTotalSupply
     : record.snapshotPulsechainTotalSupply;
+  const otherBlock = chain === "base" ? record.snapshotPulsechainBlock : record.snapshotBaseBlock;
+  const otherSupply = chain === "base"
+    ? record.snapshotPulsechainTotalSupply
+    : record.snapshotBaseTotalSupply;
 
+  if (otherBlock !== null || otherSupply !== null) {
+    throw new Error("Binding proposal contains conflicting cross-chain snapshot metadata");
+  }
   if (!Number.isSafeInteger(block) || Number(block) <= 0) {
     throw new Error(`Missing trustworthy ${chain} snapshot block`);
   }
@@ -94,4 +134,61 @@ export function assertBindingSnapshotMetadata(
 
 export function snapshotBlockForChain(record: SnapshotRecord, chain: VoteChain): number {
   return assertBindingSnapshotMetadata(record, chain).block;
+}
+
+/**
+ * Bind the historical snapshot policy to the proposal's existing content hash.
+ * The returned digest is the value anchored on-chain. Any change to mode,
+ * chain, block, supply, finality, verification time, quorum, or disable state
+ * produces a different commitment.
+ */
+export function generateProposalSnapshotCommitment(input: SnapshotCommitmentInput): string {
+  if (!/^[0-9a-f]{64}$/i.test(input.baseContentHash)) {
+    throw new Error("Proposal base content hash is invalid");
+  }
+  if (!Number.isSafeInteger(input.quorum) || input.quorum < 1) {
+    throw new Error("Proposal quorum is invalid");
+  }
+
+  let verifiedAt: string | null = null;
+  if (input.governanceMode === "binding") {
+    const chain = resolveBindingVoteChain(input.chain, input.chain as VoteChain);
+    assertBindingSnapshotMetadata(input, chain);
+    verifiedAt = new Date(input.snapshotVerifiedAt as Date | string).toISOString();
+  } else {
+    if (input.snapshotVersion !== 1) {
+      throw new Error("Advisory proposal must use snapshot version 1");
+    }
+    if (
+      input.snapshotConfirmations !== null
+      || input.snapshotBaseBlock !== null
+      || input.snapshotPulsechainBlock !== null
+      || input.snapshotBaseTotalSupply !== null
+      || input.snapshotPulsechainTotalSupply !== null
+      || input.snapshotVerifiedAt !== null
+    ) {
+      throw new Error("Advisory proposal must not carry binding snapshot metadata");
+    }
+    if (!input.bindingDisabledReason?.trim()) {
+      throw new Error("Advisory proposal must record why binding is disabled");
+    }
+  }
+
+  const canonicalPayload = JSON.stringify({
+    domain: "HERO_DAO_SNAPSHOT_v2",
+    baseContentHash: input.baseContentHash.toLowerCase(),
+    governanceMode: input.governanceMode,
+    chain: input.chain,
+    snapshotVersion: input.snapshotVersion,
+    snapshotConfirmations: input.snapshotConfirmations,
+    snapshotBaseBlock: input.snapshotBaseBlock,
+    snapshotPulsechainBlock: input.snapshotPulsechainBlock,
+    snapshotBaseTotalSupply: input.snapshotBaseTotalSupply,
+    snapshotPulsechainTotalSupply: input.snapshotPulsechainTotalSupply,
+    snapshotVerifiedAt: verifiedAt,
+    bindingDisabledReason: input.bindingDisabledReason,
+    quorum: input.quorum,
+  });
+
+  return createHash("sha256").update(canonicalPayload).digest("hex");
 }
