@@ -76,3 +76,5 @@ jobs:
           /tmp/vets-m1-step-1.sh
           /tmp/vets-m1-step-2.sh
           /tmp/vets-m1-step-3.sh
+
+# Exact-parent PR controller trigger: M1
