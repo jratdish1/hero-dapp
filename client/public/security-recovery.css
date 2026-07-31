@@ -3,9 +3,11 @@
  * This keeps keyboard-visible error recovery independent of JavaScript
  * bundle loading while remaining compatible with style-src-elem 'self'.
  */
+#application-error-title.vets-recovery-heading:focus,
+#application-error-title.vets-recovery-heading:focus-visible,
 .vets-recovery-heading:focus,
 .vets-recovery-heading:focus-visible {
-  outline: 2px solid currentColor !important;
+  outline: 3px solid #f59e0b !important;
   outline-offset: 4px !important;
-  box-shadow: 0 0 0 2px currentColor !important;
+  box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 5px #f59e0b !important;
 }
