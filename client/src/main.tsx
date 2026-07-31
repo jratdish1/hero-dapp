@@ -6,6 +6,7 @@ import DappLoadBoundary, {
 } from "./components/DappLoadBoundary";
 import { installAnalytics } from "./lib/analytics";
 import LandingApp from "./LandingApp";
+import "sonner/dist/styles.css";
 import "./index.css";
 import "./security-recovery.css";
 
