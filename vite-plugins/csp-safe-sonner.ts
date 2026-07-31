@@ -1,101 +1,75 @@
+import ts from "typescript";
 import type { Plugin } from "vite";
 
-const SONNER_MODULE_SUFFIX = "/sonner/dist/index.mjs";
-const SONNER_CSS_MARKER = "[data-sonner-toaster]";
+const MODULE_SUFFIX = "/sonner/dist/index.mjs";
+const MARKER = "[data-sonner-toaster]";
 
-function isEscaped(code: string, index: number): boolean {
-  let slashCount = 0;
-  for (let cursor = index - 1; cursor >= 0 && code[cursor] === "\\"; cursor -= 1) {
-    slashCount += 1;
+type CssLiteral = ts.StringLiteral | ts.NoSubstitutionTemplateLiteral;
+
+function count(value: string, needle: string): number {
+  let total = 0;
+  for (let at = value.indexOf(needle); at >= 0; at = value.indexOf(needle, at + needle.length)) {
+    total += 1;
   }
-  return slashCount % 2 === 1;
+  return total;
 }
 
-function findTemplateStart(code: string, markerAt: number): number {
-  for (let index = markerAt; index >= 0; index -= 1) {
-    if (code[index] === "`" && !isEscaped(code, index)) return index;
-  }
-  return -1;
+function parse(code: string, name: string): ts.SourceFile {
+  return ts.createSourceFile(name, code, ts.ScriptTarget.Latest, true, ts.ScriptKind.JS);
 }
 
-function findTemplateEnd(code: string, start: number): number {
-  for (let index = start + 1; index < code.length; index += 1) {
-    if (code[index] === "`" && !isEscaped(code, index)) return index;
-  }
-  return -1;
+function firstParseError(source: ts.SourceFile): string | null {
+  const diagnostics = (source as ts.SourceFile & {
+    parseDiagnostics?: readonly ts.Diagnostic[];
+  }).parseDiagnostics ?? [];
+  if (diagnostics.length === 0) return null;
+  return ts.flattenDiagnosticMessageText(diagnostics[0].messageText, " ");
 }
 
-function findAllMarkerPositions(code: string): number[] {
-  const positions: number[] = [];
-  let cursor = 0;
-  while (cursor < code.length) {
-    const markerAt = code.indexOf(SONNER_CSS_MARKER, cursor);
-    if (markerAt < 0) break;
-    positions.push(markerAt);
-    cursor = markerAt + SONNER_CSS_MARKER.length;
-  }
-  return positions;
-}
-
-/**
- * Neutralize Sonner's one bundled runtime stylesheet without depending on the
- * surrounding bundler-generated call or tag shape. The pinned package also
- * publishes sonner/dist/styles.css, which the application imports statically.
- *
- * Preserve the original template delimiters and remove only their static CSS
- * body. This remains syntactically valid whether the template is assigned,
- * passed to a function, or tagged. Package-shape drift, multiple templates, or
- * interpolation fails the build closed. The production browser CSP matrix then
- * proves that the emptied runtime path does not create an inline stylesheet.
- */
 export function stripSonnerRuntimeStyles(code: string): string {
-  const markerPositions = findAllMarkerPositions(code);
-  if (markerPositions.length === 0) {
-    throw new Error("FAIL-CLOSED: Sonner CSS marker was not found");
+  const source = parse(code, "sonner/dist/index.mjs");
+  const candidates: CssLiteral[] = [];
+
+  const visit = (node: ts.Node): void => {
+    if (
+      (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      && node.text.includes(MARKER)
+    ) {
+      candidates.push(node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+
+  if (candidates.length !== 1) {
+    throw new Error(`FAIL-CLOSED: expected one Sonner CSS literal, found ${candidates.length}`);
   }
 
-  const templateStart = findTemplateStart(code, markerPositions[0]);
-  const templateEnd = findTemplateEnd(code, templateStart);
-  if (templateStart < 0 || templateEnd < 0) {
-    throw new Error("FAIL-CLOSED: Sonner bundled stylesheet template was not found");
+  const candidate = candidates[0];
+  if (count(candidate.text, MARKER) !== count(code, MARKER)) {
+    throw new Error("FAIL-CLOSED: Sonner CSS markers span multiple syntax nodes");
   }
 
-  if (!markerPositions.every((markerAt) => markerAt > templateStart && markerAt < templateEnd)) {
-    throw new Error("FAIL-CLOSED: Sonner CSS markers span multiple templates");
-  }
+  const replacement = ts.isNoSubstitutionTemplateLiteral(candidate) ? "``" : '""';
+  const transformed = `${code.slice(0, candidate.getStart(source))}${replacement}${code.slice(candidate.getEnd())}`;
 
-  const cssTemplate = code.slice(templateStart + 1, templateEnd);
-  if (!cssTemplate.includes(SONNER_CSS_MARKER)) {
-    throw new Error("FAIL-CLOSED: Sonner stylesheet marker escaped the candidate template");
-  }
-  if (cssTemplate.includes("${")) {
-    throw new Error("FAIL-CLOSED: Sonner bundled stylesheet became interpolated");
-  }
-
-  const transformed = `${code.slice(0, templateStart + 1)}${code.slice(templateEnd)}`;
-
-  if (transformed.includes(SONNER_CSS_MARKER)) {
+  if (transformed.includes(MARKER)) {
     throw new Error("FAIL-CLOSED: Sonner runtime CSS remained after transform");
   }
-
+  const parseError = firstParseError(parse(transformed, "sonner/dist/index.transformed.mjs"));
+  if (parseError) {
+    throw new Error(`FAIL-CLOSED: transformed Sonner module does not parse: ${parseError}`);
+  }
   return transformed;
 }
 
-/**
- * Sonner 2.0.7 publishes a static stylesheet and also bundles that CSS for
- * runtime injection. The runtime <style> violates strict style-src-elem.
- * Empty only the pinned Sonner stylesheet template and load
- * sonner/dist/styles.css from application source. Package-shape drift fails the
- * build and the mounted browser tests enforce the CSP result.
- */
 export function cspSafeSonnerPlugin(): Plugin {
   return {
     name: "vets-csp-safe-sonner",
     enforce: "pre",
     transform(code, id) {
       const normalizedId = id.split("?")[0].replaceAll("\\", "/");
-      if (!normalizedId.endsWith(SONNER_MODULE_SUFFIX)) return null;
-
+      if (!normalizedId.endsWith(MODULE_SUFFIX)) return null;
       return { code: stripSonnerRuntimeStyles(code), map: null };
     },
   };
