@@ -3,6 +3,7 @@ import {
   assertBindingSnapshotMetadata,
   finalizedPriorBlock,
   parseFinalityBlocks,
+  requireBindingVotingEnabled,
   resolveBindingVoteChain,
   snapshotBlockForChain,
   type SnapshotRecord,
@@ -25,6 +26,13 @@ function bindingBase(overrides: Partial<SnapshotRecord> = {}): SnapshotRecord {
 }
 
 describe("DAO snapshot policy", () => {
+  it("requires an explicit request-time binding feature gate", () => {
+    expect(() => requireBindingVotingEnabled(undefined)).toThrow(/feature-fenced/);
+    expect(() => requireBindingVotingEnabled("false")).toThrow(/feature-fenced/);
+    expect(() => requireBindingVotingEnabled("TRUE")).toThrow(/feature-fenced/);
+    expect(() => requireBindingVotingEnabled("true")).not.toThrow();
+  });
+
   it("uses a finalized prior block rather than the current head", () => {
     expect(finalizedPriorBlock(100n, 20n)).toBe(80n);
   });
