@@ -5,29 +5,29 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
-  diagnose-m2:
+  remediate-m2:
     if: >-
       github.event_name == 'pull_request' &&
       github.actor == 'jratdish1' &&
       github.event.pull_request.number == 71
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - name: Checkout exact owner branch
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: cert/m2-dao-snapshot-clean-20260730
           fetch-depth: 0
-          persist-credentials: false
+          persist-credentials: true
 
-      - name: Diagnose next exact replacement
+      - name: Apply normalized bounded DAO remediation
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = '10a18b2c244bf032b9ca33be4e016b36cf9692a2'
+          test "$(git rev-parse HEAD^)" = '58a9d4ef84b883ab4d69d391052ee2f8f8eec9a2'
 
           python3 - <<'PY'
           from pathlib import Path
@@ -47,6 +47,8 @@ jobs:
           PY
 
           python3 - <<'PY'
+          from pathlib import Path
+          import re
           import subprocess
 
           workflow_path = '.github/workflows/vets-one-shot-m2-dao.yml'
@@ -54,20 +56,86 @@ jobs:
               ['git', 'show', '0e8dd251e93106a9e4e6e319291ec4e6de082959:' + workflow_path],
               text=True,
           )
-          marker = '      - name: Apply bounded snapshot and feature-fence remediation\n'
-          marker_at = original.find(marker)
-          run_marker = '        run: |\n'
-          run_at = original.find(run_marker, marker_at)
-          start = run_at + len(run_marker)
-          end = original.find('\n      - name:', start)
-          raw_lines = original[start:end].splitlines()
-          script = '\n'.join(line[10:] if line else '' for line in raw_lines).rstrip() + '\n'
-          needle = "raise SystemExit(f'FAIL-CLOSED: {path_name} expected block count={count}')"
-          replacement = "raise SystemExit(f'FAIL-CLOSED: {path_name} old={old[:240]!r} expected block count={count}')"
-          if needle not in script:
-              raise SystemExit('FAIL-CLOSED: diagnostic needle missing')
-          script = script.replace(needle, replacement, 1)
-          open('/tmp/diagnose-m2.sh', 'w', encoding='utf-8').write('#!/usr/bin/env bash\n' + script)
+
+          def extract_step(name: str) -> str:
+              marker = f'      - name: {name}\n'
+              marker_at = original.find(marker)
+              if marker_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original step not found: {name}')
+              run_marker = '        run: |\n'
+              run_at = original.find(run_marker, marker_at)
+              if run_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original run block not found: {name}')
+              start = run_at + len(run_marker)
+              end = original.find('\n      - name:', start)
+              if end < 0:
+                  end = len(original)
+              lines = original[start:end].splitlines()
+              for line in lines:
+                  if line and not line.startswith('          '):
+                      raise SystemExit(f'FAIL-CLOSED: unexpected indentation in {name}: {line!r}')
+              return '\n'.join(line[10:] if line else '' for line in lines).rstrip() + '\n'
+
+          def normalize_triple(match: re.Match[str]) -> str:
+              body = match.group(1)
+              lines = body.split('\n')
+              if not lines:
+                  return "''''''"
+              first_indent = len(lines[0]) - len(lines[0].lstrip(' '))
+              later_indents = [
+                  len(line) - len(line.lstrip(' '))
+                  for line in lines[1:]
+                  if line.strip()
+              ]
+              shift = max(0, min(later_indents) - first_indent) if later_indents else 0
+              normalized = [lines[0]]
+              normalized.extend(
+                  line[shift:] if line.strip() else line
+                  for line in lines[1:]
+              )
+              return "'''" + '\n'.join(normalized) + "'''"
+
+          apply_script = extract_step('Apply bounded snapshot and feature-fence remediation')
+          apply_script = re.sub(r"'''(.*?)'''", normalize_triple, apply_script, flags=re.DOTALL)
+          validate_script = extract_step('Validate candidate source')
+
+          Path('/tmp/vets-m2-apply.sh').write_text(
+              '#!/usr/bin/env bash\n' + apply_script,
+              encoding='utf-8',
+          )
+          Path('/tmp/vets-m2-validate.sh').write_text(
+              '#!/usr/bin/env bash\n' + validate_script,
+              encoding='utf-8',
+          )
+          Path('/tmp/vets-m2-apply.sh').chmod(0o700)
+          Path('/tmp/vets-m2-validate.sh').chmod(0o700)
           PY
-          chmod 700 /tmp/diagnose-m2.sh
-          /tmp/diagnose-m2.sh
+
+          /tmp/vets-m2-apply.sh
+
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('server/routers.ts')
+          text = path.read_text(encoding='utf-8')
+          marker = '__vetsDelegationConfirmBinding:'
+          if text.count(marker) != 1:
+              raise SystemExit('FAIL-CLOSED: delegation marker was not preserved exactly once')
+          path.write_text(text.replace(marker, 'confirmBinding:', 1), encoding='utf-8')
+          PY
+
+          /tmp/vets-m2-validate.sh
+
+          git config user.name 'VETS Remediation Controller'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            drizzle/schema.ts \
+            drizzle/migrations/dao_snapshot_v2.sql \
+            drizzle/migrations/dao_snapshot_v2.rollback.sql \
+            server/db.ts \
+            server/routers.ts \
+            server/dao-snapshot-policy.ts \
+            server/dao-snapshot-policy.test.ts
+          git diff --cached --check
+          git commit -m 'fix(dao): add fail-closed chain-bound historical snapshots'
+          git push origin HEAD:cert/m2-dao-snapshot-clean-20260730
