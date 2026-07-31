@@ -93,7 +93,56 @@ async function main() {
   const consoleErrors = [];
   client.on('Runtime.consoleAPICalled', params => { const text = (params.args ?? []).map(arg => arg.value ?? arg.description ?? '').join(' '); if (/content security policy|refused to/i.test(text)) consoleErrors.push(text); });
   await Promise.all([client.send('Page.enable'), client.send('Runtime.enable'), client.send('Network.enable')]);
-  await client.send('Page.addScriptToEvaluateOnNewDocument', { source: `window.__vetsCspViolations=[];document.addEventListener('securitypolicyviolation',event=>window.__vetsCspViolations.push({blockedURI:event.blockedURI,effectiveDirective:event.effectiveDirective,violatedDirective:event.violatedDirective,sourceFile:event.sourceFile,lineNumber:event.lineNumber}));` });
+  await client.send('Page.addScriptToEvaluateOnNewDocument', { source: `
+    (() => {
+      window.__vetsCspViolations = [];
+      window.__vetsStyleInsertions = [];
+      const creationStacks = new WeakMap();
+      const originalCreateElement = Document.prototype.createElement;
+      Document.prototype.createElement = function(tagName, options) {
+        const node = originalCreateElement.call(this, tagName, options);
+        if (String(tagName).toLowerCase() === 'style') {
+          creationStacks.set(node, new Error('style element created').stack || '');
+        }
+        return node;
+      };
+      const captureStyle = (node, method) => {
+        if (!(node instanceof HTMLStyleElement)) return;
+        window.__vetsStyleInsertions.push({
+          method,
+          id: node.id || '',
+          className: node.className || '',
+          attributes: Array.from(node.attributes || [], attribute => [attribute.name, attribute.value]),
+          text: (node.textContent || '').slice(0, 4000),
+          outerHTML: (node.outerHTML || '').slice(0, 5000),
+          creationStack: (creationStacks.get(node) || '').slice(0, 5000),
+          insertionStack: (new Error('style element inserted').stack || '').slice(0, 5000),
+        });
+      };
+      const originalAppendChild = Node.prototype.appendChild;
+      Node.prototype.appendChild = function(node) {
+        captureStyle(node, 'appendChild');
+        return originalAppendChild.call(this, node);
+      };
+      const originalInsertBefore = Node.prototype.insertBefore;
+      Node.prototype.insertBefore = function(node, reference) {
+        captureStyle(node, 'insertBefore');
+        return originalInsertBefore.call(this, node, reference);
+      };
+      const originalAppend = Element.prototype.append;
+      Element.prototype.append = function(...nodes) {
+        for (const node of nodes) captureStyle(node, 'append');
+        return originalAppend.apply(this, nodes);
+      };
+      document.addEventListener('securitypolicyviolation', event => window.__vetsCspViolations.push({
+        blockedURI: event.blockedURI,
+        effectiveDirective: event.effectiveDirective,
+        violatedDirective: event.violatedDirective,
+        sourceFile: event.sourceFile,
+        lineNumber: event.lineNumber,
+      }));
+    })();
+  ` });
   const results = [];
   try {
     for (const route of ROUTES) {
@@ -102,9 +151,10 @@ async function main() {
       while (Date.now() < deadline) { body = await evaluate(client, 'document.body?.innerText?.trim().slice(0,500) || ""').catch(() => ''); if (body) break; await sleep(250); }
       await sleep(1000);
       const violations = await evaluate(client, 'window.__vetsCspViolations || []');
+      const styleInsertions = await evaluate(client, 'window.__vetsStyleInsertions || []');
       if (!body) throw new Error(`${route}: body did not render`);
-      if (violations.length) throw new Error(`${route}: CSP violations: ${JSON.stringify(violations)}`);
-      results.push({ route, body: body.slice(0, 160), violations });
+      if (violations.length) throw new Error(`${route}: CSP violations: ${JSON.stringify(violations)} style insertions: ${JSON.stringify(styleInsertions)}`);
+      results.push({ route, body: body.slice(0, 160), violations, styleInsertions });
     }
     if (consoleErrors.length) throw new Error(`CSP console errors: ${JSON.stringify(consoleErrors)}`);
     writeFileSync(REPORT, `${JSON.stringify({ timestamp: new Date().toISOString(), result: 'PASS', policy, routes: results, consoleErrors }, null, 2)}\n`);
