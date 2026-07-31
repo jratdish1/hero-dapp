@@ -1,8 +1,9 @@
 -- HERO DAO immutable voting snapshot v2
--- Existing proposals remain advisory. Binding mode is opt-in and feature-fenced.
+-- Existing proposals remain advisory version 1. New verified binding proposals
+-- explicitly write snapshotVersion = 2 from the application.
 ALTER TABLE proposals
   ADD COLUMN governanceMode ENUM('advisory','binding') NOT NULL DEFAULT 'advisory' AFTER endTime,
-  ADD COLUMN snapshotVersion INT NOT NULL DEFAULT 2 AFTER governanceMode,
+  ADD COLUMN snapshotVersion INT NOT NULL DEFAULT 1 AFTER governanceMode,
   ADD COLUMN snapshotConfirmations INT NULL AFTER snapshotVersion,
   ADD COLUMN snapshotBaseBlock BIGINT NULL AFTER snapshotConfirmations,
   ADD COLUMN snapshotPulsechainBlock BIGINT NULL AFTER snapshotBaseBlock,
@@ -13,6 +14,6 @@ ALTER TABLE proposals
 
 UPDATE proposals
 SET governanceMode = 'advisory',
-    snapshotVersion = 2,
+    snapshotVersion = 1,
     bindingDisabledReason = COALESCE(bindingDisabledReason, 'Legacy proposal without a verified historical snapshot')
 WHERE snapshotBaseBlock IS NULL AND snapshotPulsechainBlock IS NULL;
