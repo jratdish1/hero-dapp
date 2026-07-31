@@ -1,0 +1,10 @@
+/*
+ * Security and accessibility recovery styles.
+ * These rules remain in the compiled stylesheet so strict style-src-elem
+ * enforcement does not depend on inline style mutation during an error.
+ */
+.vets-recovery-heading:focus {
+  outline: 2px solid currentColor;
+  outline-offset: 4px;
+  box-shadow: 0 0 0 2px var(--ring);
+}
