@@ -115,14 +115,7 @@ export class DappRecoveryView extends Component<DappRecoveryViewProps> {
   private readonly headingRef = createRef<HTMLHeadingElement>();
 
   private focusHeading() {
-    const heading = this.headingRef.current;
-    if (!heading) return;
-
-    if (heading.style) {
-      heading.style.outline = "2px solid currentColor";
-      heading.style.outlineOffset = "4px";
-    }
-    heading.focus();
+    this.headingRef.current?.focus();
   }
 
   componentDidMount() {
@@ -146,14 +139,6 @@ export class DappRecoveryView extends Component<DappRecoveryViewProps> {
             id="dapp-recovery-title"
             ref={this.headingRef}
             tabIndex={-1}
-            onFocus={(event) => {
-              event.currentTarget.style.outline = "2px solid currentColor";
-              event.currentTarget.style.outlineOffset = "4px";
-            }}
-            onBlur={(event) => {
-              event.currentTarget.style.removeProperty("outline");
-              event.currentTarget.style.removeProperty("outline-offset");
-            }}
             className="mt-4 rounded-sm text-2xl font-bold focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-amber-400"
           >
             {moduleLoadFailure
