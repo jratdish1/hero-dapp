@@ -11,9 +11,77 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
+  remediate-m2:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.actor == 'jratdish1' &&
+      github.event.pull_request.number == 71 &&
+      github.event.pull_request.head.sha == '90529fe7425359886cdf7649b25d10cfbcbf4c82'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout exact owner branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: cert/m2-dao-snapshot-clean-20260730
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Execute bounded DAO remediation and self-remove
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '90529fe7425359886cdf7649b25d10cfbcbf4c82'
+          git checkout HEAD^ -- .github/workflows/ci.yml
+
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+
+          workflow_path = '.github/workflows/vets-one-shot-m2-dao.yml'
+          original = subprocess.check_output(
+              ['git', 'show', f'HEAD^^^:{workflow_path}'],
+              text=True,
+          )
+          step_names = [
+              'Apply bounded snapshot and feature-fence remediation',
+              'Validate generated source',
+              'Commit clean M-2 candidate and self-remove',
+          ]
+          for index, name in enumerate(step_names, start=1):
+              marker = f'      - name: {name}\n'
+              marker_at = original.find(marker)
+              if marker_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original step not found: {name}')
+              run_marker = '        run: |\n'
+              run_at = original.find(run_marker, marker_at)
+              if run_at < 0:
+                  raise SystemExit(f'FAIL-CLOSED: original run block not found: {name}')
+              start = run_at + len(run_marker)
+              end = original.find('\n      - name:', start)
+              if end < 0:
+                  end = len(original)
+              raw_lines = original[start:end].splitlines()
+              block_lines = []
+              for line in raw_lines:
+                  if line and not line.startswith('          '):
+                      raise SystemExit(f'FAIL-CLOSED: unexpected indentation in {name}: {line!r}')
+                  block_lines.append(line[10:] if line else '')
+              target = Path(f'/tmp/vets-m2-step-{index}.sh')
+              target.write_text(
+                  '#!/usr/bin/env bash\n' + '\n'.join(block_lines).rstrip() + '\n',
+                  encoding='utf-8',
+              )
+              target.chmod(0o700)
+          PY
+
+          /tmp/vets-m2-step-1.sh
+          /tmp/vets-m2-step-2.sh
+          /tmp/vets-m2-step-3.sh
+
   test-build-scan:
     runs-on: ubuntu-latest
     timeout-minutes: 20
