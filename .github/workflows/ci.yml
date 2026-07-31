@@ -18,8 +18,7 @@ jobs:
     if: >-
       github.event_name == 'pull_request' &&
       github.actor == 'jratdish1' &&
-      github.event.pull_request.number == 71 &&
-      github.event.pull_request.head.sha == '90529fe7425359886cdf7649b25d10cfbcbf4c82'
+      github.event.pull_request.number == 71
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -34,8 +33,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = '90529fe7425359886cdf7649b25d10cfbcbf4c82'
-          git checkout HEAD^ -- .github/workflows/ci.yml
+          test "$(git rev-parse HEAD^)" = '7abf065a15334be78bd750f4bce8ba1462b0b422'
+          git checkout HEAD^^ -- .github/workflows/ci.yml
 
           python3 - <<'PY'
           from pathlib import Path
@@ -43,7 +42,7 @@ jobs:
 
           workflow_path = '.github/workflows/vets-one-shot-m2-dao.yml'
           original = subprocess.check_output(
-              ['git', 'show', f'HEAD^^^:{workflow_path}'],
+              ['git', 'show', f'HEAD^^^^:{workflow_path}'],
               text=True,
           )
           step_names = [
