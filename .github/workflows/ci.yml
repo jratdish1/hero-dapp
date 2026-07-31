@@ -29,12 +29,12 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Execute bounded CSP remediation and self-remove
+      - name: Apply and push source-only CSP remediation
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = 'aa8cc5e3113202171b074e3016cff8bc39aae30d'
-          git checkout HEAD^^ -- .github/workflows/ci.yml
+          test "$(git rev-parse HEAD^)" = 'a3e74bdbc9aa324245f2dc382a008c9b40a1f67d'
+          git checkout HEAD^^^ -- .github/workflows/ci.yml
 
           python3 - <<'PY'
           from pathlib import Path
@@ -42,13 +42,12 @@ jobs:
 
           workflow_path = '.github/workflows/vets-one-shot-m1-csp.yml'
           original = subprocess.check_output(
-              ['git', 'show', f'HEAD^^^^:{workflow_path}'],
+              ['git', 'show', f'HEAD^^^^^:{workflow_path}'],
               text=True,
           )
           step_names = [
               'Apply bounded CSP remediation',
               'Validate generated source',
-              'Commit clean M-1 candidate and self-remove',
           ]
           for index, name in enumerate(step_names, start=1):
               marker = f'      - name: {name}\n'
@@ -79,7 +78,24 @@ jobs:
 
           /tmp/vets-m1-step-1.sh
           /tmp/vets-m1-step-2.sh
-          /tmp/vets-m1-step-3.sh
+
+          mkdir -p .vets-staging
+          cp .github/workflows/ci.yml .vets-staging/ci-m1.yml
+          git checkout HEAD -- .github/workflows/ci.yml
+
+          git config user.name 'VETS Remediation Controller'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            .vets-staging/ci-m1.yml \
+            client/src/components/DappLoadBoundary.tsx \
+            client/src/components/ErrorBoundary.tsx \
+            nginx/herobase-cache-headers.conf \
+            scripts/check-csp-contract.mjs \
+            scripts/check-csp-routes.mjs \
+            server/_core/security.ts
+          git diff --cached --check
+          git commit -m 'fix(security): enforce audited production CSP boundary'
+          git push origin HEAD:cert/m1-csp-clean-20260730
 
   test-build-scan:
     runs-on: ubuntu-latest
