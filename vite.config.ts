@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { cspSafeSonnerPlugin } from "./vite-plugins/csp-safe-sonner";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -149,7 +150,13 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusDebugCollector()];
+const plugins = [
+  cspSafeSonnerPlugin(),
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
@@ -181,7 +188,7 @@ export default defineConfig({
       // even if Vite alias fails to intercept a dynamic import.
       // Let Rollup preserve the DappBootstrap dynamic boundary automatically;
       // broad manual chunks can create cycles that preload the full DApp on `/`.
-      external: (id) => id.includes('@reown/appkit'),
+      external: (id) => id.includes("@reown/appkit"),
     },
   },
   server: {
