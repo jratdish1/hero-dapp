@@ -2,6 +2,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 
+import { transform } from "esbuild";
 import { describe, expect, it } from "vitest";
 
 import { stripSonnerRuntimeStyles } from "./csp-safe-sonner";
@@ -13,7 +14,7 @@ function bundledModule(css: string): string {
 }
 
 describe("stripSonnerRuntimeStyles", () => {
-  it("neutralizes one bundled stylesheet containing repeated Sonner selectors", () => {
+  it("empties one bundled stylesheet containing repeated Sonner selectors", () => {
     const source = bundledModule(
       `${marker}{--width:356px}${marker}[data-x-position='right']{right:var(--offset-right)}`,
     );
@@ -21,22 +22,33 @@ describe("stripSonnerRuntimeStyles", () => {
     const transformed = stripSonnerRuntimeStyles(source);
 
     expect(transformed).not.toContain(marker);
-    expect(transformed).toContain('VETS CSP: static sonner/dist/styles.css */""');
+    expect(transformed).toContain("const bundledStyles = ``;");
     expect(transformed).toContain("injectStyle(bundledStyles)");
     expect(transformed).toContain("export const sonnerValue = 1");
   });
 
-  it("handles a stylesheet template used directly in a call with metadata", () => {
+  it("preserves a template used directly in a call with metadata", async () => {
     const source = `const injectStyle = (css, meta) => ({ css, meta });\ninjectStyle(\`${marker}{color:red}\`, { source: "sonner" });\nexport const sonnerValue = 1;`;
 
     const transformed = stripSonnerRuntimeStyles(source);
 
     expect(transformed).not.toContain(marker);
-    expect(transformed).toContain('{ source: "sonner" }');
+    expect(transformed).toContain("injectStyle(``, { source: \"sonner\" })");
     expect(transformed).toContain("export const sonnerValue = 1");
+    await expect(transform(transformed, { loader: "js", format: "esm" })).resolves.toBeDefined();
   });
 
-  it("neutralizes the exact installed Sonner 2.0.7 ESM distribution", () => {
+  it("preserves tagged-template syntax while emptying the CSS body", async () => {
+    const source = `const css = (parts) => parts.raw[0];\nconst styles = css\`${marker}{color:red}\`;\nexport { styles };`;
+
+    const transformed = stripSonnerRuntimeStyles(source);
+
+    expect(transformed).toContain("const styles = css``;");
+    expect(transformed).not.toContain(marker);
+    await expect(transform(transformed, { loader: "js", format: "esm" })).resolves.toBeDefined();
+  });
+
+  it("parses the transformed installed Sonner 2.0.7 ESM distribution", async () => {
     const require = createRequire(import.meta.url);
     const sonnerCjsEntry = require.resolve("sonner");
     const sonnerEsmEntry = join(dirname(sonnerCjsEntry), "index.mjs");
@@ -47,7 +59,7 @@ describe("stripSonnerRuntimeStyles", () => {
 
     expect(source).toContain(marker);
     expect(transformed).not.toContain(marker);
-    expect(transformed).toContain('VETS CSP: static sonner/dist/styles.css */""');
+    await expect(transform(transformed, { loader: "js", format: "esm" })).resolves.toBeDefined();
   });
 
   it("fails closed when Sonner markers span multiple templates", () => {
