@@ -29,12 +29,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Execute bounded DAO remediation and self-remove
+      - name: Apply and push source-only DAO remediation
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = '7abf065a15334be78bd750f4bce8ba1462b0b422'
-          git checkout HEAD^^ -- .github/workflows/ci.yml
+          test "$(git rev-parse HEAD^)" = '5527ef71345b6c97bc153e8531142e4288e8771c'
 
           python3 - <<'PY'
           from pathlib import Path
@@ -42,13 +41,12 @@ jobs:
 
           workflow_path = '.github/workflows/vets-one-shot-m2-dao.yml'
           original = subprocess.check_output(
-              ['git', 'show', f'HEAD^^^^:{workflow_path}'],
+              ['git', 'show', f'HEAD^^^^^:{workflow_path}'],
               text=True,
           )
           step_names = [
               'Apply bounded snapshot and feature-fence remediation',
-              'Validate generated source',
-              'Commit clean M-2 candidate and self-remove',
+              'Validate candidate source',
           ]
           for index, name in enumerate(step_names, start=1):
               marker = f'      - name: {name}\n'
@@ -79,7 +77,20 @@ jobs:
 
           /tmp/vets-m2-step-1.sh
           /tmp/vets-m2-step-2.sh
-          /tmp/vets-m2-step-3.sh
+
+          git config user.name 'VETS Remediation Controller'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add \
+            drizzle/schema.ts \
+            drizzle/migrations/dao_snapshot_v2.sql \
+            drizzle/migrations/dao_snapshot_v2.rollback.sql \
+            server/db.ts \
+            server/routers.ts \
+            server/dao-snapshot-policy.ts \
+            server/dao-snapshot-policy.test.ts
+          git diff --cached --check
+          git commit -m 'fix(dao): add fail-closed chain-bound historical snapshots'
+          git push origin HEAD:cert/m2-dao-snapshot-clean-20260730
 
   test-build-scan:
     runs-on: ubuntu-latest
