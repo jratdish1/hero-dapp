@@ -2,140 +2,152 @@ name: CI
 
 on:
   pull_request:
+  push:
+    branches: [main, master]
   workflow_dispatch:
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  remediate-m2:
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.actor == 'jratdish1' &&
-      github.event.pull_request.number == 71
+  test-build-scan:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    steps:
-      - name: Checkout exact owner branch
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          ref: cert/m2-dao-snapshot-clean-20260730
-          fetch-depth: 0
-          persist-credentials: true
+    timeout-minutes: 20
 
-      - name: Apply normalized bounded DAO remediation
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22
+
+      - name: Activate repository-pinned pnpm
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = '58a9d4ef84b883ab4d69d391052ee2f8f8eec9a2'
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+          test ! -e package-lock.json
 
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
 
-          path = Path('server/routers.ts')
-          text = path.read_text(encoding='utf-8')
-          old = '''          txHash: txHashSchema,
-                    confirmBinding: z.boolean().optional(),
-                  }))
-                  .mutation(async ({ ctx, input }) => {
-                    // AUDIT FIX 1.4: Verify delegator address belongs to authenticated user
-          '''
-          new = old.replace('confirmBinding:', '__vetsDelegationConfirmBinding:')
-          if text.count(old) != 1:
-              raise SystemExit('FAIL-CLOSED: delegation confirmBinding context changed')
-          path.write_text(text.replace(old, new, 1), encoding='utf-8')
-          PY
+      - name: Type check
+        shell: bash
+        run: |
+          set +e
+          pnpm check > typecheck.log 2>&1
+          status=$?
+          cat typecheck.log
+          exit "$status"
 
-          python3 - <<'PY'
-          from pathlib import Path
-          import re
-          import subprocess
+      - name: Upload type-check diagnostics
+        if: failure() && hashFiles('typecheck.log') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: typecheck-diagnostics-${{ github.sha }}
+          path: typecheck.log
+          retention-days: 7
+          if-no-files-found: error
 
-          workflow_path = '.github/workflows/vets-one-shot-m2-dao.yml'
-          original = subprocess.check_output(
-              ['git', 'show', '0e8dd251e93106a9e4e6e319291ec4e6de082959:' + workflow_path],
-              text=True,
-          )
+      - name: Test
+        env:
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+        run: pnpm test
 
-          def extract_step(name: str) -> str:
-              marker = f'      - name: {name}\n'
-              marker_at = original.find(marker)
-              if marker_at < 0:
-                  raise SystemExit(f'FAIL-CLOSED: original step not found: {name}')
-              run_marker = '        run: |\n'
-              run_at = original.find(run_marker, marker_at)
-              if run_at < 0:
-                  raise SystemExit(f'FAIL-CLOSED: original run block not found: {name}')
-              start = run_at + len(run_marker)
-              end = original.find('\n      - name:', start)
-              if end < 0:
-                  end = len(original)
-              lines = original[start:end].splitlines()
-              for line in lines:
-                  if line and not line.startswith('          '):
-                      raise SystemExit(f'FAIL-CLOSED: unexpected indentation in {name}: {line!r}')
-              return '\n'.join(line[10:] if line else '' for line in lines).rstrip() + '\n'
+      - name: Build
+        run: pnpm build
 
-          def normalize_triple(match: re.Match[str]) -> str:
-              body = match.group(1)
-              lines = body.split('\n')
-              if not lines:
-                  return "''''''"
-              first_indent = len(lines[0]) - len(lines[0].lstrip(' '))
-              later_indents = [
-                  len(line) - len(line.lstrip(' '))
-                  for line in lines[1:]
-                  if line.strip()
-              ]
-              shift = max(0, min(later_indents) - first_indent) if later_indents else 0
-              normalized = [lines[0]]
-              normalized.extend(
-                  line[shift:] if line.strip() else line
-                  for line in lines[1:]
-              )
-              return "'''" + '\n'.join(normalized) + "'''"
+      - name: Locate headless Chrome
+        id: chrome
+        shell: bash
+        run: |
+          set -euo pipefail
+          chrome_bin="$(command -v google-chrome || command -v google-chrome-stable || command -v chromium || command -v chromium-browser || true)"
+          test -n "$chrome_bin"
+          test -x "$chrome_bin"
+          echo "chrome_bin=$chrome_bin" >> "$GITHUB_OUTPUT"
+          "$chrome_bin" --version
 
-          apply_script = extract_step('Apply bounded snapshot and feature-fence remediation')
-          apply_script = re.sub(r"'''(.*?)'''", normalize_triple, apply_script, flags=re.DOTALL)
-          validate_script = extract_step('Validate candidate source')
+      - name: Exercise mounted bootstrap and route chunk recovery
+        id: recovery
+        continue-on-error: true
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 180s \
+            node scripts/check-bootstrap-recovery.mjs \
+            > bootstrap-recovery.log 2>&1
+          status=$?
+          cat bootstrap-recovery.log
+          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
-          Path('/tmp/vets-m2-apply.sh').write_text(
-              '#!/usr/bin/env bash\n' + apply_script,
-              encoding='utf-8',
-          )
-          Path('/tmp/vets-m2-validate.sh').write_text(
-              '#!/usr/bin/env bash\n' + validate_script,
-              encoding='utf-8',
-          )
-          Path('/tmp/vets-m2-apply.sh').chmod(0o700)
-          Path('/tmp/vets-m2-validate.sh').chmod(0o700)
-          PY
+      - name: Exercise mounted generic render-error focus
+        id: generic_focus
+        continue-on-error: true
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 90s \
+            node scripts/check-generic-error-focus.mjs \
+            > generic-error-focus.log 2>&1
+          status=$?
+          cat generic-error-focus.log
+          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
 
-          /tmp/vets-m2-apply.sh
+      - name: Verify public landing critical path
+        shell: bash
+        run: |
+          set -euo pipefail
+          node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
-          python3 - <<'PY'
-          from pathlib import Path
+      - name: Upload exact-head landing and recovery evidence
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json') != ''
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: landing-evidence-${{ github.sha }}
+          path: |
+            landing-bundle-report.txt
+            bootstrap-recovery.log
+            bootstrap-recovery-report.json
+            generic-error-focus.log
+            generic-error-focus-report.json
+            dist/public/.vite/manifest.json
+          retention-days: 14
+          if-no-files-found: error
 
-          path = Path('server/routers.ts')
-          text = path.read_text(encoding='utf-8')
-          marker = '__vetsDelegationConfirmBinding:'
-          if text.count(marker) != 1:
-              raise SystemExit('FAIL-CLOSED: delegation marker was not preserved exactly once')
-          path.write_text(text.replace(marker, 'confirmBinding:', 1), encoding='utf-8')
-          PY
+      - name: Enforce mounted recovery gates
+        if: always()
+        shell: bash
+        run: |
+          test "${{ steps.recovery.outcome }}" = "success"
+          test "${{ steps.recovery.outputs.exit_status }}" = "0"
+          test "${{ steps.generic_focus.outcome }}" = "success"
+          test "${{ steps.generic_focus.outputs.exit_status }}" = "0"
 
-          /tmp/vets-m2-validate.sh
+      - name: Production dependency audit
+        run: pnpm audit --prod --audit-level=high
 
-          git config user.name 'VETS Remediation Controller'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add \
-            drizzle/schema.ts \
-            drizzle/migrations/dao_snapshot_v2.sql \
-            drizzle/migrations/dao_snapshot_v2.rollback.sql \
-            server/db.ts \
-            server/routers.ts \
-            server/dao-snapshot-policy.ts \
-            server/dao-snapshot-policy.test.ts
-          git diff --cached --check
-          git commit -m 'fix(dao): add fail-closed chain-bound historical snapshots'
-          git push origin HEAD:cert/m2-dao-snapshot-clean-20260730
+      - name: Verify security-sensitive dependency resolutions
+        shell: bash
+        run: |
+          set -euo pipefail
+          node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
+          grep -q "wouter@3.7.1" pnpm-lock.yaml
+          grep -q "axios@1.18.0" pnpm-lock.yaml
+
+      - name: Token registry scanner
+        run: node scripts/check-token-registry.mjs
