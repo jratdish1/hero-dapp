@@ -4,8 +4,20 @@ export type VoteChain = Exclude<ProposalChain, "both">;
 export interface SnapshotRecord {
   chain: ProposalChain;
   governanceMode: "advisory" | "binding";
+  snapshotVersion: number;
+  snapshotConfirmations: number | null;
   snapshotBaseBlock: number | null;
   snapshotPulsechainBlock: number | null;
+  snapshotBaseTotalSupply: string | null;
+  snapshotPulsechainTotalSupply: string | null;
+  snapshotVerifiedAt: Date | string | null;
+  bindingDisabledReason: string | null;
+}
+
+export interface VerifiedBindingSnapshot {
+  block: number;
+  confirmations: number;
+  totalSupplyRaw: string;
 }
 
 export function parseFinalityBlocks(value: string | undefined, fallback: bigint): bigint {
@@ -32,9 +44,48 @@ export function resolveBindingVoteChain(proposalChain: ProposalChain, requested:
   return proposalChain;
 }
 
-export function snapshotBlockForChain(record: SnapshotRecord, chain: VoteChain): number {
-  if (record.governanceMode !== "binding") throw new Error("Proposal is advisory and has no binding snapshot");
+export function assertBindingSnapshotMetadata(
+  record: SnapshotRecord,
+  chain: VoteChain,
+): VerifiedBindingSnapshot {
+  if (record.governanceMode !== "binding") {
+    throw new Error("Proposal is advisory and has no binding snapshot");
+  }
+  if (record.chain === "both" || record.chain !== chain) {
+    throw new Error(`Binding snapshot chain ${record.chain} does not match vote chain ${chain}`);
+  }
+  if (record.snapshotVersion !== 2) {
+    throw new Error("Binding proposal does not use the approved snapshot version");
+  }
+  if (!Number.isSafeInteger(record.snapshotConfirmations) || Number(record.snapshotConfirmations) < 1) {
+    throw new Error("Binding proposal is missing an approved finality receipt");
+  }
+  if (!record.snapshotVerifiedAt || Number.isNaN(new Date(record.snapshotVerifiedAt).getTime())) {
+    throw new Error("Binding proposal is missing a verified snapshot timestamp");
+  }
+  if (record.bindingDisabledReason !== null) {
+    throw new Error("Binding proposal is disabled and must fail closed");
+  }
+
   const block = chain === "base" ? record.snapshotBaseBlock : record.snapshotPulsechainBlock;
-  if (!Number.isSafeInteger(block) || Number(block) <= 0) throw new Error(`Missing trustworthy ${chain} snapshot block`);
-  return Number(block);
+  const totalSupplyRaw = chain === "base"
+    ? record.snapshotBaseTotalSupply
+    : record.snapshotPulsechainTotalSupply;
+
+  if (!Number.isSafeInteger(block) || Number(block) <= 0) {
+    throw new Error(`Missing trustworthy ${chain} snapshot block`);
+  }
+  if (!totalSupplyRaw || !/^[0-9]+$/.test(totalSupplyRaw) || BigInt(totalSupplyRaw) <= 0n) {
+    throw new Error(`Missing trustworthy ${chain} historical total supply`);
+  }
+
+  return {
+    block: Number(block),
+    confirmations: Number(record.snapshotConfirmations),
+    totalSupplyRaw,
+  };
+}
+
+export function snapshotBlockForChain(record: SnapshotRecord, chain: VoteChain): number {
+  return assertBindingSnapshotMetadata(record, chain).block;
 }
