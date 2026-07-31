@@ -196,7 +196,10 @@ async function evaluate(client, expression) {
     returnByValue: true,
   });
   if (result.exceptionDetails) {
-    throw new Error(result.exceptionDetails.text ?? 'Browser evaluation failed');
+    const detail = result.exceptionDetails.exception?.description
+      ?? result.exceptionDetails.text
+      ?? 'Browser evaluation failed';
+    throw new Error(detail);
   }
   return result.result?.value;
 }
@@ -214,7 +217,7 @@ async function readRouteState(client) {
       currentPath: window.location.pathname,
       headings: Array.from(document.querySelectorAll('h1'), node => node.textContent?.trim() || ''),
       resources,
-      dappLoaded: resources.some(resource => /\/assets\/DappBootstrap-[^/]+\.js$/.test(resource)),
+      dappLoaded: resources.some(resource => resource.startsWith('/assets/DappBootstrap-') && resource.endsWith('.js')),
       loading: body.includes('Loading secure DApp...') || body === 'Loading...',
       recoveryHeading: document.getElementById('dapp-recovery-title')?.textContent?.trim() || '',
       errorHeading: document.getElementById('application-error-title')?.textContent?.trim() || '',
@@ -227,6 +230,7 @@ async function readRouteState(client) {
 async function waitForRoute(client, route) {
   const deadline = Date.now() + 30_000;
   let state = null;
+  let lastError = '';
   while (Date.now() < deadline) {
     try {
       state = await readRouteState(client);
@@ -244,13 +248,14 @@ async function waitForRoute(client, route) {
         await sleep(750);
         return readRouteState(client);
       }
-    } catch {
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error);
       // Navigation can briefly invalidate the execution context.
     }
     await sleep(250);
   }
   throw new Error(
-    `${route.requestedPath}: route runtime did not settle: ${JSON.stringify(state)}`,
+    `${route.requestedPath}: route runtime did not settle: state=${JSON.stringify(state)}; lastError=${lastError || 'none'}`,
   );
 }
 
