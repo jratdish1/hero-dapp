@@ -22,6 +22,16 @@ describe("stripSonnerRuntimeStyles", () => {
     expect(transformed).toContain("export const sonnerValue = 1");
   });
 
+  it("removes the full injection call when the bundler adds a metadata argument", () => {
+    const source = `const injectStyle = (css, meta) => ({ css, meta });\ninjectStyle(\`${marker}{color:red}\`, { source: "sonner" });\nexport const sonnerValue = 1;`;
+
+    const transformed = stripSonnerRuntimeStyles(source);
+
+    expect(transformed).not.toContain(marker);
+    expect(transformed).not.toContain("source: \"sonner\"");
+    expect(transformed).toContain("export const sonnerValue = 1");
+  });
+
   it("fails closed when Sonner markers span multiple injected templates", () => {
     const source = `${injectedModule(`${marker}{color:red}`)}\ninjectStyle(\`${marker}{color:blue}\`);`;
 
