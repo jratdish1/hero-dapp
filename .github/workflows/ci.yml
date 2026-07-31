@@ -136,6 +136,7 @@ jobs:
             csp-contract-report.json
             csp-browser-report.json
             dist/public/.vite/manifest.json
+            dist/public/assets/DappBootstrap-*.js
           retention-days: 14
           if-no-files-found: error
 
