@@ -1,0 +1,11 @@
+/*
+ * Static recovery focus styles loaded directly by the HTML shell.
+ * This keeps keyboard-visible error recovery independent of JavaScript
+ * bundle loading while remaining compatible with style-src-elem 'self'.
+ */
+.vets-recovery-heading:focus,
+.vets-recovery-heading:focus-visible {
+  outline: 2px solid currentColor !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 2px currentColor !important;
+}
