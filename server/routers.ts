@@ -75,29 +75,97 @@ const HERO_TOKENS: Record<string, `0x${string}`> = {
   base: "0x00Fa69ED03d3337085A6A87B691E8a02d04Eb5f8",
 };
 
-async function verifyVotingPower(voterAddress: string, chain: "pulsechain" | "base"): Promise<number> {
-  const client = chain === "pulsechain" ? pulsechainClient : baseClient;
-  const tokenAddress = HERO_TOKENS[chain];
-  const RPC_TIMEOUT_MS = 10_000;
+const HISTORICAL_VOTES_ABI = [
+  {
+    type: "function", name: "getPastVotes", stateMutability: "view",
+    inputs: [{ name: "account", type: "address" }, { name: "blockNumber", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+  {
+    type: "function", name: "getPastTotalSupply", stateMutability: "view",
+    inputs: [{ name: "blockNumber", type: "uint256" }],
+    outputs: [{ name: "", type: "uint256" }],
+  },
+] as const;
+
+const DAO_BINDING_VOTING_ENABLED = process.env.DAO_BINDING_VOTING_ENABLED === "true";
+const RPC_TIMEOUT_MS = 10_000;
+
+function clientForChain(chain: VoteChain) {
+  return chain === "pulsechain" ? pulsechainClient : baseClient;
+}
+
+function wholeTokenNumber(raw: bigint): number {
+  const whole = raw / 10n ** 18n;
+  if (whole > BigInt(Number.MAX_SAFE_INTEGER)) throw new Error("Voting power exceeds safe integer range");
+  return Number(whole);
+}
+
+async function withRpcTimeout<T>(chain: VoteChain, task: Promise<T>): Promise<T> {
   const startTime = Date.now();
   try {
-    const balancePromise = client.readContract({
-      address: tokenAddress,
-      abi: erc20Abi,
-      functionName: "balanceOf",
-      args: [voterAddress as `0x${string}`],
-    });
-    const timeoutPromise = new Promise<never>((_, reject) =>
-      setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)
-    );
-    const balance = await Promise.race([balancePromise, timeoutPromise]);
-    const durationMs = Date.now() - startTime;
-    logRpcEvent(chain, "call", durationMs);
-    return Math.floor(Number(balance) / 1e18);
+    const value = await Promise.race([
+      task,
+      new Promise<never>((_, reject) => setTimeout(() => reject(new Error("RPC timeout")), RPC_TIMEOUT_MS)),
+    ]);
+    logRpcEvent(chain, "call", Date.now() - startTime);
+    return value;
   } catch (err: any) {
     const durationMs = Date.now() - startTime;
     const isTimeout = err?.message?.includes("timeout") || durationMs >= RPC_TIMEOUT_MS;
     logRpcEvent(chain, isTimeout ? "timeout" : "error", durationMs, err?.message);
+    throw err;
+  }
+}
+
+async function captureBindingSnapshot(chain: VoteChain) {
+  const client = clientForChain(chain);
+  const confirmations = parseFinalityBlocks(
+    chain === "base" ? process.env.DAO_BASE_FINALITY_BLOCKS : process.env.DAO_PULSECHAIN_FINALITY_BLOCKS,
+    chain === "base" ? 20n : 64n,
+  );
+  const head = await withRpcTimeout(chain, client.getBlockNumber());
+  const block = finalizedPriorBlock(head, confirmations);
+  const totalSupply = await withRpcTimeout(chain, client.readContract({
+    address: HERO_TOKENS[chain],
+    abi: HISTORICAL_VOTES_ABI,
+    functionName: "getPastTotalSupply",
+    args: [block],
+  }));
+  const totalSupplyTokens = wholeTokenNumber(totalSupply);
+  if (totalSupplyTokens <= 0) throw new Error("Historical total supply is unavailable");
+  return {
+    block: Number(block),
+    confirmations: Number(confirmations),
+    totalSupplyRaw: totalSupply.toString(),
+    quorum: Math.max(1, Math.floor(totalSupplyTokens * 0.04)),
+  };
+}
+
+async function verifyHistoricalVotingPower(voterAddress: string, chain: VoteChain, snapshotBlock: number): Promise<number> {
+  try {
+    const votes = await withRpcTimeout(chain, clientForChain(chain).readContract({
+      address: HERO_TOKENS[chain],
+      abi: HISTORICAL_VOTES_ABI,
+      functionName: "getPastVotes",
+      args: [voterAddress as `0x${string}`, BigInt(snapshotBlock)],
+    }));
+    return wholeTokenNumber(votes);
+  } catch {
+    return 0;
+  }
+}
+
+async function verifyAdvisoryVotingPower(voterAddress: string, chain: VoteChain): Promise<number> {
+  try {
+    const balance = await withRpcTimeout(chain, clientForChain(chain).readContract({
+      address: HERO_TOKENS[chain],
+      abi: erc20Abi,
+      functionName: "balanceOf",
+      args: [voterAddress as `0x${string}`],
+    }));
+    return wholeTokenNumber(balance);
+  } catch {
     return 0;
   }
 }
@@ -166,8 +234,7 @@ import {
   getProposals,
   getProposalById,
   updateProposal,
-  updateProposalVotes,
-  castVote,
+  castVoteAndIncrementTallies,
   getVotesByProposal,
   getUserVote,
   registerDelegate,
@@ -206,6 +273,13 @@ import { generateProposalHash } from "./dao-security-hardening";
 import { createDaoLogger } from "./dao-logger";
 import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
 import { fetchSnapshotProposalById, fetchSnapshotProposals } from "./snapshot-integration";
+import {
+  finalizedPriorBlock,
+  parseFinalityBlocks,
+  resolveBindingVoteChain,
+  snapshotBlockForChain,
+  type VoteChain,
+} from "./dao-snapshot-policy";
 
 /**
  * STANDARDIZED ERROR RESPONSE PROTOCOL
@@ -766,6 +840,7 @@ export const appRouter = router({
           category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
           durationDays: z.number().int().min(1).max(30).optional(),
           confirmBinding: z.boolean().optional(),
+          governanceMode: z.enum(["advisory", "binding"]).default("advisory"),
         }))
         .mutation(async ({ ctx, input }) => {
           // AUDIT FIX (May 29, 2026): Verify wallet ownership before proposal creation
@@ -808,10 +883,49 @@ export const appRouter = router({
           const now = new Date();
           const durationMs = (input.durationDays || 7) * 24 * 60 * 60 * 1000;
           const endTime = new Date(now.getTime() + durationMs);
+          const proposalChain = input.chain || "both";
+          let snapshotBaseBlock: number | null = null;
+          let snapshotPulsechainBlock: number | null = null;
+          let snapshotBaseTotalSupply: string | null = null;
+          let snapshotPulsechainTotalSupply: string | null = null;
+          let snapshotConfirmations: number | null = null;
+          let snapshotVerifiedAt: Date | null = null;
+          let bindingDisabledReason: string | null = "Advisory proposal: historical voting power is not binding.";
+          let quorum = 5_000_000;
+
+          if (input.governanceMode === "binding") {
+            if (!DAO_BINDING_VOTING_ENABLED) {
+              createStandardError("PRECONDITION_FAILED", "Binding DAO voting is feature-fenced until snapshot capability is enabled");
+            }
+            if (proposalChain === "both") {
+              createStandardError("BAD_REQUEST", "Binding multi-chain proposals must be split into Base and PulseChain proposals");
+            }
+            try {
+              const snapshot = await captureBindingSnapshot(proposalChain);
+              snapshotConfirmations = snapshot.confirmations;
+              snapshotVerifiedAt = new Date();
+              bindingDisabledReason = null;
+              quorum = snapshot.quorum;
+              if (proposalChain === "base") {
+                snapshotBaseBlock = snapshot.block;
+                snapshotBaseTotalSupply = snapshot.totalSupplyRaw;
+              } else {
+                snapshotPulsechainBlock = snapshot.block;
+                snapshotPulsechainTotalSupply = snapshot.totalSupplyRaw;
+              }
+            } catch (error) {
+              routerLogger.error("Binding snapshot capture failed closed", {
+                chain: proposalChain,
+                error: error instanceof Error ? error.message : String(error),
+              });
+              createStandardError("PRECONDITION_FAILED", "Token historical voting capability or finalized snapshot is unavailable");
+            }
+          }
+
           // AUDIT FIX #3 (May 27, 2026): Generate content hash for tamper detection
           const contentHash = generateProposalHash(
             proposalId, input.title, input.description,
-            input.walletAddress, input.chain || "both", now, endTime
+            input.walletAddress, proposalChain, now, endTime
           );
           await createProposal({
             proposalId,
@@ -819,10 +933,20 @@ export const appRouter = router({
             description: input.description,
             proposerId: ctx.user.id,
             proposerAddress: input.walletAddress,
-            chain: input.chain || "both",
+            chain: proposalChain,
             category: input.category || "protocol",
             startTime: now,
             endTime,
+            quorum,
+            governanceMode: input.governanceMode,
+            snapshotVersion: 2,
+            snapshotConfirmations,
+            snapshotBaseBlock,
+            snapshotPulsechainBlock,
+            snapshotBaseTotalSupply,
+            snapshotPulsechainTotalSupply,
+            snapshotVerifiedAt,
+            bindingDisabledReason,
           });
           // AUDIT FIX #3: Anchor on-chain (non-blocking — don't fail proposal creation)
           let anchorTxHash: string | null = null;
@@ -837,7 +961,15 @@ export const appRouter = router({
           } catch (err) {
             console.warn("[DAO] On-chain anchoring failed (non-blocking):", err);
           }
-          return { success: true, proposalId, contentHash, anchorTxHash };
+          return {
+            success: true,
+            proposalId,
+            contentHash,
+            anchorTxHash,
+            governanceMode: input.governanceMode,
+            snapshotBaseBlock,
+            snapshotPulsechainBlock,
+          };
         }),
       updateStatus: protectedProcedure
         .input(z.object({
@@ -895,14 +1027,40 @@ export const appRouter = router({
               proposalId: input.proposalId,
             });
           }
+          const proposal = await getProposalById(input.proposalId);
+          if (!proposal) createStandardError("NOT_FOUND", "Proposal not found");
+          if (proposal.id !== input.proposalDbId) {
+            createStandardError("BAD_REQUEST", "Proposal database and public identifiers do not match");
+          }
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
-          // AUDIT FIX: Server-side on-chain verification of voting power
-          const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
-          if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
-          // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
+
+          let verifiedPower: number;
+          let snapshotBlock: number | null = null;
+          if (proposal.governanceMode === "binding") {
+            let boundChain: VoteChain;
+            try {
+              boundChain = resolveBindingVoteChain(proposal.chain, input.chain);
+              snapshotBlock = snapshotBlockForChain(proposal, boundChain);
+            } catch (error) {
+              createStandardError("PRECONDITION_FAILED", error instanceof Error ? error.message : "Invalid binding snapshot");
+            }
+            verifiedPower = await verifyHistoricalVotingPower(input.voterAddress, boundChain!, snapshotBlock!);
+            if (verifiedPower <= 0) {
+              createStandardError("PRECONDITION_FAILED", "No historical HERO voting power at the proposal snapshot");
+            }
+          } else {
+            if (proposal.chain !== "both" && proposal.chain !== input.chain) {
+              createStandardError("BAD_REQUEST", "Vote chain does not match proposal chain");
+            }
+            verifiedPower = await verifyAdvisoryVotingPower(input.voterAddress, input.chain);
+            if (verifiedPower <= 0) {
+              createStandardError("PRECONDITION_FAILED", "No current HERO balance found for this advisory vote");
+            }
+          }
+
           const trustedPower = Math.min(input.votingPower, verifiedPower);
-          await castVote({
+          await castVoteAndIncrementTallies({
             proposalId: input.proposalDbId,
             voterId: ctx.user.id,
             voterAddress: input.voterAddress,
@@ -911,15 +1069,12 @@ export const appRouter = router({
             chain: input.chain,
             txHash: input.txHash || null,
           });
-          // Update proposal vote tallies
-          const proposal = await getProposalById(input.proposalId);
-          if (proposal) {
-            const newFor = input.choice === "for" ? proposal.votesFor + trustedPower : proposal.votesFor;
-            const newAgainst = input.choice === "against" ? proposal.votesAgainst + trustedPower : proposal.votesAgainst;
-            const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + trustedPower : proposal.votesAbstain;
-            await updateProposalVotes(input.proposalId, newFor, newAgainst, newAbstain);
-          }
-          return { success: true };
+          return {
+            success: true,
+            governanceMode: proposal.governanceMode,
+            snapshotBlock,
+            trustedPower,
+          };
         }),
     }),
 

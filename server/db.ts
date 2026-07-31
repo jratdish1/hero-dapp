@@ -326,10 +326,18 @@ export async function updateProposalVotes(proposalId: string, votesFor: number, 
 }
 
 // --- Votes ---
-export async function castVote(vote: InsertVote) {
+export async function castVoteAndIncrementTallies(vote: InsertVote) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  return db.insert(votes).values(vote);
+  return db.transaction(async (tx) => {
+    await tx.insert(votes).values(vote);
+    const increments = vote.choice === "for"
+      ? { votesFor: sql`${proposals.votesFor} + ${vote.votingPower}` }
+      : vote.choice === "against"
+        ? { votesAgainst: sql`${proposals.votesAgainst} + ${vote.votingPower}` }
+        : { votesAbstain: sql`${proposals.votesAbstain} + ${vote.votingPower}` };
+    await tx.update(proposals).set(increments).where(eq(proposals.id, vote.proposalId));
+  });
 }
 
 export async function getVotesByProposal(proposalId: number, limit = 200) {
