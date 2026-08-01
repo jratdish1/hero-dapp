@@ -165,6 +165,13 @@ export default defineConfig({
       "@": path.resolve(import.meta.dirname, "client", "src"),
       "@shared": path.resolve(import.meta.dirname, "shared"),
       "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+      "react-remove-scroll-bar": path.resolve(
+        import.meta.dirname,
+        "client",
+        "src",
+        "lib",
+        "csp-safe-remove-scroll-bar.tsx",
+      ),
       // Block @reown/appkit - forces WalletConnect to use @walletconnect/modal 2.7.0
       // which calls explorer-api.walletconnect.com (works with our project ID)
       "@reown/appkit": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
