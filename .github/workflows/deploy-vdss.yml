@@ -1,0 +1,370 @@
+name: Protected HeroBase deployment via VDS-M to VDS-S
+run-name: VETS VDS-S ${{ inputs.operation }} ${{ inputs.commit_sha }} / ${{ inputs.correlation_id }}
+
+on:
+  workflow_call:
+    inputs:
+      commit_sha:
+        required: true
+        type: string
+      correlation_id:
+        required: true
+        type: string
+      operation:
+        required: true
+        type: string
+      confirmation:
+        required: true
+        type: string
+      command_comment_id:
+        required: true
+        type: string
+      command_run_id:
+        required: true
+        type: string
+    outputs:
+      verified:
+        value: ${{ jobs.deploy.outputs.verified }}
+      result_artifact:
+        value: ${{ jobs.deploy.outputs.result_artifact }}
+
+permissions:
+  actions: read
+  checks: read
+  contents: read
+  issues: write
+
+jobs:
+  authorize:
+    name: Verify immutable authorization and exact-head gates
+    if: github.ref == 'refs/heads/main' && github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      group: production-authorization-${{ inputs.correlation_id }}
+      cancel-in-progress: false
+    outputs:
+      consumption_comment_id: ${{ steps.auth.outputs.consumption_comment_id }}
+      ci_run_id: ${{ steps.auth.outputs.ci_run_id }}
+      security_run_id: ${{ steps.auth.outputs.security_run_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: ${{ inputs.commit_sha }}
+      CORRELATION_ID: ${{ inputs.correlation_id }}
+      OPERATION: ${{ inputs.operation }}
+      CONFIRMATION: ${{ inputs.confirmation }}
+      COMMAND_COMMENT_ID: ${{ inputs.command_comment_id }}
+      COMMAND_RUN_ID: ${{ inputs.command_run_id }}
+      TRACKER_ISSUE: '43'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Verify and consume authorization
+        id: auth
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = "jratdish1/hero-dapp"
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$GITHUB_RUN_ATTEMPT" = "1"
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
+          git fetch --no-tags origin main
+          git cat-file -e "${TARGET_SHA}^{commit}"
+
+          find_green_run() {
+            local workflow="$1" job_name="$2" run_id
+            run_id="$(gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/actions/workflows/$workflow/runs?branch=main&event=push&head_sha=$TARGET_SHA&per_page=100" \
+              --jq '[.workflow_runs[] | select(.head_sha == env.TARGET_SHA and .head_branch == "main" and .event == "push" and .run_attempt == 1 and .status == "completed" and .conclusion == "success")] | sort_by(.id) | last | .id')"
+            [[ "$run_id" =~ ^[0-9]+$ ]]
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" \
+              --jq --arg name "$job_name" '[.jobs[] | select(.name == $name)] | last | select(.status == "completed" and .conclusion == "success") | .id' \
+              | grep -Eq '^[0-9]+$'
+            printf '%s' "$run_id"
+          }
+
+          case "$OPERATION" in
+            deploy)
+              test "$GITHUB_EVENT_NAME" = "issue_comment"
+              test "$CONFIRMATION" = "DEPLOY"
+              test "$GITHUB_SHA" = "$TARGET_SHA"
+              test "$(git rev-parse origin/main)" = "$TARGET_SHA"
+              test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              [[ "$COMMAND_COMMENT_ID" =~ ^[0-9]+$ ]]
+              [[ "$COMMAND_RUN_ID" =~ ^[0-9]+$ ]]
+              test "$COMMAND_RUN_ID" = "$GITHUB_RUN_ID"
+              test "$CORRELATION_ID" = "issue-43-comment-$COMMAND_COMMENT_ID"
+              comment="$(gh api "repos/$GITHUB_REPOSITORY/issues/comments/$COMMAND_COMMENT_ID")"
+              test "$(jq -r '.user.login' <<<"$comment")" = "$GITHUB_REPOSITORY_OWNER"
+              test "$(jq -r '.author_association' <<<"$comment")" = "OWNER"
+              test "$(jq -r '.body' <<<"$comment")" = "VETS DEPLOY $TARGET_SHA"
+              marker='VETS_DEPLOY_CONSUMED v2'
+              ;;
+            rollback)
+              test "$GITHUB_EVENT_NAME" = "workflow_dispatch"
+              test "$CONFIRMATION" = "ROLLBACK"
+              test "$GITHUB_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              test "$GITHUB_TRIGGERING_ACTOR" = "$GITHUB_REPOSITORY_OWNER"
+              [[ "$CORRELATION_ID" =~ ^rollback-[A-Za-z0-9._-]{1,80}$ ]]
+              git merge-base --is-ancestor "$TARGET_SHA" origin/main
+              marker='VETS_ROLLBACK_AUTHORIZATION v2'
+              ;;
+            *) exit 64 ;;
+          esac
+
+          existing="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments?per_page=100" \
+            --jq --arg marker "$marker" --arg correlation "$CORRELATION_ID" \
+              '[.[] | select(.user.login == "github-actions[bot]" and (.body | startswith($marker + "\n")) and (.body | contains("correlation_id: " + $correlation + "\n")))] | length')"
+          test "$existing" = "0"
+
+          ci_run_id="$(find_green_run ci.yml test-build-scan)"
+          security_run_id="$(find_green_run security-and-quality.yml repository-safety)"
+          body="$(printf '%s\ncorrelation_id: %s\ntarget_sha: %s\nci_run_id: %s\nsecurity_run_id: %s\nstate: consumed' \
+            "$marker" "$CORRELATION_ID" "$TARGET_SHA" "$ci_run_id" "$security_run_id")"
+          consumption_comment_id="$(gh api "repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" \
+            -f body="$body" --jq '.id')"
+          [[ "$consumption_comment_id" =~ ^[0-9]+$ ]]
+          echo "consumption_comment_id=$consumption_comment_id" >> "$GITHUB_OUTPUT"
+          echo "ci_run_id=$ci_run_id" >> "$GITHUB_OUTPUT"
+          echo "security_run_id=$security_run_id" >> "$GITHUB_OUTPUT"
+
+  deploy:
+    name: Protected canonical VDS-S production mutation
+    needs: authorize
+    if: needs.authorize.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    environment: production
+    concurrency:
+      group: production-herobase-vdss
+      cancel-in-progress: false
+    outputs:
+      verified: ${{ steps.result.outputs.verified }}
+      result_artifact: production-result-${{ inputs.correlation_id }}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      TARGET_SHA: ${{ inputs.commit_sha }}
+      CORRELATION_ID: ${{ inputs.correlation_id }}
+      OPERATION: ${{ inputs.operation }}
+      VDSM_HOST: ${{ secrets.VDS_HOST }}
+      VDSM_SSH_KEY: ${{ secrets.VDS_SSH_KEY }}
+      VDSM_KNOWN_HOSTS: ${{ secrets.VDS_KNOWN_HOSTS }}
+      VDSS_NGINX_INCLUDE_PATH: ${{ vars.VDSS_NGINX_INCLUDE_PATH }}
+      CF_API_TOKEN: ${{ secrets.CF_API_TOKEN }}
+      CF_ZONE_ID: ${{ secrets.CF_ZONE_ID }}
+      TRACKER_ISSUE: '43'
+      EXPECTED_VDSM_IP: '100.122.125.32'
+      EXPECTED_VDSM_HOSTNAME: 'vmi2672602'
+      EXPECTED_VDSS_IP: '100.112.25.66'
+      EXPECTED_VDSS_HOSTNAME: 'vmi3266736'
+      PM2_PROCESS: 'hero-dapp-server'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+
+      - name: Validate protected inputs, secrets, and active Nginx target
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$TARGET_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CORRELATION_ID" =~ ^[A-Za-z0-9._-]{1,100}$ ]]
+          test "$VDSM_HOST" = "$EXPECTED_VDSM_IP"
+          test -n "$VDSM_SSH_KEY"
+          test -n "$VDSM_KNOWN_HOSTS"
+          [[ "$VDSS_NGINX_INCLUDE_PATH" =~ ^/etc/nginx/[A-Za-z0-9._/-]+$ ]]
+          [[ "$CF_ZONE_ID" =~ ^[0-9a-fA-F]{32}$ ]]
+          test -n "$CF_API_TOKEN"
+          install -m 700 -d "$HOME/.ssh"
+          umask 077
+          printf '%s\n' "$VDSM_SSH_KEY" > "$HOME/.ssh/id_ed25519"
+          printf '%s\n' "$VDSM_KNOWN_HOSTS" > "$HOME/.ssh/known_hosts"
+          chmod 600 "$HOME/.ssh/id_ed25519" "$HOME/.ssh/known_hosts"
+          ssh-keygen -y -f "$HOME/.ssh/id_ed25519" >/dev/null
+          ssh-keygen -F "$VDSM_HOST" -f "$HOME/.ssh/known_hosts" >/dev/null
+          bash -n scripts/vets-vdss-production.sh
+
+      - name: Verify VDS-M jump and strict VDS-S alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 30s ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 root@"$VDSM_HOST" \
+            bash -s -- "$EXPECTED_VDSM_HOSTNAME" "$EXPECTED_VDSM_IP" "$EXPECTED_VDSS_HOSTNAME" "$EXPECTED_VDSS_IP" <<'REMOTE'
+          set -euo pipefail
+          test "$(hostname -s)" = "$1"
+          test "$(tailscale ip -4 | head -n 1)" = "$2"
+          config="$(ssh -G vds-s)"
+          test "$(awk '$1=="hostname"{print $2; exit}' <<<"$config")" = "$4"
+          test "$(awk '$1=="user"{print $2; exit}' <<<"$config")" = "root"
+          awk '$1=="identityfile"{print $2}' <<<"$config" | grep -Fxq '~/.ssh/contabo_vds'
+          test "$(awk '$1=="stricthostkeychecking"{print $2; exit}' <<<"$config")" = "true"
+          timeout 20 ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes vds-s \
+            "test \"\$(hostname -s)\" = '$3' && test \"\$(tailscale ip -4 | head -n 1)\" = '$4'"
+          REMOTE
+
+      - name: Deploy exact authorized commit and active Nginx include
+        id: mutate
+        shell: bash
+        run: |
+          set -euo pipefail
+          log="$RUNNER_TEMP/vdss-production.log"
+          set +e
+          timeout --signal=TERM --kill-after=30s 3600s ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=3 \
+            root@"$VDSM_HOST" \
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes vds-s \
+            bash -s -- "$TARGET_SHA" "$OPERATION" "$CORRELATION_ID" "$VDSS_NGINX_INCLUDE_PATH" "$PM2_PROCESS" \
+            < scripts/vets-vdss-production.sh 2>&1 | tee "$log"
+          status="${PIPESTATUS[0]}"
+          set -e
+          previous_sha="$(sed -n 's/^VETS_PREVIOUS_SHA=//p' "$log" | head -n 1)"
+          final_sha="$(sed -n 's/^VETS_FINAL_SHA=//p' "$log" | tail -n 1)"
+          nginx_sha="$(sed -n 's/^VETS_TARGET_NGINX_SHA256=//p' "$log" | tail -n 1)"
+          [[ "$previous_sha" =~ ^[0-9a-f]{40}$ ]] && echo "previous_sha=$previous_sha" >> "$GITHUB_OUTPUT"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]] && echo "remote_final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          [[ "$nginx_sha" =~ ^[0-9a-f]{64}$ ]] && echo "nginx_sha256=$nginx_sha" >> "$GITHUB_OUTPUT"
+          echo "exit_code=$status" >> "$GITHUB_OUTPUT"
+          exit "$status"
+
+      - name: Purge Cloudflare cache
+        id: purge
+        if: steps.mutate.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          response="$(curl --fail-with-body --silent --show-error \
+            --connect-timeout 10 --max-time 30 \
+            -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" \
+            -H 'Content-Type: application/json' \
+            --data '{"purge_everything":true}')"
+          jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$response" >/dev/null
+
+      - name: Verify public exact release
+        id: public
+        if: steps.mutate.outcome == 'success' && steps.purge.outcome == 'success'
+        shell: bash
+        run: |
+          set -euo pipefail
+          health='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
+          for attempt in $(seq 1 15); do
+            response="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 15 "$health" || true)"
+            if printf '%s' "$response" | grep -q '"ok":true' && \
+               printf '%s' "$response" | grep -q "\"releaseSha\":\"$TARGET_SHA\"" && \
+               curl --fail --silent --show-error --connect-timeout 5 --max-time 15 -o /dev/null https://herobase.io/; then
+              exit 0
+            fi
+            sleep 4
+          done
+          exit 1
+
+      - name: Roll back after post-deploy failure
+        id: rollback
+        if: always() && steps.mutate.outcome == 'success' && (steps.purge.outcome != 'success' || steps.public.outcome != 'success')
+        shell: bash
+        env:
+          ROLLBACK_SHA: ${{ steps.mutate.outputs.previous_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$ROLLBACK_SHA" =~ ^[0-9a-f]{40}$ ]]
+          rollback_correlation="rollback-after-$CORRELATION_ID"
+          timeout --signal=TERM --kill-after=30s 3600s ssh \
+            -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            -o ConnectTimeout=15 root@"$VDSM_HOST" \
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes vds-s \
+            bash -s -- "$ROLLBACK_SHA" rollback "$rollback_correlation" "$VDSS_NGINX_INCLUDE_PATH" "$PM2_PROCESS" \
+            < scripts/vets-vdss-production.sh
+          response="$(curl --fail-with-body --silent --show-error \
+            -X POST "https://api.cloudflare.com/client/v4/zones/$CF_ZONE_ID/purge_cache" \
+            -H "Authorization: Bearer $CF_API_TOKEN" -H 'Content-Type: application/json' \
+            --data '{"purge_everything":true}')"
+          jq -e '.success == true and ((.errors // []) | length == 0)' <<<"$response" >/dev/null
+
+      - name: Capture final canonical state
+        id: final
+        if: always()
+        continue-on-error: true
+        shell: bash
+        run: |
+          set -euo pipefail
+          state="$(timeout 60 ssh -i "$HOME/.ssh/id_ed25519" \
+            -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes \
+            root@"$VDSM_HOST" \
+            ssh -o BatchMode=yes -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes vds-s \
+            bash -s -- "$VDSS_NGINX_INCLUDE_PATH" "$PM2_PROCESS" <<'REMOTE'
+          set -euo pipefail
+          nginx_path="$1"; process="$2"
+          app_dir="$(pm2 jlist | PM2_PROCESS="$process" node -e 'let i="";process.stdin.on("data",c=>i+=c);process.stdin.on("end",()=>{const m=JSON.parse(i).filter(x=>x.name===process.env.PM2_PROCESS);if(m.length!==1)process.exit(1);process.stdout.write(m[0].pm2_env.pm_cwd)})')"
+          cd "$app_dir"
+          printf '%s %s' "$(git rev-parse HEAD)" "$(sha256sum "$nginx_path" | awk '{print $1}')"
+          REMOTE
+          )"
+          read -r final_sha final_nginx_sha <<<"$state"
+          [[ "$final_sha" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$final_nginx_sha" =~ ^[0-9a-f]{64}$ ]]
+          echo "final_sha=$final_sha" >> "$GITHUB_OUTPUT"
+          echo "final_nginx_sha=$final_nginx_sha" >> "$GITHUB_OUTPUT"
+
+      - name: Build immutable result
+        id: result
+        if: always()
+        shell: bash
+        env:
+          FINAL_SHA: ${{ steps.final.outputs.final_sha }}
+          FINAL_NGINX_SHA: ${{ steps.final.outputs.final_nginx_sha }}
+          PREVIOUS_SHA: ${{ steps.mutate.outputs.previous_sha }}
+          MUTATE_OUTCOME: ${{ steps.mutate.outcome }}
+          PURGE_OUTCOME: ${{ steps.purge.outcome }}
+          PUBLIC_OUTCOME: ${{ steps.public.outcome }}
+          ROLLBACK_OUTCOME: ${{ steps.rollback.outcome }}
+          AUTH_COMMENT: ${{ needs.authorize.outputs.consumption_comment_id }}
+          CI_RUN: ${{ needs.authorize.outputs.ci_run_id }}
+          SECURITY_RUN: ${{ needs.authorize.outputs.security_run_id }}
+        run: |
+          set -euo pipefail
+          verified=false
+          if [ "$MUTATE_OUTCOME" = success ] && [ "$PURGE_OUTCOME" = success ] && [ "$PUBLIC_OUTCOME" = success ] && [ "$FINAL_SHA" = "$TARGET_SHA" ]; then
+            verified=true
+          fi
+          jq -n \
+            --arg correlation "$CORRELATION_ID" --arg operation "$OPERATION" \
+            --arg target "$TARGET_SHA" --arg previous "${PREVIOUS_SHA:-unknown}" \
+            --arg final "${FINAL_SHA:-unknown}" --arg nginx "${FINAL_NGINX_SHA:-unknown}" \
+            --arg mutate "$MUTATE_OUTCOME" --arg purge "$PURGE_OUTCOME" --arg public "$PUBLIC_OUTCOME" \
+            --arg rollback "$ROLLBACK_OUTCOME" --arg auth "$AUTH_COMMENT" \
+            --arg ci "$CI_RUN" --arg security "$SECURITY_RUN" --argjson verified "$verified" \
+            '{schema:"VETS_PRODUCTION_RESULT_V2",canonical_target:"VDS-S via VDS-M",correlation_id:$correlation,operation:$operation,target_sha:$target,previous_sha:$previous,final_active_sha:$final,active_nginx_sha256:$nginx,mutation:$mutate,cloudflare_purge:$purge,public_verify:$public,rollback:$rollback,authorization_comment_id:$auth,ci_run_id:$ci,security_run_id:$security,verified:$verified,secrets_printed:false}' \
+            > production-result.json
+          echo "verified=$verified" >> "$GITHUB_OUTPUT"
+
+      - name: Upload immutable production result
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: production-result-${{ inputs.correlation_id }}
+          path: production-result.json
+          retention-days: 90
+          if-no-files-found: error
+
+      - name: Post sanitized tracker receipt
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          body="$(jq -r '"VETS_PRODUCTION_RESULT v2\ncorrelation_id: " + .correlation_id + "\ntarget: " + .canonical_target + "\nrequested_sha: " + .target_sha + "\nprevious_sha: " + .previous_sha + "\nfinal_active_sha: " + .final_active_sha + "\nactive_nginx_sha256: " + .active_nginx_sha256 + "\ncloudflare_purge: " + .cloudflare_purge + "\npublic_verify: " + .public_verify + "\nrollback: " + .rollback + "\nverified: " + (.verified|tostring) + "\nsecrets_printed: false"' production-result.json)"
+          gh api "repos/$GITHUB_REPOSITORY/issues/$TRACKER_ISSUE/comments" -f body="$body" >/dev/null
+
+      - name: Enforce final result
+        if: always()
+        shell: bash
+        run: test "${{ steps.result.outputs.verified }}" = "true"
