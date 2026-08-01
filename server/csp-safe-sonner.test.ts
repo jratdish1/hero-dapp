@@ -49,6 +49,20 @@ describe("CSP-safe Sonner transform", () => {
     }
   });
 
+  it("empties a non-exported binding after the injector was tree-shaken", async () => {
+    const source = `const sheetText = "${marker}{color:red}"; export const ok = true;`;
+    const transformed = stripSonnerRuntimeStyles(source);
+    expect(transformed).not.toContain(marker);
+    expect(transformed).toContain('const sheetText = ""');
+    await expect(parseable(transformed)).resolves.toBeDefined();
+  });
+
+  it("rejects an unused exported CSS binding because it can escape the module", () => {
+    expect(() => stripSonnerRuntimeStyles(
+      `export const sheetText = "${marker}{color:red}";`,
+    )).toThrow(/exported and can escape/);
+  });
+
   it("supports a complete direct literal injector argument", async () => {
     const source = `${injector()} inject("${marker}{color:red}"); export const ok = true;`;
     const transformed = stripSonnerRuntimeStyles(source);
@@ -82,7 +96,7 @@ describe("CSP-safe Sonner transform", () => {
   it("fails closed when the CSS binding has multiple consumers", () => {
     expect(() => stripSonnerRuntimeStyles(
       `${injector()} const sheetText = "${marker}{a:b}"; inject(sheetText); console.log(sheetText);`,
-    )).toThrow(/expected one use/);
+    )).toThrow(/at most one use/);
   });
 
   it("fails closed for an unrecognized consumer", () => {
