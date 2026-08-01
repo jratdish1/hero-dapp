@@ -130,6 +130,20 @@ function findIdentifierReferences(
   return references;
 }
 
+function hasExportModifier(statement: ts.VariableStatement): boolean {
+  return Boolean(
+    statement.modifiers?.some(modifier => modifier.kind === ts.SyntaxKind.ExportKeyword),
+  );
+}
+
+function emptyLiteralReplacement(candidate: CssLiteral): Replacement {
+  return {
+    start: candidate.getStart(),
+    end: candidate.getEnd(),
+    text: ts.isNoSubstitutionTemplateLiteral(candidate) ? "``" : '""',
+  };
+}
+
 function replacementPlan(
   source: ts.SourceFile,
   candidate: CssLiteral,
@@ -178,9 +192,23 @@ function replacementPlan(
     }
 
     const references = findIdentifierReferences(source, parent.name);
+
+    // Vite may tree-shake the already-neutralized injector before invoking this
+    // pre-transform on an optimized dependency copy. A non-exported top-level
+    // binding with zero references cannot reach a runtime injector. Emptying the
+    // exact literal is therefore both sufficient and fail-closed. Exported or
+    // multiply consumed bindings remain prohibited because their consumers are
+    // outside this module-local proof.
+    if (references.length === 0) {
+      if (hasExportModifier(variableStatement)) {
+        fail("unused Sonner CSS binding is exported and can escape the module");
+      }
+      return [emptyLiteralReplacement(candidate)];
+    }
+
     if (references.length !== 1) {
       fail(
-        `expected one use of the Sonner CSS binding, found ${references.length}`,
+        `expected at most one use of the Sonner CSS binding, found ${references.length}`,
       );
     }
 
@@ -196,11 +224,7 @@ function replacementPlan(
     requireStandaloneInjectorCall(source, call);
 
     return [
-      {
-        start: candidate.getStart(source),
-        end: candidate.getEnd(),
-        text: ts.isNoSubstitutionTemplateLiteral(candidate) ? "``" : '""',
-      },
+      emptyLiteralReplacement(candidate),
       {
         start: call.getStart(source),
         end: call.getEnd(),
