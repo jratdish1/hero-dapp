@@ -77,7 +77,7 @@ export class ErrorBoundary extends Component<Props, State> {
             id="application-error-title"
             ref={this.headingRef}
             tabIndex={-1}
-            className="vets-recovery-heading mb-4 rounded-sm text-xl outline outline-2 outline-offset-4 outline-amber-400 focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-amber-400"
+            className="vets-recovery-heading mb-4 rounded-sm text-xl focus:outline focus:outline-2 focus:outline-offset-4 focus:outline-amber-400"
           >
             An unexpected application error occurred.
           </h1>
