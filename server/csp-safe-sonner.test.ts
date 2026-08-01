@@ -13,6 +13,16 @@ function parseable(code: string) {
   return transform(code, { loader: "js", format: "esm" });
 }
 
+function injector(name = "inject") {
+  return `
+    const ${name} = (css) => {
+      // Fixture signature: createElement("style"), textContent, appendChild.
+      if (!css) return;
+      return css;
+    };
+  `;
+}
+
 describe("CSP-safe Sonner transform", () => {
   it("neutralizes the exact installed Sonner ESM and keeps it parseable", async () => {
     const require = createRequire(import.meta.url);
@@ -26,24 +36,68 @@ describe("CSP-safe Sonner transform", () => {
     await expect(parseable(transformed)).resolves.toBeDefined();
   });
 
-  it("supports static quoted and template literals", async () => {
-    for (const source of [
-      `const css = "${marker}{color:red}"; inject(css); export const ok = true;`,
-      `const css = \`${marker}{color:red}\`; inject(css); export const ok = true;`,
+  it("supports one complete top-level quoted or template binding", async () => {
+    for (const value of [
+      `"${marker}{color:red}"`,
+      `\`${marker}{color:red}\``,
     ]) {
+      const source = `${injector()} const css = ${value}; inject(css); export const ok = true;`;
       const transformed = stripSonnerRuntimeStyles(source);
       expect(transformed).not.toContain(marker);
+      expect(transformed).toContain("void 0");
       await expect(parseable(transformed)).resolves.toBeDefined();
     }
+  });
+
+  it("supports a complete direct literal injector argument", async () => {
+    const source = `${injector()} inject("${marker}{color:red}"); export const ok = true;`;
+    const transformed = stripSonnerRuntimeStyles(source);
+    expect(transformed).not.toContain(marker);
+    expect(transformed).toContain("void 0");
+    await expect(parseable(transformed)).resolves.toBeDefined();
+  });
+
+  it("supports a complete tagged-template injector", async () => {
+    const source = `${injector()} inject\`${marker}{color:red}\`; export const ok = true;`;
+    const transformed = stripSonnerRuntimeStyles(source);
+    expect(transformed).not.toContain(marker);
+    expect(transformed).toContain("void 0");
+    await expect(parseable(transformed)).resolves.toBeDefined();
+  });
+
+  it("fails closed when the marker literal is only part of an injected value", () => {
+    expect(() => stripSonnerRuntimeStyles(
+      `${injector()} const css = "${marker}{a:b}" + ".extra{c:d}"; inject(css);`,
+    )).toThrow(/complete direct injector value|top-level binding/);
+
+    expect(() => stripSonnerRuntimeStyles(
+      `${injector()} const css = "${marker}{a:b}"; inject(css + ".extra{c:d}");`,
+    )).toThrow(/complete injector argument/);
+
+    expect(() => stripSonnerRuntimeStyles(
+      `${injector()} inject("${marker}{a:b}" + ".extra{c:d}");`,
+    )).toThrow(/complete direct injector value|top-level binding/);
+  });
+
+  it("fails closed when the CSS binding has multiple consumers", () => {
+    expect(() => stripSonnerRuntimeStyles(
+      `${injector()} const css = "${marker}{a:b}"; inject(css); console.log(css);`,
+    )).toThrow(/expected one use/);
+  });
+
+  it("fails closed for an unrecognized consumer", () => {
+    expect(() => stripSonnerRuntimeStyles(
+      `const forward = (value) => value; const css = "${marker}{a:b}"; forward(css);`,
+    )).toThrow(/runtime style injector/);
   });
 
   it("fails closed for absent, dispersed, or interpolated CSS", () => {
     expect(() => stripSonnerRuntimeStyles("export const ok = true;")).toThrow(/FAIL-CLOSED/);
     expect(() => stripSonnerRuntimeStyles(
-      `const a = "${marker}{a:b}"; const b = "${marker}{c:d}";`,
+      `${injector()} const a = "${marker}{a:b}"; const b = "${marker}{c:d}";`,
     )).toThrow(/found 2/);
     expect(() => stripSonnerRuntimeStyles(
-      `const css = \`${marker}{color:\${runtimeColor}}\`;`,
+      `${injector()} const css = \`${marker}{color:\${runtimeColor}}\`; inject(css);`,
     )).toThrow(/FAIL-CLOSED/);
   });
 });
