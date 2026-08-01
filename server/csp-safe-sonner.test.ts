@@ -41,7 +41,7 @@ describe("CSP-safe Sonner transform", () => {
       `"${marker}{color:red}"`,
       `\`${marker}{color:red}\``,
     ]) {
-      const source = `${injector()} const css = ${value}; inject(css); export const ok = true;`;
+      const source = `${injector()} const sheetText = ${value}; inject(sheetText); export const ok = true;`;
       const transformed = stripSonnerRuntimeStyles(source);
       expect(transformed).not.toContain(marker);
       expect(transformed).toContain("void 0");
@@ -67,11 +67,11 @@ describe("CSP-safe Sonner transform", () => {
 
   it("fails closed when the marker literal is only part of an injected value", () => {
     expect(() => stripSonnerRuntimeStyles(
-      `${injector()} const css = "${marker}{a:b}" + ".extra{c:d}"; inject(css);`,
+      `${injector()} const sheetText = "${marker}{a:b}" + ".extra{c:d}"; inject(sheetText);`,
     )).toThrow(/complete direct injector value|top-level binding/);
 
     expect(() => stripSonnerRuntimeStyles(
-      `${injector()} const css = "${marker}{a:b}"; inject(css + ".extra{c:d}");`,
+      `${injector()} const sheetText = "${marker}{a:b}"; inject(sheetText + ".extra{c:d}");`,
     )).toThrow(/complete injector argument/);
 
     expect(() => stripSonnerRuntimeStyles(
@@ -81,13 +81,13 @@ describe("CSP-safe Sonner transform", () => {
 
   it("fails closed when the CSS binding has multiple consumers", () => {
     expect(() => stripSonnerRuntimeStyles(
-      `${injector()} const css = "${marker}{a:b}"; inject(css); console.log(css);`,
+      `${injector()} const sheetText = "${marker}{a:b}"; inject(sheetText); console.log(sheetText);`,
     )).toThrow(/expected one use/);
   });
 
   it("fails closed for an unrecognized consumer", () => {
     expect(() => stripSonnerRuntimeStyles(
-      `const forward = (value) => value; const css = "${marker}{a:b}"; forward(css);`,
+      `const forward = (value) => value; const sheetText = "${marker}{a:b}"; forward(sheetText);`,
     )).toThrow(/runtime style injector/);
   });
 
@@ -97,7 +97,7 @@ describe("CSP-safe Sonner transform", () => {
       `${injector()} const a = "${marker}{a:b}"; const b = "${marker}{c:d}";`,
     )).toThrow(/found 2/);
     expect(() => stripSonnerRuntimeStyles(
-      `${injector()} const css = \`${marker}{color:\${runtimeColor}}\`; inject(css);`,
+      `${injector()} const sheetText = \`${marker}{color:\${runtimeColor}}\`; inject(sheetText);`,
     )).toThrow(/FAIL-CLOSED/);
   });
 });
