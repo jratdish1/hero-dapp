@@ -7,6 +7,7 @@ import {
   existsSync,
   openSync,
   readFileSync,
+  statSync,
 } from 'node:fs';
 import { build } from 'esbuild';
 import {
@@ -48,12 +49,12 @@ function contentType(file) {
   })[path.extname(file).toLowerCase()] ?? 'application/octet-stream';
 }
 
-function cspPolicy() {
-  const config = readFileSync(
+function productionCsp() {
+  const source = readFileSync(
     path.join(ROOT, 'nginx/herobase-cache-headers.conf'),
     'utf8',
   );
-  const policy = config.match(
+  const policy = source.match(
     /add_header Content-Security-Policy "([^"]+)" always;/,
   )?.[1];
   if (!policy) throw new Error('Production CSP was not found');
@@ -70,23 +71,24 @@ function productionStylesheets() {
     const href = tag.match(/\bhref=["']([^"']+)["']/i)?.[1];
     if (href) hrefs.push(href);
   }
-  if (!hrefs.includes('/security-recovery-20260731.css')) {
+  const unique = [...new Set(hrefs)];
+  if (!unique.includes('/security-recovery-20260731.css')) {
     throw new Error('Production HTML lacks the versioned recovery stylesheet');
   }
-  return [...new Set(hrefs)];
+  return unique;
 }
 
 function safeFile(root, pathname) {
   const candidate = path.resolve(root, `.${pathname}`);
   if (!candidate.startsWith(`${root}${path.sep}`)) return null;
-  if (!existsSync(candidate)) return null;
+  if (!existsSync(candidate) || !statSync(candidate).isFile()) return null;
   return candidate;
 }
 
 async function startServer(harnessRoot) {
-  const policy = cspPolicy();
+  const csp = productionCsp();
   const server = createServer((request, response) => {
-    response.setHeader('content-security-policy', policy);
+    response.setHeader('content-security-policy', csp);
     response.setHeader('cache-control', 'no-store');
 
     let pathname;
@@ -133,9 +135,8 @@ class CdpClient {
   constructor(url) {
     this.url = url;
     this.socket = null;
-    this.id = 1;
+    this.nextId = 1;
     this.pending = new Map();
-    this.listeners = new Map();
   }
 
   async connect() {
@@ -167,21 +168,16 @@ class CdpClient {
     const message = JSON.parse(
       typeof data === 'string' ? data : await data.text(),
     );
-    if (message.id) {
-      const request = this.pending.get(message.id);
-      if (!request) return;
-      this.pending.delete(message.id);
-      if (message.error) request.reject(new Error(message.error.message));
-      else request.resolve(message.result ?? {});
-      return;
-    }
-    for (const listener of this.listeners.get(message.method) ?? []) {
-      listener(message.params ?? {});
-    }
+    if (!message.id) return;
+    const request = this.pending.get(message.id);
+    if (!request) return;
+    this.pending.delete(message.id);
+    if (message.error) request.reject(new Error(message.error.message));
+    else request.resolve(message.result ?? {});
   }
 
   send(method, params = {}) {
-    const id = this.id++;
+    const id = this.nextId++;
     return new Promise((resolve, reject) => {
       const timeout = setTimeout(() => {
         this.pending.delete(id);
@@ -201,26 +197,9 @@ class CdpClient {
     });
   }
 
-  on(method, listener) {
-    const listeners = this.listeners.get(method) ?? new Set();
-    listeners.add(listener);
-    this.listeners.set(method, listeners);
-  }
-
   close() {
     this.socket?.close();
   }
-}
-
-async function waitForFile(file, child) {
-  for (let attempt = 0; attempt < 200; attempt += 1) {
-    if (existsSync(file)) return;
-    if (child.exitCode !== null) {
-      throw new Error(`Chrome exited with code ${child.exitCode}`);
-    }
-    await sleep(100);
-  }
-  throw new Error(`Timed out waiting for ${file}`);
 }
 
 async function waitForExit(child, timeoutMs) {
@@ -231,7 +210,7 @@ async function waitForExit(child, timeoutMs) {
   ]);
 }
 
-async function closeChrome(child, profile) {
+async function stopChrome(child, profile) {
   if (child.exitCode === null) {
     child.kill('SIGTERM');
     if (!(await waitForExit(child, 5_000))) {
@@ -249,8 +228,8 @@ async function closeChrome(child, profile) {
 
 async function launchChrome(bin) {
   const profile = await mkdtemp(path.join(os.tmpdir(), 'vets-scroll-lock-csp-'));
-  const log = path.join(profile, 'chrome.log');
-  const fd = openSync(log, 'a');
+  const logPath = path.join(profile, 'chrome.log');
+  const logFd = openSync(logPath, 'a');
   const child = spawn(bin, [
     '--headless=new',
     '--no-sandbox',
@@ -269,12 +248,22 @@ async function launchChrome(bin) {
     '--host-resolver-rules=MAP * 0.0.0.0, EXCLUDE 127.0.0.1',
     '--window-size=1280,900',
     'about:blank',
-  ], { stdio: ['ignore', fd, fd] });
-  closeSync(fd);
+  ], { stdio: ['ignore', logFd, logFd] });
+  closeSync(logFd);
 
   try {
     const portFile = path.join(profile, 'DevToolsActivePort');
-    await waitForFile(portFile, child);
+    for (let attempt = 0; attempt < 200; attempt += 1) {
+      if (existsSync(portFile)) break;
+      if (child.exitCode !== null) {
+        throw new Error(`Chrome exited with code ${child.exitCode}`);
+      }
+      await sleep(100);
+    }
+    if (!existsSync(portFile)) {
+      throw new Error('Chrome debugging port did not appear');
+    }
+
     const [port] = (await readFile(portFile, 'utf8')).trim().split(/\r?\n/);
     const response = await fetch(
       `http://127.0.0.1:${port}/json/new?about:blank`,
@@ -287,13 +276,20 @@ async function launchChrome(bin) {
     if (!target.webSocketDebuggerUrl) {
       throw new Error('Chrome target lacks a DevTools WebSocket URL');
     }
+
     return {
       url: target.webSocketDebuggerUrl,
-      close: () => closeChrome(child, profile),
+      close: () => stopChrome(child, profile),
     };
   } catch (error) {
-    await closeChrome(child, profile).catch(() => {});
-    throw error;
+    const logTail = await readFile(logPath, 'utf8')
+      .then(value => value.slice(-2_000))
+      .catch(() => 'Chrome log unavailable');
+    await stopChrome(child, profile).catch(() => {});
+    throw new Error(
+      `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,
+      { cause: error },
+    );
   }
 }
 
@@ -313,12 +309,13 @@ async function evaluate(client, expression) {
   return result.result?.value;
 }
 
-async function state(client) {
+async function readState(client) {
   return evaluate(client, `(() => {
     const bodyStyle = getComputedStyle(document.body);
     return {
       ready: document.body?.dataset.ready || '',
       dialogOpen: Boolean(document.querySelector('[data-vets-dialog-content]')),
+      closeAvailable: typeof window.__vetsCloseDialog === 'function',
       lockCount: document.body?.getAttribute('data-scroll-locked') || '',
       gapMode: document.body?.getAttribute('data-vets-scroll-lock-gap-mode') || '',
       overflow: bodyStyle.overflow,
@@ -330,15 +327,15 @@ async function state(client) {
   })()`);
 }
 
-async function waitFor(client, predicateName, predicate) {
+async function waitForState(client, name, predicate) {
   const deadline = Date.now() + 20_000;
   let last = null;
   while (Date.now() < deadline) {
-    last = await state(client);
+    last = await readState(client);
     if (predicate(last)) return last;
     await sleep(100);
   }
-  throw new Error(`${predicateName} timed out: ${JSON.stringify(last)}`);
+  throw new Error(`${name} timed out: ${JSON.stringify(last)}`);
 }
 
 async function main() {
@@ -358,19 +355,31 @@ async function main() {
 
   try {
     await writeFile(entryPath, `
-      import React from 'react';
+      import React, { useEffect, useState } from 'react';
       import { createRoot } from 'react-dom/client';
       import * as Dialog from '@radix-ui/react-dialog';
 
       function Harness() {
+        const [open, setOpen] = useState(true);
+
+        useEffect(() => {
+          window.__vetsCloseDialog = () => setOpen(false);
+          requestAnimationFrame(() => requestAnimationFrame(() => {
+            document.body.dataset.ready = 'true';
+          }));
+          return () => {
+            delete window.__vetsCloseDialog;
+          };
+        }, []);
+
         return (
-          <Dialog.Root defaultOpen>
+          <Dialog.Root open={open} onOpenChange={setOpen}>
             <Dialog.Portal>
               <Dialog.Overlay data-vets-dialog-overlay />
               <Dialog.Content data-vets-dialog-content>
                 <Dialog.Title>VETS CSP scroll lock</Dialog.Title>
                 <Dialog.Description>Production-style Radix modal test.</Dialog.Description>
-                <Dialog.Close data-vets-dialog-close>Close</Dialog.Close>
+                <Dialog.Close>Close</Dialog.Close>
               </Dialog.Content>
             </Dialog.Portal>
           </Dialog.Root>
@@ -380,9 +389,6 @@ async function main() {
       const root = document.getElementById('root');
       if (!root) throw new Error('Missing scroll-lock test root');
       createRoot(root).render(<Harness />);
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        document.body.dataset.ready = 'true';
-      }));
     `);
 
     await build({
@@ -419,7 +425,8 @@ async function main() {
       throw new Error('Production harness did not bundle the CSP-safe scroll-lock shim');
     }
 
-    const styleLinks = productionStylesheets()
+    const stylesheets = productionStylesheets();
+    const styleLinks = stylesheets
       .map(href => `<link rel="stylesheet" href="${href}">`)
       .join('');
     await writeFile(
@@ -440,25 +447,32 @@ async function main() {
       (() => {
         window.__vetsCspViolations = [];
         window.__vetsStyleInsertions = [];
-        const originalAppendChild = Node.prototype.appendChild;
-        Node.prototype.appendChild = function(node) {
-          if (node instanceof HTMLStyleElement) {
-            window.__vetsStyleInsertions.push({
-              method: 'appendChild',
-              text: (node.textContent || '').slice(0, 2000),
-            });
-          }
-          return originalAppendChild.call(this, node);
+        const capture = (node, method) => {
+          if (!(node instanceof HTMLStyleElement)) return;
+          window.__vetsStyleInsertions.push({
+            method,
+            text: (node.textContent || '').slice(0, 2000),
+          });
         };
-        const originalInsertBefore = Node.prototype.insertBefore;
+        const appendChild = Node.prototype.appendChild;
+        Node.prototype.appendChild = function(node) {
+          capture(node, 'appendChild');
+          return appendChild.call(this, node);
+        };
+        const insertBefore = Node.prototype.insertBefore;
         Node.prototype.insertBefore = function(node, reference) {
-          if (node instanceof HTMLStyleElement) {
-            window.__vetsStyleInsertions.push({
-              method: 'insertBefore',
-              text: (node.textContent || '').slice(0, 2000),
-            });
-          }
-          return originalInsertBefore.call(this, node, reference);
+          capture(node, 'insertBefore');
+          return insertBefore.call(this, node, reference);
+        };
+        const append = Element.prototype.append;
+        Element.prototype.append = function(...nodes) {
+          for (const node of nodes) capture(node, 'append');
+          return append.apply(this, nodes);
+        };
+        const prepend = Element.prototype.prepend;
+        Element.prototype.prepend = function(...nodes) {
+          for (const node of nodes) capture(node, 'prepend');
+          return prepend.apply(this, nodes);
         };
         document.addEventListener('securitypolicyviolation', event => {
           window.__vetsCspViolations.push({
@@ -471,13 +485,14 @@ async function main() {
     ` });
 
     await client.send('Page.navigate', { url: server.url });
-    const opened = await waitFor(
+    const opened = await waitForState(
       client,
       'Radix dialog open and body locked',
-      value => value.ready === 'true'
-        && value.dialogOpen
-        && Number.parseInt(value.lockCount, 10) >= 1
-        && value.overflow === 'hidden',
+      state => state.ready === 'true'
+        && state.dialogOpen
+        && state.closeAvailable
+        && Number.parseInt(state.lockCount, 10) >= 1
+        && state.overflow === 'hidden',
     );
 
     if (opened.violations.length > 0) {
@@ -493,31 +508,37 @@ async function main() {
       throw new Error(`Measured scroll gap is missing: ${opened.measuredGap || 'none'}`);
     }
 
-    await evaluate(client, `(() => {
-      const close = document.querySelector('[data-vets-dialog-close]');
-      if (!(close instanceof HTMLElement)) throw new Error('Dialog close control missing');
-      close.click();
+    const closeResult = await evaluate(client, `(() => {
+      if (typeof window.__vetsCloseDialog !== 'function') return false;
+      window.__vetsCloseDialog();
       return true;
     })()`);
+    if (closeResult !== true) {
+      throw new Error('Controlled Radix close function was unavailable');
+    }
 
-    const closed = await waitFor(
+    const closed = await waitForState(
       client,
       'Radix dialog close and body unlock',
-      value => !value.dialogOpen && value.lockCount === '',
+      state => !state.dialogOpen && state.lockCount === '',
     );
-    if (closed.violations.length > 0 || closed.styleInsertions.length > 0) {
-      throw new Error(`CSP/style evidence changed after close: ${JSON.stringify(closed)}`);
+    if (closed.violations.length > 0) {
+      throw new Error(`CSP violations after dialog close: ${JSON.stringify(closed.violations)}`);
+    }
+    if (closed.styleInsertions.length > 0) {
+      throw new Error(`Runtime style insertion after dialog close: ${JSON.stringify(closed.styleInsertions)}`);
     }
 
     const report = {
       timestamp: new Date().toISOString(),
       result: 'PASS',
       actualRadixDialog: true,
+      controlledCloseExercised: true,
       cspSafeShimBundled: true,
       reactStyleSingletonBundled: false,
       openState: opened,
       closedState: closed,
-      productionStylesheets: productionStylesheets(),
+      productionStylesheets: stylesheets,
     };
     await writeFile(REPORT, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Radix scroll-lock CSP integration: PASS (${REPORT})`);
