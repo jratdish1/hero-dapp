@@ -116,6 +116,11 @@ jobs:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         run: node scripts/check-csp-routes.mjs
 
+      - name: Exercise Radix dialog scroll lock under production CSP
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        run: node scripts/check-scroll-lock-csp.mjs
+
       - name: Verify public landing critical path
         shell: bash
         run: |
@@ -123,7 +128,7 @@ jobs:
           node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
       - name: Upload exact-head landing and recovery evidence
-        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json') != ''
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json', 'scroll-lock-csp-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: landing-evidence-${{ github.sha }}
@@ -135,6 +140,7 @@ jobs:
             generic-error-focus-report.json
             csp-contract-report.json
             csp-browser-report.json
+            scroll-lock-csp-report.json
             dist/public/.vite/manifest.json
             dist/public/assets/DappBootstrap-*.js
           retention-days: 14
