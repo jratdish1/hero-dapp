@@ -161,25 +161,52 @@ const plugins = [
 export default defineConfig({
   plugins,
   resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
-      "react-remove-scroll-bar": path.resolve(
-        import.meta.dirname,
-        "client",
-        "src",
-        "lib",
-        "csp-safe-remove-scroll-bar.tsx",
-      ),
+    alias: [
+      {
+        find: /^react-remove-scroll-bar$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          "client",
+          "src",
+          "lib",
+          "csp-safe-remove-scroll-bar.tsx",
+        ),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(import.meta.dirname, "client", "src"),
+      },
+      {
+        find: "@shared",
+        replacement: path.resolve(import.meta.dirname, "shared"),
+      },
+      {
+        find: "@assets",
+        replacement: path.resolve(import.meta.dirname, "attached_assets"),
+      },
       // Block @reown/appkit - forces WalletConnect to use @walletconnect/modal 2.7.0
       // which calls explorer-api.walletconnect.com (works with our project ID)
-      "@reown/appkit": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-controllers": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-core": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-utils": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-wallet": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-    },
+      {
+        find: "@reown/appkit",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-controllers",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-core",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-utils",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-wallet",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+    ],
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
