@@ -7,7 +7,6 @@ import {
   writeFileSync,
 } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
-import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { transform } from 'esbuild';
@@ -189,14 +188,18 @@ for (const file of [shellRecoveryPath, compiledRecoveryPath]) {
     '.width-before-scroll-bar',
   ]) {
     if (!text.includes(marker)) {
-      fail(`Static CSP-safe stylesheet marker missing in ${path.relative(root, file)}: ${marker}`);
+      fail(
+        `Static CSP-safe stylesheet marker missing in ${path.relative(root, file)}: ${marker}`,
+      );
     }
   }
 }
 
 const viteConfig = readFileSync(viteConfigPath, 'utf8');
-if (!viteConfig.includes('"react-remove-scroll-bar"')) {
-  fail('Vite does not alias react-remove-scroll-bar to the CSP-safe shim');
+const exactScrollLockAlias =
+  /find:\s*(?:["']react-remove-scroll-bar["']|\/\^react-remove-scroll-bar\$\/)/;
+if (!exactScrollLockAlias.test(viteConfig)) {
+  fail('Vite does not define an exact react-remove-scroll-bar alias');
 }
 if (!viteConfig.includes('csp-safe-remove-scroll-bar.tsx')) {
   fail('Vite scroll-lock alias does not target the CSP-safe shim');
@@ -233,6 +236,7 @@ const report = {
   styleSrcElem: nginxDirectives.get('style-src-elem'),
   styleSrcAttr: nginxDirectives.get('style-src-attr'),
   versionedRecoveryStylesheet: '/security-recovery-20260731.css',
+  exactScrollLockAliasVerified: true,
   scrollLockRuntimeStyleInjectorReplaced: true,
   transitionalStyleAttributeFiles: styleFiles,
   removalCondition:
