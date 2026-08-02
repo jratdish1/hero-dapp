@@ -14,6 +14,7 @@ permissions:
 
 jobs:
   repository-safety:
+    name: Security and Quality
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
