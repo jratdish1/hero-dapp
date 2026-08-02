@@ -15,6 +15,7 @@ permissions:
 
 jobs:
   test-build-scan:
+    name: CI
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
