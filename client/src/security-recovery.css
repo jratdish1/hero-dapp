@@ -3,6 +3,14 @@
  * application bundle. Keep the shell-critical subset synchronized with
  * client/public/security-recovery-20260731.css.
  */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+}
+
 #application-error-title.vets-recovery-heading:focus,
 #application-error-title.vets-recovery-heading:focus-visible,
 #dapp-recovery-title.vets-recovery-heading:focus,
