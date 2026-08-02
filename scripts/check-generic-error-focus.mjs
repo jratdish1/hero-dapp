@@ -234,7 +234,7 @@ async function stopChromeProcess(child, userDataDir) {
     }
   }
   if (userDataDir) {
-    await rm(userDataDir, { recursive: true, force: true });
+    await rm(userDataDir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
     if (existsSync(userDataDir)) {
       throw new Error(`Chrome profile cleanup failed: ${userDataDir}`);
     }
@@ -294,15 +294,18 @@ async function launchChrome(chromeBin) {
     const logTail = await readFile(chromeLog, 'utf8')
       .then(value => value.slice(-2_000))
       .catch(() => 'Chrome log unavailable');
-    try {
-      await stopChromeProcess(child, userDataDir);
-    } catch (cleanupError) {
-      throw new Error('Chrome cleanup failed after a startup error', { cause: cleanupError });
-    }
-    throw new ChromeStartupError(
+    const startupError = new ChromeStartupError(
       `Chrome startup failed: ${error instanceof Error ? error.message : String(error)}; log=${logTail}`,
       { cause: error },
     );
+    try {
+      await stopChromeProcess(child, userDataDir);
+    } catch (cleanupError) {
+      startupError.cleanupErrors = [
+        `chrome-startup-cleanup: ${cleanupError instanceof Error ? cleanupError.message : String(cleanupError)}`,
+      ];
+    }
+    throw startupError;
   }
 }
 
@@ -313,6 +316,9 @@ async function launchChromeWithRetry(chromeBin, attempts = 3) {
       return await launchChrome(chromeBin);
     } catch (error) {
       if (!(error instanceof ChromeStartupError)) throw error;
+      if (Array.isArray(error.cleanupErrors) && error.cleanupErrors.length > 0) {
+        throw error;
+      }
       lastError = error;
       console.error(`Chrome startup attempt ${attempt}/${attempts} failed: ${error.message}`);
       if (attempt < attempts) await sleep(attempt * 1_000);
@@ -375,6 +381,7 @@ async function main() {
   let server = null;
   let chrome = null;
   let client = null;
+  let primaryError = null;
 
   try {
     const stylesheets = productionStylesheets();
@@ -504,11 +511,52 @@ async function main() {
     };
     await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`);
     console.log(`Mounted generic error focus: PASS (${REPORT_PATH})`);
-  } finally {
+  } catch (error) {
+    primaryError = error;
+  }
+
+  const cleanupErrors = [];
+  try {
     client?.close();
+  } catch (error) {
+    cleanupErrors.push(`cdp-client: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
     if (chrome) await chrome.close();
+  } catch (error) {
+    cleanupErrors.push(`chrome: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
     if (server) await server.close();
-    await rm(workdir, { recursive: true, force: true });
+  } catch (error) {
+    cleanupErrors.push(`server: ${error instanceof Error ? error.message : String(error)}`);
+  }
+  try {
+    await rm(workdir, { recursive: true, force: true, maxRetries: 10, retryDelay: 200 });
+    if (existsSync(workdir)) {
+      throw new Error(`Harness workdir cleanup failed: ${workdir}`);
+    }
+  } catch (error) {
+    cleanupErrors.push(`workdir: ${error instanceof Error ? error.message : String(error)}`);
+  }
+
+  if (primaryError !== null) {
+    const primary =
+      primaryError instanceof Error
+        ? primaryError
+        : new Error(String(primaryError));
+    if (cleanupErrors.length > 0) {
+    const existingCleanupErrors = Array.isArray(primary.cleanupErrors)
+      ? primary.cleanupErrors.map(value => String(value))
+      : [];
+    primary.cleanupErrors = [...existingCleanupErrors, ...cleanupErrors];
+  }
+    throw primary;
+  }
+  if (cleanupErrors.length > 0) {
+    const cleanupFailure = new Error(`Generic focus cleanup failed: ${cleanupErrors.join("; ")}`);
+    cleanupFailure.cleanupErrors = cleanupErrors;
+    throw cleanupFailure;
   }
 }
 
@@ -520,6 +568,9 @@ if (import.meta.url === pathToFileURL(process.argv[1] ?? '').href) {
       result: 'FAIL',
       error: safeError,
       errorKind: error instanceof ChromeStartupError ? 'chrome-startup' : 'assertion-or-runtime',
+      cleanupErrors: Array.isArray(error?.cleanupErrors)
+        ? error.cleanupErrors.map(value => redact(String(value)))
+        : [],
     };
     await writeFile(REPORT_PATH, `${JSON.stringify(report, null, 2)}\n`).catch(() => {});
     console.error(`[Mounted generic error focus failed] ${safeError}`);
