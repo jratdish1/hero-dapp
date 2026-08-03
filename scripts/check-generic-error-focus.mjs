@@ -401,13 +401,29 @@ async function main() {
         <ErrorBoundary><ThrowOnInitialRender /></ErrorBoundary>,
       );
 
-      setTimeout(() => {
+      const markReady = async () => {
+        if (document.readyState !== 'complete') {
+          await new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
+        }
+        const links = Array.from(document.querySelectorAll('link[rel~="stylesheet"]'));
+        await Promise.all(links.map(link => {
+          if (link.sheet) return Promise.resolve();
+          return new Promise((resolve, reject) => {
+            const timeout = setTimeout(() => reject(new Error('Stylesheet readiness timed out')), 10_000);
+            link.addEventListener('load', () => { clearTimeout(timeout); resolve(); }, { once: true });
+            link.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Stylesheet failed to load')); }, { once: true });
+          });
+        }));
+        await new Promise(resolve => requestAnimationFrame(() => resolve()));
         const heading = document.getElementById(${JSON.stringify(EXPECTED_HEADING_ID)});
         document.body.dataset.ready = 'true';
         document.body.dataset.focusedId = document.activeElement?.id || '';
         document.body.dataset.heading = heading?.textContent?.trim() || '';
         document.body.dataset.focusClass = heading?.className || '';
-      }, 100);
+      };
+      void markReady().catch(error => {
+        console.error('[Generic focus harness readiness failed]', error);
+      });
     `;
 
     await writeFile(entryPath, entry);
@@ -470,8 +486,8 @@ async function main() {
     if (state.heading !== EXPECTED_HEADING) {
       throw new Error(`Unexpected generic error heading: ${state.heading || 'missing'}`);
     }
-    if (!state.focusClass.includes('focus:outline') || state.focusClass.includes('focus:outline-none')) {
-      throw new Error(`Generic error heading lacks a focus utility: ${state.focusClass}`);
+    if (!state.focusClass.includes('vets-recovery-heading')) {
+      throw new Error(`Generic error heading lacks the static recovery class: ${state.focusClass}`);
     }
     const outlineWidth = Number.parseFloat(state.outlineWidth || '0');
     const visibleOutline = state.outlineStyle !== 'none' && outlineWidth > 0;

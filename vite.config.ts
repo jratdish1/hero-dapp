@@ -4,6 +4,7 @@ import react from "@vitejs/plugin-react";
 import fs from "node:fs";
 import path from "node:path";
 import { defineConfig, type Plugin, type ViteDevServer } from "vite";
+import { cspSafeSonnerPlugin } from "./vite-plugins/csp-safe-sonner";
 
 // =============================================================================
 // Manus Debug Collector - Vite Plugin
@@ -149,23 +150,63 @@ function vitePluginManusDebugCollector(): Plugin {
   };
 }
 
-const plugins = [react(), tailwindcss(), jsxLocPlugin(), vitePluginManusDebugCollector()];
+const plugins = [
+  cspSafeSonnerPlugin(),
+  react(),
+  tailwindcss(),
+  jsxLocPlugin(),
+  vitePluginManusDebugCollector(),
+];
 
 export default defineConfig({
   plugins,
   resolve: {
-    alias: {
-      "@": path.resolve(import.meta.dirname, "client", "src"),
-      "@shared": path.resolve(import.meta.dirname, "shared"),
-      "@assets": path.resolve(import.meta.dirname, "attached_assets"),
+    alias: [
+      {
+        find: /^react-remove-scroll-bar$/,
+        replacement: path.resolve(
+          import.meta.dirname,
+          "client",
+          "src",
+          "lib",
+          "csp-safe-remove-scroll-bar.tsx",
+        ),
+      },
+      {
+        find: "@",
+        replacement: path.resolve(import.meta.dirname, "client", "src"),
+      },
+      {
+        find: "@shared",
+        replacement: path.resolve(import.meta.dirname, "shared"),
+      },
+      {
+        find: "@assets",
+        replacement: path.resolve(import.meta.dirname, "attached_assets"),
+      },
       // Block @reown/appkit - forces WalletConnect to use @walletconnect/modal 2.7.0
       // which calls explorer-api.walletconnect.com (works with our project ID)
-      "@reown/appkit": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-controllers": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-core": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-utils": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-      "@reown/appkit-wallet": path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
-    },
+      {
+        find: "@reown/appkit",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-controllers",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-core",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-utils",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+      {
+        find: "@reown/appkit-wallet",
+        replacement: path.resolve(import.meta.dirname, "client", "src", "lib", "empty-module.ts"),
+      },
+    ],
   },
   envDir: path.resolve(import.meta.dirname),
   root: path.resolve(import.meta.dirname, "client"),
@@ -181,7 +222,7 @@ export default defineConfig({
       // even if Vite alias fails to intercept a dynamic import.
       // Let Rollup preserve the DappBootstrap dynamic boundary automatically;
       // broad manual chunks can create cycles that preload the full DApp on `/`.
-      external: (id) => id.includes('@reown/appkit'),
+      external: (id) => id.includes("@reown/appkit"),
     },
   },
   server: {

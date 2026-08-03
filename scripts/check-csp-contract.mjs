@@ -261,6 +261,17 @@ if (!viteConfig.includes('csp-safe-remove-scroll-bar.tsx')) {
   fail('Vite scroll-lock alias does not target the CSP-safe shim');
 }
 
+for (const file of [
+  'client/src/pages/AiAssistant.tsx',
+  'client/src/pages/Blog.tsx',
+  'client/src/components/AIChatBox.tsx',
+]) {
+  const text = readFileSync(path.join(root, file), 'utf8');
+  if (!text.includes('disableMermaidDiagrams')) {
+    fail(`Streamdown Mermaid runtime path is not neutralized in ${file}`);
+  }
+}
+
 const styleFiles = [];
 const clientRoot = path.join(root, 'client/src');
 function walk(directory) {
