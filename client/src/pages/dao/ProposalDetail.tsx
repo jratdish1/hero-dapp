@@ -68,6 +68,7 @@ export default function ProposalDetail() {
       setPendingBinding(null);
       await utils.auth.me.invalidate();
     },
+    onError: () => setPendingBinding(null),
   });
   const castVote = trpc.dao.votes.cast.useMutation({
     onSuccess: async () => {
