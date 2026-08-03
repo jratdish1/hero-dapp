@@ -480,7 +480,14 @@ jobs:
             local target_sha="$1"
             local guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
             local guard_status=0
-            git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"
+            if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then
+              rm -f "$guard_path"
+              return 70
+            fi
+            if [ ! -s "$guard_path" ]; then
+              rm -f "$guard_path"
+              return 70
+            fi
             node "$guard_path" "$target_sha" || guard_status="$?"
             rm -f "$guard_path"
             return "$guard_status"
