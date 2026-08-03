@@ -5,6 +5,7 @@
  * deployment. Keep this file synchronized with client/src/security-recovery.css
  * and advance the filename whenever the shell-critical rules change.
  */
+.vets-recovery-heading,
 #application-error-title.vets-recovery-heading:focus,
 #application-error-title.vets-recovery-heading:focus-visible,
 #dapp-recovery-title.vets-recovery-heading:focus,
