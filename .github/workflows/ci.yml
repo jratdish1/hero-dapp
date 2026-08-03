@@ -154,10 +154,17 @@ jobs:
         if: always()
         shell: bash
         run: |
-          test "${{ steps.recovery.outcome }}" = "success"
-          test "${{ steps.recovery.outputs.exit_status }}" = "0"
-          test "${{ steps.generic_focus.outcome }}" = "success"
-          test "${{ steps.generic_focus.outputs.exit_status }}" = "0"
+          set -euo pipefail
+          recovery_outcome="${{ steps.recovery.outcome }}"
+          recovery_status="${{ steps.recovery.outputs.exit_status }}"
+          focus_outcome="${{ steps.generic_focus.outcome }}"
+          focus_status="${{ steps.generic_focus.outputs.exit_status }}"
+          if [[ "$recovery_outcome" != "success" || "$recovery_status" != "0" || "$focus_outcome" != "success" || "$focus_status" != "0" ]]; then
+            printf 'Mounted recovery gates failed: recovery=%s/%s generic_focus=%s/%s\n' \
+              "$recovery_outcome" "$recovery_status" "$focus_outcome" "$focus_status" >&2
+            exit 1
+          fi
+          echo 'Mounted recovery gates: PASS'
 
       - name: Production dependency advisory gate
         id: production_audit
