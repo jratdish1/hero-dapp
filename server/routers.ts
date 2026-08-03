@@ -21,7 +21,9 @@ import {
   DAO_DELEGATION_DISABLED_REASON,
   DAO_SNAPSHOT_VERSION,
   advisoryProposalMetadata,
+  assertNoAdvisoryTransactionHash,
   assertProposalVoteable,
+  isAdvisoryVotingWindowOpen,
   proposalGovernanceMetadata,
   resolveAdvisoryVoteChain,
 } from "./dao-governance-policy";
@@ -85,9 +87,10 @@ const daoRouter = router({
       getDelegates(1000),
       getLatestTreasurySnapshots(),
     ]);
+    const now = new Date();
     return {
       totalProposals: allProposals.length,
-      activeProposals: allProposals.filter(proposal => proposal.status === "active").length,
+      activeProposals: allProposals.filter(proposal => isAdvisoryVotingWindowOpen(proposal, now)).length,
       passedProposals: allProposals.filter(proposal => proposal.status === "passed").length,
       totalDelegates: historicalDelegates.length,
       totalVotingPower: 0,
@@ -299,6 +302,11 @@ const daoRouter = router({
         } catch (error) {
           fail("PRECONDITION_FAILED", error instanceof Error ? error.message : "Proposal is not voteable");
         }
+        try {
+          assertNoAdvisoryTransactionHash(input.txHash);
+        } catch (error) {
+          fail("BAD_REQUEST", error instanceof Error ? error.message : "Advisory transaction metadata is not allowed");
+        }
         let voteChain: "base" | "pulsechain";
         try {
           voteChain = resolveAdvisoryVoteChain(proposal.chain, input.chain);
@@ -313,7 +321,7 @@ const daoRouter = router({
             choice: input.choice,
             votingPower: 1,
             chain: voteChain,
-            txHash: input.txHash || null,
+            txHash: null,
           });
         } catch (error) {
           const message = error instanceof Error ? error.message : "Vote rejected";
