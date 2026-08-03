@@ -476,12 +476,23 @@ jobs:
               --platform=node --packages=external --bundle --format=esm --outdir=dist
           }
 
+          assert_dao_rollback_compatible() {
+            local target_sha="$1"
+            local guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
+            local guard_status=0
+            git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"
+            node "$guard_path" "$target_sha" || guard_status="$?"
+            rm -f "$guard_path"
+            return "$guard_status"
+          }
+
           rollback() {
             original_status="$?"
             trap - ERR
             if [ "$MUTATION_STARTED" = true ]; then
               printf 'VETS_INLINE_ROLLBACK_ATTEMPTED=true\n'
-              if git reset --hard "$PREVIOUS_SHA" &&
+              if assert_dao_rollback_compatible "$PREVIOUS_SHA" &&
+                 git reset --hard "$PREVIOUS_SHA" &&
                  corepack enable &&
                  corepack prepare pnpm@10.34.4 --activate &&
                  test "$(pnpm --version)" = "10.34.4" &&
@@ -510,6 +521,7 @@ jobs:
             rollback)
               test "$(git rev-parse origin/main)" != "$DEPLOY_SHA"
               git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+              assert_dao_rollback_compatible "$DEPLOY_SHA"
               ;;
             *) exit 64 ;;
           esac
@@ -645,6 +657,12 @@ jobs:
           flock -w 1800 9 || exit 75
           git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${ROLLBACK_SHA}^{commit}"
+          guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
+          guard_status=0
+          git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"
+          node "$guard_path" "$ROLLBACK_SHA" || guard_status="$?"
+          rm -f "$guard_path"
+          test "$guard_status" = "0"
           git reset --hard "$ROLLBACK_SHA"
           corepack enable
           corepack prepare pnpm@10.34.4 --activate
@@ -849,8 +867,8 @@ jobs:
           FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
           MUTATION_STARTED: ${{ steps.state.outputs.mutation_started }}
           INLINE_ATTEMPTED: ${{ steps.state.outputs.inline_attempted }}
-          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_succeeded }}
-          INLINE_FAILED: ${{ steps.state.outputs.inline_failed }}
+          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_rollback_succeeded }}
+          INLINE_FAILED: ${{ steps.state.outputs.inline_rollback_failed }}
           POST_ATTEMPTED: ${{ steps.state.outputs.post_attempted }}
           POST_SUCCEEDED: ${{ steps.state.outputs.post_succeeded }}
           POST_FAILED: ${{ steps.state.outputs.post_failed }}
