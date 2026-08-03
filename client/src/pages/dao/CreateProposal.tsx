@@ -11,6 +11,11 @@ import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, FileText } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
+interface PendingBinding {
+  walletAddress: string;
+  challenge: string;
+}
+
 export default function CreateProposal() {
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
@@ -23,66 +28,68 @@ export default function CreateProposal() {
   const [category, setCategory] = useState<"protocol" | "treasury" | "community" | "emergency">("protocol");
   const [chain, setChain] = useState<"base" | "pulsechain" | "both">("both");
   const [durationDays, setDurationDays] = useState(7);
-  const [pendingBindingWallet, setPendingBindingWallet] = useState<string | null>(null);
+  const [pendingBinding, setPendingBinding] = useState<PendingBinding | null>(null);
   const [error, setError] = useState("");
-  const confirmsCurrentWallet = !!address
-    && pendingBindingWallet?.toLowerCase() === address.toLowerCase();
+  const pendingForCurrentWallet = !!address
+    && pendingBinding?.walletAddress.toLowerCase() === address.toLowerCase()
+    ? pendingBinding
+    : null;
 
   const createProposal = trpc.dao.proposals.create.useMutation({
     onSuccess: (data) => {
-      if (!data.success && "requiresConfirmation" in data && data.requiresConfirmation) {
-        setPendingBindingWallet(data.walletAddress);
+      if (!data.success && data.requiresConfirmation) {
+        if (!data.bindingChallenge) {
+          setPendingBinding(null);
+          setError("The server did not issue a wallet-binding challenge.");
+          return;
+        }
+        setPendingBinding({
+          walletAddress: data.walletAddress,
+          challenge: data.bindingChallenge,
+        });
         setError(data.message);
         return;
       }
       if (data.success && data.proposalId) {
-        setPendingBindingWallet(null);
+        setPendingBinding(null);
         navigate(`/dao/proposals/${data.proposalId}`);
         return;
       }
       setError("Proposal creation did not return a valid proposal ID.");
     },
-    onError: (err) => {
-      setError(err.message);
-    },
+    onError: (err) => setError(err.message),
   });
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = (event: React.FormEvent) => {
+    event.preventDefault();
     setError("");
 
-    if (!sanitizeString(sanitizeString(title.trim()))) { setError("Title is required"); return; }
-    if (!sanitizeString(sanitizeString(description.trim()))) { setError("Description is required"); return; }
+    if (!sanitizeString(title.trim())) { setError("Title is required"); return; }
+    if (!sanitizeString(description.trim())) { setError("Description is required"); return; }
     if (!isConnected || !address) { setError("Connect your wallet to create a proposal"); return; }
     if (!user) { setError("Sign in to create a proposal"); return; }
 
     createProposal.mutate({
-      title: sanitizeString(sanitizeString(title.trim())),
-      description: sanitizeString(sanitizeString(description.trim())),
+      title: sanitizeString(title.trim()),
+      description: sanitizeString(description.trim()),
       walletAddress: address,
       category,
       chain,
       durationDays,
       governanceMode: "advisory",
-      confirmBinding: confirmsCurrentWallet || undefined,
+      bindingChallenge: pendingForCurrentWallet?.challenge,
     });
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
       <Link href="/dao/proposals">
-        <Button variant="ghost" className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Proposals
-        </Button>
+        <Button variant="ghost" className="gap-2"><ArrowLeft className="h-4 w-4" />Back to Proposals</Button>
       </Link>
 
       <Card className="bg-card text-card-foreground border-border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-primary" />
-            Create New Advisory Proposal
-          </CardTitle>
+          <CardTitle className="flex items-center gap-2"><FileText className="h-5 w-5 text-primary" />Create New Advisory Proposal</CardTitle>
         </CardHeader>
         <CardContent>
           {!isConnected ? (
@@ -92,32 +99,21 @@ export default function CreateProposal() {
               icon="shield"
             />
           ) : !user ? (
-            <div className="text-center py-8">
-              <p className="text-muted-foreground">Sign in to create a proposal.</p>
-            </div>
+            <div className="text-center py-8"><p className="text-muted-foreground">Sign in to create a proposal.</p></div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-5">
-              {error && (
-                <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">
-                  {error}
-                </div>
-              )}
+              {error && <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30 text-red-400 text-sm">{error}</div>}
 
               <div>
                 <label className="block text-sm font-medium mb-1.5">Title</label>
-                <Input
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="Enter proposal title..."
-                  maxLength={512}
-                />
+                <Input value={title} onChange={(event) => setTitle(event.target.value)} placeholder="Enter proposal title..." maxLength={512} />
               </div>
 
               <div>
                 <label className="block text-sm font-medium mb-1.5">Description</label>
                 <Textarea
                   value={description}
-                  onChange={(e) => setDescription(e.target.value)}
+                  onChange={(event) => setDescription(event.target.value)}
                   placeholder="Describe your proposal in detail. Include motivation, implementation plan, and expected outcomes..."
                   rows={10}
                   maxLength={10000}
@@ -130,38 +126,25 @@ export default function CreateProposal() {
                   <label className="block text-sm font-medium mb-1.5">Category</label>
                   <select
                     value={category}
-                    onChange={(e) => { const v = e.target.value; if ((validCategories as readonly string[]).includes(v)) setCategory(v as typeof category); }}
+                    onChange={(event) => { const value = event.target.value; if ((validCategories as readonly string[]).includes(value)) setCategory(value as typeof category); }}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
-                    <option value="protocol">Protocol</option>
-                    <option value="treasury">Treasury</option>
-                    <option value="community">Community</option>
-                    <option value="emergency">Emergency</option>
+                    <option value="protocol">Protocol</option><option value="treasury">Treasury</option><option value="community">Community</option><option value="emergency">Emergency</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Chain scope</label>
                   <select
                     value={chain}
-                    onChange={(e) => { const v = e.target.value; if ((validChains as readonly string[]).includes(v)) setChain(v as typeof chain); }}
+                    onChange={(event) => { const value = event.target.value; if ((validChains as readonly string[]).includes(value)) setChain(value as typeof chain); }}
                     className="w-full h-10 rounded-md border border-border bg-background px-3 text-sm"
                   >
-                    <option value="both">Both Chains</option>
-                    <option value="pulsechain">PulseChain</option>
-                    <option value="base">Base</option>
+                    <option value="both">Both Chains</option><option value="pulsechain">PulseChain</option><option value="base">Base</option>
                   </select>
                 </div>
-
                 <div>
                   <label className="block text-sm font-medium mb-1.5">Duration (days)</label>
-                  <Input
-                    type="number"
-                    value={durationDays}
-                    onChange={(e) => setDurationDays(Math.max(1, Math.min(30, parseInt(e.target.value) || 7)))}
-                    min={1}
-                    max={30}
-                  />
+                  <Input type="number" value={durationDays} onChange={(event) => setDurationDays(Math.max(1, Math.min(30, parseInt(event.target.value) || 7)))} min={1} max={30} />
                 </div>
               </div>
 
@@ -169,18 +152,14 @@ export default function CreateProposal() {
                 <p className="font-medium mb-1">Advisory Governance Boundary</p>
                 <ul className="text-muted-foreground space-y-1 text-xs">
                   <li>• One authenticated account and bound wallet receives one advisory vote.</li>
-                  <li>• Proposal activation and quorum remain persisted server-side policy.</li>
+                  <li>• A server-signed challenge is required before permanent wallet binding.</li>
                   <li>• The selected chain limits where an advisory vote may be recorded.</li>
                   <li>• Binding execution, token-weighted voting, and treasury actions remain disabled.</li>
                 </ul>
               </div>
 
               <Button type="submit" className="w-full" disabled={createProposal.isPending}>
-                {createProposal.isPending
-                  ? "Creating..."
-                  : confirmsCurrentWallet
-                    ? "Confirm Wallet Binding & Submit Proposal"
-                    : "Submit Advisory Proposal"}
+                {createProposal.isPending ? "Creating..." : pendingForCurrentWallet ? "Confirm Wallet Binding & Submit Proposal" : "Submit Advisory Proposal"}
               </Button>
             </form>
           )}
