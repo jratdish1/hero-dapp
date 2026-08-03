@@ -6,6 +6,7 @@ import {
   classifyDaoMigrationShape,
   isAdvisoryPolicyStatusAllowed,
   isConstraintEnforced,
+  isFinalizedAdvisoryOutcomeValid,
   isWalletUniqueIndexShapeValid,
   normalizeCheckClause,
 } from "./dao-advisory-migration";
@@ -69,6 +70,26 @@ describe("DAO advisory migration policy", () => {
     "rejects binding-only or unknown advisory status %s",
     status => expect(isAdvisoryPolicyStatusAllowed(status)).toBe(false),
   );
+
+  it("validates finalized advisory outcomes against deadline, quorum, and tallies", () => {
+    const ended = new Date("2026-08-03T00:00:00.000Z");
+    const now = new Date("2026-08-03T00:00:01.000Z");
+    expect(isFinalizedAdvisoryOutcomeValid({
+      status: "passed", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+    }, now)).toBe(true);
+    expect(isFinalizedAdvisoryOutcomeValid({
+      status: "passed", endTime: new Date("2026-08-04T00:00:00.000Z"), votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+    }, now)).toBe(false);
+    expect(isFinalizedAdvisoryOutcomeValid({
+      status: "passed", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
+    }, now)).toBe(false);
+    expect(isFinalizedAdvisoryOutcomeValid({
+      status: "defeated", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
+    }, now)).toBe(true);
+    expect(isFinalizedAdvisoryOutcomeValid({
+      status: "defeated", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+    }, now)).toBe(false);
+  });
 
   it("requires the exact one-column unique wallet index", () => {
     expect(isWalletUniqueIndexShapeValid([{
