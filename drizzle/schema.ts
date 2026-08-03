@@ -30,7 +30,6 @@ export const dcaOrders = mysqlTable("dca_orders", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 }, (table) => ({
-  // AUDIT FIX 3.4: Index on frequently queried columns
   walletIdx: uniqueIndex("idx_dca_wallet").on(table.userId, table.walletAddress),
 }));
 
@@ -163,13 +162,18 @@ export const proposals = mysqlTable("proposals", {
   description: text("description").notNull(),
   proposerId: int("proposerId").notNull(),
   proposerAddress: varchar("proposerAddress", { length: 42 }).notNull(),
-  status: mysqlEnum("status", ["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]).default("pending").notNull(),
+  status: mysqlEnum("status", ["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]).default("active").notNull(),
   chain: mysqlEnum("chain", ["base", "pulsechain", "both"]).default("both").notNull(),
   category: mysqlEnum("category", ["protocol", "treasury", "community", "emergency"]).default("protocol").notNull(),
+  governanceMode: mysqlEnum("governanceMode", ["legacy", "advisory", "binding"]).default("advisory").notNull(),
+  snapshotVersion: int("snapshotVersion").default(1).notNull(),
+  bindingDisabledReason: varchar("bindingDisabledReason", { length: 512 })
+    .default("Binding governance is disabled until verified wallet ownership, finalized historical checkpoints, and an audited execution contract are available.")
+    .notNull(),
   votesFor: bigint("votesFor", { mode: "number" }).default(0).notNull(),
   votesAgainst: bigint("votesAgainst", { mode: "number" }).default(0).notNull(),
   votesAbstain: bigint("votesAbstain", { mode: "number" }).default(0).notNull(),
-  quorum: bigint("quorum", { mode: "number" }).default(5000000).notNull(),
+  quorum: bigint("quorum", { mode: "number" }).default(1).notNull(),
   startTime: timestamp("startTime").notNull(),
   endTime: timestamp("endTime").notNull(),
   executionTxHash: varchar("executionTxHash", { length: 66 }),
@@ -188,7 +192,6 @@ export const votes = mysqlTable("votes", {
   txHash: varchar("txHash", { length: 66 }),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
 }, (table) => ({
-  // AUDIT FIX 3.2: Unique constraint to prevent double voting at DB level
   uniqueVote: uniqueIndex("idx_unique_vote").on(table.proposalId, table.voterId),
 }));
 
@@ -333,7 +336,6 @@ export const spinLeaderboard = mysqlTable("spin_leaderboard", {
   walletIdx: uniqueIndex("lb_wallet_idx").on(table.wallet),
 }));
 
-// Insert types for spin tables
 export type InsertSpinRecord = typeof spinRecords.$inferInsert;
 export type InsertSpinResult = typeof spinResults.$inferInsert;
 export type InsertSpinLeaderboard = typeof spinLeaderboard.$inferInsert;
