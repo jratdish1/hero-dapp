@@ -313,3 +313,6 @@ writeFileSync('csp-contract-report.json', `${JSON.stringify(report, null, 2)}\n`
 console.log(
   `Production CSP contract: PASS; complete Helmet/Nginx match; transitional style-attribute files=${styleFiles.length}`,
 );
+// The instrumented security module may retain unrelated top-level handles.
+// All evidence is synchronously persisted above, so terminate deterministically.
+process.exit(0);
