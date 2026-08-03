@@ -162,18 +162,18 @@ export const proposals = mysqlTable("proposals", {
   description: text("description").notNull(),
   proposerId: int("proposerId").notNull(),
   proposerAddress: varchar("proposerAddress", { length: 42 }).notNull(),
-  status: mysqlEnum("status", ["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]).default("active").notNull(),
+  status: mysqlEnum("status", ["pending", "active", "passed", "defeated", "queued", "executed", "cancelled"]).default("pending").notNull(),
   chain: mysqlEnum("chain", ["base", "pulsechain", "both"]).default("both").notNull(),
   category: mysqlEnum("category", ["protocol", "treasury", "community", "emergency"]).default("protocol").notNull(),
-  governanceMode: mysqlEnum("governanceMode", ["legacy", "advisory", "binding"]).default("advisory").notNull(),
-  snapshotVersion: int("snapshotVersion").default(1).notNull(),
+  governanceMode: mysqlEnum("governanceMode", ["legacy", "advisory", "binding"]).default("legacy").notNull(),
+  snapshotVersion: int("snapshotVersion").default(0).notNull(),
   bindingDisabledReason: varchar("bindingDisabledReason", { length: 512 })
-    .default("Binding governance is disabled until verified wallet ownership, finalized historical checkpoints, and an audited execution contract are available.")
+    .default("This legacy proposal is frozen because it predates the advisory policy receipt and may contain token-weighted or on-chain-anchored state.")
     .notNull(),
   votesFor: bigint("votesFor", { mode: "number" }).default(0).notNull(),
   votesAgainst: bigint("votesAgainst", { mode: "number" }).default(0).notNull(),
   votesAbstain: bigint("votesAbstain", { mode: "number" }).default(0).notNull(),
-  quorum: bigint("quorum", { mode: "number" }).default(1).notNull(),
+  quorum: bigint("quorum", { mode: "number" }).default(5000000).notNull(),
   startTime: timestamp("startTime").notNull(),
   endTime: timestamp("endTime").notNull(),
   executionTxHash: varchar("executionTxHash", { length: 66 }),
