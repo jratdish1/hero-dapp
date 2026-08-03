@@ -666,7 +666,14 @@ jobs:
           git cat-file -e "${ROLLBACK_SHA}^{commit}"
           guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
           guard_status=0
-          git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"
+          if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then
+            rm -f "$guard_path"
+            exit 70
+          fi
+          if [ ! -s "$guard_path" ]; then
+            rm -f "$guard_path"
+            exit 70
+          fi
           node "$guard_path" "$ROLLBACK_SHA" || guard_status="$?"
           rm -f "$guard_path"
           test "$guard_status" = "0"
