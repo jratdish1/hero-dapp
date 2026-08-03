@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { readFileSync } from "node:fs";
 
 import { describe, expect, it } from "vitest";
 
@@ -11,6 +12,21 @@ describe("DAO rollback compatibility guard", () => {
   it("recognizes the checked-out advisory boundary", () => {
     const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
     expect(targetSupportsDaoBoundary(head)).toBe(true);
+  });
+
+  it("fails closed when the deploy workflow cannot extract a non-empty guard", () => {
+    const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
+    const functionBody = workflow.match(
+      /assert_dao_rollback_compatible\(\) \{([\s\S]*?)\n          \}/,
+    )?.[1] ?? "";
+
+    expect(functionBody).toContain(
+      'if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then',
+    );
+    expect(functionBody).toMatch(/if \[ ! -s "\$guard_path" \]; then/);
+    expect(functionBody.match(/return 70/g)).toHaveLength(2);
+    expect(functionBody.indexOf("if ! git show")).toBeLessThan(functionBody.indexOf('node "$guard_path"'));
+    expect(functionBody.indexOf('if [ ! -s "$guard_path" ]')).toBeLessThan(functionBody.indexOf('node "$guard_path"'));
   });
 
   it("allows targets that preserve the complete advisory boundary", () => {
