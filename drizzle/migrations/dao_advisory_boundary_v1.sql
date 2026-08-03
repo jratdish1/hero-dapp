@@ -1,13 +1,14 @@
--- DAO advisory-boundary policy and per-proposal policy versioning.
--- Run once through the approved single-writer database migration lane with the
--- application stopped. Any pre-existing/partial object fails closed for manual
--- reconciliation instead of being silently accepted.
+-- DAO advisory-boundary policy, per-proposal policy versioning, and permanent
+-- one-account-per-wallet binding. Run once through the approved single-writer
+-- database migration lane with the application stopped. Any pre-existing or
+-- partial policy object, drifted index, or duplicate wallet binding fails closed
+-- for manual reconciliation instead of being silently accepted.
 --
 -- Database defaults intentionally remain legacy-safe. New advisory-v1 records
 -- set every policy/status/quorum field explicitly in application code. If the
--- application is rolled back while the additive columns remain, the older code
--- can only create legacy/0 proposals rather than silently creating advisory
--- records under token-weighted semantics.
+-- application is rolled back while the additive columns remain, older code can
+-- only create legacy/0 proposals rather than silently creating advisory records
+-- under token-weighted semantics.
 
 DROP PROCEDURE IF EXISTS install_dao_advisory_boundary_v1;
 
@@ -16,6 +17,8 @@ CREATE PROCEDURE install_dao_advisory_boundary_v1()
 BEGIN
   DECLARE policy_tables INT DEFAULT 0;
   DECLARE proposal_policy_columns INT DEFAULT 0;
+  DECLARE wallet_index_rows INT DEFAULT 0;
+  DECLARE duplicate_wallet_groups INT DEFAULT 0;
 
   SELECT COUNT(*) INTO policy_tables
   FROM information_schema.tables
@@ -28,10 +31,37 @@ BEGIN
     AND table_name = 'proposals'
     AND column_name IN ('governanceMode', 'snapshotVersion', 'bindingDisabledReason');
 
-  IF policy_tables <> 0 OR proposal_policy_columns <> 0 THEN
+  SELECT COUNT(*) INTO wallet_index_rows
+  FROM information_schema.statistics
+  WHERE table_schema = DATABASE()
+    AND table_name = 'users'
+    AND index_name = 'ux_users_wallet_address';
+
+  SELECT COUNT(*) INTO duplicate_wallet_groups
+  FROM (
+    SELECT LOWER(walletAddress) AS normalized_wallet
+    FROM users
+    WHERE walletAddress IS NOT NULL
+    GROUP BY LOWER(walletAddress)
+    HAVING COUNT(*) > 1
+  ) AS duplicate_wallets;
+
+  IF policy_tables <> 0 OR proposal_policy_columns <> 0 OR wallet_index_rows <> 0 THEN
     SIGNAL SQLSTATE '45000'
       SET MESSAGE_TEXT = 'Refusing DAO v1 install: partial or prior governance policy objects require manual reconciliation';
   END IF;
+
+  IF duplicate_wallet_groups <> 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Refusing DAO v1 install: duplicate bound wallets require manual reconciliation';
+  END IF;
+
+  UPDATE users
+  SET walletAddress = LOWER(walletAddress)
+  WHERE walletAddress IS NOT NULL;
+
+  ALTER TABLE users
+    ADD UNIQUE INDEX ux_users_wallet_address (walletAddress);
 
   CREATE TABLE dao_governance_policy (
     id INT NOT NULL PRIMARY KEY,
