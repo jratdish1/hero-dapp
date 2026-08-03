@@ -84,8 +84,6 @@ jobs:
           "$chrome_bin" --version
 
       - name: Exercise mounted bootstrap and route chunk recovery
-        id: recovery
-        continue-on-error: true
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         shell: bash
@@ -96,12 +94,10 @@ jobs:
             > bootstrap-recovery.log 2>&1
           status=$?
           cat bootstrap-recovery.log
-          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
       - name: Exercise mounted generic render-error focus
-        id: generic_focus
-        continue-on-error: true
+        if: always()
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         shell: bash
@@ -112,7 +108,6 @@ jobs:
             > generic-error-focus.log 2>&1
           status=$?
           cat generic-error-focus.log
-          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
       - name: Exercise production CSP route matrix
@@ -149,22 +144,6 @@ jobs:
             dist/public/assets/DappBootstrap-*.js
           retention-days: 14
           if-no-files-found: error
-
-      - name: Enforce mounted recovery gates
-        if: always()
-        shell: bash
-        run: |
-          set -euo pipefail
-          recovery_outcome="${{ steps.recovery.outcome }}"
-          recovery_status="${{ steps.recovery.outputs.exit_status }}"
-          focus_outcome="${{ steps.generic_focus.outcome }}"
-          focus_status="${{ steps.generic_focus.outputs.exit_status }}"
-          if [[ "$recovery_outcome" != "success" || "$recovery_status" != "0" || "$focus_outcome" != "success" || "$focus_status" != "0" ]]; then
-            printf 'Mounted recovery gates failed: recovery=%s/%s generic_focus=%s/%s\n' \
-              "$recovery_outcome" "$recovery_status" "$focus_outcome" "$focus_status" >&2
-            exit 1
-          fi
-          echo 'Mounted recovery gates: PASS'
 
       - name: Production dependency advisory gate
         id: production_audit
