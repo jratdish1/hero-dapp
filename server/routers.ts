@@ -4,6 +4,7 @@ import { z } from "zod";
 import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
   castAdvisoryVoteAtomic,
+  createProposal,
   getDelegateByAddress,
   getDelegates,
   getLatestTreasurySnapshots,
@@ -15,18 +16,27 @@ import {
   updateUserWalletAddress,
 } from "./db";
 import {
+  DAO_ADVISORY_QUORUM,
+  DAO_BINDING_DISABLED_REASON,
   DAO_DELEGATION_DISABLED_REASON,
+  DAO_SNAPSHOT_VERSION,
   advisoryProposalMetadata,
   assertProposalVoteable,
   proposalGovernanceMetadata,
   resolveAdvisoryVoteChain,
 } from "./dao-governance-policy";
+import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
+import { generateProposalHash } from "./dao-security-hardening";
 import { appRouter as legacyAppRouter } from "./routers-base";
 
 export { getRpcMetrics } from "./routers-base";
 
 const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet address format");
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
+const safeStringSchema = (maxLength: number) => z.string().min(1).max(maxLength).refine(
+  value => !/<script/i.test(value) && !/javascript:/i.test(value) && !/on\w+=/i.test(value),
+  { message: "Input contains disallowed content" },
+);
 
 function fail(
   code: "BAD_REQUEST" | "UNAUTHORIZED" | "FORBIDDEN" | "NOT_FOUND" | "TOO_MANY_REQUESTS" | "INTERNAL_SERVER_ERROR" | "PRECONDITION_FAILED",
@@ -112,6 +122,87 @@ const daoRouter = router({
       .query(async ({ input }) => {
         const proposal = await getProposalById(input.proposalId);
         return proposal ? { ...proposal, ...proposalGovernanceMetadata(proposal) } : undefined;
+      }),
+    create: protectedProcedure
+      .input(z.object({
+        title: safeStringSchema(512),
+        description: safeStringSchema(10_000),
+        walletAddress: ethAddressSchema,
+        chain: z.enum(["base", "pulsechain", "both"]).optional(),
+        category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
+        durationDays: z.number().int().min(1).max(30).optional(),
+        governanceMode: z.enum(["advisory", "binding"]).optional(),
+        confirmBinding: z.boolean().optional(),
+      }))
+      .mutation(async ({ ctx, input }) => {
+        if ((input.governanceMode ?? "advisory") !== "advisory") {
+          fail("PRECONDITION_FAILED", DAO_BINDING_DISABLED_REASON);
+        }
+        const normalizedWallet = input.walletAddress.toLowerCase();
+        const existingWallet = ctx.user.walletAddress?.toLowerCase();
+        if (existingWallet && existingWallet !== normalizedWallet) {
+          fail("FORBIDDEN", "Wallet address does not match the authenticated account wallet");
+        }
+        if (!existingWallet && !input.confirmBinding) {
+          return {
+            success: false,
+            requiresConfirmation: true,
+            message: "Confirm permanent account binding before creating this advisory proposal.",
+            walletAddress: normalizedWallet,
+            proposalId: undefined,
+            contentHash: undefined,
+            anchorTxHash: undefined,
+            ...advisoryProposalMetadata(),
+          } as const;
+        }
+        if (!existingWallet) {
+          await updateUserWalletAddress(ctx.user.id, normalizedWallet);
+        }
+
+        const proposalId = `HERO-A1-${Date.now().toString(36).toUpperCase()}`;
+        const rateCheck = await atomicRateLimitAndRecord(ctx.user.id, proposalId, normalizedWallet, 3);
+        if (!rateCheck.allowed) {
+          fail("TOO_MANY_REQUESTS", "Rate limited: maximum 3 proposals per 24 hours");
+        }
+        const startTime = new Date();
+        const endTime = new Date(startTime.getTime() + (input.durationDays ?? 7) * 86_400_000);
+        const chain = input.chain ?? "both";
+        const contentHash = generateProposalHash(
+          proposalId,
+          input.title,
+          input.description,
+          normalizedWallet,
+          chain,
+          startTime,
+          endTime,
+        );
+
+        await createProposal({
+          proposalId,
+          title: input.title,
+          description: input.description,
+          proposerId: ctx.user.id,
+          proposerAddress: normalizedWallet,
+          status: "active",
+          chain,
+          category: input.category ?? "protocol",
+          governanceMode: "advisory",
+          snapshotVersion: DAO_SNAPSHOT_VERSION,
+          bindingDisabledReason: DAO_BINDING_DISABLED_REASON,
+          quorum: DAO_ADVISORY_QUORUM,
+          startTime,
+          endTime,
+        });
+
+        return {
+          success: true,
+          requiresConfirmation: false,
+          walletAddress: normalizedWallet,
+          proposalId,
+          contentHash,
+          anchorTxHash: null,
+          ...advisoryProposalMetadata(),
+        } as const;
       }),
     updateStatus: protectedProcedure
       .input(z.object({
