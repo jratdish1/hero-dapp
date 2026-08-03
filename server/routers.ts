@@ -804,6 +804,10 @@ export const appRouter = router({
                 requiresConfirmation: true,
                 message: "This will permanently bind this wallet to your account. Set confirmBinding: true to proceed.",
                 walletAddress: input.walletAddress,
+                proposalId: undefined,
+                contentHash: undefined,
+                anchorTxHash: undefined,
+                ...advisoryProposalMetadata(),
               };
             }
             await updateUserWalletAddress(ctx.user.id, input.walletAddress);
