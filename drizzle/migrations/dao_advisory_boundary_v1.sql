@@ -2,6 +2,12 @@
 -- Run once through the approved single-writer database migration lane with the
 -- application stopped. Any pre-existing/partial object fails closed for manual
 -- reconciliation instead of being silently accepted.
+--
+-- Database defaults intentionally remain legacy-safe. New advisory-v1 records
+-- set every policy/status/quorum field explicitly in application code. If the
+-- application is rolled back while the additive columns remain, the older code
+-- can only create legacy/0 proposals rather than silently creating advisory
+-- records under token-weighted semantics.
 
 DROP PROCEDURE IF EXISTS install_dao_advisory_boundary_v1;
 
@@ -43,22 +49,11 @@ BEGIN
     )
   );
 
-  -- New columns initially default to legacy so every pre-existing row is frozen.
   ALTER TABLE proposals
     ADD COLUMN governanceMode ENUM('legacy', 'advisory', 'binding') NOT NULL DEFAULT 'legacy',
     ADD COLUMN snapshotVersion INT NOT NULL DEFAULT 0,
     ADD COLUMN bindingDisabledReason VARCHAR(512) NOT NULL DEFAULT
       'This legacy proposal is frozen because it predates the advisory policy receipt and may contain token-weighted or on-chain-anchored state.';
-
-  -- Future inserts are explicit advisory-v1 records with a one-vote quorum and
-  -- an active voting window; existing rows retain legacy/0 and their old values.
-  ALTER TABLE proposals
-    MODIFY COLUMN governanceMode ENUM('legacy', 'advisory', 'binding') NOT NULL DEFAULT 'advisory',
-    MODIFY COLUMN snapshotVersion INT NOT NULL DEFAULT 1,
-    MODIFY COLUMN bindingDisabledReason VARCHAR(512) NOT NULL DEFAULT
-      'Binding governance is disabled until verified wallet ownership, finalized historical checkpoints, and an audited execution contract are available.',
-    MODIFY COLUMN status ENUM('pending', 'active', 'passed', 'defeated', 'queued', 'executed', 'cancelled') NOT NULL DEFAULT 'active',
-    MODIFY COLUMN quorum BIGINT NOT NULL DEFAULT 1;
 
   INSERT INTO dao_governance_policy (
     id,
