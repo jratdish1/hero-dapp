@@ -476,12 +476,30 @@ jobs:
               --platform=node --packages=external --bundle --format=esm --outdir=dist
           }
 
+          assert_dao_rollback_compatible() {
+            local target_sha="$1"
+            local guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
+            local guard_status=0
+            if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then
+              rm -f "$guard_path"
+              return 70
+            fi
+            if [ ! -s "$guard_path" ]; then
+              rm -f "$guard_path"
+              return 70
+            fi
+            node "$guard_path" "$target_sha" || guard_status="$?"
+            rm -f "$guard_path"
+            return "$guard_status"
+          }
+
           rollback() {
             original_status="$?"
             trap - ERR
             if [ "$MUTATION_STARTED" = true ]; then
               printf 'VETS_INLINE_ROLLBACK_ATTEMPTED=true\n'
-              if git reset --hard "$PREVIOUS_SHA" &&
+              if assert_dao_rollback_compatible "$PREVIOUS_SHA" &&
+                 git reset --hard "$PREVIOUS_SHA" &&
                  corepack enable &&
                  corepack prepare pnpm@10.34.4 --activate &&
                  test "$(pnpm --version)" = "10.34.4" &&
@@ -510,6 +528,7 @@ jobs:
             rollback)
               test "$(git rev-parse origin/main)" != "$DEPLOY_SHA"
               git merge-base --is-ancestor "$DEPLOY_SHA" origin/main
+              assert_dao_rollback_compatible "$DEPLOY_SHA"
               ;;
             *) exit 64 ;;
           esac
@@ -645,6 +664,19 @@ jobs:
           flock -w 1800 9 || exit 75
           git fetch --no-tags origin main:refs/remotes/origin/main
           git cat-file -e "${ROLLBACK_SHA}^{commit}"
+          guard_path="$APP_DIR/.git/vets-dao-rollback-guard.mjs"
+          guard_status=0
+          if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then
+            rm -f "$guard_path"
+            exit 70
+          fi
+          if [ ! -s "$guard_path" ]; then
+            rm -f "$guard_path"
+            exit 70
+          fi
+          node "$guard_path" "$ROLLBACK_SHA" || guard_status="$?"
+          rm -f "$guard_path"
+          test "$guard_status" = "0"
           git reset --hard "$ROLLBACK_SHA"
           corepack enable
           corepack prepare pnpm@10.34.4 --activate

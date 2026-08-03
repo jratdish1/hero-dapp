@@ -2,16 +2,20 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAccount, useChainId, useReadContract } from "wagmi";
-import { getHeroAddress } from "@/lib/config";
-import { erc20Abi, formatUnits } from "viem";
+import { useAccount, useChainId, useSignMessage } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users, AlertCircle } from "lucide-react";
+import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, Users, AlertCircle, Link2 } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { IdentityBadge } from "@/components/WalletIdentity";
+
+interface PendingBinding {
+  walletAddress: string;
+  challenge: string;
+  message: string;
+}
 
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
@@ -25,81 +29,70 @@ const statusColors: Record<string, string> = {
 
 export default function ProposalDetail() {
   const [, params] = useRoute("/dao/proposals/:id");
-  // Validate proposalId from URL params to prevent injection
   const rawProposalId = params?.id || "";
-  // Proposal IDs follow format: HERO-XXXX or alphanumeric with hyphens, 3-64 chars
   const proposalId = /^[A-Za-z0-9][A-Za-z0-9-]{2,63}$/.test(rawProposalId) ? rawProposalId : "";
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { signMessageAsync, isPending: isSigningBinding } = useSignMessage();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
+  const [pendingBinding, setPendingBinding] = useState<PendingBinding | null>(null);
 
-  // HERO token addresses per chain
-  const heroTokenAddress = chainId === 369
-    ? getHeroAddress(369) ?? "" // PulseChain
-    : getHeroAddress(8453) ?? ""; // BASE
-
-  // Read user's HERO balance for voting power (1 HERO = 1 vote)
-  const { data: heroBalance } = useReadContract({
-    address: heroTokenAddress as `0x${string}`,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId: chainId === 369 || chainId === 8453 ? chainId : undefined,
-    query: { enabled: isConnected && !!address },
-  });
-
-  // Convert balance to whole tokens (18 decimals) — use formatUnits for precision
-  const votingPower = heroBalance ? Math.floor(Number(formatUnits(heroBalance, 18))) : 0;
-  const connectedChain = chainId === 369 ? "pulsechain" : "base";
-
-  // Fetch proposal first — dependent queries gate on proposal.id
+  const connectedChain = chainId === 369 ? "pulsechain" : chainId === 8453 ? "base" : null;
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
     { proposalId },
-    { enabled: !!proposalId }
+    { enabled: !!proposalId },
   );
-
   const proposalDbId = proposal?.id;
-
-  // Check if user already voted (audit fix: disable UI if already voted)
   const { data: myVote } = trpc.dao.votes.myVote.useQuery(
     { proposalDbId: proposalDbId! },
-    { enabled: !!proposalDbId && !!user }
+    { enabled: !!proposalDbId && !!user },
   );
-  const hasVoted = !!myVote;
-
   const { data: votes } = trpc.dao.votes.list.useQuery(
     { proposalDbId: proposalDbId! },
-    { enabled: !!proposalDbId }
+    { enabled: !!proposalDbId },
   );
 
   const utils = trpc.useUtils();
+  const bindWallet = trpc.dao.wallet.bindForVoting.useMutation({
+    onSuccess: async (data) => {
+      if (!data.success && data.requiresConfirmation) {
+        if (!data.bindingChallenge || !data.bindingMessage) {
+          setPendingBinding(null);
+          return;
+        }
+        setPendingBinding({
+          walletAddress: data.walletAddress,
+          challenge: data.bindingChallenge,
+          message: data.bindingMessage,
+        });
+        return;
+      }
+      setPendingBinding(null);
+      await utils.auth.me.invalidate();
+    },
+    onError: () => setPendingBinding(null),
+  });
   const castVote = trpc.dao.votes.cast.useMutation({
-    onSuccess: () => {
-      utils.dao.proposals.get.invalidate({ proposalId });
-      if (proposalDbId) utils.dao.votes.list.invalidate({ proposalDbId });
+    onSuccess: async () => {
+      await Promise.all([
+        utils.dao.proposals.get.invalidate({ proposalId }),
+        proposalDbId ? utils.dao.votes.list.invalidate({ proposalDbId }) : Promise.resolve(),
+        proposalDbId ? utils.dao.votes.myVote.invalidate({ proposalDbId }) : Promise.resolve(),
+      ]);
       setVotingChoice(null);
     },
   });
 
   if (isLoading) {
-    return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
-        <Skeleton className="h-64 w-full" />
-        <Skeleton className="h-48 w-full" />
-      </div>
-    );
+    return <div className="space-y-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-64 w-full" /><Skeleton className="h-48 w-full" /></div>;
   }
-
   if (!proposal) {
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 mx-auto mb-3 text-muted-foreground" />
         <h2 className="text-xl font-semibold mb-2">Proposal Not Found</h2>
-        <Link href="/dao/proposals">
-          <Button variant="outline">Back to Proposals</Button>
-        </Link>
+        <Link href="/dao/proposals"><Button variant="outline">Back to Proposals</Button></Link>
       </div>
     );
   }
@@ -110,217 +103,148 @@ export default function ProposalDetail() {
   const abstainPct = totalVotes > 0 ? (proposal.votesAbstain / totalVotes) * 100 : 0;
   const endDate = new Date(proposal.endTime);
   const isActive = proposal.status === "active" && endDate > new Date();
-  const quorum = 5_000_000;
-  const quorumPct = Math.min((totalVotes / quorum) * 100, 100);
+  const quorumPct = proposal.quorum > 0 ? Math.min((totalVotes / proposal.quorum) * 100, 100) : 0;
+  const isChainEligible = connectedChain !== null && (proposal.chain === "both" || proposal.chain === connectedChain);
+  const hasVoted = !!myVote;
+  const isBoundWallet = !!address && user?.walletAddress?.toLowerCase() === address.toLowerCase();
+  const bindingForCurrentWallet = !!address
+    && pendingBinding?.walletAddress.toLowerCase() === address.toLowerCase()
+    ? pendingBinding
+    : null;
+  const canVotePolicy = proposal.advisoryVotingEnabled === true && proposal.governanceMode === "advisory" && proposal.snapshotVersion === 1;
 
+  const requestWalletBinding = async () => {
+    if (!address) return;
+    let walletSignature: `0x${string}` | undefined;
+    if (bindingForCurrentWallet) {
+      try {
+        walletSignature = await signMessageAsync({ message: bindingForCurrentWallet.message });
+      } catch {
+        return;
+      }
+    }
+    bindWallet.mutate({
+      walletAddress: address,
+      bindingChallenge: bindingForCurrentWallet?.challenge,
+      walletSignature,
+    });
+  };
   const handleVote = (choice: "for" | "against" | "abstain") => {
-    if (!isConnected || !address || !user || hasVoted) return;
-    if (votingPower <= 0) return; // Must hold HERO to vote
+    if (!isConnected || !address || !user || !isBoundWallet || hasVoted || !connectedChain || !isChainEligible || !canVotePolicy) return;
     castVote.mutate({
       proposalDbId: proposal.id,
       proposalId: proposal.proposalId,
       voterAddress: address,
       choice,
-      votingPower,
+      votingPower: 1,
       chain: connectedChain,
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Back Button */}
-      <Link href="/dao/proposals">
-        <Button variant="ghost" className="gap-2">
-          <ArrowLeft className="h-4 w-4" />
-          Back to Proposals
-        </Button>
-      </Link>
+      <Link href="/dao/proposals"><Button variant="ghost" className="gap-2"><ArrowLeft className="h-4 w-4" />Back to Proposals</Button></Link>
 
-      {/* Proposal Header */}
       <Card className="bg-card text-card-foreground border-border">
         <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-3">
-            <Badge variant="outline" className={statusColors[proposal.status] || ""}>
-              {proposal.status}
-            </Badge>
+          <div className="flex flex-wrap items-center gap-2 mb-3">
+            <Badge variant="outline" className={statusColors[proposal.status] || ""}>{proposal.status}</Badge>
             <Badge variant="outline">{proposal.category}</Badge>
             <Badge variant="outline">{proposal.chain}</Badge>
+            <Badge variant="outline">{proposal.governanceMode === "legacy" ? "Legacy · frozen" : "Advisory v1 · 1 account = 1 vote"}</Badge>
           </div>
           <h1 className="text-2xl font-bold">{proposal.title}</h1>
-          <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
-            <span>{proposal.proposalId}</span>
-            <span>·</span>
-            <span>By {proposal.proposerAddress.slice(0, 6)}...{proposal.proposerAddress.slice(-4)}</span>
-            <span>·</span>
-            <span>
-              <Clock className="h-3 w-3 inline mr-1" />
-              {isActive ? `Ends ${endDate.toLocaleDateString()}` : `Ended ${endDate.toLocaleDateString()}`}
-            </span>
+          <p className="mt-2 text-xs text-muted-foreground">{proposal.bindingDisabledReason}</p>
+          <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
+            <span>{proposal.proposalId}</span><span>·</span>
+            <span>By {proposal.proposerAddress.slice(0, 6)}...{proposal.proposerAddress.slice(-4)}</span><span>·</span>
+            <span><Clock className="h-3 w-3 inline mr-1" />{isActive ? `Ends ${endDate.toLocaleDateString()}` : `Ended ${endDate.toLocaleDateString()}`}</span>
           </div>
         </CardContent>
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Description */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="bg-card text-card-foreground border-border">
-            <CardHeader>
-              <CardTitle>Description</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {/* React auto-escapes text content — no XSS risk from JSX interpolation */}
-              <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap break-words">
-                {String(proposal.description ?? "")}  
-              </div>
-            </CardContent>
+            <CardHeader><CardTitle>Description</CardTitle></CardHeader>
+            <CardContent><div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap break-words">{String(proposal.description ?? "")}</div></CardContent>
           </Card>
-
-          {/* Votes List */}
           <Card className="bg-card text-card-foreground border-border">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Users className="h-5 w-5" />
-                Votes ({votes?.length || 0})
-              </CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Recorded Votes ({votes?.length || 0})</CardTitle></CardHeader>
             <CardContent>
               {votes && votes.length > 0 ? (
                 <div className="space-y-2 max-h-64 overflow-y-auto">
-                  {votes.map((v) => (
-                    <div key={v.id} className="flex items-center justify-between p-2 rounded-lg border border-border">
+                  {votes.map((vote) => (
+                    <div key={vote.id} className="flex items-center justify-between p-2 rounded-lg border border-border">
                       <div className="flex items-center gap-2">
-                        {v.choice === "for" && <ThumbsUp className="h-4 w-4 text-green-400" />}
-                        {v.choice === "against" && <ThumbsDown className="h-4 w-4 text-red-400" />}
-                        {v.choice === "abstain" && <Minus className="h-4 w-4 text-muted-foreground" />}
-                        <IdentityBadge address={v.voterAddress} />
+                        {vote.choice === "for" && <ThumbsUp className="h-4 w-4 text-green-400" />}
+                        {vote.choice === "against" && <ThumbsDown className="h-4 w-4 text-red-400" />}
+                        {vote.choice === "abstain" && <Minus className="h-4 w-4 text-muted-foreground" />}
+                        <IdentityBadge address={vote.voterAddress} />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">{v.votingPower.toLocaleString()} VP</span>
-                        <Badge variant="outline" className="text-xs capitalize">{v.choice}</Badge>
+                        <span className="text-sm text-muted-foreground">{proposal.governanceMode === "legacy" ? `${vote.votingPower.toLocaleString()} legacy weight` : "1 advisory vote"}</span>
+                        <Badge variant="outline" className="text-xs capitalize">{vote.choice}</Badge>
                       </div>
                     </div>
                   ))}
                 </div>
-              ) : (
-                <p className="text-center text-muted-foreground py-4">No votes yet. Be the first!</p>
-              )}
+              ) : <p className="text-center text-muted-foreground py-4">No votes recorded.</p>}
             </CardContent>
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
-          {/* Vote Results */}
           <Card className="bg-card text-card-foreground border-border">
-            <CardHeader>
-              <CardTitle>Results</CardTitle>
-            </CardHeader>
+            <CardHeader><CardTitle>Results</CardTitle></CardHeader>
             <CardContent className="space-y-4">
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="flex items-center gap-1"><ThumbsUp className="h-3 w-3 text-green-400" /> For</span>
-                  <span>{forPct.toFixed(1)}% ({proposal.votesFor.toLocaleString()})</span>
+              {[{label:"For", pct:forPct, count:proposal.votesFor, icon:<ThumbsUp className="h-3 w-3 text-green-400" />, cls:"bg-green-500"}, {label:"Against", pct:againstPct, count:proposal.votesAgainst, icon:<ThumbsDown className="h-3 w-3 text-red-400" />, cls:"bg-red-500"}, {label:"Abstain", pct:abstainPct, count:proposal.votesAbstain, icon:<Minus className="h-3 w-3" />, cls:"bg-muted-foreground/30"}].map((item) => (
+                <div key={item.label}>
+                  <div className="flex justify-between text-sm mb-1"><span className="flex items-center gap-1">{item.icon}{item.label}</span><span>{item.pct.toFixed(1)}% ({item.count.toLocaleString()})</span></div>
+                  <div className="h-2 bg-muted rounded-full overflow-hidden"><div className={`h-full rounded-full ${item.cls}`} style={{ width: `${item.pct}%` }} /></div>
                 </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${forPct}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="flex items-center gap-1"><ThumbsDown className="h-3 w-3 text-red-400" /> Against</span>
-                  <span>{againstPct.toFixed(1)}% ({proposal.votesAgainst.toLocaleString()})</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-red-500 rounded-full" style={{ width: `${againstPct}%` }} />
-                </div>
-              </div>
-              <div>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="flex items-center gap-1"><Minus className="h-3 w-3" /> Abstain</span>
-                  <span>{abstainPct.toFixed(1)}% ({proposal.votesAbstain.toLocaleString()})</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-muted-foreground/30 rounded-full" style={{ width: `${abstainPct}%` }} />
-                </div>
-              </div>
-
-              {/* Quorum */}
+              ))}
               <div className="pt-2 border-t border-border">
-                <div className="flex justify-between text-sm mb-1">
-                  <span>Quorum</span>
-                  <span>{quorumPct.toFixed(1)}%</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div className="h-full bg-primary rounded-full" style={{ width: `${quorumPct}%` }} />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {totalVotes.toLocaleString()} / {quorum.toLocaleString()} HERO needed
-                </p>
+                <div className="flex justify-between text-sm mb-1"><span>{proposal.governanceMode === "legacy" ? "Legacy quorum" : "Advisory quorum"}</span><span>{quorumPct.toFixed(1)}%</span></div>
+                <div className="h-2 bg-muted rounded-full overflow-hidden"><div className="h-full bg-primary rounded-full" style={{ width: `${quorumPct}%` }} /></div>
+                <p className="text-xs text-muted-foreground mt-1">{totalVotes.toLocaleString()} / {proposal.quorum.toLocaleString()}</p>
               </div>
             </CardContent>
           </Card>
 
-          {/* Cast Vote */}
           {isActive && (
             <Card className="bg-card text-card-foreground border-border">
-              <CardHeader>
-                <CardTitle>Cast Your Vote</CardTitle>
-              </CardHeader>
+              <CardHeader><CardTitle>Cast Your Advisory Vote</CardTitle></CardHeader>
               <CardContent className="space-y-3">
-                {!isConnected ? (
-                  <ConnectWalletPrompt
-                    message="Connect your wallet to cast your vote."
-                    subMessage="1 HERO = 1 vote. Voting power is calculated from your wallet balance."
-                    icon="shield"
-                    variant="card"
-                  />
+                {!canVotePolicy ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">This proposal is frozen and cannot accept advisory-v1 votes.</p>
+                ) : !isConnected ? (
+                  <ConnectWalletPrompt message="Connect your wallet to cast your vote." subMessage="Advisory mode: one authenticated account and bound wallet, one vote." icon="shield" variant="card" />
                 ) : !user ? (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    Sign in to vote
-                  </p>
-                ) : hasVoted ? (
-                  <div className="text-center py-4">
-                    <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-400" />
-                    <p className="text-sm font-medium">You have already voted on this proposal</p>
-                    <p className="text-xs text-muted-foreground mt-1">Your vote: {myVote?.choice}</p>
+                  <p className="text-sm text-muted-foreground text-center py-2">Sign in to vote.</p>
+                ) : !isBoundWallet ? (
+                  <div className="space-y-3 text-center">
+                    <p className="text-sm text-muted-foreground">Bind the connected wallet before voting. The wallet must sign the server-issued account/address/nonce message; the signature authorizes no transaction or token movement.</p>
+                    {bindWallet.error && <p className="text-sm text-red-400">{bindWallet.error.message}</p>}
+                    <Button className="w-full gap-2" onClick={requestWalletBinding} disabled={bindWallet.isPending || isSigningBinding || !address}>
+                      <Link2 className="h-4 w-4" />
+                      {isSigningBinding ? "Awaiting Wallet Signature..." : bindWallet.isPending ? "Binding..." : bindingForCurrentWallet ? "Sign & Bind Wallet" : "Start Wallet Binding"}
+                    </Button>
                   </div>
-                ) : votingPower <= 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    You need HERO tokens to vote. 1 HERO = 1 vote.
-                  </p>
+                ) : !connectedChain ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">Switch to Base or PulseChain.</p>
+                ) : !isChainEligible ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">Switch to the proposal&apos;s {proposal.chain} chain.</p>
+                ) : hasVoted ? (
+                  <div className="text-center py-4"><CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-400" /><p className="text-sm font-medium">You already voted</p><p className="text-xs text-muted-foreground mt-1">Your vote: {myVote?.choice}</p></div>
                 ) : (
                   <>
-                    <p className="text-xs text-muted-foreground mb-2">Your voting power: {votingPower.toLocaleString()} HERO</p>
-                    <Button
-                      variant={votingChoice === "for" ? "default" : "outline"}
-                      className="w-full gap-2"
-                      onClick={() => setVotingChoice("for")}
-                    >
-                      <ThumbsUp className="h-4 w-4" /> Vote For
-                    </Button>
-                    <Button
-                      variant={votingChoice === "against" ? "destructive" : "outline"}
-                      className="w-full gap-2"
-                      onClick={() => setVotingChoice("against")}
-                    >
-                      <ThumbsDown className="h-4 w-4" /> Vote Against
-                    </Button>
-                    <Button
-                      variant={votingChoice === "abstain" ? "secondary" : "outline"}
-                      className="w-full gap-2"
-                      onClick={() => setVotingChoice("abstain")}
-                    >
-                      <Minus className="h-4 w-4" /> Abstain
-                    </Button>
-                    {votingChoice && (
-                      <Button
-                        className="w-full mt-2"
-                        onClick={() => handleVote(votingChoice)}
-                        disabled={castVote.isPending}
-                      >
-                        {castVote.isPending ? "Submitting..." : `Confirm Vote: ${votingChoice}`}
-                      </Button>
-                    )}
+                    <p className="text-xs text-muted-foreground">Advisory voting power: 1 vote</p>
+                    <Button variant={votingChoice === "for" ? "default" : "outline"} className="w-full gap-2" onClick={() => setVotingChoice("for")}><ThumbsUp className="h-4 w-4" />Vote For</Button>
+                    <Button variant={votingChoice === "against" ? "destructive" : "outline"} className="w-full gap-2" onClick={() => setVotingChoice("against")}><ThumbsDown className="h-4 w-4" />Vote Against</Button>
+                    <Button variant={votingChoice === "abstain" ? "secondary" : "outline"} className="w-full gap-2" onClick={() => setVotingChoice("abstain")}><Minus className="h-4 w-4" />Abstain</Button>
+                    {castVote.error && <p className="text-sm text-red-400">{castVote.error.message}</p>}
+                    {votingChoice && <Button className="w-full mt-2" onClick={() => handleVote(votingChoice)} disabled={castVote.isPending}>{castVote.isPending ? "Submitting..." : `Confirm Vote: ${votingChoice}`}</Button>}
                   </>
                 )}
               </CardContent>

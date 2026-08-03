@@ -33,8 +33,40 @@ import {
   type InsertInfluencerMention,
 } from "../drizzle/schema";
 import { ENV } from './_core/env';
+import {
+  DAO_DELEGATION_DISABLED_REASON,
+  assertAdvisoryProposalPolicy,
+  resolveAdvisoryStatusTransition,
+} from "./dao-governance-policy";
 
 let _db: ReturnType<typeof drizzle> | null = null;
+
+type RawRow = Record<string, unknown>;
+
+function extractRawRows(result: unknown): RawRow[] {
+  if (!Array.isArray(result) || !Array.isArray(result[0])) return [];
+  return result[0] as RawRow[];
+}
+
+function parseDatabaseDate(value: unknown): Date {
+  const parsed = value instanceof Date ? value : new Date(String(value ?? ""));
+  if (Number.isNaN(parsed.getTime())) throw new Error("Database clock returned an invalid timestamp");
+  return parsed;
+}
+
+function parseCount(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("Database aggregate returned an invalid count");
+  return parsed;
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; errno?: unknown; message?: unknown };
+  return candidate.code === "ER_DUP_ENTRY"
+    || candidate.errno === 1062
+    || /duplicate entry/i.test(String(candidate.message ?? ""));
+}
 
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
@@ -49,25 +81,17 @@ export async function getDb() {
 }
 
 export async function upsertUser(user: InsertUser): Promise<void> {
-  if (!user.openId) {
-    throw new Error("User openId is required for upsert");
-  }
-
+  if (!user.openId) throw new Error("User openId is required for upsert");
   const db = await getDb();
   if (!db) {
     console.warn("[Database] Cannot upsert user: database not available");
     return;
   }
-
   try {
-    const values: InsertUser = {
-      openId: user.openId,
-    };
+    const values: InsertUser = { openId: user.openId };
     const updateSet: Record<string, unknown> = {};
-
     const textFields = ["name", "email", "loginMethod"] as const;
     type TextField = (typeof textFields)[number];
-
     const assignNullable = (field: TextField) => {
       const value = user[field];
       if (value === undefined) return;
@@ -75,9 +99,7 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values[field] = normalized;
       updateSet[field] = normalized;
     };
-
     textFields.forEach(assignNullable);
-
     if (user.lastSignedIn !== undefined) {
       values.lastSignedIn = user.lastSignedIn;
       updateSet.lastSignedIn = user.lastSignedIn;
@@ -89,18 +111,9 @@ export async function upsertUser(user: InsertUser): Promise<void> {
       values.role = 'admin';
       updateSet.role = 'admin';
     }
-
-    if (!values.lastSignedIn) {
-      values.lastSignedIn = new Date();
-    }
-
-    if (Object.keys(updateSet).length === 0) {
-      updateSet.lastSignedIn = new Date();
-    }
-
-    await db.insert(users).values(values).onDuplicateKeyUpdate({
-      set: updateSet,
-    });
+    if (!values.lastSignedIn) values.lastSignedIn = new Date();
+    if (Object.keys(updateSet).length === 0) updateSet.lastSignedIn = new Date();
+    await db.insert(users).values(values).onDuplicateKeyUpdate({ set: updateSet });
   } catch (error) {
     console.error("[Database] Failed to upsert user:", error);
     throw error;
@@ -113,127 +126,106 @@ export async function getUserByOpenId(openId: string) {
     console.warn("[Database] Cannot get user: database not available");
     return undefined;
   }
-
   const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-// --- DCA Orders ---
 export async function createDcaOrder(order: InsertDcaOrder) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  const result = await db.insert(dcaOrders).values(order);
-  return result;
+  return db.insert(dcaOrders).values(order);
 }
-
 export async function getDcaOrdersByUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(dcaOrders).where(eq(dcaOrders.userId, userId)).orderBy(desc(dcaOrders.createdAt));
 }
-
 export async function updateDcaOrderStatus(orderId: number, userId: number, status: "active" | "paused" | "completed" | "cancelled") {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(dcaOrders).set({ status }).where(and(eq(dcaOrders.id, orderId), eq(dcaOrders.userId, userId)));
 }
 
-// --- Limit Orders ---
 export async function createLimitOrder(order: InsertLimitOrder) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(limitOrders).values(order);
 }
-
 export async function getLimitOrdersByUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(limitOrders).where(eq(limitOrders.userId, userId)).orderBy(desc(limitOrders.createdAt));
 }
-
 export async function cancelLimitOrder(orderId: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(limitOrders).set({ status: "cancelled" }).where(and(eq(limitOrders.id, orderId), eq(limitOrders.userId, userId)));
 }
 
-// --- Swap History ---
 export async function recordSwap(entry: InsertSwapHistory) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(swapHistory).values(entry);
 }
-
 export async function getSwapHistoryByWallet(walletAddress: string, limit = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(swapHistory).where(eq(swapHistory.walletAddress, walletAddress)).orderBy(desc(swapHistory.createdAt)).limit(limit);
 }
 
-// --- Watchlist ---
 export async function addToWatchlist(entry: InsertWatchlist) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(watchlist).values(entry);
 }
-
 export async function getWatchlistByUser(userId: number) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(watchlist).where(eq(watchlist.userId, userId));
 }
-
 export async function removeFromWatchlist(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.delete(watchlist).where(and(eq(watchlist.id, id), eq(watchlist.userId, userId)));
 }
 
-// --- Blog Posts ---
 export async function createBlogPost(post: InsertBlogPost) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(blogPosts).values(post);
 }
-
 export async function getPublishedBlogPosts(limit = 20) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(blogPosts).where(eq(blogPosts.status, "published")).orderBy(desc(blogPosts.publishedAt)).limit(limit);
 }
-
 export async function getBlogPostBySlug(slug: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(blogPosts).where(eq(blogPosts.slug, slug)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
-
 export async function getAllBlogPosts(limit = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(blogPosts).orderBy(desc(blogPosts.createdAt)).limit(limit);
 }
-
 export async function updateBlogPost(id: number, data: Partial<InsertBlogPost>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   await db.update(blogPosts).set(data).where(eq(blogPosts.id, id));
 }
 
-// --- Media Mentions (formerly MVS Content) ---
 export async function saveMvsContent(entry: InsertMvsContent) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(mvsContent).values(entry);
 }
-
 export async function getMvsContentList(limit = 20) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(mvsContent).orderBy(desc(mvsContent.createdAt)).limit(limit);
 }
-
 export async function getMvsContentByTweetId(tweetId: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -241,71 +233,70 @@ export async function getMvsContentByTweetId(tweetId: string) {
   return result.length > 0 ? result[0] : undefined;
 }
 
-// --- Media Posts ---
 export async function createMediaPost(post: InsertMediaPost) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(mediaPosts).values(post);
 }
-
-export async function getMediaPostsByCategory(
-  category: "instructional" | "photos" | "memories" | "memes" | "announcements" | "nfts",
-  limit = 50
-) {
+export async function getMediaPostsByCategory(category: "instructional" | "photos" | "memories" | "memes" | "announcements" | "nfts", limit = 50) {
   const db = await getDb();
   if (!db) return [];
   return db.select().from(mediaPosts)
     .where(and(eq(mediaPosts.category, category), eq(mediaPosts.status, "active")))
-    .orderBy(desc(mediaPosts.createdAt))
-    .limit(limit);
+    .orderBy(desc(mediaPosts.createdAt)).limit(limit);
 }
-
 export async function getAllMediaPosts(limit = 100) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(mediaPosts)
-    .where(eq(mediaPosts.status, "active"))
-    .orderBy(desc(mediaPosts.createdAt))
-    .limit(limit);
+  return db.select().from(mediaPosts).where(eq(mediaPosts.status, "active")).orderBy(desc(mediaPosts.createdAt)).limit(limit);
 }
-
 export async function getMediaPostsByUser(userId: number, limit = 50) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(mediaPosts)
-    .where(eq(mediaPosts.userId, userId))
-    .orderBy(desc(mediaPosts.createdAt))
-    .limit(limit);
+  return db.select().from(mediaPosts).where(eq(mediaPosts.userId, userId)).orderBy(desc(mediaPosts.createdAt)).limit(limit);
 }
-
 export async function deleteMediaPost(id: number, userId: number) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(mediaPosts).set({ status: "removed" })
-    .where(and(eq(mediaPosts.id, id), eq(mediaPosts.userId, userId)));
+  await db.update(mediaPosts).set({ status: "removed" }).where(and(eq(mediaPosts.id, id), eq(mediaPosts.userId, userId)));
 }
 
-// ─── DAO Governance Helpers ──────────────────────────────────────
-
-// --- Proposals ---
 export async function createProposal(proposal: InsertProposal) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(proposals).values(proposal);
 }
-
 export async function getProposals(status?: string, limit = 50) {
   const db = await getDb();
   if (!db) return [];
   if (status) {
-    return db.select().from(proposals)
-      .where(eq(proposals.status, status as any))
-      .orderBy(desc(proposals.createdAt))
-      .limit(limit);
+    return db.select().from(proposals).where(eq(proposals.status, status as any)).orderBy(desc(proposals.createdAt)).limit(limit);
   }
   return db.select().from(proposals).orderBy(desc(proposals.createdAt)).limit(limit);
 }
-
+export async function getDaoProposalStats() {
+  const db = await getDb();
+  if (!db) return { totalProposals: 0, activeProposals: 0, passedProposals: 0 };
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) AS totalProposals,
+      COALESCE(SUM(CASE
+        WHEN governanceMode = 'advisory'
+         AND snapshotVersion = 1
+         AND status = 'active'
+         AND startTime <= CURRENT_TIMESTAMP(3)
+         AND endTime > CURRENT_TIMESTAMP(3)
+        THEN 1 ELSE 0 END), 0) AS activeProposals,
+      COALESCE(SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END), 0) AS passedProposals
+    FROM proposals
+  `);
+  const row = extractRawRows(result)[0] ?? {};
+  return {
+    totalProposals: parseCount(row.totalProposals),
+    activeProposals: parseCount(row.activeProposals),
+    passedProposals: parseCount(row.passedProposals),
+  };
+}
 export async function getProposalById(proposalId: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -316,7 +307,18 @@ export async function getProposalById(proposalId: string) {
 export async function updateProposal(id: number, data: Partial<InsertProposal>) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db.update(proposals).set(data).where(eq(proposals.id, id));
+  if (data.status === undefined) {
+    await db.update(proposals).set(data).where(eq(proposals.id, id));
+    return;
+  }
+  await db.transaction(async tx => {
+    await tx.execute(sql`SELECT id FROM proposals WHERE id = ${id} FOR UPDATE`);
+    const rows = await tx.select().from(proposals).where(eq(proposals.id, id)).limit(1);
+    const proposal = rows[0];
+    if (!proposal) throw new Error("Proposal not found");
+    const status = resolveAdvisoryStatusTransition(proposal, data.status);
+    await tx.update(proposals).set({ ...data, status }).where(eq(proposals.id, id));
+  });
 }
 
 export async function updateProposalVotes(proposalId: string, votesFor: number, votesAgainst: number, votesAbstain: number) {
@@ -325,11 +327,38 @@ export async function updateProposalVotes(proposalId: string, votesFor: number, 
   await db.update(proposals).set({ votesFor, votesAgainst, votesAbstain }).where(eq(proposals.proposalId, proposalId));
 }
 
-// --- Votes ---
 export async function castVote(vote: InsertVote) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(votes).values(vote);
+}
+
+export async function castAdvisoryVoteAtomic(vote: InsertVote) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT id FROM proposals WHERE id = ${vote.proposalId} FOR UPDATE`);
+    const proposalRows = await tx.select().from(proposals).where(eq(proposals.id, vote.proposalId)).limit(1);
+    const proposal = proposalRows[0];
+    if (!proposal) throw new Error("Proposal not found");
+    const clockResult = await tx.execute(sql`SELECT CURRENT_TIMESTAMP(3) AS currentTime`);
+    const lockedNow = parseDatabaseDate(extractRawRows(clockResult)[0]?.currentTime);
+    assertAdvisoryProposalPolicy(proposal);
+    if (proposal.status !== "active") throw new Error("Proposal is not active");
+    if (lockedNow < proposal.startTime) throw new Error("Proposal voting has not started");
+    if (lockedNow >= proposal.endTime) throw new Error("Proposal voting has ended");
+    if (vote.votingPower !== 1) throw new Error("Advisory voting power must equal one");
+    const duplicate = await tx.select({ id: votes.id }).from(votes)
+      .where(and(eq(votes.proposalId, vote.proposalId), eq(votes.voterAddress, vote.voterAddress))).limit(1);
+    if (duplicate.length > 0) throw new Error("Wallet already voted on this proposal");
+    await tx.insert(votes).values(vote);
+    const tallies = vote.choice === "for"
+      ? { votesFor: sql`${proposals.votesFor} + 1` }
+      : vote.choice === "against"
+        ? { votesAgainst: sql`${proposals.votesAgainst} + 1` }
+        : { votesAbstain: sql`${proposals.votesAbstain} + 1` };
+    await tx.update(proposals).set(tallies).where(eq(proposals.id, vote.proposalId));
+  });
 }
 
 export async function getVotesByProposal(proposalId: number, limit = 200) {
@@ -337,192 +366,114 @@ export async function getVotesByProposal(proposalId: number, limit = 200) {
   if (!db) return [];
   return db.select().from(votes).where(eq(votes.proposalId, proposalId)).orderBy(desc(votes.createdAt)).limit(limit);
 }
-
 export async function getUserVote(proposalId: number, voterId: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(votes)
-    .where(and(eq(votes.proposalId, proposalId), eq(votes.voterId, voterId)))
-    .limit(1);
+  const result = await db.select().from(votes).where(and(eq(votes.proposalId, proposalId), eq(votes.voterId, voterId))).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
-// --- Delegates ---
-export async function registerDelegate(delegate: InsertDelegate) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(delegates).values(delegate);
+export async function registerDelegate(_delegate: InsertDelegate) {
+  throw new Error(DAO_DELEGATION_DISABLED_REASON);
 }
-
 export async function getDelegates(limit = 50) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(delegates)
-    .where(eq(delegates.isActive, true))
-    .orderBy(desc(delegates.votingPower))
-    .limit(limit);
+  return db.select().from(delegates).where(eq(delegates.isActive, true)).orderBy(desc(delegates.votingPower)).limit(limit);
 }
-
 export async function getDelegateByAddress(address: string) {
   const db = await getDb();
   if (!db) return undefined;
   const result = await db.select().from(delegates).where(eq(delegates.address, address)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
-
-export async function updateDelegate(id: number, data: Partial<InsertDelegate>) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(delegates).set(data).where(eq(delegates.id, id));
+export async function updateDelegate(_id: number, _data: Partial<InsertDelegate>) {
+  throw new Error(DAO_DELEGATION_DISABLED_REASON);
 }
-
-// AUDIT FIX 1.2/3.1: Atomic increment to prevent race conditions on delegation stats
-export async function atomicIncrementDelegateStats(delegateId: number, amount: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.execute(
-    sql`UPDATE delegates SET votingPower = votingPower + ${amount}, delegatorCount = delegatorCount + 1 WHERE id = ${delegateId}`
-  );
+export async function atomicIncrementDelegateStats(_delegateId: number, _amount: number) {
+  throw new Error(DAO_DELEGATION_DISABLED_REASON);
 }
-
-// --- Delegations ---
-export async function createDelegation(delegation: InsertDelegation) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  return db.insert(delegations).values(delegation);
+export async function createDelegation(_delegation: InsertDelegation) {
+  throw new Error(DAO_DELEGATION_DISABLED_REASON);
 }
-
 export async function getDelegationsByDelegator(delegatorId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(delegations)
-    .where(and(eq(delegations.delegatorId, delegatorId), eq(delegations.isActive, true)))
-    .orderBy(desc(delegations.createdAt));
+  return db.select().from(delegations).where(and(eq(delegations.delegatorId, delegatorId), eq(delegations.isActive, true))).orderBy(desc(delegations.createdAt));
 }
-
 export async function getDelegationsByDelegate(delegateId: number) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(delegations)
-    .where(and(eq(delegations.delegateId, delegateId), eq(delegations.isActive, true)))
-    .orderBy(desc(delegations.createdAt));
+  return db.select().from(delegations).where(and(eq(delegations.delegateId, delegateId), eq(delegations.isActive, true))).orderBy(desc(delegations.createdAt));
+}
+export async function revokeDelegation(_id: number, _delegatorId: number) {
+  throw new Error(DAO_DELEGATION_DISABLED_REASON);
 }
 
-export async function revokeDelegation(id: number, delegatorId: number) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
-  await db.update(delegations).set({ isActive: false })
-    .where(and(eq(delegations.id, id), eq(delegations.delegatorId, delegatorId)));
-}
-
-// --- Treasury Snapshots ---
 export async function saveTreasurySnapshot(snapshot: InsertTreasurySnapshot) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.insert(treasurySnapshots).values(snapshot);
 }
-
 export async function getLatestTreasurySnapshots(chain?: string) {
   const db = await getDb();
   if (!db) return [];
-  if (chain) {
-    return db.select().from(treasurySnapshots)
-      .where(eq(treasurySnapshots.chain, chain as any))
-      .orderBy(desc(treasurySnapshots.snapshotAt))
-      .limit(20);
-  }
+  if (chain) return db.select().from(treasurySnapshots).where(eq(treasurySnapshots.chain, chain as any)).orderBy(desc(treasurySnapshots.snapshotAt)).limit(20);
   return db.select().from(treasurySnapshots).orderBy(desc(treasurySnapshots.snapshotAt)).limit(40);
 }
-
-// --- Chain Data Cache ---
 export async function getCachedChainData(chain: string, dataKey: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(chainDataCache)
-    .where(and(eq(chainDataCache.chain, chain as any), eq(chainDataCache.dataKey, dataKey)))
-    .limit(1);
+  const result = await db.select().from(chainDataCache).where(and(eq(chainDataCache.chain, chain as any), eq(chainDataCache.dataKey, dataKey))).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
-
 export async function setCachedChainData(chain: string, dataKey: string, dataValue: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const existing = await getCachedChainData(chain, dataKey);
-  if (existing) {
-    await db.update(chainDataCache).set({ dataValue }).where(eq(chainDataCache.id, existing.id));
-  } else {
-    await db.insert(chainDataCache).values({ chain: chain as any, dataKey, dataValue });
-  }
+  if (existing) await db.update(chainDataCache).set({ dataValue }).where(eq(chainDataCache.id, existing.id));
+  else await db.insert(chainDataCache).values({ chain: chain as any, dataKey, dataValue });
 }
-
-// ─── Influencer Mentions ────────────────────────────────────────
 
 export async function upsertInfluencerMention(mention: InsertInfluencerMention) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  // Upsert by tweetId — update engagement metrics if already exists
   await db.insert(influencerMentions).values(mention).onDuplicateKeyUpdate({
-    set: {
-      retweetCount: mention.retweetCount,
-      likeCount: mention.likeCount,
-      replyCount: mention.replyCount,
-      quoteCount: mention.quoteCount,
-      fetchedAt: new Date(),
-    },
+    set: { retweetCount: mention.retweetCount, likeCount: mention.likeCount, replyCount: mention.replyCount, quoteCount: mention.quoteCount, fetchedAt: new Date() },
   });
 }
-
-export async function getInfluencerMentions(
-  opts: { category?: string; limit?: number; offset?: number; includeHidden?: boolean } = {}
-) {
+export async function getInfluencerMentions(opts: { category?: string; limit?: number; offset?: number; includeHidden?: boolean } = {}) {
   const db = await getDb();
   if (!db) return [];
   const { category, limit = 50, offset = 0, includeHidden = false } = opts;
-
   const conditions = [];
   if (!includeHidden) conditions.push(eq(influencerMentions.isHidden, false));
   if (category) conditions.push(eq(influencerMentions.category, category as any));
-
-  const query = conditions.length > 0
-    ? db.select().from(influencerMentions).where(and(...conditions))
-    : db.select().from(influencerMentions);
-
-  // Sort: pinned first, then by tweet date descending
+  const query = conditions.length > 0 ? db.select().from(influencerMentions).where(and(...conditions)) : db.select().from(influencerMentions);
   return query.orderBy(desc(influencerMentions.isPinned), desc(influencerMentions.tweetCreatedAt)).limit(limit).offset(offset);
 }
-
 export async function getInfluencerMentionByTweetId(tweetId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(influencerMentions)
-    .where(eq(influencerMentions.tweetId, tweetId)).limit(1);
+  const result = await db.select().from(influencerMentions).where(eq(influencerMentions.tweetId, tweetId)).limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
-
 export async function toggleMentionPinned(id: number, isPinned: boolean) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); if (!db) throw new Error("Database not available");
   await db.update(influencerMentions).set({ isPinned }).where(eq(influencerMentions.id, id));
 }
-
 export async function toggleMentionHighlight(id: number, isHighlighted: boolean) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); if (!db) throw new Error("Database not available");
   await db.update(influencerMentions).set({ isHighlighted }).where(eq(influencerMentions.id, id));
 }
-
 export async function toggleMentionHidden(id: number, isHidden: boolean) {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); if (!db) throw new Error("Database not available");
   await db.update(influencerMentions).set({ isHidden }).where(eq(influencerMentions.id, id));
 }
-
 export async function updateMentionCategory(id: number, category: "influencer" | "community" | "press" | "partner") {
-  const db = await getDb();
-  if (!db) throw new Error("Database not available");
+  const db = await getDb(); if (!db) throw new Error("Database not available");
   await db.update(influencerMentions).set({ category }).where(eq(influencerMentions.id, id));
 }
-
 export async function getInfluencerMentionStats() {
   const db = await getDb();
   if (!db) return { total: 0, influencer: 0, community: 0, press: 0, partner: 0 };
@@ -536,12 +487,37 @@ export async function getInfluencerMentionStats() {
   };
 }
 
-// AUDIT FIX: Bind wallet address to user on first vote (prevents vote spoofing)
 export async function updateUserWalletAddress(userId: number, walletAddress: string) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
-  await db
-    .update(users)
-    .set({ walletAddress: walletAddress.toLowerCase() })
-    .where(eq(users.id, userId));
+  const normalized = walletAddress.toLowerCase();
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
+    const currentRows = await tx.select({ walletAddress: users.walletAddress })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    const current = currentRows[0]?.walletAddress?.toLowerCase() ?? null;
+    if (current && current !== normalized) {
+      throw new Error("Account is already bound to a different wallet");
+    }
+    const conflictRows = await tx.select({ id: users.id }).from(users)
+      .where(and(
+        sql`LOWER(${users.walletAddress}) = ${normalized}`,
+        sql`${users.id} <> ${userId}`,
+      )).limit(1);
+    if (conflictRows.length > 0) {
+      throw new Error("Wallet is already bound to another account");
+    }
+    if (current === normalized) return;
+    try {
+      await tx.update(users).set({ walletAddress: normalized }).where(eq(users.id, userId));
+    } catch (error) {
+      if (isDuplicateKeyError(error)) throw new Error("Wallet is already bound to another account");
+      throw error;
+    }
+    const verifiedRows = await tx.select({ walletAddress: users.walletAddress })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    if (verifiedRows[0]?.walletAddress?.toLowerCase() !== normalized) {
+      throw new Error("Wallet binding was not persisted");
+    }
+  });
 }

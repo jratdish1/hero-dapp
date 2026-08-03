@@ -8,6 +8,7 @@ import { registerOAuthRoutes } from "./oauth";
 import { registerStandaloneAuthRoutes } from "./standalone-auth";
 import { appRouter } from "../routers";
 import { getDb } from "../db";
+import { ensureDaoAdvisoryBoundary } from "../dao-advisory-migration";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { setupSecurity } from "./security";
@@ -34,25 +35,24 @@ async function findAvailablePort(startPort: number = 3000): Promise<number> {
 }
 
 async function startServer() {
+  // The advisory DAO schema is additive and legacy-safe. Verify or install it
+  // before exposing any route; partial/drifted states abort startup and keep the
+  // previous PM2 release serving during the protected reload.
+  await ensureDaoAdvisoryBoundary();
+
   const app = express();
   app.disable("x-powered-by");
   const server = createServer(app);
-  // Configure body parser with larger size limit for file uploads
   app.use(express.json({ limit: "50mb" }));
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
-  // Gzip/Brotli compression for all responses
   app.use(compression());
-  // Security middleware: helmet, rate limiting, sanitization
   setupSecurity(app);
 
-  // Initialize persistent MySQL-backed tRPC rate limiter
   initTrpcRateLimiter(getDb);
   await ensureRateLimitTable();
-  // OAuth callback under /api/oauth/callback
   registerOAuthRoutes(app);
   registerStandaloneAuthRoutes(app);
 
-  // tRPC API
   app.use(
     "/api/trpc",
     createExpressMiddleware({
@@ -60,7 +60,6 @@ async function startServer() {
       createContext,
     })
   );
-  // development mode uses Vite, production mode uses static files
   if (process.env.NODE_ENV === "development") {
     await setupVite(app, server);
   } else {
@@ -76,9 +75,11 @@ async function startServer() {
 
   server.listen(port, () => {
     console.log(`Server running on http://localhost:${port}/`);
-    // Start scheduled Twitter mention auto-refresh (every 4 hours)
     startMentionScheduler();
   });
 }
 
-startServer().catch(console.error);
+startServer().catch(error => {
+  console.error("Fatal server startup failure", error);
+  process.exitCode = 1;
+});
