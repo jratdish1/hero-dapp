@@ -27,6 +27,23 @@ describe("DAO exact-head closeout regressions", () => {
     expect(migration).toContain("ADD UNIQUE INDEX ${WALLET_UNIQUE_INDEX} (walletAddress)");
   });
 
+  it("requires a wallet signature and recovered address before permanent binding", () => {
+    const binding = readFileSync("server/dao-wallet-binding.ts", "utf8");
+    const router = readFileSync("server/routers.ts", "utf8");
+    const create = readFileSync("client/src/pages/dao/CreateProposal.tsx", "utf8");
+    const detail = readFileSync("client/src/pages/dao/ProposalDetail.tsx", "utf8");
+    expect(binding).toContain("recoverMessageAddress");
+    expect(binding).toContain("verifyWalletBindingProof");
+    expect(binding).toContain("not signed by the requested wallet");
+    expect(router).toContain("walletSignatureSchema");
+    expect(router).toContain("await verifyWalletBindingProof");
+    for (const source of [create, detail]) {
+      expect(source).toContain("useSignMessage");
+      expect(source).toContain("signMessageAsync");
+      expect(source).toContain("walletSignature");
+    }
+  });
+
   it("computes exact proposal aggregates without a bounded listing", () => {
     const database = readFileSync("server/db.ts", "utf8");
     const router = readFileSync("server/routers.ts", "utf8");
