@@ -35,15 +35,15 @@ function fail(
   throw new TRPCError({ code, message });
 }
 
-// Keep the legacy router's exact static type while replacing only the DAO
-// subtrees. Accessing the typed router record avoids widening AppRouter to any,
-// which would erase every generated client procedure type.
+// In tRPC v11 the router definition record stores nested router records
+// directly. Preserve those exact static records and replace only the DAO
+// members, avoiding any widening that would erase client procedure types.
 const rootRecord = legacyAppRouter._def.record;
-const legacyDaoRecord = rootRecord.dao._def.record;
-const legacyProposalRecord = legacyDaoRecord.proposals._def.record;
-const legacyVoteRecord = legacyDaoRecord.votes._def.record;
-const legacyDelegateRecord = legacyDaoRecord.delegates._def.record;
-const legacyDelegationRecord = legacyDaoRecord.delegations._def.record;
+const legacyDaoRecord = rootRecord.dao;
+const legacyProposalRecord = legacyDaoRecord.proposals;
+const legacyVoteRecord = legacyDaoRecord.votes;
+const legacyDelegateRecord = legacyDaoRecord.delegates;
+const legacyDelegationRecord = legacyDaoRecord.delegations;
 
 const disabledDelegationMutation = protectedProcedure.mutation(() => {
   fail("PRECONDITION_FAILED", DAO_DELEGATION_DISABLED_REASON);
