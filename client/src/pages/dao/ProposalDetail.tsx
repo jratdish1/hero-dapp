@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, XCircle, Users, AlertCircle } from "lucide-react";
+import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, Users, AlertCircle } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { IdentityBadge } from "@/components/WalletIdentity";
 
@@ -23,21 +23,21 @@ const statusColors: Record<string, string> = {
 
 export default function ProposalDetail() {
   const [, params] = useRoute("/dao/proposals/:id");
-  // Validate proposalId from URL params to prevent injection
   const rawProposalId = params?.id || "";
-  // Proposal IDs follow format: HERO-XXXX or alphanumeric with hyphens, 3-64 chars
   const proposalId = /^[A-Za-z0-9][A-Za-z0-9-]{2,63}$/.test(rawProposalId) ? rawProposalId : "";
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
 
-  // Binding/token-weighted governance is intentionally disabled. Advisory mode
-  // is one authenticated wallet/account, one vote.
-  const votingPower = 1;
-  const connectedChain = chainId === 369 ? "pulsechain" : "base";
+  // Advisory voting supports only the two declared proposal chains. Never map an
+  // unknown wallet network to Base implicitly.
+  const connectedChain = chainId === 369
+    ? "pulsechain"
+    : chainId === 8453
+      ? "base"
+      : null;
 
-  // Fetch proposal first — dependent queries gate on proposal.id
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
     { proposalId },
     { enabled: !!proposalId }
@@ -45,7 +45,6 @@ export default function ProposalDetail() {
 
   const proposalDbId = proposal?.id;
 
-  // Check if user already voted (audit fix: disable UI if already voted)
   const { data: myVote } = trpc.dao.votes.myVote.useQuery(
     { proposalDbId: proposalDbId! },
     { enabled: !!proposalDbId && !!user }
@@ -95,24 +94,24 @@ export default function ProposalDetail() {
   const endDate = new Date(proposal.endTime);
   const isActive = proposal.status === "active" && endDate > new Date();
   const quorum = proposal.quorum;
-  const quorumPct = Math.min((totalVotes / quorum) * 100, 100);
+  const quorumPct = quorum > 0 ? Math.min((totalVotes / quorum) * 100, 100) : 0;
+  const isChainEligible = connectedChain !== null
+    && (proposal.chain === "both" || proposal.chain === connectedChain);
 
   const handleVote = (choice: "for" | "against" | "abstain") => {
-    if (!isConnected || !address || !user || hasVoted) return;
-    // Advisory voting is unweighted; the server ignores client power claims.
+    if (!isConnected || !address || !user || hasVoted || !connectedChain || !isChainEligible) return;
     castVote.mutate({
       proposalDbId: proposal.id,
       proposalId: proposal.proposalId,
       voterAddress: address,
       choice,
-      votingPower,
+      votingPower: 1,
       chain: connectedChain,
     });
   };
 
   return (
     <div className="space-y-6">
-      {/* Back Button */}
       <Link href="/dao/proposals">
         <Button variant="ghost" className="gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -120,18 +119,19 @@ export default function ProposalDetail() {
         </Button>
       </Link>
 
-      {/* Proposal Header */}
       <Card className="bg-card text-card-foreground border-border">
         <CardContent className="p-6">
-          <div className="flex items-center gap-2 mb-3">
+          <div className="flex flex-wrap items-center gap-2 mb-3">
             <Badge variant="outline" className={statusColors[proposal.status] || ""}>
               {proposal.status}
             </Badge>
             <Badge variant="outline">{proposal.category}</Badge>
             <Badge variant="outline">{proposal.chain}</Badge>
+            <Badge variant="outline">Advisory · 1 account = 1 vote</Badge>
           </div>
           <h1 className="text-2xl font-bold">{proposal.title}</h1>
-          <div className="flex items-center gap-4 mt-3 text-sm text-muted-foreground">
+          <p className="mt-2 text-xs text-muted-foreground">{proposal.bindingDisabledReason}</p>
+          <div className="flex flex-wrap items-center gap-4 mt-3 text-sm text-muted-foreground">
             <span>{proposal.proposalId}</span>
             <span>·</span>
             <span>By {proposal.proposerAddress.slice(0, 6)}...{proposal.proposerAddress.slice(-4)}</span>
@@ -145,21 +145,18 @@ export default function ProposalDetail() {
       </Card>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Description */}
         <div className="lg:col-span-2 space-y-6">
           <Card className="bg-card text-card-foreground border-border">
             <CardHeader>
               <CardTitle>Description</CardTitle>
             </CardHeader>
             <CardContent>
-              {/* React auto-escapes text content — no XSS risk from JSX interpolation */}
               <div className="prose prose-sm max-w-none text-foreground whitespace-pre-wrap break-words">
-                {String(proposal.description ?? "")}  
+                {String(proposal.description ?? "")}
               </div>
             </CardContent>
           </Card>
 
-          {/* Votes List */}
           <Card className="bg-card text-card-foreground border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -179,7 +176,9 @@ export default function ProposalDetail() {
                         <IdentityBadge address={v.voterAddress} />
                       </div>
                       <div className="flex items-center gap-2">
-                        <span className="text-sm text-muted-foreground">{v.votingPower.toLocaleString()} VP</span>
+                        <span className="text-sm text-muted-foreground">
+                          {v.votingPower.toLocaleString()} advisory vote{v.votingPower === 1 ? "" : "s"}
+                        </span>
                         <Badge variant="outline" className="text-xs capitalize">{v.choice}</Badge>
                       </div>
                     </div>
@@ -192,9 +191,7 @@ export default function ProposalDetail() {
           </Card>
         </div>
 
-        {/* Sidebar */}
         <div className="space-y-6">
-          {/* Vote Results */}
           <Card className="bg-card text-card-foreground border-border">
             <CardHeader>
               <CardTitle>Results</CardTitle>
@@ -228,10 +225,9 @@ export default function ProposalDetail() {
                 </div>
               </div>
 
-              {/* Quorum */}
               <div className="pt-2 border-t border-border">
                 <div className="flex justify-between text-sm mb-1">
-                  <span>Quorum</span>
+                  <span>Advisory quorum</span>
                   <span>{quorumPct.toFixed(1)}%</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
@@ -244,11 +240,10 @@ export default function ProposalDetail() {
             </CardContent>
           </Card>
 
-          {/* Cast Vote */}
           {isActive && (
             <Card className="bg-card text-card-foreground border-border">
               <CardHeader>
-                <CardTitle>Cast Your Vote</CardTitle>
+                <CardTitle>Cast Your Advisory Vote</CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
                 {!isConnected ? (
@@ -262,16 +257,20 @@ export default function ProposalDetail() {
                   <p className="text-sm text-muted-foreground text-center py-2">
                     Sign in to vote
                   </p>
+                ) : !connectedChain ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Switch your wallet to Base or PulseChain to cast an advisory vote.
+                  </p>
+                ) : !isChainEligible ? (
+                  <p className="text-sm text-muted-foreground text-center py-2">
+                    Switch to the proposal&apos;s {proposal.chain} chain before voting.
+                  </p>
                 ) : hasVoted ? (
                   <div className="text-center py-4">
                     <CheckCircle className="h-8 w-8 mx-auto mb-2 text-green-400" />
                     <p className="text-sm font-medium">You have already voted on this proposal</p>
                     <p className="text-xs text-muted-foreground mt-1">Your vote: {myVote?.choice}</p>
                   </div>
-                ) : votingPower <= 0 ? (
-                  <p className="text-sm text-muted-foreground text-center py-2">
-                    A verified account wallet is required for advisory voting.
-                  </p>
                 ) : (
                   <>
                     <p className="text-xs text-muted-foreground mb-2">Advisory voting power: 1 vote</p>
