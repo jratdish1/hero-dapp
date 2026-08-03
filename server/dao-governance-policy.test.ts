@@ -5,7 +5,9 @@ import {
   DAO_LEGACY_PROPOSAL_DISABLED_REASON,
   advisoryProposalMetadata,
   assertAdvisoryMode,
+  assertNoAdvisoryTransactionHash,
   assertProposalVoteable,
+  isAdvisoryVotingWindowOpen,
   proposalGovernanceMetadata,
   resolveAdvisoryStatusTransition,
   resolveAdvisoryVoteChain,
@@ -40,14 +42,29 @@ describe("DAO governance policy", () => {
   it("accepts votes only for advisory-v1 proposals inside the active interval", () => {
     const now = new Date("2026-08-03T01:00:00.000Z");
     expect(() => assertProposalVoteable(advisoryProposal, now)).not.toThrow();
+    expect(isAdvisoryVotingWindowOpen(advisoryProposal, now)).toBe(true);
     expect(() => assertProposalVoteable({ ...advisoryProposal, status: "pending" }, now)).toThrow(/not active/);
+    expect(isAdvisoryVotingWindowOpen({ ...advisoryProposal, status: "pending" }, now)).toBe(false);
     expect(() => assertProposalVoteable({ ...advisoryProposal, startTime: new Date("2026-08-03T02:00:00.000Z") }, now)).toThrow(/not started/);
+    expect(isAdvisoryVotingWindowOpen({ ...advisoryProposal, startTime: new Date("2026-08-03T02:00:00.000Z") }, now)).toBe(false);
     expect(() => assertProposalVoteable({ ...advisoryProposal, endTime: now }, now)).toThrow(/ended/);
+    expect(isAdvisoryVotingWindowOpen({ ...advisoryProposal, endTime: now }, now)).toBe(false);
     expect(() => assertProposalVoteable({
       ...advisoryProposal,
       governanceMode: "legacy",
       snapshotVersion: 0,
     }, now)).toThrow(DAO_LEGACY_PROPOSAL_DISABLED_REASON);
+    expect(isAdvisoryVotingWindowOpen({
+      ...advisoryProposal,
+      governanceMode: "legacy",
+      snapshotVersion: 0,
+    }, now)).toBe(false);
+  });
+
+  it("rejects fabricated transaction hashes for advisory votes", () => {
+    expect(() => assertNoAdvisoryTransactionHash(undefined)).not.toThrow();
+    expect(() => assertNoAdvisoryTransactionHash(null)).not.toThrow();
+    expect(() => assertNoAdvisoryTransactionHash(`0x${"a".repeat(64)}`)).toThrow(/do not accept transaction hashes/);
   });
 
   it("binds a vote to the proposal chain", () => {
