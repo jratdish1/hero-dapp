@@ -215,6 +215,24 @@ async function inspectDaoBoundary(databaseUrl) {
                  OR proposal.bindingDisabledReason <> ?
                  OR proposal.quorum <> 1
                  OR proposal.status IN ('queued', 'executed')
+                 OR (
+                   proposal.status IN ('passed', 'defeated')
+                   AND (
+                     proposal.endTime > CURRENT_TIMESTAMP(3)
+                     OR (
+                       proposal.status = 'passed'
+                       AND NOT (
+                         proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                         AND proposal.votesFor > proposal.votesAgainst
+                       )
+                     )
+                     OR (
+                       proposal.status = 'defeated'
+                       AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                       AND proposal.votesFor > proposal.votesAgainst
+                     )
+                   )
+                 )
                ))
           )`,
       [LEGACY_DISABLED_REASON, BINDING_DISABLED_REASON],
