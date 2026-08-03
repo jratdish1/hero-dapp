@@ -11,6 +11,11 @@ import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, Users, Aler
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { IdentityBadge } from "@/components/WalletIdentity";
 
+interface PendingBinding {
+  walletAddress: string;
+  challenge: string;
+}
+
 const statusColors: Record<string, string> = {
   active: "bg-green-500/20 text-green-400 border-green-500/30",
   pending: "bg-yellow-500/20 text-yellow-400 border-yellow-500/30",
@@ -29,7 +34,7 @@ export default function ProposalDetail() {
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
-  const [pendingBindingWallet, setPendingBindingWallet] = useState<string | null>(null);
+  const [pendingBinding, setPendingBinding] = useState<PendingBinding | null>(null);
 
   const connectedChain = chainId === 369 ? "pulsechain" : chainId === 8453 ? "base" : null;
   const { data: proposal, isLoading } = trpc.dao.proposals.get.useQuery(
@@ -50,10 +55,17 @@ export default function ProposalDetail() {
   const bindWallet = trpc.dao.wallet.bindForVoting.useMutation({
     onSuccess: async (data) => {
       if (!data.success && data.requiresConfirmation) {
-        setPendingBindingWallet(data.walletAddress);
+        if (!data.bindingChallenge) {
+          setPendingBinding(null);
+          return;
+        }
+        setPendingBinding({
+          walletAddress: data.walletAddress,
+          challenge: data.bindingChallenge,
+        });
         return;
       }
-      setPendingBindingWallet(null);
+      setPendingBinding(null);
       await utils.auth.me.invalidate();
     },
   });
@@ -91,12 +103,18 @@ export default function ProposalDetail() {
   const isChainEligible = connectedChain !== null && (proposal.chain === "both" || proposal.chain === connectedChain);
   const hasVoted = !!myVote;
   const isBoundWallet = !!address && user?.walletAddress?.toLowerCase() === address.toLowerCase();
-  const bindingMatchesCurrentWallet = !!address && pendingBindingWallet?.toLowerCase() === address.toLowerCase();
+  const bindingForCurrentWallet = !!address
+    && pendingBinding?.walletAddress.toLowerCase() === address.toLowerCase()
+    ? pendingBinding
+    : null;
   const canVotePolicy = proposal.advisoryVotingEnabled === true && proposal.governanceMode === "advisory" && proposal.snapshotVersion === 1;
 
   const requestWalletBinding = () => {
     if (!address) return;
-    bindWallet.mutate({ walletAddress: address, confirmBinding: bindingMatchesCurrentWallet || undefined });
+    bindWallet.mutate({
+      walletAddress: address,
+      bindingChallenge: bindingForCurrentWallet?.challenge,
+    });
   };
   const handleVote = (choice: "for" | "against" | "abstain") => {
     if (!isConnected || !address || !user || !isBoundWallet || hasVoted || !connectedChain || !isChainEligible || !canVotePolicy) return;
@@ -120,9 +138,7 @@ export default function ProposalDetail() {
             <Badge variant="outline" className={statusColors[proposal.status] || ""}>{proposal.status}</Badge>
             <Badge variant="outline">{proposal.category}</Badge>
             <Badge variant="outline">{proposal.chain}</Badge>
-            <Badge variant="outline">
-              {proposal.governanceMode === "legacy" ? "Legacy · frozen" : "Advisory v1 · 1 account = 1 vote"}
-            </Badge>
+            <Badge variant="outline">{proposal.governanceMode === "legacy" ? "Legacy · frozen" : "Advisory v1 · 1 account = 1 vote"}</Badge>
           </div>
           <h1 className="text-2xl font-bold">{proposal.title}</h1>
           <p className="mt-2 text-xs text-muted-foreground">{proposal.bindingDisabledReason}</p>
@@ -195,11 +211,11 @@ export default function ProposalDetail() {
                   <p className="text-sm text-muted-foreground text-center py-2">Sign in to vote.</p>
                 ) : !isBoundWallet ? (
                   <div className="space-y-3 text-center">
-                    <p className="text-sm text-muted-foreground">Bind the connected wallet to this account before voting. This binding is permanent and never happens inside vote casting.</p>
+                    <p className="text-sm text-muted-foreground">Bind the connected wallet to this account before voting. The server issues a signed, account-and-address-specific challenge before permanent binding.</p>
                     {bindWallet.error && <p className="text-sm text-red-400">{bindWallet.error.message}</p>}
                     <Button className="w-full gap-2" onClick={requestWalletBinding} disabled={bindWallet.isPending || !address}>
                       <Link2 className="h-4 w-4" />
-                      {bindWallet.isPending ? "Binding..." : bindingMatchesCurrentWallet ? "Confirm Permanent Wallet Binding" : "Start Wallet Binding"}
+                      {bindWallet.isPending ? "Binding..." : bindingForCurrentWallet ? "Confirm Permanent Wallet Binding" : "Start Wallet Binding"}
                     </Button>
                   </div>
                 ) : !connectedChain ? (
