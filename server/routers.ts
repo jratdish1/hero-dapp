@@ -5,6 +5,7 @@ import { protectedProcedure, publicProcedure, router } from "./_core/trpc";
 import {
   castAdvisoryVoteAtomic,
   createProposal,
+  getDaoProposalStats,
   getDelegateByAddress,
   getDelegates,
   getLatestTreasurySnapshots,
@@ -23,7 +24,6 @@ import {
   advisoryProposalMetadata,
   assertNoAdvisoryTransactionHash,
   assertProposalVoteable,
-  isAdvisoryVotingWindowOpen,
   proposalGovernanceMetadata,
   resolveAdvisoryVoteChain,
 } from "./dao-governance-policy";
@@ -82,16 +82,13 @@ const daoRouter = router({
   ...legacyDaoRecord,
 
   stats: publicProcedure.query(async () => {
-    const [allProposals, historicalDelegates, treasury] = await Promise.all([
-      getProposals(undefined, 1000),
+    const [proposalStats, historicalDelegates, treasury] = await Promise.all([
+      getDaoProposalStats(),
       getDelegates(1000),
       getLatestTreasurySnapshots(),
     ]);
-    const now = new Date();
     return {
-      totalProposals: allProposals.length,
-      activeProposals: allProposals.filter(proposal => isAdvisoryVotingWindowOpen(proposal, now)).length,
-      passedProposals: allProposals.filter(proposal => proposal.status === "passed").length,
+      ...proposalStats,
       totalDelegates: historicalDelegates.length,
       totalVotingPower: 0,
       treasuryValueUsd: treasury.reduce((sum, item) => sum + parseFloat(item.valueUsd || "0"), 0),
@@ -131,7 +128,11 @@ const daoRouter = router({
           } as const;
         }
         requireWalletBindingChallenge(input.bindingChallenge, ctx.user.id, normalized);
-        await updateUserWalletAddress(ctx.user.id, normalized);
+        try {
+          await updateUserWalletAddress(ctx.user.id, normalized);
+        } catch (error) {
+          fail("PRECONDITION_FAILED", error instanceof Error ? error.message : "Wallet binding failed");
+        }
         return {
           success: true,
           requiresConfirmation: false,
@@ -190,7 +191,11 @@ const daoRouter = router({
         }
         if (!existingWallet) {
           requireWalletBindingChallenge(input.bindingChallenge!, ctx.user.id, normalizedWallet);
-          await updateUserWalletAddress(ctx.user.id, normalizedWallet);
+          try {
+            await updateUserWalletAddress(ctx.user.id, normalizedWallet);
+          } catch (error) {
+            fail("PRECONDITION_FAILED", error instanceof Error ? error.message : "Wallet binding failed");
+          }
         }
 
         const proposalId = `HERO-A1-${Date.now().toString(36).toUpperCase()}`;
