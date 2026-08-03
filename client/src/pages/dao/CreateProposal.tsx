@@ -167,7 +167,7 @@ export default function CreateProposal() {
                 <p className="font-medium mb-1">Advisory Governance Boundary</p>
                 <ul className="text-muted-foreground space-y-1 text-xs">
                   <li>• One authenticated account and bound wallet receives one advisory vote.</li>
-                  <li>• New proposals open immediately with a one-vote advisory quorum.</li>
+                  <li>• Proposal activation and quorum remain persisted server-side policy.</li>
                   <li>• The selected chain limits where an advisory vote may be recorded.</li>
                   <li>• Binding execution, token-weighted voting, and treasury actions remain disabled.</li>
                 </ul>
