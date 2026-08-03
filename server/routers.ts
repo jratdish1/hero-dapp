@@ -166,8 +166,7 @@ import {
   getProposals,
   getProposalById,
   updateProposal,
-  updateProposalVotes,
-  castVote,
+  castAdvisoryVoteAtomic,
   getVotesByProposal,
   getUserVote,
   registerDelegate,
@@ -206,6 +205,12 @@ import { generateProposalHash } from "./dao-security-hardening";
 import { createDaoLogger } from "./dao-logger";
 import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
 import { fetchSnapshotProposalById, fetchSnapshotProposals } from "./snapshot-integration";
+import {
+  advisoryProposalMetadata,
+  assertAdvisoryMode,
+  assertProposalVoteable,
+  resolveAdvisoryVoteChain,
+} from "./dao-governance-policy";
 
 /**
  * STANDARDIZED ERROR RESPONSE PROTOCOL
@@ -750,12 +755,14 @@ export const appRouter = router({
       list: publicProcedure
         .input(z.object({ status: z.string().optional(), limit: z.number().int().positive().max(100).optional() }).optional())
         .query(async ({ input }) => {
-          return getProposals(input?.status, input?.limit ?? 50);
+          const rows = await getProposals(input?.status, input?.limit ?? 50);
+          return rows.map(proposal => ({ ...proposal, ...advisoryProposalMetadata() }));
         }),
       get: publicProcedure
         .input(z.object({ proposalId: z.string().min(1) }))
         .query(async ({ input }) => {
-          return getProposalById(input.proposalId);
+          const proposal = await getProposalById(input.proposalId);
+          return proposal ? { ...proposal, ...advisoryProposalMetadata() } : undefined;
         }),
       create: protectedProcedure
         .input(z.object({
@@ -765,9 +772,20 @@ export const appRouter = router({
           chain: z.enum(["base", "pulsechain", "both"]).optional(),
           category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
           durationDays: z.number().int().min(1).max(30).optional(),
+          governanceMode: z.enum(["advisory", "binding"]).optional(),
           confirmBinding: z.boolean().optional(),
         }))
         .mutation(async ({ ctx, input }) => {
+          // Binding mode is intentionally rejected before wallet binding,
+          // rate-limit recording, RPC access, or any other persistent effect.
+          try {
+            assertAdvisoryMode(input.governanceMode ?? "advisory");
+          } catch (error) {
+            createStandardError(
+              "PRECONDITION_FAILED",
+              error instanceof Error ? error.message : "Binding governance is disabled",
+            );
+          }
           // AUDIT FIX (May 29, 2026): Verify wallet ownership before proposal creation
           if (ctx.user.walletAddress) {
             if (input.walletAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
@@ -837,7 +855,13 @@ export const appRouter = router({
           } catch (err) {
             console.warn("[DAO] On-chain anchoring failed (non-blocking):", err);
           }
-          return { success: true, proposalId, contentHash, anchorTxHash };
+          return {
+            success: true,
+            proposalId,
+            contentHash,
+            anchorTxHash,
+            ...advisoryProposalMetadata(),
+          };
         }),
       updateStatus: protectedProcedure
         .input(z.object({
@@ -874,52 +898,71 @@ export const appRouter = router({
           proposalId: z.string().min(1),
           voterAddress: ethAddressSchema,
           choice: z.enum(["for", "against", "abstain"]),
-          votingPower: z.number().int().positive().max(1_000_000_000),
+          // Retained for client compatibility only; advisory voting never trusts it.
+          votingPower: z.number().int().positive().max(1_000_000_000).optional(),
           chain: z.enum(["base", "pulsechain"]),
           txHash: txHashSchema,
         }))
         .mutation(async ({ ctx, input }) => {
-          // AUDIT FIX 1.4: Verify wallet address belongs to authenticated user
-          // If user has a registered wallet, it MUST match. If not registered, bind it on first vote.
-          if (ctx.user.walletAddress) {
-            if (input.voterAddress.toLowerCase() !== ctx.user.walletAddress.toLowerCase()) {
-              createStandardError("FORBIDDEN", "Voter address does not match authenticated user's wallet");
-            }
-          } else {
-            // First-time voter: bind this wallet to their account to prevent future spoofing
-            // This ensures subsequent votes must come from the same wallet
-            await updateUserWalletAddress(ctx.user.id, input.voterAddress);
-            routerLogger.info("Wallet bound to user on vote cast", {
-              userId: ctx.user.id,
-              walletAddress: input.voterAddress,
-              proposalId: input.proposalId,
-            });
+          if (!ctx.user.walletAddress) {
+            createStandardError(
+              "PRECONDITION_FAILED",
+              "Bind and verify a wallet before voting; vote casting never binds wallets implicitly",
+            );
           }
+          const normalizedWallet = ctx.user.walletAddress.toLowerCase();
+          if (input.voterAddress.toLowerCase() !== normalizedWallet) {
+            createStandardError(
+              "FORBIDDEN",
+              "Voter address does not match authenticated user's wallet",
+            );
+          }
+
+          const proposal = await getProposalById(input.proposalId);
+          if (!proposal || proposal.id !== input.proposalDbId) {
+            createStandardError("NOT_FOUND", "Proposal identity mismatch");
+          }
+          try {
+            assertProposalVoteable(proposal);
+          } catch (error) {
+            createStandardError(
+              "PRECONDITION_FAILED",
+              error instanceof Error ? error.message : "Proposal is not voteable",
+            );
+          }
+
+          let voteChain: "base" | "pulsechain";
+          try {
+            voteChain = resolveAdvisoryVoteChain(proposal.chain, input.chain);
+          } catch (error) {
+            createStandardError(
+              "BAD_REQUEST",
+              error instanceof Error ? error.message : "Vote chain mismatch",
+            );
+          }
+
           const existing = await getUserVote(input.proposalDbId, ctx.user.id);
           if (existing) createStandardError("BAD_REQUEST", "Already voted on this proposal");
-          // AUDIT FIX: Server-side on-chain verification of voting power
-          const verifiedPower = await verifyVotingPower(input.voterAddress, input.chain);
-          if (verifiedPower <= 0) createStandardError("PRECONDITION_FAILED", "No HERO tokens found — cannot vote");
-          // Use the LOWER of client-claimed and on-chain verified power (prevents inflation)
-          const trustedPower = Math.min(input.votingPower, verifiedPower);
-          await castVote({
-            proposalId: input.proposalDbId,
-            voterId: ctx.user.id,
-            voterAddress: input.voterAddress,
-            choice: input.choice,
-            votingPower: trustedPower,
-            chain: input.chain,
-            txHash: input.txHash || null,
-          });
-          // Update proposal vote tallies
-          const proposal = await getProposalById(input.proposalId);
-          if (proposal) {
-            const newFor = input.choice === "for" ? proposal.votesFor + trustedPower : proposal.votesFor;
-            const newAgainst = input.choice === "against" ? proposal.votesAgainst + trustedPower : proposal.votesAgainst;
-            const newAbstain = input.choice === "abstain" ? proposal.votesAbstain + trustedPower : proposal.votesAbstain;
-            await updateProposalVotes(input.proposalId, newFor, newAgainst, newAbstain);
+
+          try {
+            await castAdvisoryVoteAtomic({
+              proposalId: input.proposalDbId,
+              voterId: ctx.user.id,
+              voterAddress: normalizedWallet,
+              choice: input.choice,
+              // Advisory mode is one authenticated wallet/account, one vote.
+              votingPower: 1,
+              chain: voteChain,
+              txHash: input.txHash || null,
+            });
+          } catch (error) {
+            const message = error instanceof Error ? error.message : "Vote rejected";
+            createStandardError(
+              /already voted/i.test(message) ? "BAD_REQUEST" : "PRECONDITION_FAILED",
+              message,
+            );
           }
-          return { success: true };
+          return { success: true, ...advisoryProposalMetadata() };
         }),
     }),
 

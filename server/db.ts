@@ -332,6 +332,47 @@ export async function castVote(vote: InsertVote) {
   return db.insert(votes).values(vote);
 }
 
+export async function castAdvisoryVoteAtomic(
+  vote: InsertVote,
+  now = new Date(),
+) {
+  const db = await getDb();
+  if (!db) throw new Error("Database not available");
+
+  return db.transaction(async tx => {
+    // Serialize every vote for this proposal so duplicate-address checks and
+    // lifecycle validation cannot race with another vote or status mutation.
+    await tx.execute(
+      sql`SELECT id FROM proposals WHERE id = ${vote.proposalId} FOR UPDATE`,
+    );
+    const proposalRows = await tx.select().from(proposals)
+      .where(eq(proposals.id, vote.proposalId))
+      .limit(1);
+    const proposal = proposalRows[0];
+    if (!proposal) throw new Error("Proposal not found");
+    if (proposal.status !== "active") throw new Error("Proposal is not active");
+    if (now < proposal.startTime) throw new Error("Proposal voting has not started");
+    if (now >= proposal.endTime) throw new Error("Proposal voting has ended");
+
+    const duplicate = await tx.select({ id: votes.id }).from(votes)
+      .where(and(
+        eq(votes.proposalId, vote.proposalId),
+        eq(votes.voterAddress, vote.voterAddress),
+      ))
+      .limit(1);
+    if (duplicate.length > 0) throw new Error("Wallet already voted on this proposal");
+
+    await tx.insert(votes).values(vote);
+    const increment = vote.votingPower;
+    const tallies = vote.choice === "for"
+      ? { votesFor: sql`${proposals.votesFor} + ${increment}` }
+      : vote.choice === "against"
+        ? { votesAgainst: sql`${proposals.votesAgainst} + ${increment}` }
+        : { votesAbstain: sql`${proposals.votesAbstain} + ${increment}` };
+    await tx.update(proposals).set(tallies).where(eq(proposals.id, vote.proposalId));
+  });
+}
+
 export async function getVotesByProposal(proposalId: number, limit = 200) {
   const db = await getDb();
   if (!db) return [];

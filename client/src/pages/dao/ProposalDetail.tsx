@@ -2,9 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAccount, useChainId, useReadContract } from "wagmi";
-import { getHeroAddress } from "@/lib/config";
-import { erc20Abi, formatUnits } from "viem";
+import { useAccount, useChainId } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -34,23 +32,9 @@ export default function ProposalDetail() {
   const chainId = useChainId();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
 
-  // HERO token addresses per chain
-  const heroTokenAddress = chainId === 369
-    ? getHeroAddress(369) ?? "" // PulseChain
-    : getHeroAddress(8453) ?? ""; // BASE
-
-  // Read user's HERO balance for voting power (1 HERO = 1 vote)
-  const { data: heroBalance } = useReadContract({
-    address: heroTokenAddress as `0x${string}`,
-    abi: erc20Abi,
-    functionName: "balanceOf",
-    args: address ? [address] : undefined,
-    chainId: chainId === 369 || chainId === 8453 ? chainId : undefined,
-    query: { enabled: isConnected && !!address },
-  });
-
-  // Convert balance to whole tokens (18 decimals) — use formatUnits for precision
-  const votingPower = heroBalance ? Math.floor(Number(formatUnits(heroBalance, 18))) : 0;
+  // Binding/token-weighted governance is intentionally disabled. Advisory mode
+  // is one authenticated wallet/account, one vote.
+  const votingPower = 1;
   const connectedChain = chainId === 369 ? "pulsechain" : "base";
 
   // Fetch proposal first — dependent queries gate on proposal.id
@@ -110,12 +94,12 @@ export default function ProposalDetail() {
   const abstainPct = totalVotes > 0 ? (proposal.votesAbstain / totalVotes) * 100 : 0;
   const endDate = new Date(proposal.endTime);
   const isActive = proposal.status === "active" && endDate > new Date();
-  const quorum = 5_000_000;
+  const quorum = proposal.quorum;
   const quorumPct = Math.min((totalVotes / quorum) * 100, 100);
 
   const handleVote = (choice: "for" | "against" | "abstain") => {
     if (!isConnected || !address || !user || hasVoted) return;
-    if (votingPower <= 0) return; // Must hold HERO to vote
+    // Advisory voting is unweighted; the server ignores client power claims.
     castVote.mutate({
       proposalDbId: proposal.id,
       proposalId: proposal.proposalId,
@@ -254,7 +238,7 @@ export default function ProposalDetail() {
                   <div className="h-full bg-primary rounded-full" style={{ width: `${quorumPct}%` }} />
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  {totalVotes.toLocaleString()} / {quorum.toLocaleString()} HERO needed
+                  {totalVotes.toLocaleString()} / {quorum.toLocaleString()} advisory votes needed
                 </p>
               </div>
             </CardContent>
@@ -270,7 +254,7 @@ export default function ProposalDetail() {
                 {!isConnected ? (
                   <ConnectWalletPrompt
                     message="Connect your wallet to cast your vote."
-                    subMessage="1 HERO = 1 vote. Voting power is calculated from your wallet balance."
+                    subMessage="Advisory mode: one authenticated wallet/account, one vote."
                     icon="shield"
                     variant="card"
                   />
@@ -286,11 +270,11 @@ export default function ProposalDetail() {
                   </div>
                 ) : votingPower <= 0 ? (
                   <p className="text-sm text-muted-foreground text-center py-2">
-                    You need HERO tokens to vote. 1 HERO = 1 vote.
+                    A verified account wallet is required for advisory voting.
                   </p>
                 ) : (
                   <>
-                    <p className="text-xs text-muted-foreground mb-2">Your voting power: {votingPower.toLocaleString()} HERO</p>
+                    <p className="text-xs text-muted-foreground mb-2">Advisory voting power: 1 vote</p>
                     <Button
                       variant={votingChoice === "for" ? "default" : "outline"}
                       className="w-full gap-2"
