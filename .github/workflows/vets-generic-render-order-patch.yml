@@ -1,0 +1,50 @@
+name: One-shot generic focus render-order patch
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vets-generic-render-order-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'closeout/csp-rebuild-20260802'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: closeout/csp-rebuild-20260802
+          fetch-depth: 0
+
+      - name: Apply bounded render-order correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/vets-generic-render-order-patch.py
+          python3 -m py_compile scripts/vets-generic-render-order-patch.py
+          node --check scripts/check-generic-error-focus.mjs
+          git diff --check
+
+      - name: Commit exact correction
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'VETS GitHub automation'
+          git config user.email 'jratdish1@users.noreply.github.com'
+          git add scripts/check-generic-error-focus.mjs
+          git diff --cached --quiet && {
+            echo 'Expected render-order correction produced no change' >&2
+            exit 1
+          }
+          git commit -m 'fix(test): mount generic error after stylesheet readiness'
+          git pull --rebase origin closeout/csp-rebuild-20260802
+          git push origin HEAD:closeout/csp-rebuild-20260802
