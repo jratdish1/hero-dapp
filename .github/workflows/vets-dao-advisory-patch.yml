@@ -1,0 +1,61 @@
+name: One-shot DAO advisory boundary patch
+
+on:
+  push:
+    branches:
+      - closeout/dao-rebuild-20260803
+  pull_request:
+    branches:
+      - main
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event_name == 'push' || github.event.pull_request.head.ref == 'closeout/dao-rebuild-20260803'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact branch head
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: closeout/dao-rebuild-20260803
+          fetch-depth: 0
+
+      - name: Stop after result commit
+        id: guard
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "$(git log -1 --pretty=%s)" = 'fix(dao): enforce fail-closed advisory governance' ]; then
+            echo 'skip=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'skip=false' >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Apply deterministic DAO patch
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/vets-dao-advisory-patch.py
+          python3 -m py_compile scripts/vets-dao-advisory-patch.py
+          git diff --check
+
+      - name: Commit exact patch result
+        if: steps.guard.outputs.skip != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'VETS GitHub automation'
+          git config user.email 'jratdish1@users.noreply.github.com'
+          git add server/db.ts server/routers.ts client/src/pages/dao/ProposalDetail.tsx
+          git diff --cached --quiet && {
+            echo 'Expected DAO patch produced no changes' >&2
+            exit 1
+          }
+          git commit -m 'fix(dao): enforce fail-closed advisory governance'
+          git pull --rebase origin closeout/dao-rebuild-20260803
+          git push origin HEAD:closeout/dao-rebuild-20260803
