@@ -23,11 +23,22 @@ export default function CreateProposal() {
   const [category, setCategory] = useState<"protocol" | "treasury" | "community" | "emergency">("protocol");
   const [chain, setChain] = useState<"base" | "pulsechain" | "both">("both");
   const [durationDays, setDurationDays] = useState(7);
+  const [confirmBinding, setConfirmBinding] = useState(false);
   const [error, setError] = useState("");
 
   const createProposal = trpc.dao.proposals.create.useMutation({
     onSuccess: (data) => {
-      navigate(`/dao/proposals/${data.proposalId}`);
+      if (!data.success && "requiresConfirmation" in data && data.requiresConfirmation) {
+        setConfirmBinding(true);
+        setError(data.message);
+        return;
+      }
+      if (data.success && data.proposalId) {
+        setConfirmBinding(false);
+        navigate(`/dao/proposals/${data.proposalId}`);
+        return;
+      }
+      setError("Proposal creation did not return a valid proposal ID.");
     },
     onError: (err) => {
       setError(err.message);
@@ -50,12 +61,13 @@ export default function CreateProposal() {
       category,
       chain,
       durationDays,
+      governanceMode: "advisory",
+      confirmBinding: confirmBinding || undefined,
     });
   };
 
   return (
     <div className="max-w-3xl mx-auto space-y-6">
-      {/* Back */}
       <Link href="/dao/proposals">
         <Button variant="ghost" className="gap-2">
           <ArrowLeft className="h-4 w-4" />
@@ -67,14 +79,14 @@ export default function CreateProposal() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <FileText className="h-5 w-5 text-primary" />
-            Create New Proposal
+            Create New Advisory Proposal
           </CardTitle>
         </CardHeader>
         <CardContent>
           {!isConnected ? (
             <ConnectWalletPrompt
-              message="Connect your wallet to create a proposal."
-              subMessage="Your wallet address is used to sign and submit governance proposals on-chain."
+              message="Connect your wallet to create an advisory proposal."
+              subMessage="The wallet identifies the proposal author. Binding execution and token-weighted voting are disabled."
               icon="shield"
             />
           ) : !user ? (
@@ -127,7 +139,7 @@ export default function CreateProposal() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1.5">Chain</label>
+                  <label className="block text-sm font-medium mb-1.5">Chain scope</label>
                   <select
                     value={chain}
                     onChange={(e) => { const v = e.target.value; if ((validChains as readonly string[]).includes(v)) setChain(v as typeof chain); }}
@@ -152,17 +164,21 @@ export default function CreateProposal() {
               </div>
 
               <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
-                <p className="font-medium mb-1">Proposal Guidelines</p>
+                <p className="font-medium mb-1">Advisory Governance Boundary</p>
                 <ul className="text-muted-foreground space-y-1 text-xs">
-                  <li>• Proposals require 5,000,000 HERO in total votes to reach quorum</li>
-                  <li>• Voting period starts immediately after creation</li>
-                  <li>• Emergency proposals have a 24-hour fast-track option</li>
-                  <li>• Be clear and specific about what you're proposing</li>
+                  <li>• One authenticated account and bound wallet receives one advisory vote.</li>
+                  <li>• New proposals open immediately with a one-vote advisory quorum.</li>
+                  <li>• The selected chain limits where an advisory vote may be recorded.</li>
+                  <li>• Binding execution, token-weighted voting, and treasury actions remain disabled.</li>
                 </ul>
               </div>
 
               <Button type="submit" className="w-full" disabled={createProposal.isPending}>
-                {createProposal.isPending ? "Creating..." : "Submit Proposal"}
+                {createProposal.isPending
+                  ? "Creating..."
+                  : confirmBinding
+                    ? "Confirm Wallet Binding & Submit Proposal"
+                    : "Submit Advisory Proposal"}
               </Button>
             </form>
           )}
