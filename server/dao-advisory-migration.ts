@@ -36,6 +36,15 @@ export interface DaoMigrationStatus {
   checkedAt: string;
 }
 
+export interface FinalizedAdvisoryOutcome {
+  status: "passed" | "defeated";
+  endTime: Date;
+  votesFor: number;
+  votesAgainst: number;
+  votesAbstain: number;
+  quorum: number;
+}
+
 let migrationStatus: DaoMigrationStatus = {
   state: "not-configured",
   policyTableVerified: false,
@@ -83,6 +92,21 @@ export function isConstraintEnforced(value: unknown): boolean {
 
 export function isAdvisoryPolicyStatusAllowed(value: unknown): boolean {
   return ["pending", "active", "passed", "defeated", "cancelled"].includes(String(value));
+}
+
+export function isFinalizedAdvisoryOutcomeValid(
+  proposal: FinalizedAdvisoryOutcome,
+  now = new Date(),
+): boolean {
+  if (now < proposal.endTime) return false;
+  const counts = [proposal.votesFor, proposal.votesAgainst, proposal.votesAbstain, proposal.quorum];
+  if (!counts.every(value => Number.isSafeInteger(value) && value >= 0) || proposal.quorum < 1) return false;
+  const totalVotes = proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain;
+  if (!Number.isSafeInteger(totalVotes)) return false;
+  const expected = totalVotes >= proposal.quorum && proposal.votesFor > proposal.votesAgainst
+    ? "passed"
+    : "defeated";
+  return proposal.status === expected;
 }
 
 export function isWalletUniqueIndexShapeValid(rows: ReadonlyArray<Record<string, unknown>>): boolean {
@@ -297,6 +321,24 @@ async function verifyProposalPolicyHistory(connection: mysql.Connection): Promis
                OR proposal.bindingDisabledReason <> ?
                OR proposal.quorum <> ?
                OR proposal.status IN ('queued', 'executed')
+               OR (
+                 proposal.status IN ('passed', 'defeated')
+                 AND (
+                   proposal.endTime > CURRENT_TIMESTAMP(3)
+                   OR (
+                     proposal.status = 'passed'
+                     AND NOT (
+                       proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                       AND proposal.votesFor > proposal.votesAgainst
+                     )
+                   )
+                   OR (
+                     proposal.status = 'defeated'
+                     AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                     AND proposal.votesFor > proposal.votesAgainst
+                   )
+                 )
+               )
              ))
         )`,
     [DAO_LEGACY_PROPOSAL_DISABLED_REASON, DAO_BINDING_DISABLED_REASON, DAO_ADVISORY_QUORUM],
