@@ -348,6 +348,7 @@ async function waitForHarness(client) {
         const style = heading ? getComputedStyle(heading) : null;
         return {
           ready: document.body?.dataset.ready || '',
+          readyError: document.body?.dataset.readyError || '',
           focusedId: document.activeElement?.id || '',
           heading: document.body?.dataset.heading || '',
           focusClass: document.body?.dataset.focusClass || '',
@@ -357,8 +358,17 @@ async function waitForHarness(client) {
           boxShadow: style?.boxShadow || '',
         };
       })()`);
+      if (state.readyError) {
+        throw new Error(`Generic focus harness readiness failed: ${state.readyError}`);
+      }
       if (state.ready === 'true') return state;
-    } catch {
+    } catch (error) {
+      if (
+        error instanceof Error
+        && error.message.startsWith('Generic focus harness readiness failed:')
+      ) {
+        throw error;
+      }
       // Navigation can briefly invalidate the execution context.
     }
     await sleep(100);
@@ -422,14 +432,36 @@ async function main() {
           await new Promise(resolve => requestAnimationFrame(() => resolve()));
         }
         if (!heading) throw new Error('Generic error heading did not mount');
-        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+        const focusStyleDeadline = Date.now() + 10_000;
+        let computed = getComputedStyle(heading);
+        while (Date.now() < focusStyleDeadline) {
+          const outlineWidth = Number.parseFloat(computed.outlineWidth || '0');
+          const visibleOutline = computed.outlineStyle !== 'none' && outlineWidth > 0;
+          const visibleRing = computed.boxShadow && computed.boxShadow !== 'none';
+          if (visibleOutline || visibleRing) break;
+          await new Promise(resolve => requestAnimationFrame(() => resolve()));
+          computed = getComputedStyle(heading);
+        }
+        const finalOutlineWidth = Number.parseFloat(computed.outlineWidth || '0');
+        const finalVisibleOutline = computed.outlineStyle !== 'none' && finalOutlineWidth > 0;
+        const finalVisibleRing = computed.boxShadow && computed.boxShadow !== 'none';
+        if (!finalVisibleOutline && !finalVisibleRing) {
+          throw new Error(
+            'Focused heading never acquired a visible computed outline or ring; '
+            + 'stylesheets=' + links.map(link => link.href).join(',')
+            + '; outline=' + computed.outline
+            + '; boxShadow=' + computed.boxShadow,
+          );
+        }
+
         document.body.dataset.ready = 'true';
         document.body.dataset.focusedId = document.activeElement?.id || '';
         document.body.dataset.heading = heading.textContent?.trim() || '';
         document.body.dataset.focusClass = heading.className || '';
       };
       void markReady().catch(error => {
-        console.error('[Generic focus harness readiness failed]', error);
+        document.body.dataset.readyError = error instanceof Error ? error.message : String(error);
       });
     `;
 
