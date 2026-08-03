@@ -2,6 +2,7 @@ import { z } from "zod";
 import { notifyOwner } from "./notification";
 import { adminProcedure, publicProcedure, router } from "./trpc";
 import { getRpcMetrics } from "../routers";
+import { getDaoMigrationStatus } from "../dao-advisory-migration";
 
 const RELEASE_SHA_PATTERN = /^[0-9a-f]{40}$/;
 
@@ -23,6 +24,12 @@ export const systemRouter = router({
       releaseSha: getReleaseSha(),
       uptime: process.uptime(),
       rpc: getRpcMetrics(),
+      daoGovernance: {
+        mode: "advisory",
+        bindingVotingEnabled: false,
+        delegationEnabled: false,
+        migration: getDaoMigrationStatus(),
+      },
     })),
 
   notifyOwner: adminProcedure
