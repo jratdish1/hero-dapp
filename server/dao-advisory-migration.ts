@@ -63,8 +63,13 @@ export function normalizeCheckClause(value: unknown): string {
 }
 
 export function canonicalizeCheckClause(value: unknown): string {
-  const normalized = normalizeCheckClause(value);
-  if (!normalized || normalized.includes("or") || normalized.includes("not")) return normalized;
+  const source = String(value ?? "")
+    .toLowerCase()
+    .replaceAll("`", "")
+    .replace(/_[a-z0-9]+(?=')/g, "")
+    .replace(/\bfalse\b/g, "0");
+  const normalized = source.replace(/[()\s]/g, "");
+  if (!normalized || /\bor\b/.test(source) || /\bnot\b/.test(source)) return normalized;
   return normalized.split("and").sort().join("and");
 }
 
