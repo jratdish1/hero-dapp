@@ -57,7 +57,10 @@ export default function CreateProposal() {
       }
       setError("Proposal creation did not return a valid proposal ID.");
     },
-    onError: (err) => setError(err.message),
+    onError: (err) => {
+      setPendingBinding(null);
+      setError(err.message);
+    },
   });
 
   const handleSubmit = (event: React.FormEvent) => {
