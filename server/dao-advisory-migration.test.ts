@@ -1,13 +1,20 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  DAO_ROLLBACK_CONTRACT_VERSION,
   canonicalizeCheckClause,
   classifyDaoMigrationShape,
+  isAdvisoryPolicyStatusAllowed,
   isConstraintEnforced,
+  isWalletUniqueIndexShapeValid,
   normalizeCheckClause,
 } from "./dao-advisory-migration";
 
 describe("DAO advisory migration policy", () => {
+  it("publishes the current rollback contract version", () => {
+    expect(DAO_ROLLBACK_CONTRACT_VERSION).toBe(2);
+  });
+
   it("installs only from a completely absent schema", () => {
     expect(classifyDaoMigrationShape(0, 0)).toBe("install");
   });
@@ -51,5 +58,37 @@ describe("DAO advisory migration policy", () => {
     expect(isConstraintEnforced("yes")).toBe(true);
     expect(isConstraintEnforced("NO")).toBe(false);
     expect(isConstraintEnforced(undefined)).toBe(false);
+  });
+
+  it.each(["pending", "active", "passed", "defeated", "cancelled"])(
+    "permits advisory status %s",
+    status => expect(isAdvisoryPolicyStatusAllowed(status)).toBe(true),
+  );
+
+  it.each(["queued", "executed", "binding", undefined])(
+    "rejects binding-only or unknown advisory status %s",
+    status => expect(isAdvisoryPolicyStatusAllowed(status)).toBe(false),
+  );
+
+  it("requires the exact one-column unique wallet index", () => {
+    expect(isWalletUniqueIndexShapeValid([{
+      INDEX_NAME: "ux_users_wallet_address",
+      COLUMN_NAME: "walletAddress",
+      SEQ_IN_INDEX: 1,
+      NON_UNIQUE: 0,
+    }])).toBe(true);
+    expect(isWalletUniqueIndexShapeValid([])).toBe(false);
+    expect(isWalletUniqueIndexShapeValid([{
+      INDEX_NAME: "ux_users_wallet_address",
+      COLUMN_NAME: "walletAddress",
+      SEQ_IN_INDEX: 1,
+      NON_UNIQUE: 1,
+    }])).toBe(false);
+    expect(isWalletUniqueIndexShapeValid([{
+      INDEX_NAME: "some_marker_only_index",
+      COLUMN_NAME: "walletAddress",
+      SEQ_IN_INDEX: 1,
+      NON_UNIQUE: 0,
+    }])).toBe(false);
   });
 });
