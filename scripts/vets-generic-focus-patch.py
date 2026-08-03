@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from pathlib import Path
 
+# One-shot deterministic correction for the mounted generic recovery harness.
 path = Path('scripts/check-generic-error-focus.mjs')
 text = path.read_text(encoding='utf-8')
 old = """        await new Promise(resolve => requestAnimationFrame(() => resolve()));
