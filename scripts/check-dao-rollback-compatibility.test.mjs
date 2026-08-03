@@ -1,8 +1,18 @@
+import { execFileSync } from "node:child_process";
+
 import { describe, expect, it } from "vitest";
 
-import { assessDaoRollbackCompatibility } from "./check-dao-rollback-compatibility.mjs";
+import {
+  assessDaoRollbackCompatibility,
+  targetSupportsDaoBoundary,
+} from "./check-dao-rollback-compatibility.mjs";
 
 describe("DAO rollback compatibility guard", () => {
+  it("recognizes the checked-out advisory boundary", () => {
+    const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(targetSupportsDaoBoundary(head)).toBe(true);
+  });
+
   it("allows targets that preserve the complete advisory boundary", () => {
     expect(assessDaoRollbackCompatibility({
       targetSupportsBoundary: true,
