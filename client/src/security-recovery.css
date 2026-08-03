@@ -11,6 +11,7 @@
   src: url("/fonts/inter-latin.woff2") format("woff2");
 }
 
+.vets-recovery-heading,
 #application-error-title.vets-recovery-heading:focus,
 #application-error-title.vets-recovery-heading:focus-visible,
 #dapp-recovery-title.vets-recovery-heading:focus,
