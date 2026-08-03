@@ -1,0 +1,84 @@
+name: One-shot ip-address lock refresh
+
+on:
+  push:
+    branches:
+      - closeout/dao-rebuild-20260803
+    paths:
+      - .github/workflows/vets-ip-address-lock-refresh.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vets-ip-address-lock-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    if: github.repository == 'jratdish1/hero-dapp' && github.actor == github.repository_owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout exact branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 0
+          ref: closeout/dao-rebuild-20260803
+
+      - name: Setup Node
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '24'
+
+      - name: Activate repository-pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = "10.34.4"
+
+      - name: Refresh only the patched ip-address resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from 'node:fs';
+          const path = 'package.json';
+          const manifest = JSON.parse(readFileSync(path, 'utf8'));
+          manifest.pnpm ??= {};
+          manifest.pnpm.overrides ??= {};
+          manifest.pnpm.overrides['ip-address'] = '10.3.1';
+          writeFileSync(path, `${JSON.stringify(manifest, null, 2)}\n`);
+          NODE
+          pnpm install --lockfile-only --ignore-scripts
+          node --input-type=module <<'NODE'
+          import { readFileSync } from 'node:fs';
+          const manifest = JSON.parse(readFileSync('package.json', 'utf8'));
+          if (manifest.pnpm?.overrides?.['ip-address'] !== '10.3.1') {
+            throw new Error('ip-address override was not pinned to 10.3.1');
+          }
+          const lock = readFileSync('pnpm-lock.yaml', 'utf8');
+          if (!lock.includes("ip-address: 10.3.1") || !lock.includes('ip-address@10.3.1:')) {
+            throw new Error('pnpm lockfile did not resolve ip-address 10.3.1');
+          }
+          if (lock.includes('ip-address@10.2.0:')) {
+            throw new Error('vulnerable ip-address 10.2.0 remains in lockfile');
+          }
+          NODE
+          pnpm install --frozen-lockfile --ignore-scripts
+
+      - name: Commit lock refresh and remove controller
+        shell: bash
+        run: |
+          set -euo pipefail
+          git rm .github/workflows/vets-ip-address-lock-refresh.yml
+          unexpected="$(git status --porcelain | awk '{print $2}' | grep -Ev '^(package.json|pnpm-lock.yaml|.github/workflows/vets-ip-address-lock-refresh.yml)$' || true)"
+          test -z "$unexpected"
+          git diff --check
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json pnpm-lock.yaml
+          git commit -m 'fix(deps): pin patched ip-address 10.3.1'
+          git push origin HEAD:closeout/dao-rebuild-20260803
