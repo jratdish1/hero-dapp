@@ -40,9 +40,15 @@ function contentType(file) {
 
 function cspPolicy() {
   const config = readFileSync(path.join(ROOT, 'nginx/herobase-cache-headers.conf'), 'utf8');
-  const policy = config.match(/add_header Content-Security-Policy "([^"]+)" always;/)?.[1];
-  if (!policy) throw new Error('Production CSP was not found');
-  return policy;
+  const policies = Array.from(
+    config.matchAll(/add_header Content-Security-Policy "([^"]+)" always;/g),
+    match => match[1],
+  );
+  if (policies.length === 0) throw new Error('Production CSP was not found');
+  if (new Set(policies).size !== 1) {
+    throw new Error('Effective Nginx CSP policies are not identical');
+  }
+  return policies[0];
 }
 
 class Cdp {

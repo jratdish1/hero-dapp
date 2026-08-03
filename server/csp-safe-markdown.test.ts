@@ -9,6 +9,15 @@ describe("CSP-safe markdown", () => {
       .toBe("  ~~~~text\nA-->B\n~~~~");
   });
 
+  it("neutralizes Mermaid fences nested in block quotes and lists", () => {
+    expect(disableMermaidDiagrams("> ```mermaid\n> graph TD; A-->B\n> ```"))
+      .toBe("> ```text\n> graph TD; A-->B\n> ```");
+    expect(disableMermaidDiagrams("- ```mermaid\n  graph TD; A-->B\n  ```"))
+      .toBe("- ```text\n  graph TD; A-->B\n  ```");
+    expect(disableMermaidDiagrams("> 1. ~~~mermaid theme=dark\n>    A-->B\n>    ~~~"))
+      .toBe("> 1. ~~~text\n>    A-->B\n>    ~~~");
+  });
+
   it("leaves non-Mermaid fences and prose unchanged", () => {
     const value = "```typescript\nconst mermaid = true;\n```";
     expect(disableMermaidDiagrams(value)).toBe(value);

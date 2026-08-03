@@ -27,6 +27,53 @@ const recoveryPaths = [
   path.join(root, 'client/src/components/DappLoadBoundary.tsx'),
 ];
 
+const approvedStyleAttributeFiles = new Set([
+  'client/src/components/AIChatBox.tsx',
+  'client/src/components/AppLayout.tsx',
+  'client/src/components/BetaDisclaimer.tsx',
+  'client/src/components/ChainStatsWidget.tsx',
+  'client/src/components/DashboardLayout.tsx',
+  'client/src/components/ExplainerVideoModal.tsx',
+  'client/src/components/IntroOverlay.tsx',
+  'client/src/components/LiveTicker.tsx',
+  'client/src/components/NFTCarousel.tsx',
+  'client/src/components/NetworkSwitcher.tsx',
+  'client/src/components/PriceImpactWarning.tsx',
+  'client/src/components/PriceTicker.tsx',
+  'client/src/components/QuickVote.tsx',
+  'client/src/components/SquirrelSwapWidget.tsx',
+  'client/src/components/ui/chart.tsx',
+  'client/src/components/ui/progress.tsx',
+  'client/src/components/ui/sidebar.tsx',
+  'client/src/components/ui/sonner.tsx',
+  'client/src/lib/csp-safe-remove-scroll-bar.tsx',
+  'client/src/pages/AiAssistant.tsx',
+  'client/src/pages/BaseFarm.tsx',
+  'client/src/pages/BaseStake.tsx',
+  'client/src/pages/Blog.tsx',
+  'client/src/pages/BuyAndBurn.tsx',
+  'client/src/pages/DAOProposals.tsx',
+  'client/src/pages/DcaOrders.tsx',
+  'client/src/pages/Farm.tsx',
+  'client/src/pages/Giveaways.tsx',
+  'client/src/pages/HeroStake.tsx',
+  'client/src/pages/Home.tsx',
+  'client/src/pages/LimitOrders.tsx',
+  'client/src/pages/MediaHub.tsx',
+  'client/src/pages/NFTMint.tsx',
+  'client/src/pages/NftCollection.tsx',
+  'client/src/pages/Onboarding.tsx',
+  'client/src/pages/Portfolio.tsx',
+  'client/src/pages/Stake.tsx',
+  'client/src/pages/Subdomains.tsx',
+  'client/src/pages/Swap.tsx',
+  'client/src/pages/Tokenomics.tsx',
+  'client/src/pages/dao/DaoDashboard.tsx',
+  'client/src/pages/dao/ProposalDetail.tsx',
+  'client/src/pages/dao/Proposals.tsx',
+  'client/src/pages/dao/Treasury.tsx',
+]);
+
 function fail(message) {
   throw new Error(message);
 }
@@ -185,16 +232,20 @@ function hasStyleAttributeOrAccess(full, name, text) {
 }
 
 const nginx = readFileSync(nginxPath, 'utf8');
-const policy = nginx.match(
-  /add_header Content-Security-Policy "([^"]+)" always;/,
-)?.[1];
-if (!policy) fail('Nginx CSP header was not found');
-const nginxDirectives = parseHeaderPolicy(policy);
+const nginxPolicies = Array.from(
+  nginx.matchAll(/add_header Content-Security-Policy "([^"]+)" always;/g),
+  match => match[1],
+);
+if (nginxPolicies.length === 0) fail('Nginx CSP header was not found');
+const nginxDirectiveSets = nginxPolicies.map(parseHeaderPolicy);
+const nginxDirectives = nginxDirectiveSets[0];
 
 const helmetDirectives = normalizeHelmetPolicy(
   await loadActualHelmetProductionPolicy(),
 );
-comparePolicies('Nginx', nginxDirectives, 'Helmet', helmetDirectives);
+for (const [index, directives] of nginxDirectiveSets.entries()) {
+  comparePolicies(`Nginx policy ${index + 1}`, directives, 'Helmet', helmetDirectives);
+}
 
 const script = nginxDirectives.get('script-src') ?? [];
 if (script.includes("'unsafe-inline'") || script.includes("'unsafe-eval'")) {
@@ -292,11 +343,20 @@ styleFiles.sort();
 if (styleFiles.length === 0) {
   fail("style-src-attr 'unsafe-inline' is no longer justified; remove it instead");
 }
+const unexpectedStyleFiles = styleFiles.filter(
+  file => !approvedStyleAttributeFiles.has(file),
+);
+if (unexpectedStyleFiles.length > 0) {
+  fail(
+    `Unreviewed style-attribute files were added: ${unexpectedStyleFiles.join(', ')}`,
+  );
+}
 
 const report = {
   timestamp: new Date().toISOString(),
   result: 'PASS',
   completePolicyComparison: true,
+  nginxPolicyOccurrences: nginxPolicies.length,
   nginxPolicy: mapToObject(nginxDirectives),
   helmetProductionPolicy: mapToObject(helmetDirectives),
   scriptSrc: script,
