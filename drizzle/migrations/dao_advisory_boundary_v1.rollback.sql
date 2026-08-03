@@ -1,37 +1,52 @@
--- Fail-closed rollback for the DAO advisory-boundary policy receipt.
--- The routine is defined before acquiring the table lock because MySQL routine
--- DDL implicitly commits and would release an existing LOCK TABLES lock. The
--- table CHECK constraints prevent an unsafe policy row while the validation and
--- DROP execute through the approved single-writer migration lane.
+-- Fail-closed rollback for DAO advisory policy versioning.
+-- Run only with the application stopped in the approved single-writer lane.
+-- Any advisory/binding proposal blocks rollback so policy history is never
+-- stripped from records that were created under the new semantics.
 
 DROP PROCEDURE IF EXISTS rollback_dao_advisory_boundary_v1;
 
 DELIMITER $$
 CREATE PROCEDURE rollback_dao_advisory_boundary_v1()
 BEGIN
-  DECLARE total_rows INT DEFAULT 0;
-  DECLARE unsafe_rows INT DEFAULT 0;
+  DECLARE total_receipts INT DEFAULT 0;
+  DECLARE unsafe_receipts INT DEFAULT 0;
+  DECLARE governed_proposals INT DEFAULT 0;
 
-  SELECT COUNT(*) INTO total_rows
+  SELECT COUNT(*) INTO total_receipts
   FROM dao_governance_policy;
 
-  SELECT COUNT(*) INTO unsafe_rows
+  SELECT COUNT(*) INTO unsafe_receipts
   FROM dao_governance_policy
   WHERE id <> 1
      OR binding_enabled <> FALSE
      OR governance_mode <> 'advisory'
      OR snapshot_version <> 1;
 
-  IF total_rows <> 1 OR unsafe_rows <> 0 THEN
+  SELECT COUNT(*) INTO governed_proposals
+  FROM proposals
+  WHERE governanceMode <> 'legacy'
+     OR snapshotVersion <> 0;
+
+  IF total_receipts <> 1 OR unsafe_receipts <> 0 THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Refusing rollback: DAO advisory policy receipt is missing or unsafe';
+      SET MESSAGE_TEXT = 'Refusing rollback: DAO policy receipt is missing or unsafe';
   END IF;
+
+  IF governed_proposals <> 0 THEN
+    SIGNAL SQLSTATE '45000'
+      SET MESSAGE_TEXT = 'Refusing rollback: advisory/binding proposal records would lose policy history';
+  END IF;
+
+  ALTER TABLE proposals
+    DROP COLUMN bindingDisabledReason,
+    DROP COLUMN snapshotVersion,
+    DROP COLUMN governanceMode,
+    MODIFY COLUMN status ENUM('pending', 'active', 'passed', 'defeated', 'queued', 'executed', 'cancelled') NOT NULL DEFAULT 'pending',
+    MODIFY COLUMN quorum BIGINT NOT NULL DEFAULT 5000000;
 
   DROP TABLE dao_governance_policy;
 END$$
 DELIMITER ;
 
-LOCK TABLES dao_governance_policy WRITE;
 CALL rollback_dao_advisory_boundary_v1();
-UNLOCK TABLES;
 DROP PROCEDURE rollback_dao_advisory_boundary_v1;
