@@ -49,6 +49,7 @@ jobs:
         run: |
           set -euo pipefail
           python3 scripts/vets-csp-rebuild-patch.py
+          git checkout -- .github/workflows/ci.yml
           python3 -m py_compile scripts/vets-csp-rebuild-patch.py
           node --check scripts/check-csp-contract.mjs
           node --check scripts/check-csp-routes.mjs
@@ -56,6 +57,7 @@ jobs:
           node --check scripts/check-generic-error-focus.mjs
           test ! -e .github/workflows/deploy-vdss.yml
           test ! -e scripts/vets-vdss-production.sh
+          test -z "$(git diff --name-only -- .github/workflows)"
           git diff --check
 
       - name: Commit exact patch result
