@@ -31,7 +31,8 @@ import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
 import { generateProposalHash } from "./dao-security-hardening";
 import {
   issueWalletBindingChallenge,
-  verifyWalletBindingChallenge,
+  verifyWalletBindingProof,
+  walletBindingMessage,
 } from "./dao-wallet-binding";
 import { appRouter as legacyAppRouter } from "./routers-base";
 
@@ -40,6 +41,9 @@ export { getRpcMetrics } from "./routers-base";
 const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet address format");
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
 const bindingChallengeSchema = z.string().min(64).max(2_048).optional();
+const walletSignatureSchema = z.string()
+  .regex(/^0x(?:[0-9a-fA-F]{128}|[0-9a-fA-F]{130})$/, "Invalid wallet signature format")
+  .optional();
 const safeStringSchema = (maxLength: number) => z.string().min(1).max(maxLength).refine(
   value => !/<script/i.test(value) && !/javascript:/i.test(value) && !/on\w+=/i.test(value),
   { message: "Input contains disallowed content" },
@@ -63,19 +67,28 @@ const disabledDelegationMutation = protectedProcedure.mutation(() => {
   fail("PRECONDITION_FAILED", DAO_DELEGATION_DISABLED_REASON);
 });
 
-function requireWalletBindingChallenge(
+async function requireWalletBindingProof(
   challenge: string,
+  walletSignature: string,
   userId: number,
   walletAddress: string,
-): void {
+): Promise<void> {
   try {
-    verifyWalletBindingChallenge(challenge, userId, walletAddress);
+    await verifyWalletBindingProof(challenge, walletSignature, userId, walletAddress);
   } catch (error) {
     fail(
       "PRECONDITION_FAILED",
-      error instanceof Error ? error.message : "Wallet binding challenge is invalid",
+      error instanceof Error ? error.message : "Wallet binding proof is invalid",
     );
   }
+}
+
+function newBindingChallenge(userId: number, walletAddress: string) {
+  const bindingChallenge = issueWalletBindingChallenge(userId, walletAddress);
+  return {
+    bindingChallenge,
+    bindingMessage: walletBindingMessage(bindingChallenge, userId, walletAddress),
+  };
 }
 
 const daoRouter = router({
@@ -103,6 +116,7 @@ const daoRouter = router({
       .input(z.object({
         walletAddress: ethAddressSchema,
         bindingChallenge: bindingChallengeSchema,
+        walletSignature: walletSignatureSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         const normalized = input.walletAddress.toLowerCase();
@@ -116,18 +130,27 @@ const daoRouter = router({
             requiresConfirmation: false,
             walletAddress: normalized,
             bindingChallenge: undefined,
+            bindingMessage: undefined,
           } as const;
         }
-        if (!input.bindingChallenge) {
+        if (!input.bindingChallenge && !input.walletSignature) {
           return {
             success: false,
             requiresConfirmation: true,
             walletAddress: normalized,
-            bindingChallenge: issueWalletBindingChallenge(ctx.user.id, normalized),
-            message: "Confirm permanent account binding before casting an advisory vote.",
+            ...newBindingChallenge(ctx.user.id, normalized),
+            message: "Sign the wallet-binding message before permanently binding this address.",
           } as const;
         }
-        requireWalletBindingChallenge(input.bindingChallenge, ctx.user.id, normalized);
+        if (!input.bindingChallenge || !input.walletSignature) {
+          fail("PRECONDITION_FAILED", "Wallet binding requires both the server challenge and wallet signature");
+        }
+        await requireWalletBindingProof(
+          input.bindingChallenge,
+          input.walletSignature,
+          ctx.user.id,
+          normalized,
+        );
         try {
           await updateUserWalletAddress(ctx.user.id, normalized);
         } catch (error) {
@@ -138,6 +161,7 @@ const daoRouter = router({
           requiresConfirmation: false,
           walletAddress: normalized,
           bindingChallenge: undefined,
+          bindingMessage: undefined,
         } as const;
       }),
   }),
@@ -166,6 +190,7 @@ const daoRouter = router({
         durationDays: z.number().int().min(1).max(30).optional(),
         governanceMode: z.enum(["advisory", "binding"]).optional(),
         bindingChallenge: bindingChallengeSchema,
+        walletSignature: walletSignatureSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         if ((input.governanceMode ?? "advisory") !== "advisory") {
@@ -176,13 +201,13 @@ const daoRouter = router({
         if (existingWallet && existingWallet !== normalizedWallet) {
           fail("FORBIDDEN", "Wallet address does not match the authenticated account wallet");
         }
-        if (!existingWallet && !input.bindingChallenge) {
+        if (!existingWallet && !input.bindingChallenge && !input.walletSignature) {
           return {
             success: false,
             requiresConfirmation: true,
-            message: "Confirm permanent account binding before creating this advisory proposal.",
+            message: "Sign the wallet-binding message before creating this advisory proposal.",
             walletAddress: normalizedWallet,
-            bindingChallenge: issueWalletBindingChallenge(ctx.user.id, normalizedWallet),
+            ...newBindingChallenge(ctx.user.id, normalizedWallet),
             proposalId: undefined,
             contentHash: undefined,
             anchorTxHash: undefined,
@@ -190,7 +215,15 @@ const daoRouter = router({
           } as const;
         }
         if (!existingWallet) {
-          requireWalletBindingChallenge(input.bindingChallenge!, ctx.user.id, normalizedWallet);
+          if (!input.bindingChallenge || !input.walletSignature) {
+            fail("PRECONDITION_FAILED", "Wallet binding requires both the server challenge and wallet signature");
+          }
+          await requireWalletBindingProof(
+            input.bindingChallenge,
+            input.walletSignature,
+            ctx.user.id,
+            normalizedWallet,
+          );
           try {
             await updateUserWalletAddress(ctx.user.id, normalizedWallet);
           } catch (error) {
@@ -238,6 +271,7 @@ const daoRouter = router({
           requiresConfirmation: false,
           walletAddress: normalizedWallet,
           bindingChallenge: undefined,
+          bindingMessage: undefined,
           proposalId,
           contentHash,
           anchorTxHash: null,
