@@ -867,8 +867,8 @@ jobs:
           FINAL_ACTIVE_SHA: ${{ steps.final_state.outputs.final_active_sha }}
           MUTATION_STARTED: ${{ steps.state.outputs.mutation_started }}
           INLINE_ATTEMPTED: ${{ steps.state.outputs.inline_attempted }}
-          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_rollback_succeeded }}
-          INLINE_FAILED: ${{ steps.state.outputs.inline_rollback_failed }}
+          INLINE_SUCCEEDED: ${{ steps.state.outputs.inline_succeeded }}
+          INLINE_FAILED: ${{ steps.state.outputs.inline_failed }}
           POST_ATTEMPTED: ${{ steps.state.outputs.post_attempted }}
           POST_SUCCEEDED: ${{ steps.state.outputs.post_succeeded }}
           POST_FAILED: ${{ steps.state.outputs.post_failed }}
