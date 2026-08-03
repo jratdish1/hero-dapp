@@ -405,12 +405,6 @@ async function main() {
         throw new Error(${JSON.stringify(SENSITIVE_DETAIL)});
       }
 
-      const root = document.getElementById('root');
-      if (!root) throw new Error('Missing generic focus test root');
-      createRoot(root, createRootErrorHandlers(false)).render(
-        <ErrorBoundary><ThrowOnInitialRender /></ErrorBoundary>,
-      );
-
       const markReady = async () => {
         if (document.readyState !== 'complete') {
           await new Promise(resolve => window.addEventListener('load', resolve, { once: true }));
@@ -424,6 +418,13 @@ async function main() {
             link.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Stylesheet failed to load')); }, { once: true });
           });
         }));
+
+        const root = document.getElementById('root');
+        if (!root) throw new Error('Missing generic focus test root');
+        createRoot(root, createRootErrorHandlers(false)).render(
+          <ErrorBoundary><ThrowOnInitialRender /></ErrorBoundary>,
+        );
+
         let heading = null;
         const headingDeadline = Date.now() + 10_000;
         while (Date.now() < headingDeadline) {
