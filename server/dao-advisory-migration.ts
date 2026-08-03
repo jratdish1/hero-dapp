@@ -41,6 +41,14 @@ export function classifyDaoMigrationShape(policyTableCount: number, policyColumn
   );
 }
 
+export function normalizeCheckClause(value: unknown): string {
+  return String(value ?? "")
+    .toLowerCase()
+    .replaceAll("`", "")
+    .replace(/\bfalse\b/g, "0")
+    .replace(/[()\s]/g, "");
+}
+
 function normalizeDefault(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return String(value);
@@ -83,16 +91,32 @@ async function verifyProposalColumns(connection: mysql.Connection): Promise<void
 }
 
 async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
-  const [createRows] = await connection.query<RowDataPacket[]>(`SHOW CREATE TABLE ${POLICY_TABLE}`);
-  const createSql = String(createRows[0]?.["Create Table"] ?? "").toLowerCase();
+  const [constraintRows] = await connection.query<RowDataPacket[]>(
+    `SELECT tc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
+       FROM information_schema.table_constraints tc
+       JOIN information_schema.check_constraints cc
+         ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
+        AND cc.CONSTRAINT_NAME = tc.CONSTRAINT_NAME
+      WHERE tc.CONSTRAINT_SCHEMA = DATABASE()
+        AND tc.TABLE_NAME = ?
+        AND tc.CONSTRAINT_TYPE = 'CHECK'`,
+    [POLICY_TABLE],
+  );
+  const clauses = new Map(
+    constraintRows.map(row => [String(row.CONSTRAINT_NAME), normalizeCheckClause(row.CHECK_CLAUSE)]),
+  );
+  const singleton = clauses.get("chk_dao_policy_singleton") ?? "";
+  const binding = clauses.get("chk_dao_binding_receipt") ?? "";
+  if (!singleton.includes("id=1")) {
+    throw new Error("FAIL-CLOSED: DAO singleton constraint is missing or changed");
+  }
   for (const marker of [
-    "check (`id` = 1)",
-    "`binding_enabled` = false",
-    "`governance_mode` = 'advisory'",
-    "`snapshot_version` = 1",
+    "binding_enabled=0",
+    "governance_mode='advisory'",
+    "snapshot_version=1",
   ]) {
-    if (!createSql.includes(marker)) {
-      throw new Error(`FAIL-CLOSED: DAO policy table constraint missing: ${marker}`);
+    if (!binding.includes(marker)) {
+      throw new Error(`FAIL-CLOSED: DAO binding receipt constraint missing: ${marker}`);
     }
   }
 
@@ -169,6 +193,9 @@ async function installBoundary(connection: mysql.Connection): Promise<void> {
 export async function ensureDaoAdvisoryBoundary(): Promise<DaoMigrationStatus> {
   const databaseUrl = process.env.DATABASE_URL?.trim();
   if (!databaseUrl) {
+    if (process.env.NODE_ENV === "production") {
+      throw new Error("FAIL-CLOSED: DATABASE_URL is required for the production DAO policy boundary");
+    }
     migrationStatus = {
       state: "not-configured",
       policyTableVerified: false,
