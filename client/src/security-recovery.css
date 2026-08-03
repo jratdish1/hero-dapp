@@ -1,0 +1,101 @@
+/*
+ * Security, accessibility, and CSP-safe scroll-lock styles compiled into the
+ * application bundle. Keep the shell-critical subset synchronized with
+ * client/public/security-recovery-20260731.css.
+ */
+@font-face {
+  font-family: "Inter";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/inter-latin.woff2") format("woff2");
+}
+
+#application-error-title.vets-recovery-heading:focus,
+#application-error-title.vets-recovery-heading:focus-visible,
+#dapp-recovery-title.vets-recovery-heading:focus,
+#dapp-recovery-title.vets-recovery-heading:focus-visible,
+.vets-recovery-heading:focus,
+.vets-recovery-heading:focus-visible {
+  outline: 3px solid #f59e0b !important;
+  outline-offset: 4px !important;
+  box-shadow: 0 0 0 2px #0a0a0a, 0 0 0 5px #f59e0b !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="true"] {
+  overflow: hidden !important;
+  overscroll-behavior: contain;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="false"] {
+  overflow: hidden;
+  overscroll-behavior: contain;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-relative="true"][data-vets-scroll-lock-important="true"] {
+  position: relative !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-relative="true"][data-vets-scroll-lock-important="false"] {
+  position: relative;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-gap-mode="margin"] {
+  padding-left: var(--vets-scroll-lock-left, 0px);
+  padding-top: var(--vets-scroll-lock-top, 0px);
+  padding-right: var(--vets-scroll-lock-right, 0px);
+  margin-left: 0;
+  margin-top: 0;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-gap-mode="margin"][data-vets-scroll-lock-important="true"] {
+  margin-right: var(--vets-scroll-lock-gap, 0px) !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-gap-mode="margin"][data-vets-scroll-lock-important="false"] {
+  margin-right: var(--vets-scroll-lock-gap, 0px);
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-gap-mode="padding"][data-vets-scroll-lock-important="true"] {
+  padding-right: var(--vets-scroll-lock-gap, 0px) !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-gap-mode="padding"][data-vets-scroll-lock-important="false"] {
+  padding-right: var(--vets-scroll-lock-gap, 0px);
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="true"] .with-scroll-bars-hidden,
+body.with-scroll-bars-hidden[data-scroll-locked][data-vets-scroll-lock-important="true"] {
+  overflow: hidden !important;
+  padding-right: var(--vets-scroll-lock-gap, 0px) !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="false"] .with-scroll-bars-hidden,
+body.with-scroll-bars-hidden[data-scroll-locked][data-vets-scroll-lock-important="false"] {
+  overflow: hidden;
+  padding-right: var(--vets-scroll-lock-gap, 0px);
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="true"] .right-scroll-bar-position {
+  right: var(--vets-scroll-lock-gap, 0px) !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="false"] .right-scroll-bar-position {
+  right: var(--vets-scroll-lock-gap, 0px);
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="true"] .width-before-scroll-bar {
+  margin-right: var(--vets-scroll-lock-gap, 0px) !important;
+}
+
+body[data-scroll-locked][data-vets-scroll-lock-important="false"] .width-before-scroll-bar {
+  margin-right: var(--vets-scroll-lock-gap, 0px);
+}
+
+body[data-scroll-locked] .right-scroll-bar-position .right-scroll-bar-position {
+  right: 0 !important;
+}
+
+body[data-scroll-locked] .width-before-scroll-bar .width-before-scroll-bar {
+  margin-right: 0 !important;
+}
