@@ -40,9 +40,7 @@ BEGIN
   ALTER TABLE proposals
     DROP COLUMN bindingDisabledReason,
     DROP COLUMN snapshotVersion,
-    DROP COLUMN governanceMode,
-    MODIFY COLUMN status ENUM('pending', 'active', 'passed', 'defeated', 'queued', 'executed', 'cancelled') NOT NULL DEFAULT 'pending',
-    MODIFY COLUMN quorum BIGINT NOT NULL DEFAULT 5000000;
+    DROP COLUMN governanceMode;
 
   DROP TABLE dao_governance_policy;
 END$$
