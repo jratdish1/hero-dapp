@@ -23,18 +23,20 @@ export default function CreateProposal() {
   const [category, setCategory] = useState<"protocol" | "treasury" | "community" | "emergency">("protocol");
   const [chain, setChain] = useState<"base" | "pulsechain" | "both">("both");
   const [durationDays, setDurationDays] = useState(7);
-  const [confirmBinding, setConfirmBinding] = useState(false);
+  const [pendingBindingWallet, setPendingBindingWallet] = useState<string | null>(null);
   const [error, setError] = useState("");
+  const confirmsCurrentWallet = !!address
+    && pendingBindingWallet?.toLowerCase() === address.toLowerCase();
 
   const createProposal = trpc.dao.proposals.create.useMutation({
     onSuccess: (data) => {
       if (!data.success && "requiresConfirmation" in data && data.requiresConfirmation) {
-        setConfirmBinding(true);
+        setPendingBindingWallet(data.walletAddress);
         setError(data.message);
         return;
       }
       if (data.success && data.proposalId) {
-        setConfirmBinding(false);
+        setPendingBindingWallet(null);
         navigate(`/dao/proposals/${data.proposalId}`);
         return;
       }
@@ -62,7 +64,7 @@ export default function CreateProposal() {
       chain,
       durationDays,
       governanceMode: "advisory",
-      confirmBinding: confirmBinding || undefined,
+      confirmBinding: confirmsCurrentWallet || undefined,
     });
   };
 
@@ -176,7 +178,7 @@ export default function CreateProposal() {
               <Button type="submit" className="w-full" disabled={createProposal.isPending}>
                 {createProposal.isPending
                   ? "Creating..."
-                  : confirmBinding
+                  : confirmsCurrentWallet
                     ? "Confirm Wallet Binding & Submit Proposal"
                     : "Submit Advisory Proposal"}
               </Button>
