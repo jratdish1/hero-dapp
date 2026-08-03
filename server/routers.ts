@@ -35,23 +35,15 @@ function fail(
   throw new TRPCError({ code, message });
 }
 
-const rootRecord = (legacyAppRouter as any)._def?.record as Record<string, any> | undefined;
-const legacyDaoRecord = rootRecord?.dao?._def?.record as Record<string, any> | undefined;
-const legacyProposalRecord = legacyDaoRecord?.proposals?._def?.record as Record<string, any> | undefined;
-const legacyVoteRecord = legacyDaoRecord?.votes?._def?.record as Record<string, any> | undefined;
-const legacyDelegateRecord = legacyDaoRecord?.delegates?._def?.record as Record<string, any> | undefined;
-const legacyDelegationRecord = legacyDaoRecord?.delegations?._def?.record as Record<string, any> | undefined;
-
-if (
-  !rootRecord
-  || !legacyDaoRecord
-  || !legacyProposalRecord
-  || !legacyVoteRecord
-  || !legacyDelegateRecord
-  || !legacyDelegationRecord
-) {
-  throw new Error("FAIL-CLOSED: tRPC router shape changed; DAO policy overrides were not installed");
-}
+// Keep the legacy router's exact static type while replacing only the DAO
+// subtrees. Accessing the typed router record avoids widening AppRouter to any,
+// which would erase every generated client procedure type.
+const rootRecord = legacyAppRouter._def.record;
+const legacyDaoRecord = rootRecord.dao._def.record;
+const legacyProposalRecord = legacyDaoRecord.proposals._def.record;
+const legacyVoteRecord = legacyDaoRecord.votes._def.record;
+const legacyDelegateRecord = legacyDaoRecord.delegates._def.record;
+const legacyDelegationRecord = legacyDaoRecord.delegations._def.record;
 
 const disabledDelegationMutation = protectedProcedure.mutation(() => {
   fail("PRECONDITION_FAILED", DAO_DELEGATION_DISABLED_REASON);
@@ -92,7 +84,7 @@ const daoRouter = router({
           fail("FORBIDDEN", "Account is already bound to a different wallet");
         }
         if (existing === normalized) {
-          return { success: true, requiresConfirmation: false, walletAddress: normalized };
+          return { success: true, requiresConfirmation: false, walletAddress: normalized } as const;
         }
         if (!input.confirmBinding) {
           return {
@@ -100,10 +92,10 @@ const daoRouter = router({
             requiresConfirmation: true,
             walletAddress: normalized,
             message: "Confirm permanent account binding before casting an advisory vote.",
-          };
+          } as const;
         }
         await updateUserWalletAddress(ctx.user.id, normalized);
-        return { success: true, requiresConfirmation: false, walletAddress: normalized };
+        return { success: true, requiresConfirmation: false, walletAddress: normalized } as const;
       }),
   }),
 
@@ -227,6 +219,6 @@ const daoRouter = router({
 export const appRouter = router({
   ...rootRecord,
   dao: daoRouter,
-} as any);
+});
 
 export type AppRouter = typeof appRouter;
