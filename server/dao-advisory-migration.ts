@@ -250,17 +250,25 @@ async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
 async function verifyProposalPolicyHistory(connection: mysql.Connection): Promise<void> {
   const [rows] = await connection.query<RowDataPacket[]>(
     `SELECT COUNT(*) AS unsafe_count
-       FROM proposals
-      WHERE governanceMode = 'binding'
-         OR (governanceMode = 'legacy' AND (
-              snapshotVersion <> 0
-              OR bindingDisabledReason <> ?
-            ))
-         OR (governanceMode = 'advisory' AND (
-              snapshotVersion <> 1
-              OR bindingDisabledReason <> ?
-              OR quorum <> ?
-            ))`,
+       FROM proposals AS proposal
+       CROSS JOIN ${POLICY_TABLE} AS policy
+      WHERE policy.id = 1
+        AND (
+          proposal.governanceMode = 'binding'
+          OR (
+            proposal.createdAt < policy.created_at
+            AND proposal.governanceMode <> 'legacy'
+          )
+          OR (proposal.governanceMode = 'legacy' AND (
+               proposal.snapshotVersion <> 0
+               OR proposal.bindingDisabledReason <> ?
+             ))
+          OR (proposal.governanceMode = 'advisory' AND (
+               proposal.snapshotVersion <> 1
+               OR proposal.bindingDisabledReason <> ?
+               OR proposal.quorum <> ?
+             ))
+        )`,
     [DAO_LEGACY_PROPOSAL_DISABLED_REASON, DAO_BINDING_DISABLED_REASON, DAO_ADVISORY_QUORUM],
   );
   if (Number(rows[0]?.unsafe_count ?? 0) !== 0) {
