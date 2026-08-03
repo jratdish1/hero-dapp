@@ -67,6 +67,24 @@ export function assertProposalVoteable(
   }
 }
 
+export function isAdvisoryVotingWindowOpen(
+  proposal: Pick<GovernedProposalRecord, "status" | "startTime" | "endTime" | "governanceMode" | "snapshotVersion">,
+  now = new Date(),
+): boolean {
+  try {
+    assertProposalVoteable(proposal, now);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export function assertNoAdvisoryTransactionHash(txHash: string | null | undefined): void {
+  if (txHash) {
+    throw new Error("Advisory votes do not accept transaction hashes");
+  }
+}
+
 export function resolveAdvisoryVoteChain(
   proposalChain: ProposalChain,
   requestedChain: VoteChain,
