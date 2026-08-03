@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 const REQUIRED_TARGET_MARKERS = [
   ['server/dao-advisory-migration.ts', 'verifyProposalPolicyHistory'],
   ['server/dao-governance-policy.ts', 'assertAdvisoryProposalPolicy'],
-  ['server/dao-anchor.ts', 'DAO on-chain operation blocked by advisory governance boundary'],
+  ['server/dao-anchor-integration.ts', 'DAO on-chain operation blocked by advisory governance boundary'],
   ['server/routers.ts', 'assertNoAdvisoryTransactionHash'],
 ];
 
