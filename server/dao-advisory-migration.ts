@@ -1,6 +1,7 @@
 import mysql, { type RowDataPacket } from "mysql2/promise";
 
 import {
+  DAO_ADVISORY_QUORUM,
   DAO_BINDING_DISABLED_REASON,
   DAO_LEGACY_PROPOSAL_DISABLED_REASON,
 } from "./dao-governance-policy";
@@ -12,6 +13,15 @@ const REQUIRED_POLICY_COLUMNS = [
   "snapshotVersion",
   "bindingDisabledReason",
 ] as const;
+const EXPECTED_POLICY_TABLE_COLUMNS = [
+  "id",
+  "governance_mode",
+  "snapshot_version",
+  "binding_enabled",
+  "disabled_reason",
+  "created_at",
+  "updated_at",
+] as const;
 
 export type DaoMigrationState = "not-configured" | "verified" | "installed";
 
@@ -19,6 +29,7 @@ export interface DaoMigrationStatus {
   state: DaoMigrationState;
   policyTableVerified: boolean;
   proposalPolicyColumnsVerified: boolean;
+  proposalPolicyHistoryVerified: boolean;
   checkedAt: string;
 }
 
@@ -26,6 +37,7 @@ let migrationStatus: DaoMigrationStatus = {
   state: "not-configured",
   policyTableVerified: false,
   proposalPolicyColumnsVerified: false,
+  proposalPolicyHistoryVerified: false,
   checkedAt: new Date(0).toISOString(),
 };
 
@@ -45,13 +57,28 @@ export function normalizeCheckClause(value: unknown): string {
   return String(value ?? "")
     .toLowerCase()
     .replaceAll("`", "")
+    .replace(/_[a-z0-9]+(?=')/g, "")
     .replace(/\bfalse\b/g, "0")
     .replace(/[()\s]/g, "");
 }
 
+export function canonicalizeCheckClause(value: unknown): string {
+  const normalized = normalizeCheckClause(value);
+  if (!normalized || normalized.includes("or") || normalized.includes("not")) return normalized;
+  return normalized.split("and").sort().join("and");
+}
+
 function normalizeDefault(value: unknown): string | null {
   if (value === null || value === undefined) return null;
-  return String(value);
+  return String(value).toLowerCase().replace(/^'(.*)'$/, "$1").replace(/[()]/g, "");
+}
+
+function normalizeExtra(value: unknown): string {
+  return String(value ?? "").toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function isIntType(value: unknown): boolean {
+  return /^int(?:\(\d+\))?$/.test(String(value).toLowerCase());
 }
 
 async function verifyProposalColumns(connection: mysql.Connection): Promise<void> {
@@ -66,7 +93,9 @@ async function verifyProposalColumns(connection: mysql.Connection): Promise<void
   const mode = byName.get("governanceMode");
   const version = byName.get("snapshotVersion");
   const reason = byName.get("bindingDisabledReason");
-  if (!mode || !version || !reason) throw new Error("FAIL-CLOSED: DAO proposal policy columns are incomplete");
+  if (!mode || !version || !reason || rows.length !== REQUIRED_POLICY_COLUMNS.length) {
+    throw new Error("FAIL-CLOSED: DAO proposal policy columns are incomplete or duplicated");
+  }
   if (
     String(mode.COLUMN_TYPE).toLowerCase() !== "enum('legacy','advisory','binding')"
     || mode.IS_NULLABLE !== "NO"
@@ -75,7 +104,7 @@ async function verifyProposalColumns(connection: mysql.Connection): Promise<void
     throw new Error("FAIL-CLOSED: governanceMode column does not match the legacy-safe contract");
   }
   if (
-    !String(version.COLUMN_TYPE).toLowerCase().startsWith("int")
+    !isIntType(version.COLUMN_TYPE)
     || version.IS_NULLABLE !== "NO"
     || normalizeDefault(version.COLUMN_DEFAULT) !== "0"
   ) {
@@ -84,13 +113,93 @@ async function verifyProposalColumns(connection: mysql.Connection): Promise<void
   if (
     String(reason.COLUMN_TYPE).toLowerCase() !== "varchar(512)"
     || reason.IS_NULLABLE !== "NO"
-    || normalizeDefault(reason.COLUMN_DEFAULT) !== DAO_LEGACY_PROPOSAL_DISABLED_REASON
+    || normalizeDefault(reason.COLUMN_DEFAULT) !== DAO_LEGACY_PROPOSAL_DISABLED_REASON.toLowerCase()
   ) {
     throw new Error("FAIL-CLOSED: bindingDisabledReason column does not match the legacy-safe contract");
   }
 }
 
+async function verifyPolicyTableColumns(connection: mysql.Connection): Promise<void> {
+  const [rows] = await connection.query<RowDataPacket[]>(
+    `SELECT COLUMN_NAME, COLUMN_TYPE, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, EXTRA
+       FROM information_schema.columns
+      WHERE table_schema = DATABASE() AND table_name = ?
+      ORDER BY ORDINAL_POSITION`,
+    [POLICY_TABLE],
+  );
+  const names = rows.map(row => String(row.COLUMN_NAME));
+  if (JSON.stringify(names) !== JSON.stringify(EXPECTED_POLICY_TABLE_COLUMNS)) {
+    throw new Error(`FAIL-CLOSED: DAO policy table columns differ: ${JSON.stringify(names)}`);
+  }
+  const byName = new Map(rows.map(row => [String(row.COLUMN_NAME), row]));
+  const id = byName.get("id")!;
+  const mode = byName.get("governance_mode")!;
+  const version = byName.get("snapshot_version")!;
+  const enabled = byName.get("binding_enabled")!;
+  const reason = byName.get("disabled_reason")!;
+  const created = byName.get("created_at")!;
+  const updated = byName.get("updated_at")!;
+
+  if (!isIntType(id.COLUMN_TYPE) || id.IS_NULLABLE !== "NO" || id.COLUMN_KEY !== "PRI" || id.COLUMN_DEFAULT !== null) {
+    throw new Error("FAIL-CLOSED: DAO policy id column differs from the contract");
+  }
+  if (
+    String(mode.COLUMN_TYPE).toLowerCase() !== "enum('advisory','binding')"
+    || mode.IS_NULLABLE !== "NO"
+    || normalizeDefault(mode.COLUMN_DEFAULT) !== "advisory"
+  ) {
+    throw new Error("FAIL-CLOSED: DAO governance_mode column differs from the contract");
+  }
+  if (!isIntType(version.COLUMN_TYPE) || version.IS_NULLABLE !== "NO" || normalizeDefault(version.COLUMN_DEFAULT) !== "1") {
+    throw new Error("FAIL-CLOSED: DAO snapshot_version column differs from the contract");
+  }
+  if (
+    String(enabled.COLUMN_TYPE).toLowerCase() !== "tinyint(1)"
+    || enabled.IS_NULLABLE !== "NO"
+    || !["0", "b'0'"].includes(normalizeDefault(enabled.COLUMN_DEFAULT) ?? "")
+  ) {
+    throw new Error("FAIL-CLOSED: DAO binding_enabled column differs from the contract");
+  }
+  if (String(reason.COLUMN_TYPE).toLowerCase() !== "varchar(512)" || reason.IS_NULLABLE !== "NO" || reason.COLUMN_DEFAULT !== null) {
+    throw new Error("FAIL-CLOSED: DAO disabled_reason column differs from the contract");
+  }
+  if (
+    String(created.COLUMN_TYPE).toLowerCase() !== "timestamp"
+    || created.IS_NULLABLE !== "NO"
+    || normalizeDefault(created.COLUMN_DEFAULT) !== "current_timestamp"
+    || normalizeExtra(created.EXTRA).replace("default_generated", "").trim() !== ""
+  ) {
+    throw new Error("FAIL-CLOSED: DAO created_at column differs from the contract");
+  }
+  const updatedExtra = normalizeExtra(updated.EXTRA).replace("default_generated", "").trim();
+  if (
+    String(updated.COLUMN_TYPE).toLowerCase() !== "timestamp"
+    || updated.IS_NULLABLE !== "NO"
+    || normalizeDefault(updated.COLUMN_DEFAULT) !== "current_timestamp"
+    || updatedExtra !== "on update current_timestamp"
+  ) {
+    throw new Error("FAIL-CLOSED: DAO updated_at column differs from the contract");
+  }
+
+  const [primaryRows] = await connection.query<RowDataPacket[]>(
+    `SELECT COLUMN_NAME, SEQ_IN_INDEX, NON_UNIQUE
+       FROM information_schema.statistics
+      WHERE table_schema = DATABASE() AND table_name = ? AND index_name = 'PRIMARY'
+      ORDER BY SEQ_IN_INDEX`,
+    [POLICY_TABLE],
+  );
+  if (
+    primaryRows.length !== 1
+    || primaryRows[0].COLUMN_NAME !== "id"
+    || Number(primaryRows[0].SEQ_IN_INDEX) !== 1
+    || Number(primaryRows[0].NON_UNIQUE) !== 0
+  ) {
+    throw new Error("FAIL-CLOSED: DAO policy primary key differs from the contract");
+  }
+}
+
 async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
+  await verifyPolicyTableColumns(connection);
   const [constraintRows] = await connection.query<RowDataPacket[]>(
     `SELECT tc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
        FROM information_schema.table_constraints tc
@@ -103,21 +212,17 @@ async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
     [POLICY_TABLE],
   );
   const clauses = new Map(
-    constraintRows.map(row => [String(row.CONSTRAINT_NAME), normalizeCheckClause(row.CHECK_CLAUSE)]),
+    constraintRows.map(row => [String(row.CONSTRAINT_NAME), canonicalizeCheckClause(row.CHECK_CLAUSE)]),
   );
-  const singleton = clauses.get("chk_dao_policy_singleton") ?? "";
-  const binding = clauses.get("chk_dao_binding_receipt") ?? "";
-  if (!singleton.includes("id=1")) {
-    throw new Error("FAIL-CLOSED: DAO singleton constraint is missing or changed");
+  const expectedSingleton = canonicalizeCheckClause("id = 1");
+  const expectedBinding = canonicalizeCheckClause(
+    "binding_enabled = FALSE AND governance_mode = 'advisory' AND snapshot_version = 1",
+  );
+  if (clauses.size !== 2 || clauses.get("chk_dao_policy_singleton") !== expectedSingleton) {
+    throw new Error("FAIL-CLOSED: DAO singleton check expression is missing or changed");
   }
-  for (const marker of [
-    "binding_enabled=0",
-    "governance_mode='advisory'",
-    "snapshot_version=1",
-  ]) {
-    if (!binding.includes(marker)) {
-      throw new Error(`FAIL-CLOSED: DAO binding receipt constraint missing: ${marker}`);
-    }
+  if (clauses.get("chk_dao_binding_receipt") !== expectedBinding) {
+    throw new Error("FAIL-CLOSED: DAO binding receipt check expression is missing or changed");
   }
 
   const [receiptRows] = await connection.query<RowDataPacket[]>(
@@ -134,6 +239,27 @@ async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
     || receipt.disabled_reason !== DAO_BINDING_DISABLED_REASON
   ) {
     throw new Error("FAIL-CLOSED: DAO policy receipt contents are unsafe");
+  }
+}
+
+async function verifyProposalPolicyHistory(connection: mysql.Connection): Promise<void> {
+  const [rows] = await connection.query<RowDataPacket[]>(
+    `SELECT COUNT(*) AS unsafe_count
+       FROM proposals
+      WHERE governanceMode = 'binding'
+         OR (governanceMode = 'legacy' AND (
+              snapshotVersion <> 0
+              OR bindingDisabledReason <> ?
+            ))
+         OR (governanceMode = 'advisory' AND (
+              snapshotVersion <> 1
+              OR bindingDisabledReason <> ?
+              OR quorum <> ?
+            ))`,
+    [DAO_LEGACY_PROPOSAL_DISABLED_REASON, DAO_BINDING_DISABLED_REASON, DAO_ADVISORY_QUORUM],
+  );
+  if (Number(rows[0]?.unsafe_count ?? 0) !== 0) {
+    throw new Error("FAIL-CLOSED: proposal governance policy history is inconsistent");
   }
 }
 
@@ -200,6 +326,7 @@ export async function ensureDaoAdvisoryBoundary(): Promise<DaoMigrationStatus> {
       state: "not-configured",
       policyTableVerified: false,
       proposalPolicyColumnsVerified: false,
+      proposalPolicyHistoryVerified: false,
       checkedAt: new Date().toISOString(),
     };
     return getDaoMigrationStatus();
@@ -222,11 +349,13 @@ export async function ensureDaoAdvisoryBoundary(): Promise<DaoMigrationStatus> {
     }
     await verifyProposalColumns(connection);
     await verifyPolicyTable(connection);
+    await verifyProposalPolicyHistory(connection);
 
     migrationStatus = {
       state: action === "install" ? "installed" : "verified",
       policyTableVerified: true,
       proposalPolicyColumnsVerified: true,
+      proposalPolicyHistoryVerified: true,
       checkedAt: new Date().toISOString(),
     };
     console.info("[DAO Migration] advisory boundary verified", migrationStatus);
