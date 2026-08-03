@@ -30,7 +30,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD^)" = "a63792bedffccd4da5a85d8c5acfcab3e6baea04"
+          test "$(git rev-parse HEAD^)" = "2f94c98389409ad20bc4865342a0a0e341f7e967"
 
       - name: Apply finalized outcome boundary
         shell: bash
@@ -38,14 +38,18 @@ jobs:
           set -euo pipefail
           python3 - <<'PY'
           from pathlib import Path
+          import re
+          from textwrap import dedent
 
           migration = Path('server/dao-advisory-migration.ts')
           text = migration.read_text()
-          marker = '''export function isAdvisoryPolicyStatusAllowed(value: unknown): boolean {
-            return ["pending", "active", "passed", "defeated", "cancelled"].includes(String(value));
-          }
-          '''
-          helper = marker + '''
+          pattern = re.compile(
+              r'(export function isAdvisoryPolicyStatusAllowed\(value: unknown\): boolean \{\n'
+              r'  return \["pending", "active", "passed", "defeated", "cancelled"\]\.includes\(String\(value\)\);\n'
+              r'\}\n)'
+          )
+          helper = dedent('''
+
           export interface FinalizedAdvisoryOutcome {
             status: "passed" | "defeated";
             endTime: Date;
@@ -69,103 +73,109 @@ jobs:
               : "defeated";
             return proposal.status === expected;
           }
-          '''
-          if marker not in text:
-              raise SystemExit('migration helper marker missing')
-          text = text.replace(marker, helper, 1)
-          old = '''               OR proposal.quorum <> ?
-               OR proposal.status IN ('queued', 'executed')
-             ))'''
-          new = '''               OR proposal.quorum <> ?
-               OR proposal.status IN ('queued', 'executed')
-               OR (
-                 proposal.status IN ('passed', 'defeated')
-                 AND (
-                   proposal.endTime > CURRENT_TIMESTAMP(3)
-                   OR (
-                     proposal.status = 'passed'
-                     AND NOT (
-                       proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
-                       AND proposal.votesFor > proposal.votesAgainst
-                     )
-                   )
-                   OR (
-                     proposal.status = 'defeated'
-                     AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
-                     AND proposal.votesFor > proposal.votesAgainst
-                   )
-                 )
-               )
-             ))'''
+          ''')
+          text, count = pattern.subn(lambda match: match.group(1) + helper, text, count=1)
+          if count != 1:
+              raise SystemExit(f'migration helper replacement count={count}')
+
+          old = dedent('''
+                         OR proposal.quorum <> ?
+                         OR proposal.status IN ('queued', 'executed')
+                       ))
+          ''').strip('\n')
+          new = dedent('''
+                         OR proposal.quorum <> ?
+                         OR proposal.status IN ('queued', 'executed')
+                         OR (
+                           proposal.status IN ('passed', 'defeated')
+                           AND (
+                             proposal.endTime > CURRENT_TIMESTAMP(3)
+                             OR (
+                               proposal.status = 'passed'
+                               AND NOT (
+                                 proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                                 AND proposal.votesFor > proposal.votesAgainst
+                               )
+                             )
+                             OR (
+                               proposal.status = 'defeated'
+                               AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                               AND proposal.votesFor > proposal.votesAgainst
+                             )
+                           )
+                         )
+                       ))
+          ''').strip('\n')
           if old not in text:
               raise SystemExit('migration history marker missing')
           migration.write_text(text.replace(old, new, 1))
 
           guard = Path('scripts/check-dao-rollback-compatibility.mjs')
           text = guard.read_text()
-          old = '''                 OR proposal.quorum <> 1
-                 OR proposal.status IN ('queued', 'executed')
-               ))'''
-          new = '''                 OR proposal.quorum <> 1
-                 OR proposal.status IN ('queued', 'executed')
-                 OR (
-                   proposal.status IN ('passed', 'defeated')
-                   AND (
-                     proposal.endTime > CURRENT_TIMESTAMP(3)
-                     OR (
-                       proposal.status = 'passed'
-                       AND NOT (
-                         proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
-                         AND proposal.votesFor > proposal.votesAgainst
-                       )
-                     )
-                     OR (
-                       proposal.status = 'defeated'
-                       AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
-                       AND proposal.votesFor > proposal.votesAgainst
-                     )
-                   )
-                 )
-               ))'''
+          old = dedent('''
+                           OR proposal.quorum <> 1
+                           OR proposal.status IN ('queued', 'executed')
+                         ))
+          ''').strip('\n')
+          new = dedent('''
+                           OR proposal.quorum <> 1
+                           OR proposal.status IN ('queued', 'executed')
+                           OR (
+                             proposal.status IN ('passed', 'defeated')
+                             AND (
+                               proposal.endTime > CURRENT_TIMESTAMP(3)
+                               OR (
+                                 proposal.status = 'passed'
+                                 AND NOT (
+                                   proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                                   AND proposal.votesFor > proposal.votesAgainst
+                                 )
+                               )
+                               OR (
+                                 proposal.status = 'defeated'
+                                 AND proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum
+                                 AND proposal.votesFor > proposal.votesAgainst
+                               )
+                             )
+                           )
+                         ))
+          ''').strip('\n')
           if old not in text:
               raise SystemExit('rollback history marker missing')
           guard.write_text(text.replace(old, new, 1))
 
           test = Path('server/dao-advisory-migration.test.ts')
           text = test.read_text()
-          old_import = '''  isAdvisoryPolicyStatusAllowed,
-            isConstraintEnforced,'''
-          new_import = '''  isAdvisoryPolicyStatusAllowed,
-            isConstraintEnforced,
-            isFinalizedAdvisoryOutcomeValid,'''
-          if old_import not in text:
+          import_marker = '  isConstraintEnforced,\n'
+          if import_marker not in text:
               raise SystemExit('test import marker missing')
-          text = text.replace(old_import, new_import, 1)
-          marker = '''  it("requires the exact one-column unique wallet index", () => {'''
-          cases = '''  it("validates finalized advisory outcomes against deadline, quorum, and tallies", () => {
-            const ended = new Date("2026-08-03T00:00:00.000Z");
-            const now = new Date("2026-08-03T00:00:01.000Z");
-            expect(isFinalizedAdvisoryOutcomeValid({
-              status: "passed", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
-            }, now)).toBe(true);
-            expect(isFinalizedAdvisoryOutcomeValid({
-              status: "passed", endTime: new Date("2026-08-04T00:00:00.000Z"), votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
-            }, now)).toBe(false);
-            expect(isFinalizedAdvisoryOutcomeValid({
-              status: "passed", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
-            }, now)).toBe(false);
-            expect(isFinalizedAdvisoryOutcomeValid({
-              status: "defeated", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
-            }, now)).toBe(true);
-            expect(isFinalizedAdvisoryOutcomeValid({
-              status: "defeated", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
-            }, now)).toBe(false);
-          });
+          text = text.replace(import_marker, import_marker + '  isFinalizedAdvisoryOutcomeValid,\n', 1)
+          marker = '  it("requires the exact one-column unique wallet index", () => {'
+          cases = dedent('''
+            it("validates finalized advisory outcomes against deadline, quorum, and tallies", () => {
+              const ended = new Date("2026-08-03T00:00:00.000Z");
+              const now = new Date("2026-08-03T00:00:01.000Z");
+              expect(isFinalizedAdvisoryOutcomeValid({
+                status: "passed", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+              }, now)).toBe(true);
+              expect(isFinalizedAdvisoryOutcomeValid({
+                status: "passed", endTime: new Date("2026-08-04T00:00:00.000Z"), votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+              }, now)).toBe(false);
+              expect(isFinalizedAdvisoryOutcomeValid({
+                status: "passed", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
+              }, now)).toBe(false);
+              expect(isFinalizedAdvisoryOutcomeValid({
+                status: "defeated", endTime: ended, votesFor: 0, votesAgainst: 0, votesAbstain: 0, quorum: 1,
+              }, now)).toBe(true);
+              expect(isFinalizedAdvisoryOutcomeValid({
+                status: "defeated", endTime: ended, votesFor: 2, votesAgainst: 1, votesAbstain: 0, quorum: 1,
+              }, now)).toBe(false);
+            });
 
-          ''' + marker
+          ''')
           if marker not in text:
               raise SystemExit('test insertion marker missing')
-          test.write_text(text.replace(marker, cases, 1))
+          test.write_text(text.replace(marker, cases + marker, 1))
           PY
 
       - name: Commit fix and remove controller
