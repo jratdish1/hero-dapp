@@ -73,6 +73,10 @@ export function canonicalizeCheckClause(value: unknown): string {
   return normalized.split("and").sort().join("and");
 }
 
+export function isConstraintEnforced(value: unknown): boolean {
+  return String(value ?? "").toUpperCase() === "YES";
+}
+
 function normalizeDefault(value: unknown): string | null {
   if (value === null || value === undefined) return null;
   return String(value).toLowerCase().replace(/^'(.*)'$/, "$1").replace(/[()]/g, "");
@@ -206,7 +210,7 @@ async function verifyPolicyTableColumns(connection: mysql.Connection): Promise<v
 async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
   await verifyPolicyTableColumns(connection);
   const [constraintRows] = await connection.query<RowDataPacket[]>(
-    `SELECT tc.CONSTRAINT_NAME, cc.CHECK_CLAUSE
+    `SELECT tc.CONSTRAINT_NAME, tc.ENFORCED, cc.CHECK_CLAUSE
        FROM information_schema.table_constraints tc
        JOIN information_schema.check_constraints cc
          ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
@@ -216,18 +220,27 @@ async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
         AND tc.CONSTRAINT_TYPE = 'CHECK'`,
     [POLICY_TABLE],
   );
-  const clauses = new Map(
-    constraintRows.map(row => [String(row.CONSTRAINT_NAME), canonicalizeCheckClause(row.CHECK_CLAUSE)]),
+  const constraints = new Map(
+    constraintRows.map(row => [String(row.CONSTRAINT_NAME), {
+      clause: canonicalizeCheckClause(row.CHECK_CLAUSE),
+      enforced: isConstraintEnforced(row.ENFORCED),
+    }]),
   );
   const expectedSingleton = canonicalizeCheckClause("id = 1");
   const expectedBinding = canonicalizeCheckClause(
     "binding_enabled = FALSE AND governance_mode = 'advisory' AND snapshot_version = 1",
   );
-  if (clauses.size !== 2 || clauses.get("chk_dao_policy_singleton") !== expectedSingleton) {
-    throw new Error("FAIL-CLOSED: DAO singleton check expression is missing or changed");
+  const singleton = constraints.get("chk_dao_policy_singleton");
+  if (
+    constraints.size !== 2
+    || !singleton?.enforced
+    || singleton.clause !== expectedSingleton
+  ) {
+    throw new Error("FAIL-CLOSED: enforced DAO singleton check expression is missing or changed");
   }
-  if (clauses.get("chk_dao_binding_receipt") !== expectedBinding) {
-    throw new Error("FAIL-CLOSED: DAO binding receipt check expression is missing or changed");
+  const binding = constraints.get("chk_dao_binding_receipt");
+  if (!binding?.enforced || binding.clause !== expectedBinding) {
+    throw new Error("FAIL-CLOSED: enforced DAO binding receipt check expression is missing or changed");
   }
 
   const [receiptRows] = await connection.query<RowDataPacket[]>(
