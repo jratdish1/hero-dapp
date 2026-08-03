@@ -4,14 +4,63 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
 import {
+  DAO_ROLLBACK_CONTRACT_VERSION,
   assessDaoRollbackCompatibility,
+  canonicalizeCheckClause,
+  targetDaoBoundaryVersion,
   targetSupportsDaoBoundary,
 } from "./check-dao-rollback-compatibility.mjs";
 
 describe("DAO rollback compatibility guard", () => {
-  it("recognizes the checked-out advisory boundary", () => {
+  it("recognizes the checked-out complete boundary contract", () => {
     const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+    expect(DAO_ROLLBACK_CONTRACT_VERSION).toBe(2);
+    expect(targetDaoBoundaryVersion(head)).toBe(2);
     expect(targetSupportsDaoBoundary(head)).toBe(true);
+  });
+
+  it("does not treat legacy marker-only targets as boundary compatible", () => {
+    expect(assessDaoRollbackCompatibility({
+      targetBoundaryVersion: 1,
+      boundaryInstalled: true,
+      boundaryIntegrityValid: true,
+    })).toEqual({ allowed: false, reason: "target-lacks-current-boundary-contract" });
+  });
+
+  it("fails closed when exact or enforced database invariants drift", () => {
+    expect(assessDaoRollbackCompatibility({
+      targetBoundaryVersion: 2,
+      boundaryInstalled: true,
+      boundaryIntegrityValid: false,
+    })).toEqual({ allowed: false, reason: "current-boundary-invariants-failed" });
+  });
+
+  it("allows a target only when target and installed database preserve v2", () => {
+    expect(assessDaoRollbackCompatibility({
+      targetBoundaryVersion: 2,
+      boundaryInstalled: true,
+      boundaryIntegrityValid: true,
+    })).toEqual({ allowed: true, reason: "target-and-database-preserve-boundary-v2" });
+  });
+
+  it("allows a pre-boundary database without trusting target markers", () => {
+    expect(assessDaoRollbackCompatibility({
+      targetBoundaryVersion: 0,
+      boundaryInstalled: false,
+      boundaryIntegrityValid: true,
+    })).toEqual({ allowed: true, reason: "boundary-not-installed" });
+  });
+
+  it("canonicalizes exact checks while rejecting weakened OR clauses", () => {
+    const expected = canonicalizeCheckClause(
+      "binding_enabled = FALSE AND governance_mode = 'advisory' AND snapshot_version = 1",
+    );
+    expect(canonicalizeCheckClause(
+      "snapshot_version = 1 AND governance_mode = 'advisory' AND binding_enabled = 0",
+    )).toBe(expected);
+    expect(canonicalizeCheckClause(
+      "binding_enabled = 0 OR governance_mode = 'advisory' OR snapshot_version = 1",
+    )).not.toBe(expected);
   });
 
   it("fails closed in both rollback scripts when guard extraction is missing or empty", () => {
@@ -40,55 +89,5 @@ describe("DAO rollback compatibility guard", () => {
     expect(postFailureScript.indexOf(extractionGuard)).toBeLessThan(postFailureScript.indexOf('node "$guard_path"'));
     expect(postFailureScript.indexOf(nonEmptyGuard)).toBeLessThan(postFailureScript.indexOf('node "$guard_path"'));
     expect(postFailureScript.indexOf('node "$guard_path"')).toBeLessThan(postFailureScript.indexOf('git reset --hard "$ROLLBACK_SHA"'));
-  });
-
-  it("allows targets that preserve the complete advisory boundary", () => {
-    expect(assessDaoRollbackCompatibility({
-      targetSupportsBoundary: true,
-      policyTableCount: 1,
-      proposalPolicyColumnCount: 3,
-      governedProposalCount: 9,
-    })).toEqual({ allowed: true, reason: "target-supports-boundary" });
-  });
-
-  it("allows a pre-boundary database with no policy shape", () => {
-    expect(assessDaoRollbackCompatibility({
-      targetSupportsBoundary: false,
-      policyTableCount: 0,
-      proposalPolicyColumnCount: 0,
-      governedProposalCount: 0,
-    })).toEqual({ allowed: true, reason: "boundary-not-installed" });
-  });
-
-  it.each([
-    [1, 0],
-    [0, 3],
-    [1, 2],
-    [2, 3],
-  ])("fails closed for partial or drifted schema tables=%s columns=%s", (policyTableCount, proposalPolicyColumnCount) => {
-    expect(assessDaoRollbackCompatibility({
-      targetSupportsBoundary: false,
-      policyTableCount,
-      proposalPolicyColumnCount,
-      governedProposalCount: 0,
-    })).toEqual({ allowed: false, reason: "partial-or-drifted-boundary" });
-  });
-
-  it("refuses boundary-unaware code after governed proposals exist", () => {
-    expect(assessDaoRollbackCompatibility({
-      targetSupportsBoundary: false,
-      policyTableCount: 1,
-      proposalPolicyColumnCount: 3,
-      governedProposalCount: 1,
-    })).toEqual({ allowed: false, reason: "governed-proposals-require-boundary-aware-code" });
-  });
-
-  it("allows old code only while the complete boundary has no governed proposal rows", () => {
-    expect(assessDaoRollbackCompatibility({
-      targetSupportsBoundary: false,
-      policyTableCount: 1,
-      proposalPolicyColumnCount: 3,
-      governedProposalCount: 0,
-    })).toEqual({ allowed: true, reason: "complete-boundary-without-governed-proposals" });
   });
 });
