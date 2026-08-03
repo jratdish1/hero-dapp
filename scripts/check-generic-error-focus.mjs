@@ -414,12 +414,19 @@ async function main() {
             link.addEventListener('error', () => { clearTimeout(timeout); reject(new Error('Stylesheet failed to load')); }, { once: true });
           });
         }));
-        await new Promise(resolve => requestAnimationFrame(() => resolve()));
-        const heading = document.getElementById(${JSON.stringify(EXPECTED_HEADING_ID)});
+        let heading = null;
+        const headingDeadline = Date.now() + 10_000;
+        while (Date.now() < headingDeadline) {
+          heading = document.getElementById(${JSON.stringify(EXPECTED_HEADING_ID)});
+          if (heading) break;
+          await new Promise(resolve => requestAnimationFrame(() => resolve()));
+        }
+        if (!heading) throw new Error('Generic error heading did not mount');
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
         document.body.dataset.ready = 'true';
         document.body.dataset.focusedId = document.activeElement?.id || '';
-        document.body.dataset.heading = heading?.textContent?.trim() || '';
-        document.body.dataset.focusClass = heading?.className || '';
+        document.body.dataset.heading = heading.textContent?.trim() || '';
+        document.body.dataset.focusClass = heading.className || '';
       };
       void markReady().catch(error => {
         console.error('[Generic focus harness readiness failed]', error);
