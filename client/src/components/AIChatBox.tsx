@@ -1,4 +1,5 @@
 import { sanitizeString } from "@/lib/validation";
+import { disableMermaidDiagrams } from "@/lib/csp-safe-markdown";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -265,7 +266,7 @@ export function AIChatBox({
                     >
                       {message.role === "assistant" ? (
                         <div className="prose prose-sm dark:prose-invert max-w-none">
-                          <Streamdown>{sanitizeString(message.content)}</Streamdown>
+                          <Streamdown>{disableMermaidDiagrams(sanitizeString(message.content))}</Streamdown>
                         </div>
                       ) : (
                         <p className="whitespace-pre-wrap text-sm">

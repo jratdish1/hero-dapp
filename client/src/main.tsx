@@ -6,6 +6,8 @@ import DappLoadBoundary, {
 } from "./components/DappLoadBoundary";
 import { installAnalytics } from "./lib/analytics";
 import LandingApp from "./LandingApp";
+import "sonner/dist/styles.css";
+import "./security-recovery.css";
 import "./index.css";
 
 const DappBootstrap = lazy(() => import("./DappBootstrap"));

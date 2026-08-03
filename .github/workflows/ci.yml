@@ -17,7 +17,7 @@ jobs:
   test-build-scan:
     name: CI
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - name: Checkout
@@ -66,6 +66,12 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Verify production CSP contract
+        run: node scripts/check-csp-contract.mjs
+
+      - name: Complete Hardhat v2 suite
+        run: pnpm exec hardhat test test/v2/*.test.mjs --config hardhat.v2test.config.mjs
+
       - name: Locate headless Chrome
         id: chrome
         shell: bash
@@ -78,8 +84,6 @@ jobs:
           "$chrome_bin" --version
 
       - name: Exercise mounted bootstrap and route chunk recovery
-        id: recovery
-        continue-on-error: true
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         shell: bash
@@ -90,12 +94,10 @@ jobs:
             > bootstrap-recovery.log 2>&1
           status=$?
           cat bootstrap-recovery.log
-          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
 
       - name: Exercise mounted generic render-error focus
-        id: generic_focus
-        continue-on-error: true
+        if: always()
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         shell: bash
@@ -106,8 +108,17 @@ jobs:
             > generic-error-focus.log 2>&1
           status=$?
           cat generic-error-focus.log
-          printf 'exit_status=%s\n' "$status" >> "$GITHUB_OUTPUT"
           exit "$status"
+
+      - name: Exercise production CSP route matrix
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        run: node scripts/check-csp-routes.mjs
+
+      - name: Exercise Radix dialog scroll lock under production CSP
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        run: node scripts/check-scroll-lock-csp.mjs
 
       - name: Verify public landing critical path
         shell: bash
@@ -116,7 +127,7 @@ jobs:
           node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
       - name: Upload exact-head landing and recovery evidence
-        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json') != ''
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json', 'scroll-lock-csp-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: landing-evidence-${{ github.sha }}
@@ -126,18 +137,13 @@ jobs:
             bootstrap-recovery-report.json
             generic-error-focus.log
             generic-error-focus-report.json
+            csp-contract-report.json
+            csp-browser-report.json
+            scroll-lock-csp-report.json
             dist/public/.vite/manifest.json
+            dist/public/assets/DappBootstrap-*.js
           retention-days: 14
           if-no-files-found: error
-
-      - name: Enforce mounted recovery gates
-        if: always()
-        shell: bash
-        run: |
-          test "${{ steps.recovery.outcome }}" = "success"
-          test "${{ steps.recovery.outputs.exit_status }}" = "0"
-          test "${{ steps.generic_focus.outcome }}" = "success"
-          test "${{ steps.generic_focus.outputs.exit_status }}" = "0"
 
       - name: Production dependency advisory gate
         id: production_audit

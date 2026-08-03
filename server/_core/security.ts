@@ -117,11 +117,8 @@ function createLimiter(opts: {
 function buildCspDirectives() {
   const isDev = process.env.NODE_ENV === "development";
 
-  // Base script sources — dev needs 'unsafe-eval' for Vite HMR + React Refresh
-  // Production uses 'unsafe-inline' since the SPA serves pre-built static JS bundles
-  // via <script> tags in index.html without server-side nonce injection.
-  // NOTE: strict-dynamic requires nonce attributes on all script tags at render time;
-  // until a full SSR nonce pipeline is implemented, 'unsafe-inline' is the correct policy.
+  // Development permits Vite HMR/React Refresh only. Production serves
+  // pre-built external bundles and does not permit inline or eval-based scripts.
   const scriptSrc = isDev
     ? ["'self'", "'unsafe-inline'", "'unsafe-eval'"]
     : ["'self'"];
@@ -142,7 +139,11 @@ function buildCspDirectives() {
   return {
     defaultSrc: ["'self'"],
     scriptSrc,
-    styleSrc: ["'self'", "'unsafe-inline'"],
+    // Vite injects development-only styles for HMR. Production remains strict.
+    styleSrc: isDev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
+    styleSrcElem: isDev ? ["'self'", "'unsafe-inline'"] : ["'self'"],
+    // Transitional: application and audited third-party components still emit style attributes.
+    styleSrcAttr: ["'unsafe-inline'"],
     fontSrc: ["'self'", "data:"],
     imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
     connectSrc,
