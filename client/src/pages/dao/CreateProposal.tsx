@@ -3,7 +3,7 @@ import { useState } from "react";
 import { useLocation, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAccount } from "wagmi";
+import { useAccount, useSignMessage } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,11 +14,13 @@ import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 interface PendingBinding {
   walletAddress: string;
   challenge: string;
+  message: string;
 }
 
 export default function CreateProposal() {
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
+  const { signMessageAsync, isPending: isSigning } = useSignMessage();
   const [, navigate] = useLocation();
 
   const validCategories = ["protocol", "treasury", "community", "emergency"] as const;
@@ -38,14 +40,15 @@ export default function CreateProposal() {
   const createProposal = trpc.dao.proposals.create.useMutation({
     onSuccess: (data) => {
       if (!data.success && data.requiresConfirmation) {
-        if (!data.bindingChallenge) {
+        if (!data.bindingChallenge || !data.bindingMessage) {
           setPendingBinding(null);
-          setError("The server did not issue a wallet-binding challenge.");
+          setError("The server did not issue a complete wallet-binding challenge.");
           return;
         }
         setPendingBinding({
           walletAddress: data.walletAddress,
           challenge: data.bindingChallenge,
+          message: data.bindingMessage,
         });
         setError(data.message);
         return;
@@ -63,7 +66,7 @@ export default function CreateProposal() {
     },
   });
 
-  const handleSubmit = (event: React.FormEvent) => {
+  const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
 
@@ -71,6 +74,16 @@ export default function CreateProposal() {
     if (!sanitizeString(description.trim())) { setError("Description is required"); return; }
     if (!isConnected || !address) { setError("Connect your wallet to create a proposal"); return; }
     if (!user) { setError("Sign in to create a proposal"); return; }
+
+    let walletSignature: `0x${string}` | undefined;
+    if (pendingForCurrentWallet) {
+      try {
+        walletSignature = await signMessageAsync({ message: pendingForCurrentWallet.message });
+      } catch (signatureError) {
+        setError(signatureError instanceof Error ? signatureError.message : "Wallet signature was rejected");
+        return;
+      }
+    }
 
     createProposal.mutate({
       title: sanitizeString(title.trim()),
@@ -81,6 +94,7 @@ export default function CreateProposal() {
       durationDays,
       governanceMode: "advisory",
       bindingChallenge: pendingForCurrentWallet?.challenge,
+      walletSignature,
     });
   };
 
@@ -154,15 +168,15 @@ export default function CreateProposal() {
               <div className="p-3 rounded-lg bg-primary/5 border border-primary/20 text-sm">
                 <p className="font-medium mb-1">Advisory Governance Boundary</p>
                 <ul className="text-muted-foreground space-y-1 text-xs">
-                  <li>• One authenticated account and bound wallet receives one advisory vote.</li>
-                  <li>• A server-signed challenge is required before permanent wallet binding.</li>
+                  <li>• One authenticated account and wallet receives one advisory vote.</li>
+                  <li>• The wallet must sign a server-issued account/address/nonce challenge before permanent binding.</li>
                   <li>• The selected chain limits where an advisory vote may be recorded.</li>
-                  <li>• Binding execution, token-weighted voting, and treasury actions remain disabled.</li>
+                  <li>• The signature authorizes no transaction, token transfer, delegation, or execution.</li>
                 </ul>
               </div>
 
-              <Button type="submit" className="w-full" disabled={createProposal.isPending}>
-                {createProposal.isPending ? "Creating..." : pendingForCurrentWallet ? "Confirm Wallet Binding & Submit Proposal" : "Submit Advisory Proposal"}
+              <Button type="submit" className="w-full" disabled={createProposal.isPending || isSigning}>
+                {isSigning ? "Awaiting Wallet Signature..." : createProposal.isPending ? "Creating..." : pendingForCurrentWallet ? "Sign & Submit Advisory Proposal" : "Submit Advisory Proposal"}
               </Button>
             </form>
           )}
