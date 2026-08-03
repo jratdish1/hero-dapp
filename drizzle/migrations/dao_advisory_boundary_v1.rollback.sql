@@ -1,8 +1,10 @@
 -- Fail-closed rollback for the DAO advisory-boundary policy receipt.
--- Hold an exclusive table lock while validating the singleton receipt before
--- removing it. Run only through the approved database migration lane.
+-- The routine is defined before acquiring the table lock because MySQL routine
+-- DDL implicitly commits and would release an existing LOCK TABLES lock. The
+-- table CHECK constraints prevent an unsafe policy row while the validation and
+-- DROP execute through the approved single-writer migration lane.
 
-LOCK TABLES dao_governance_policy WRITE;
+DROP PROCEDURE IF EXISTS rollback_dao_advisory_boundary_v1;
 
 DELIMITER $$
 CREATE PROCEDURE rollback_dao_advisory_boundary_v1()
@@ -29,6 +31,7 @@ BEGIN
 END$$
 DELIMITER ;
 
+LOCK TABLES dao_governance_policy WRITE;
 CALL rollback_dao_advisory_boundary_v1();
-DROP PROCEDURE rollback_dao_advisory_boundary_v1;
 UNLOCK TABLES;
+DROP PROCEDURE rollback_dao_advisory_boundary_v1;
