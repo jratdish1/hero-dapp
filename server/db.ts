@@ -41,6 +41,33 @@ import {
 
 let _db: ReturnType<typeof drizzle> | null = null;
 
+type RawRow = Record<string, unknown>;
+
+function extractRawRows(result: unknown): RawRow[] {
+  if (!Array.isArray(result) || !Array.isArray(result[0])) return [];
+  return result[0] as RawRow[];
+}
+
+function parseDatabaseDate(value: unknown): Date {
+  const parsed = value instanceof Date ? value : new Date(String(value ?? ""));
+  if (Number.isNaN(parsed.getTime())) throw new Error("Database clock returned an invalid timestamp");
+  return parsed;
+}
+
+function parseCount(value: unknown): number {
+  const parsed = Number(value ?? 0);
+  if (!Number.isSafeInteger(parsed) || parsed < 0) throw new Error("Database aggregate returned an invalid count");
+  return parsed;
+}
+
+function isDuplicateKeyError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const candidate = error as { code?: unknown; errno?: unknown; message?: unknown };
+  return candidate.code === "ER_DUP_ENTRY"
+    || candidate.errno === 1062
+    || /duplicate entry/i.test(String(candidate.message ?? ""));
+}
+
 export async function getDb() {
   if (!_db && process.env.DATABASE_URL) {
     try {
@@ -247,6 +274,29 @@ export async function getProposals(status?: string, limit = 50) {
   }
   return db.select().from(proposals).orderBy(desc(proposals.createdAt)).limit(limit);
 }
+export async function getDaoProposalStats() {
+  const db = await getDb();
+  if (!db) return { totalProposals: 0, activeProposals: 0, passedProposals: 0 };
+  const result = await db.execute(sql`
+    SELECT
+      COUNT(*) AS totalProposals,
+      COALESCE(SUM(CASE
+        WHEN governanceMode = 'advisory'
+         AND snapshotVersion = 1
+         AND status = 'active'
+         AND startTime <= CURRENT_TIMESTAMP(3)
+         AND endTime > CURRENT_TIMESTAMP(3)
+        THEN 1 ELSE 0 END), 0) AS activeProposals,
+      COALESCE(SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END), 0) AS passedProposals
+    FROM proposals
+  `);
+  const row = extractRawRows(result)[0] ?? {};
+  return {
+    totalProposals: parseCount(row.totalProposals),
+    activeProposals: parseCount(row.activeProposals),
+    passedProposals: parseCount(row.passedProposals),
+  };
+}
 export async function getProposalById(proposalId: string) {
   const db = await getDb();
   if (!db) return undefined;
@@ -283,7 +333,7 @@ export async function castVote(vote: InsertVote) {
   return db.insert(votes).values(vote);
 }
 
-export async function castAdvisoryVoteAtomic(vote: InsertVote, now = new Date()) {
+export async function castAdvisoryVoteAtomic(vote: InsertVote) {
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   return db.transaction(async tx => {
@@ -291,10 +341,12 @@ export async function castAdvisoryVoteAtomic(vote: InsertVote, now = new Date())
     const proposalRows = await tx.select().from(proposals).where(eq(proposals.id, vote.proposalId)).limit(1);
     const proposal = proposalRows[0];
     if (!proposal) throw new Error("Proposal not found");
+    const clockResult = await tx.execute(sql`SELECT CURRENT_TIMESTAMP(3) AS currentTime`);
+    const lockedNow = parseDatabaseDate(extractRawRows(clockResult)[0]?.currentTime);
     assertAdvisoryProposalPolicy(proposal);
     if (proposal.status !== "active") throw new Error("Proposal is not active");
-    if (now < proposal.startTime) throw new Error("Proposal voting has not started");
-    if (now >= proposal.endTime) throw new Error("Proposal voting has ended");
+    if (lockedNow < proposal.startTime) throw new Error("Proposal voting has not started");
+    if (lockedNow >= proposal.endTime) throw new Error("Proposal voting has ended");
     if (vote.votingPower !== 1) throw new Error("Advisory voting power must equal one");
     const duplicate = await tx.select({ id: votes.id }).from(votes)
       .where(and(eq(votes.proposalId, vote.proposalId), eq(votes.voterAddress, vote.voterAddress))).limit(1);
@@ -439,14 +491,33 @@ export async function updateUserWalletAddress(userId: number, walletAddress: str
   const db = await getDb();
   if (!db) throw new Error("Database not available");
   const normalized = walletAddress.toLowerCase();
-  await db.execute(sql`
-    UPDATE users
-    SET walletAddress = ${normalized}
-    WHERE id = ${userId}
-      AND (walletAddress IS NULL OR LOWER(walletAddress) = ${normalized})
-  `);
-  const rows = await db.select({ walletAddress: users.walletAddress }).from(users).where(eq(users.id, userId)).limit(1);
-  if (!rows[0] || rows[0].walletAddress?.toLowerCase() !== normalized) {
-    throw new Error("Account is already bound to a different wallet");
-  }
+  return db.transaction(async tx => {
+    await tx.execute(sql`SELECT id FROM users WHERE id = ${userId} FOR UPDATE`);
+    const currentRows = await tx.select({ walletAddress: users.walletAddress })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    const current = currentRows[0]?.walletAddress?.toLowerCase() ?? null;
+    if (current && current !== normalized) {
+      throw new Error("Account is already bound to a different wallet");
+    }
+    const conflictRows = await tx.select({ id: users.id }).from(users)
+      .where(and(
+        sql`LOWER(${users.walletAddress}) = ${normalized}`,
+        sql`${users.id} <> ${userId}`,
+      )).limit(1);
+    if (conflictRows.length > 0) {
+      throw new Error("Wallet is already bound to another account");
+    }
+    if (current === normalized) return;
+    try {
+      await tx.update(users).set({ walletAddress: normalized }).where(eq(users.id, userId));
+    } catch (error) {
+      if (isDuplicateKeyError(error)) throw new Error("Wallet is already bound to another account");
+      throw error;
+    }
+    const verifiedRows = await tx.select({ walletAddress: users.walletAddress })
+      .from(users).where(eq(users.id, userId)).limit(1);
+    if (verifiedRows[0]?.walletAddress?.toLowerCase() !== normalized) {
+      throw new Error("Wallet binding was not persisted");
+    }
+  });
 }
