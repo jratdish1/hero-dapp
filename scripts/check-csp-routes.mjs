@@ -13,7 +13,7 @@ const ROUTES = [
   { requestedPath: '/', expectedPath: '/', marker: 'Swap Aggregator', requiresDapp: false },
   { requestedPath: '/wallet', expectedPath: '/portfolio', marker: 'Portfolio Tracker', requiresDapp: true },
   { requestedPath: '/stake', expectedPath: '/stake', marker: 'HERO Stake', requiresDapp: true },
-  { requestedPath: '/dao', expectedPath: '/dao', marker: 'HERO DAO Governance', requiresDapp: true },
+  { requestedPath: '/dao', expectedPath: '/dao', marker: 'HERO Advisory Governance', requiresDapp: true },
   { requestedPath: '/dao/proposals', expectedPath: '/dao/proposals', marker: 'Proposals', requiresDapp: true },
 ];
 
