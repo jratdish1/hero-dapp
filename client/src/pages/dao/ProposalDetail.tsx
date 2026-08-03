@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { trpc } from "@/lib/trpc";
 import { useAuth } from "@/_core/hooks/useAuth";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount, useChainId, useSignMessage } from "wagmi";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +14,7 @@ import { IdentityBadge } from "@/components/WalletIdentity";
 interface PendingBinding {
   walletAddress: string;
   challenge: string;
+  message: string;
 }
 
 const statusColors: Record<string, string> = {
@@ -33,6 +34,7 @@ export default function ProposalDetail() {
   const { user } = useAuth();
   const { address, isConnected } = useAccount();
   const chainId = useChainId();
+  const { signMessageAsync, isPending: isSigningBinding } = useSignMessage();
   const [votingChoice, setVotingChoice] = useState<"for" | "against" | "abstain" | null>(null);
   const [pendingBinding, setPendingBinding] = useState<PendingBinding | null>(null);
 
@@ -55,13 +57,14 @@ export default function ProposalDetail() {
   const bindWallet = trpc.dao.wallet.bindForVoting.useMutation({
     onSuccess: async (data) => {
       if (!data.success && data.requiresConfirmation) {
-        if (!data.bindingChallenge) {
+        if (!data.bindingChallenge || !data.bindingMessage) {
           setPendingBinding(null);
           return;
         }
         setPendingBinding({
           walletAddress: data.walletAddress,
           challenge: data.bindingChallenge,
+          message: data.bindingMessage,
         });
         return;
       }
@@ -110,11 +113,20 @@ export default function ProposalDetail() {
     : null;
   const canVotePolicy = proposal.advisoryVotingEnabled === true && proposal.governanceMode === "advisory" && proposal.snapshotVersion === 1;
 
-  const requestWalletBinding = () => {
+  const requestWalletBinding = async () => {
     if (!address) return;
+    let walletSignature: `0x${string}` | undefined;
+    if (bindingForCurrentWallet) {
+      try {
+        walletSignature = await signMessageAsync({ message: bindingForCurrentWallet.message });
+      } catch {
+        return;
+      }
+    }
     bindWallet.mutate({
       walletAddress: address,
       bindingChallenge: bindingForCurrentWallet?.challenge,
+      walletSignature,
     });
   };
   const handleVote = (choice: "for" | "against" | "abstain") => {
@@ -212,11 +224,11 @@ export default function ProposalDetail() {
                   <p className="text-sm text-muted-foreground text-center py-2">Sign in to vote.</p>
                 ) : !isBoundWallet ? (
                   <div className="space-y-3 text-center">
-                    <p className="text-sm text-muted-foreground">Bind the connected wallet to this account before voting. The server issues a signed, account-and-address-specific challenge before permanent binding.</p>
+                    <p className="text-sm text-muted-foreground">Bind the connected wallet before voting. The wallet must sign the server-issued account/address/nonce message; the signature authorizes no transaction or token movement.</p>
                     {bindWallet.error && <p className="text-sm text-red-400">{bindWallet.error.message}</p>}
-                    <Button className="w-full gap-2" onClick={requestWalletBinding} disabled={bindWallet.isPending || !address}>
+                    <Button className="w-full gap-2" onClick={requestWalletBinding} disabled={bindWallet.isPending || isSigningBinding || !address}>
                       <Link2 className="h-4 w-4" />
-                      {bindWallet.isPending ? "Binding..." : bindingForCurrentWallet ? "Confirm Permanent Wallet Binding" : "Start Wallet Binding"}
+                      {isSigningBinding ? "Awaiting Wallet Signature..." : bindWallet.isPending ? "Binding..." : bindingForCurrentWallet ? "Sign & Bind Wallet" : "Start Wallet Binding"}
                     </Button>
                   </div>
                 ) : !connectedChain ? (
