@@ -315,16 +315,17 @@ async function evaluate(client, expression) {
 
 async function readState(client) {
   return evaluate(client, `(() => {
-    const bodyStyle = getComputedStyle(document.body);
+    const body = document.body;
+    const bodyStyle = body instanceof Element ? getComputedStyle(body) : null;
     return {
-      ready: document.body?.dataset.ready || '',
+      ready: body?.dataset.ready || '',
       dialogOpen: Boolean(document.querySelector('[data-vets-dialog-content]')),
       closeAvailable: typeof window.__vetsCloseDialog === 'function',
-      lockCount: document.body?.getAttribute('data-scroll-locked') || '',
-      gapMode: document.body?.getAttribute('data-vets-scroll-lock-gap-mode') || '',
-      overflow: bodyStyle.overflow,
-      removedGap: bodyStyle.getPropertyValue('--removed-body-scroll-bar-size').trim(),
-      measuredGap: bodyStyle.getPropertyValue('--vets-scroll-lock-gap').trim(),
+      lockCount: body?.getAttribute('data-scroll-locked') || '',
+      gapMode: body?.getAttribute('data-vets-scroll-lock-gap-mode') || '',
+      overflow: bodyStyle?.overflow || '',
+      removedGap: bodyStyle?.getPropertyValue('--removed-body-scroll-bar-size').trim() || '',
+      measuredGap: bodyStyle?.getPropertyValue('--vets-scroll-lock-gap').trim() || '',
       violations: window.__vetsCspViolations || [],
       styleInsertions: window.__vetsStyleInsertions || [],
     };
