@@ -1,0 +1,36 @@
+name: One-shot DAO return type correction
+
+on:
+  pull_request:
+    branches: [main]
+    types: [synchronize]
+
+permissions:
+  contents: write
+
+jobs:
+  apply:
+    if: github.event.pull_request.head.ref == 'closeout/dao-rebuild-20260803'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: closeout/dao-rebuild-20260803
+          fetch-depth: 0
+      - shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/vets-dao-typefix.py
+          python3 -m py_compile scripts/vets-dao-typefix.py
+          git diff --check
+      - shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'VETS GitHub automation'
+          git config user.email 'jratdish1@users.noreply.github.com'
+          git add server/routers.ts
+          git diff --cached --quiet && exit 1
+          git commit -m 'fix(dao): preserve proposal response union fields'
+          git pull --rebase origin closeout/dao-rebuild-20260803
+          git push origin HEAD:closeout/dao-rebuild-20260803
