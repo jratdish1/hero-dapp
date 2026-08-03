@@ -37,9 +37,16 @@ describe("DAO exact-head closeout regressions", () => {
     expect(router).not.toContain("getProposals(undefined, 1000)");
   });
 
-  it("rejects binding-only advisory statuses before routes are served", () => {
+  it("rejects binding-only and invalid finalized advisory states before routes are served", () => {
     const migration = readFileSync("server/dao-advisory-migration.ts", "utf8");
-    expect(migration).toContain("proposal.status IN ('queued', 'executed')");
+    const guard = readFileSync("scripts/check-dao-rollback-compatibility.mjs", "utf8");
+    for (const source of [migration, guard]) {
+      expect(source).toContain("proposal.status IN ('queued', 'executed')");
+      expect(source).toContain("proposal.status IN ('passed', 'defeated')");
+      expect(source).toContain("proposal.endTime > CURRENT_TIMESTAMP(3)");
+      expect(source).toContain("proposal.votesFor + proposal.votesAgainst + proposal.votesAbstain >= proposal.quorum");
+      expect(source).toContain("proposal.votesFor > proposal.votesAgainst");
+    }
     expect(migration).toContain("await verifyProposalPolicyHistory(connection)");
   });
 
