@@ -1,5 +1,7 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
+import { recoverMessageAddress, type Hex } from "viem";
+
 const CHALLENGE_VERSION = 1;
 const CHALLENGE_TTL_MS = 10 * 60 * 1000;
 
@@ -21,6 +23,25 @@ function challengeSecret(): string {
 
 function signPayload(encodedPayload: string): string {
   return createHmac("sha256", challengeSecret()).update(encodedPayload).digest("base64url");
+}
+
+function parseChallengePayload(challenge: string): WalletBindingPayload {
+  const [encodedPayload, suppliedSignature, extra] = challenge.split(".");
+  if (!encodedPayload || !suppliedSignature || extra !== undefined) {
+    throw new Error("Wallet binding challenge is malformed");
+  }
+  const expectedSignature = signPayload(encodedPayload);
+  const supplied = Buffer.from(suppliedSignature, "utf8");
+  const expected = Buffer.from(expectedSignature, "utf8");
+  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
+    throw new Error("Wallet binding challenge signature is invalid");
+  }
+
+  try {
+    return JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as WalletBindingPayload;
+  } catch {
+    throw new Error("Wallet binding challenge payload is invalid");
+  }
 }
 
 export function issueWalletBindingChallenge(
@@ -48,23 +69,7 @@ export function verifyWalletBindingChallenge(
   walletAddress: string,
   now = Date.now(),
 ): void {
-  const [encodedPayload, suppliedSignature, extra] = challenge.split(".");
-  if (!encodedPayload || !suppliedSignature || extra !== undefined) {
-    throw new Error("Wallet binding challenge is malformed");
-  }
-  const expectedSignature = signPayload(encodedPayload);
-  const supplied = Buffer.from(suppliedSignature, "utf8");
-  const expected = Buffer.from(expectedSignature, "utf8");
-  if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-    throw new Error("Wallet binding challenge signature is invalid");
-  }
-
-  let payload: WalletBindingPayload;
-  try {
-    payload = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8")) as WalletBindingPayload;
-  } catch {
-    throw new Error("Wallet binding challenge payload is invalid");
-  }
+  const payload = parseChallengePayload(challenge);
   const normalizedAddress = walletAddress.toLowerCase();
   if (
     payload.version !== CHALLENGE_VERSION
@@ -78,5 +83,48 @@ export function verifyWalletBindingChallenge(
   }
   if (payload.expiresAt <= now || payload.expiresAt > now + CHALLENGE_TTL_MS) {
     throw new Error("Wallet binding challenge has expired or has an invalid lifetime");
+  }
+}
+
+export function walletBindingMessage(
+  challenge: string,
+  userId: number,
+  walletAddress: string,
+): string {
+  const normalizedAddress = walletAddress.toLowerCase();
+  return [
+    "HERO Advisory Governance Wallet Binding",
+    "",
+    "Sign this message to prove control of the wallet before permanently binding it to your authenticated HERO account.",
+    `Account ID: ${userId}`,
+    `Wallet: ${normalizedAddress}`,
+    `Challenge: ${challenge}`,
+    "",
+    "This signature does not authorize a blockchain transaction, token transfer, delegation, or governance execution.",
+  ].join("\n");
+}
+
+export async function verifyWalletBindingProof(
+  challenge: string,
+  walletSignature: string,
+  userId: number,
+  walletAddress: string,
+  now = Date.now(),
+): Promise<void> {
+  verifyWalletBindingChallenge(challenge, userId, walletAddress, now);
+  if (!/^0x(?:[0-9a-fA-F]{128}|[0-9a-fA-F]{130})$/.test(walletSignature)) {
+    throw new Error("Wallet binding proof signature is malformed");
+  }
+  let recoveredAddress: string;
+  try {
+    recoveredAddress = await recoverMessageAddress({
+      message: walletBindingMessage(challenge, userId, walletAddress),
+      signature: walletSignature as Hex,
+    });
+  } catch {
+    throw new Error("Wallet binding proof signature is invalid");
+  }
+  if (recoveredAddress.toLowerCase() !== walletAddress.toLowerCase()) {
+    throw new Error("Wallet binding proof was not signed by the requested wallet");
   }
 }
