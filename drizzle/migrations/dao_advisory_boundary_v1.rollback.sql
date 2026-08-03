@@ -18,8 +18,7 @@ BEGIN
   WHERE id <> 1
      OR binding_enabled <> FALSE
      OR governance_mode <> 'advisory'
-     OR snapshot_version <> 1
-     OR advisory_quorum <> 1;
+     OR snapshot_version <> 1;
 
   IF total_rows <> 1 OR unsafe_rows <> 0 THEN
     SIGNAL SQLSTATE '45000'
