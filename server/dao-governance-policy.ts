@@ -79,10 +79,13 @@ export function resolveAdvisoryVoteChain(
 
 export function resolveAdvisoryStatusTransition(
   proposal: GovernedProposalRecord,
-  requested: ProposalStatus,
+  requested: ProposalStatus | undefined,
   now = new Date(),
 ): ProposalStatus {
   assertAdvisoryProposalPolicy(proposal);
+  if (!requested) {
+    throw new Error("Proposal status transition is missing");
+  }
   if (requested === "queued" || requested === "executed") {
     throw new Error(DAO_BINDING_DISABLED_REASON);
   }
