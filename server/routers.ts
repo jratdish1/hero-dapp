@@ -27,12 +27,17 @@ import {
 } from "./dao-governance-policy";
 import { atomicRateLimitAndRecord } from "./dao-rate-limiter";
 import { generateProposalHash } from "./dao-security-hardening";
+import {
+  issueWalletBindingChallenge,
+  verifyWalletBindingChallenge,
+} from "./dao-wallet-binding";
 import { appRouter as legacyAppRouter } from "./routers-base";
 
 export { getRpcMetrics } from "./routers-base";
 
 const ethAddressSchema = z.string().regex(/^0x[0-9a-fA-F]{40}$/, "Invalid wallet address format");
 const txHashSchema = z.string().regex(/^0x[0-9a-fA-F]{64}$/, "Invalid transaction hash format").optional();
+const bindingChallengeSchema = z.string().min(64).max(2_048).optional();
 const safeStringSchema = (maxLength: number) => z.string().min(1).max(maxLength).refine(
   value => !/<script/i.test(value) && !/javascript:/i.test(value) && !/on\w+=/i.test(value),
   { message: "Input contains disallowed content" },
@@ -45,9 +50,6 @@ function fail(
   throw new TRPCError({ code, message });
 }
 
-// In tRPC v11 the router definition record stores nested router records
-// directly. Preserve those exact static records and replace only the DAO
-// members, avoiding any widening that would erase client procedure types.
 const rootRecord = legacyAppRouter._def.record;
 const legacyDaoRecord = rootRecord.dao;
 const legacyProposalRecord = legacyDaoRecord.proposals;
@@ -58,6 +60,21 @@ const legacyDelegationRecord = legacyDaoRecord.delegations;
 const disabledDelegationMutation = protectedProcedure.mutation(() => {
   fail("PRECONDITION_FAILED", DAO_DELEGATION_DISABLED_REASON);
 });
+
+function requireWalletBindingChallenge(
+  challenge: string,
+  userId: number,
+  walletAddress: string,
+): void {
+  try {
+    verifyWalletBindingChallenge(challenge, userId, walletAddress);
+  } catch (error) {
+    fail(
+      "PRECONDITION_FAILED",
+      error instanceof Error ? error.message : "Wallet binding challenge is invalid",
+    );
+  }
+}
 
 const daoRouter = router({
   ...legacyDaoRecord,
@@ -85,7 +102,7 @@ const daoRouter = router({
     bindForVoting: protectedProcedure
       .input(z.object({
         walletAddress: ethAddressSchema,
-        confirmBinding: z.boolean().optional(),
+        bindingChallenge: bindingChallengeSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         const normalized = input.walletAddress.toLowerCase();
@@ -94,18 +111,30 @@ const daoRouter = router({
           fail("FORBIDDEN", "Account is already bound to a different wallet");
         }
         if (existing === normalized) {
-          return { success: true, requiresConfirmation: false, walletAddress: normalized } as const;
+          return {
+            success: true,
+            requiresConfirmation: false,
+            walletAddress: normalized,
+            bindingChallenge: undefined,
+          } as const;
         }
-        if (!input.confirmBinding) {
+        if (!input.bindingChallenge) {
           return {
             success: false,
             requiresConfirmation: true,
             walletAddress: normalized,
+            bindingChallenge: issueWalletBindingChallenge(ctx.user.id, normalized),
             message: "Confirm permanent account binding before casting an advisory vote.",
           } as const;
         }
+        requireWalletBindingChallenge(input.bindingChallenge, ctx.user.id, normalized);
         await updateUserWalletAddress(ctx.user.id, normalized);
-        return { success: true, requiresConfirmation: false, walletAddress: normalized } as const;
+        return {
+          success: true,
+          requiresConfirmation: false,
+          walletAddress: normalized,
+          bindingChallenge: undefined,
+        } as const;
       }),
   }),
 
@@ -132,7 +161,7 @@ const daoRouter = router({
         category: z.enum(["protocol", "treasury", "community", "emergency"]).optional(),
         durationDays: z.number().int().min(1).max(30).optional(),
         governanceMode: z.enum(["advisory", "binding"]).optional(),
-        confirmBinding: z.boolean().optional(),
+        bindingChallenge: bindingChallengeSchema,
       }))
       .mutation(async ({ ctx, input }) => {
         if ((input.governanceMode ?? "advisory") !== "advisory") {
@@ -143,12 +172,13 @@ const daoRouter = router({
         if (existingWallet && existingWallet !== normalizedWallet) {
           fail("FORBIDDEN", "Wallet address does not match the authenticated account wallet");
         }
-        if (!existingWallet && !input.confirmBinding) {
+        if (!existingWallet && !input.bindingChallenge) {
           return {
             success: false,
             requiresConfirmation: true,
             message: "Confirm permanent account binding before creating this advisory proposal.",
             walletAddress: normalizedWallet,
+            bindingChallenge: issueWalletBindingChallenge(ctx.user.id, normalizedWallet),
             proposalId: undefined,
             contentHash: undefined,
             anchorTxHash: undefined,
@@ -156,6 +186,7 @@ const daoRouter = router({
           } as const;
         }
         if (!existingWallet) {
+          requireWalletBindingChallenge(input.bindingChallenge!, ctx.user.id, normalizedWallet);
           await updateUserWalletAddress(ctx.user.id, normalizedWallet);
         }
 
@@ -198,6 +229,7 @@ const daoRouter = router({
           success: true,
           requiresConfirmation: false,
           walletAddress: normalizedWallet,
+          bindingChallenge: undefined,
           proposalId,
           contentHash,
           anchorTxHash: null,
