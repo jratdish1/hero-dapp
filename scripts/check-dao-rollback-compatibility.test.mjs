@@ -14,19 +14,32 @@ describe("DAO rollback compatibility guard", () => {
     expect(targetSupportsDaoBoundary(head)).toBe(true);
   });
 
-  it("fails closed when the deploy workflow cannot extract a non-empty guard", () => {
+  it("fails closed in both rollback scripts when guard extraction is missing or empty", () => {
     const workflow = readFileSync(".github/workflows/deploy.yml", "utf8");
-    const functionBody = workflow.match(
+    const extractionGuard = 'if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then';
+    const nonEmptyGuard = 'if [ ! -s "$guard_path" ]; then';
+
+    expect(workflow.split(extractionGuard)).toHaveLength(3);
+    expect(workflow.split(nonEmptyGuard)).toHaveLength(3);
+
+    const inlineFunction = workflow.match(
       /assert_dao_rollback_compatible\(\) \{([\s\S]*?)\n          \}/,
     )?.[1] ?? "";
+    expect(inlineFunction).toContain(extractionGuard);
+    expect(inlineFunction).toContain(nonEmptyGuard);
+    expect(inlineFunction.match(/return 70/g)).toHaveLength(2);
+    expect(inlineFunction.indexOf(extractionGuard)).toBeLessThan(inlineFunction.indexOf('node "$guard_path"'));
+    expect(inlineFunction.indexOf(nonEmptyGuard)).toBeLessThan(inlineFunction.indexOf('node "$guard_path"'));
 
-    expect(functionBody).toContain(
-      'if ! git show "origin/main:scripts/check-dao-rollback-compatibility.mjs" > "$guard_path"; then',
-    );
-    expect(functionBody).toMatch(/if \[ ! -s "\$guard_path" \]; then/);
-    expect(functionBody.match(/return 70/g)).toHaveLength(2);
-    expect(functionBody.indexOf("if ! git show")).toBeLessThan(functionBody.indexOf('node "$guard_path"'));
-    expect(functionBody.indexOf('if [ ! -s "$guard_path" ]')).toBeLessThan(functionBody.indexOf('node "$guard_path"'));
+    const postFailureScript = workflow.match(
+      /- name: Roll back after interrupted or post-deploy failure([\s\S]*?)- name: Purge Cloudflare after rollback/,
+    )?.[1] ?? "";
+    expect(postFailureScript).toContain(extractionGuard);
+    expect(postFailureScript).toContain(nonEmptyGuard);
+    expect(postFailureScript.match(/exit 70/g)).toHaveLength(2);
+    expect(postFailureScript.indexOf(extractionGuard)).toBeLessThan(postFailureScript.indexOf('node "$guard_path"'));
+    expect(postFailureScript.indexOf(nonEmptyGuard)).toBeLessThan(postFailureScript.indexOf('node "$guard_path"'));
+    expect(postFailureScript.indexOf('node "$guard_path"')).toBeLessThan(postFailureScript.indexOf('git reset --hard "$ROLLBACK_SHA"'));
   });
 
   it("allows targets that preserve the complete advisory boundary", () => {
