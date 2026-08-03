@@ -1,22 +1,29 @@
 -- Fail-closed rollback for the DAO advisory-boundary policy receipt.
--- Hold the table lock across verification and destructive DDL so the receipt
--- cannot be enabled or changed between the guard and drop.
+-- Hold an exclusive table lock while validating the singleton receipt before
+-- removing it. Run only through the approved database migration lane.
 
 LOCK TABLES dao_governance_policy WRITE;
 
 DELIMITER $$
 CREATE PROCEDURE rollback_dao_advisory_boundary_v1()
 BEGIN
+  DECLARE total_rows INT DEFAULT 0;
   DECLARE unsafe_rows INT DEFAULT 0;
+
+  SELECT COUNT(*) INTO total_rows
+  FROM dao_governance_policy;
+
   SELECT COUNT(*) INTO unsafe_rows
   FROM dao_governance_policy
-  WHERE binding_enabled <> FALSE
+  WHERE id <> 1
+     OR binding_enabled <> FALSE
      OR governance_mode <> 'advisory'
-     OR snapshot_version <> 1;
+     OR snapshot_version <> 1
+     OR advisory_quorum <> 1;
 
-  IF unsafe_rows <> 0 THEN
+  IF total_rows <> 1 OR unsafe_rows <> 0 THEN
     SIGNAL SQLSTATE '45000'
-      SET MESSAGE_TEXT = 'Refusing rollback: DAO binding policy is not safely disabled';
+      SET MESSAGE_TEXT = 'Refusing rollback: DAO advisory policy receipt is missing or unsafe';
   END IF;
 
   DROP TABLE dao_governance_policy;
