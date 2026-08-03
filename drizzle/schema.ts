@@ -11,7 +11,9 @@ export const users = mysqlTable("users", {
   createdAt: timestamp("createdAt").defaultNow().notNull(),
   updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
   lastSignedIn: timestamp("lastSignedIn").defaultNow().notNull(),
-});
+}, (table) => ({
+  walletAddressUnique: uniqueIndex("ux_users_wallet_address").on(table.walletAddress),
+}));
 
 export const dcaOrders = mysqlTable("dca_orders", {
   id: int("id").autoincrement().primaryKey(),
