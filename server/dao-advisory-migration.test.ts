@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canonicalizeCheckClause,
   classifyDaoMigrationShape,
+  isConstraintEnforced,
   normalizeCheckClause,
 } from "./dao-advisory-migration";
 
@@ -43,5 +44,12 @@ describe("DAO advisory migration policy", () => {
     expect(canonicalizeCheckClause(
       "binding_enabled = 0 AND governance_mode = 'advisory' AND snapshot_version = 1 AND id = 1",
     )).not.toBe(expected);
+  });
+
+  it("accepts only explicitly enforced MySQL checks", () => {
+    expect(isConstraintEnforced("YES")).toBe(true);
+    expect(isConstraintEnforced("yes")).toBe(true);
+    expect(isConstraintEnforced("NO")).toBe(false);
+    expect(isConstraintEnforced(undefined)).toBe(false);
   });
 });
