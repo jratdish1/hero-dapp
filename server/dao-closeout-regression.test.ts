@@ -61,4 +61,16 @@ describe("DAO exact-head closeout regressions", () => {
     expect(assertion.indexOf("inspectDaoBoundary")).toBeLessThan(assertion.indexOf("assessDaoRollbackCompatibility"));
     expect(assertion).not.toContain("if (targetSupportsBoundary) return");
   });
+
+  it("pins the reviewed ip-address security release in manifest and lockfile", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const lockfile = readFileSync("pnpm-lock.yaml", "utf8");
+    expect(manifest.pnpm?.overrides?.["ip-address"]).toBe("10.3.1");
+    expect(lockfile).toContain("ip-address: 10.3.1");
+    expect(lockfile).toContain("ip-address@10.3.1:");
+    expect(lockfile).toContain("sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==");
+    expect(lockfile).not.toContain("ip-address@10.2.0:");
+  });
 });
