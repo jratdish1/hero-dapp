@@ -1,0 +1,109 @@
+name: VETS HERO PR77 deployment finalizer
+
+on:
+  push:
+    branches:
+      - ops/vets-hero-pr77-deploy-finalizer-v2-20260806
+    paths:
+      - .github/workflows/vets-hero-pr77-deployment-finalizer.yml
+
+permissions:
+  actions: write
+  contents: read
+  deployments: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: vets-hero-pr77-deployment-finalizer-v2
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: jratdish1/hero-dapp
+      PR_NUMBER: "77"
+      AUTHORIZED_HEAD: 6f687a1ce2336bcc1d331c3a68b88a8855f17c60
+    steps:
+      - name: Verify authorized merge and canonical deploy path
+        shell: bash
+        run: |
+          set -euo pipefail
+          pr="$(gh api "repos/${REPO}/pulls/${PR_NUMBER}")"
+          state="$(jq -r '.state' <<<"${pr}")"
+          merged="$(jq -r '.merged' <<<"${pr}")"
+          head="$(jq -r '.head.sha' <<<"${pr}")"
+          merge_sha="$(jq -r '.merge_commit_sha // empty' <<<"${pr}")"
+          if [[ "${head}" != "${AUTHORIZED_HEAD}" ]]; then
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO FINALIZER — HOLD: authorized head \`${AUTHORIZED_HEAD}\` no longer matches \`${head}\`. No deployment attempted."
+            exit 20
+          fi
+          if [[ "${state}" != "closed" || "${merged}" != "true" || -z "${merge_sha}" ]]; then
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO FINALIZER — HOLD: PR #77 is not verified merged from \`${AUTHORIZED_HEAD}\`. No deployment attempted."
+            exit 21
+          fi
+          main_sha="$(gh api "repos/${REPO}/branches/main" --jq '.commit.sha')"
+          echo "MERGE_SHA=${merge_sha}" >> "$GITHUB_ENV"
+          echo "MAIN_SHA=${main_sha}" >> "$GITHUB_ENV"
+
+          mapfile -t paths < <(gh api "repos/${REPO}/contents/.github/workflows?ref=main" --jq '.[]|select(.type=="file")|.path' | sort)
+          safe=()
+          rejected=()
+          for path in "${paths[@]}"; do
+            [[ "${path,,}" == *deploy* || "${path,,}" == *release* ]] || continue
+            content="$(gh api "repos/${REPO}/contents/${path}?ref=main" --jq '.content' | tr -d '\n' | base64 -d)"
+            if grep -Eqi 'VPS1|VPS_?1|Deploy to VPS1' <<<"${content}"; then
+              rejected+=("${path}:VPS1")
+              continue
+            fi
+            if ! grep -Eqi 'VDS[-_ ]?S|VDSS|hero.*production|production.*hero' <<<"${content}"; then
+              rejected+=("${path}:canonical-target-unproven")
+              continue
+            fi
+            if ! grep -Eq 'workflow_dispatch|branches:[[:space:]]*\[?main' <<<"${content}"; then
+              rejected+=("${path}:no-safe-entrypoint")
+              continue
+            fi
+            safe+=("${path}")
+          done
+
+          if [[ ${#safe[@]} -ne 1 ]]; then
+            gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO DEPLOYMENT — HOLD\n\nPR #77 merged from \`${AUTHORIZED_HEAD}\`; merge \`${merge_sha}\`; main \`${main_sha}\`. Exactly one canonical VDS-S production workflow was not proven. Safe candidates: \`$(IFS=,; echo "${safe[*]-none}")\`. Rejected: \`$(IFS=';'; echo "${rejected[*]-none}")\`. No deployment attempted."
+            exit 22
+          fi
+          deploy_path="${safe[0]}"
+          workflow_id="$(gh api "repos/${REPO}/actions/workflows" --jq --arg p "${deploy_path}" '.workflows[]|select(.path==$p)|.id')"
+          [[ -n "${workflow_id}" ]]
+          echo "DEPLOY_PATH=${deploy_path}" >> "$GITHUB_ENV"
+          echo "DEPLOY_WORKFLOW_ID=${workflow_id}" >> "$GITHUB_ENV"
+
+      - name: Dispatch or monitor canonical deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          run_id="$(gh api "repos/${REPO}/actions/workflows/${DEPLOY_WORKFLOW_ID}/runs?branch=main&per_page=30" --jq --arg sha "${MERGE_SHA}" '.workflow_runs[]|select(.head_sha==$sha)|.id' | head -n1)"
+          if [[ -z "${run_id}" ]]; then
+            gh api --method POST "repos/${REPO}/actions/workflows/${DEPLOY_WORKFLOW_ID}/dispatches" -f ref=main
+            sleep 8
+            run_id="$(gh api "repos/${REPO}/actions/workflows/${DEPLOY_WORKFLOW_ID}/runs?branch=main&per_page=30" --jq '.workflow_runs[0].id')"
+          fi
+          [[ -n "${run_id}" ]]
+          for _ in $(seq 1 60); do
+            run="$(gh api "repos/${REPO}/actions/runs/${run_id}")"
+            status="$(jq -r '.status' <<<"${run}")"
+            conclusion="$(jq -r '.conclusion // empty' <<<"${run}")"
+            if [[ "${status}" == completed ]]; then
+              if [[ "${conclusion}" == success ]]; then
+                gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO DEPLOYMENT RECEIPT — SUCCESS\n\nAuthorized head: \`${AUTHORIZED_HEAD}\`\nMerge: \`${MERGE_SHA}\`\nMain observed: \`${MAIN_SHA}\`\nWorkflow: \`${DEPLOY_PATH}\`\nRun: \`${run_id}\`\nConclusion: \`success\`."
+                exit 0
+              fi
+              gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO DEPLOYMENT RECEIPT — FAILED\n\nWorkflow \`${DEPLOY_PATH}\`; run \`${run_id}\`; conclusion \`${conclusion}\`. No duplicate deployment attempted."
+              exit 30
+            fi
+            sleep 10
+          done
+          gh pr comment "${PR_NUMBER}" --repo "${REPO}" --body "VETS HERO DEPLOYMENT RECEIPT — TIMEOUT\n\nWorkflow \`${DEPLOY_PATH}\`; run \`${run_id}\`. No duplicate deployment dispatched."
+          exit 31
