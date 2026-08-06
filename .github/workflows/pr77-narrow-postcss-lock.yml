@@ -24,7 +24,7 @@ jobs:
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ github.sha }}
-          fetch-depth: 3
+          fetch-depth: 4
           persist-credentials: true
           submodules: false
 
@@ -32,29 +32,40 @@ jobs:
         shell: bash
         env:
           EXPECTED_BRANCH: dependabot/npm_and_yarn/postcss-8.5.23
-          EXPECTED_PARENT: 796baf15efe27c6f33af815c3366e8e99c046094
+          EXPECTED_PARENT: 6fff21afd0522f3465447ead58f48b746fb9b934
+          EXPECTED_SCRIPT_COMMIT: 796baf15efe27c6f33af815c3366e8e99c046094
           EXPECTED_ORIGINAL_HEAD: 3ebc750d90000734dd8f6d95200eb219574e34cf
           BASE_SHA: cf145377cd3b002c1ed500c7f262dad2c3cf5e30
           BASE_LOCK_BLOB: 0d0aa2b44cc8df909013746061b53e4dca8b1cfa
           PACKAGE_JSON_BLOB: 8dd4f8f3d0708427bf281128e69c4aab6f95c9ec
-          PATCH_SHA256: ce39f3c3a616d702dfea34d02a2da8c2b51d3a99f7983303bc6f049d10619d0d
+          PATCH_BLOB: 41987af5c852b3ec8c3e2c7a5ce3cd4096379427
         run: |
-          set -euo pipefail
+          set -euxo pipefail
           umask 077
+          echo "branch=${GITHUB_REF_NAME}"
+          echo "head=$(git rev-parse HEAD)"
+          echo "parent=$(git rev-parse HEAD^)"
+          echo "script_commit=$(git rev-parse HEAD^^)"
+          echo "original_head=$(git rev-parse HEAD^^^)"
+          echo "package_blob=$(git hash-object package.json)"
+          echo "patch_blob=$(git hash-object .github/pr77_narrow_lock.py)"
           test "${GITHUB_REF_NAME}" = "${EXPECTED_BRANCH}"
           test "$(git rev-parse HEAD)" = "${GITHUB_SHA}"
           test "$(git rev-parse HEAD^)" = "${EXPECTED_PARENT}"
-          test "$(git rev-parse HEAD^^)" = "${EXPECTED_ORIGINAL_HEAD}"
+          test "$(git rev-parse HEAD^^)" = "${EXPECTED_SCRIPT_COMMIT}"
+          test "$(git rev-parse HEAD^^^)" = "${EXPECTED_ORIGINAL_HEAD}"
           test "$(git hash-object package.json)" = "${PACKAGE_JSON_BLOB}"
-          test "$(sha256sum .github/pr77_narrow_lock.py | awk '{print $1}')" = "${PATCH_SHA256}"
+          test "$(git hash-object .github/pr77_narrow_lock.py)" = "${PATCH_BLOB}"
           python3 -m py_compile .github/pr77_narrow_lock.py
 
           git fetch --no-tags --depth=1 origin "${BASE_SHA}"
           git show "${BASE_SHA}:pnpm-lock.yaml" > /tmp/pnpm-lock.base.yaml
+          echo "base_lock_blob=$(git hash-object /tmp/pnpm-lock.base.yaml)"
           test "$(git hash-object /tmp/pnpm-lock.base.yaml)" = "${BASE_LOCK_BLOB}"
 
           before_names="$(git diff --name-only "${BASE_SHA}" "${EXPECTED_ORIGINAL_HEAD}" | LC_ALL=C sort)"
           expected_before="$(printf '%s\n' package.json pnpm-lock.yaml | LC_ALL=C sort)"
+          printf 'before_names=%s\n' "${before_names}"
           test "${before_names}" = "${expected_before}"
 
           python3 .github/pr77_narrow_lock.py
