@@ -24,22 +24,24 @@ jobs:
       - name: Checkout exact triggering commit
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          fetch-depth: 2
+          fetch-depth: 3
           persist-credentials: true
 
-      - name: Verify exact parent and bounded controller scope
+      - name: Verify exact lineage and bounded controller scope
         shell: bash
         env:
           EXPECTED_BRANCH: dependabot/npm_and_yarn/nanoid-5.1.16
-          EXPECTED_PARENT: 99395b0eba453d68174577e25fd15c511523ec71
+          EXPECTED_PARENT: 109969afdc6c182051594b3e7dca34ea19a99731
+          EXPECTED_ORIGINAL: 99395b0eba453d68174577e25fd15c511523ec71
           CONTROLLER_PATH: .github/workflows/vets-pr78-nanoid-lockfile-remediation.yml
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
           test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD^^)" = "$EXPECTED_ORIGINAL"
           test "$(git diff --name-only HEAD^..HEAD)" = "$CONTROLLER_PATH"
           git fetch --no-tags origin main
-          test "$(git diff --name-only origin/main...HEAD^ | sort)" = $'package.json\npnpm-lock.yaml'
+          test "$(git diff --name-only origin/main...HEAD^^ | sort)" = $'package.json\npnpm-lock.yaml'
           test "$(node -p "require('./package.json').dependencies.nanoid")" = '^5.1.16'
 
       - name: Restore main lockfile and apply Nano ID-only resolution
@@ -130,15 +132,17 @@ jobs:
           corepack prepare pnpm@10.34.4 --activate
           test "$(pnpm --version)" = '10.34.4'
 
-      - name: Install without lifecycle scripts and validate
+      - name: Run repository-equivalent validation
         shell: bash
+        env:
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
         run: |
           set -euo pipefail
-          pnpm install --ignore-scripts --frozen-lockfile
+          pnpm install --frozen-lockfile
           pnpm check
           pnpm test
-          pnpm exec hardhat test
-          pnpm exec hardhat compile
+          pnpm build
+          pnpm exec hardhat test test/v2/*.test.mjs --config hardhat.v2test.config.mjs
 
       - name: Scan bounded diff
         shell: bash
