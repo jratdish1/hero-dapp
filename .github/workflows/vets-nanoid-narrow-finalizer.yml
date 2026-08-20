@@ -1,0 +1,180 @@
+name: VETS Nano ID narrow finalizer
+
+on:
+  push:
+    branches:
+      - fix/nanoid-5.1.16-narrow-20260819
+    paths:
+      - .github/workflows/vets-nanoid-narrow-finalizer.yml
+
+permissions:
+  contents: write
+
+concurrency:
+  group: vets-nanoid-narrow-finalizer
+  cancel-in-progress: false
+
+jobs:
+  finalize:
+    name: Finalize Nano ID-only lockfile
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout exact triggering commit
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 3
+          persist-credentials: true
+
+      - name: Verify exact lineage and bounded scope
+        shell: bash
+        env:
+          EXPECTED_BRANCH: fix/nanoid-5.1.16-narrow-20260819
+          EXPECTED_PARENT: 20cdc7fff444d8e404a96924d633bfaf6443c0df
+          EXPECTED_BASE: facbf0940f23bd3232f70d5533b617b7bd736abb
+          CONTROLLER_PATH: .github/workflows/vets-nanoid-narrow-finalizer.yml
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = "$EXPECTED_BRANCH"
+          test "$(git rev-parse HEAD^)" = "$EXPECTED_PARENT"
+          test "$(git rev-parse HEAD^^)" = "$EXPECTED_BASE"
+          test "$(git diff --name-only HEAD^..HEAD)" = "$CONTROLLER_PATH"
+          git fetch --no-tags origin main
+          test "$(git rev-parse origin/main)" = "$EXPECTED_BASE"
+          test "$(git diff --name-only origin/main...HEAD^ | sort)" = 'package.json'
+          test "$(node -p "require('./package.json').dependencies.nanoid")" = '^5.1.16'
+
+      - name: Apply Nano ID-only lockfile resolution
+        shell: bash
+        run: |
+          set -euo pipefail
+          git show origin/main:pnpm-lock.yaml > pnpm-lock.yaml
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('pnpm-lock.yaml')
+          text = path.read_text(encoding='utf-8')
+          replacements = [
+              (
+                  "      nanoid:\n        specifier: ^5.1.5\n        version: 5.1.6",
+                  "      nanoid:\n        specifier: ^5.1.16\n        version: 5.1.16",
+              ),
+              (
+                  "  nanoid@5.1.6:\n    resolution: {integrity: sha512-c7+7RQ+dMB5dPwwCp4ee1/iV/q2P6aK1mTZcfr1BTuVlyW9hJYiMPybJCcnBlQtuSmTIWNeazm/zqNoZSSElBg==}\n    engines: {node: ^18 || >=20}\n    hasBin: true",
+                  "  nanoid@5.1.16:\n    resolution: {integrity: sha512-kVrnsrJqMR8+oLJnGEmSWw9BivK5mt7H3FZatVRjrc5wGqFYuBxX1yG7+A7Gi5AefkX6t/oCkizcQgpu0cY1dQ==}\n    engines: {node: ^18 || >=20}\n    hasBin: true",
+              ),
+              ("  nanoid@5.1.6: {}", "  nanoid@5.1.16: {}"),
+          ]
+          for old, new in replacements:
+              count = text.count(old)
+              if count != 1:
+                  raise SystemExit(f'expected exactly one occurrence, found {count}: {old.splitlines()[0]}')
+              text = text.replace(old, new, 1)
+          path.write_text(text, encoding='utf-8')
+          PY
+
+      - name: Prove Nano ID-only diff
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+
+          actual = subprocess.check_output(
+              ['git', 'diff', '--name-only', 'origin/main', '--', 'package.json', 'pnpm-lock.yaml'],
+              text=True,
+          ).splitlines()
+          if actual != ['package.json', 'pnpm-lock.yaml']:
+              raise SystemExit(f'unexpected changed-file list: {actual!r}')
+
+          patch = subprocess.check_output(
+              ['git', 'diff', '--unified=0', 'origin/main', '--', 'package.json', 'pnpm-lock.yaml'],
+              text=True,
+          )
+          required = [
+              '-    "nanoid": "^5.1.5",',
+              '+    "nanoid": "^5.1.16",',
+              '-        specifier: ^5.1.5',
+              '+        specifier: ^5.1.16',
+              '-        version: 5.1.6',
+              '+        version: 5.1.16',
+              '-  nanoid@5.1.6:',
+              '+  nanoid@5.1.16:',
+              '-  nanoid@5.1.6: {}',
+              '+  nanoid@5.1.16: {}',
+          ]
+          for line in required:
+              if line not in patch:
+                  raise SystemExit(f'missing expected patch line: {line}')
+
+          forbidden = [
+              'hardhat-errors@3.0.18',
+              'hardhat-utils@4.1.7',
+              'ethers@6.17.0',
+              'bn.js@5.2.5',
+              'env-paths@4.0.0',
+              'undici@6.28.0',
+              'ws@8.21.3',
+          ]
+          for token in forbidden:
+              if token in patch:
+                  raise SystemExit(f'unrelated dependency drift remains: {token}')
+          PY
+
+      - name: Activate repository-pinned pnpm
+        shell: bash
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@10.34.4 --activate
+          test "$(pnpm --version)" = '10.34.4'
+
+      - name: Run repository-equivalent validation
+        shell: bash
+        env:
+          VITE_WALLETCONNECT_PROJECT_ID: ${{ secrets.VITE_WALLETCONNECT_PROJECT_ID }}
+        run: |
+          set -euo pipefail
+          pnpm install --frozen-lockfile
+          pnpm check
+          pnpm test
+          pnpm build
+          pnpm exec hardhat test test/v2/*.test.mjs --config hardhat.v2test.config.mjs
+
+      - name: Scan bounded files
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          hidden = re.compile('[\u200b\u200c\u200d\u2060\ufeff\u202a-\u202e]')
+          secrets = re.compile(
+              r'(-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----|'
+              r'gh[pousr]_[A-Za-z0-9_]{30,}|sk-[A-Za-z0-9_-]{20,}|'
+              r'AKIA[0-9A-Z]{16}|PRIVATE_KEY\s*=\s*0x[0-9a-fA-F]{64})'
+          )
+          for path in [Path('package.json'), Path('pnpm-lock.yaml')]:
+              text = path.read_text(encoding='utf-8')
+              if hidden.search(text):
+                  raise SystemExit(f'hidden Unicode in {path}')
+              if secrets.search(text):
+                  raise SystemExit(f'secret-shaped content in {path}')
+          PY
+
+      - name: Remove controller and publish bounded commit
+        shell: bash
+        env:
+          CONTROLLER_PATH: .github/workflows/vets-nanoid-narrow-finalizer.yml
+        run: |
+          set -euo pipefail
+          rm -- "$CONTROLLER_PATH"
+          test "$(git diff --name-only origin/main | sort)" = $'package.json\npnpm-lock.yaml'
+          git diff --check
+          git config user.name 'VETS Remediation Bot'
+          git config user.email '92892706+jratdish1@users.noreply.github.com'
+          git add package.json pnpm-lock.yaml "$CONTROLLER_PATH"
+          git commit -m 'chore(deps): narrow nanoid lockfile update'
+          git push origin "HEAD:${GITHUB_REF_NAME}"
