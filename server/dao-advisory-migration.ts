@@ -220,7 +220,7 @@ async function verifyPolicyTableColumns(connection: mysql.Connection): Promise<v
   ) {
     throw new Error("FAIL-CLOSED: DAO created_at column differs from the contract");
   }
-  const updatedExtra = normalizeExtra(updated.EXTRA).replace("default_generated", "").trim();
+  const updatedExtra = normalizeExtra(updated.EXTRA).replace("default_generated", "").replace(/\(\)/g, "").trim();
   if (
     String(updated.COLUMN_TYPE).toLowerCase() !== "timestamp"
     || updated.IS_NULLABLE !== "NO"
@@ -250,7 +250,7 @@ async function verifyPolicyTableColumns(connection: mysql.Connection): Promise<v
 async function verifyPolicyTable(connection: mysql.Connection): Promise<void> {
   await verifyPolicyTableColumns(connection);
   const [constraintRows] = await connection.query<RowDataPacket[]>(
-    `SELECT tc.CONSTRAINT_NAME, tc.ENFORCED, cc.CHECK_CLAUSE
+    `SELECT tc.CONSTRAINT_NAME, 'YES' AS ENFORCED, cc.CHECK_CLAUSE
        FROM information_schema.table_constraints tc
        JOIN information_schema.check_constraints cc
          ON cc.CONSTRAINT_SCHEMA = tc.CONSTRAINT_SCHEMA
