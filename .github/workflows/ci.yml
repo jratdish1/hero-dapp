@@ -168,9 +168,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.0'){throw new Error('axios resolved to '+v)}"
+          node -e "const v=require('./node_modules/axios/package.json').version;if(v!=='1.18.1'){throw new Error('axios resolved to '+v)}"
           grep -q "wouter@3.7.1" pnpm-lock.yaml
-          grep -q "axios@1.18.0" pnpm-lock.yaml
+          grep -q "axios@1.18.1" pnpm-lock.yaml
 
       - name: Token registry scanner
         run: node scripts/check-token-registry.mjs
