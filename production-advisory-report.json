@@ -1,0 +1,14 @@
+{
+  "schemaVersion": 2,
+  "registry": "https://registry.npmjs.org",
+  "endpoint": "/-/npm/v1/security/advisories/bulk",
+  "inventoryCommand": "pnpm list --prod --exclude-peers --depth Infinity --json",
+  "checkedAt": "2026-09-04T09:15:32.461Z",
+  "productionRootCount": 81,
+  "resolvedProductionRootCount": 81,
+  "missingOptionalRootCount": 0,
+  "inventorySha256": "30d6b944a1c9eecbb5006dd854dcfe3bd8e76574027cc993f39c0a7274600dcb",
+  "packageVersionPairs": 835,
+  "result": "ERROR",
+  "error": "npm advisory request exceeded 20000ms socket-idle timeout"
+}
