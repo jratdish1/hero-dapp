@@ -36,7 +36,7 @@ const issues = [];
 const expected = [
   ['@walletconnect/ethereum-provider', '2.17.0'],
   ['@walletconnect/modal', '2.7.0'],
-  ['axios', '1.18.0'],
+  ['axios', '1.18.1'],
   ['wouter', '3.7.1'],
 ];
 
