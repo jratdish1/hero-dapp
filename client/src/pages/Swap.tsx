@@ -75,7 +75,10 @@ function QuickTokenRow() {
    ═══════════════════════════════════════════════════ */
 export default function Swap() {
   const { dexSources, chain } = useNetwork();
-  const heroPulse = getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAc87B9Bc386C3D27";
+  const heroPulse = getHeroAddress(369);
+  if (!heroPulse) {
+    throw new Error("PulseChain HERO address missing from shared config");
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
@@ -171,7 +174,7 @@ export default function Swap() {
 
             {/* CTA Button */}
             <a
-              href="https://switch.win/?network=pulsechain&to={`${heroPulse}`}"
+              href={`https://switch.win/?network=pulsechain&to=${heroPulse}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-orange)] to-amber-600 text-black font-bold text-base hover:opacity-90 transition-opacity shadow-lg"
@@ -273,7 +276,7 @@ export default function Swap() {
 
             {/* CTA Button */}
             <a
-              href="https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&tokenOut={`${heroPulse}`}"
+              href={`https://app.squirrelswap.pro/#/widget?modes=swap,limit,dca&tokenOut=${heroPulse}`}
               target="_blank"
               rel="noopener noreferrer"
               className="flex items-center justify-center gap-2 w-full py-4 rounded-xl bg-gradient-to-r from-[var(--hero-green)] to-emerald-600 text-black font-bold text-base hover:opacity-90 transition-opacity shadow-lg"
