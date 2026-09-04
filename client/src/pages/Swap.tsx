@@ -75,7 +75,10 @@ function QuickTokenRow() {
    ═══════════════════════════════════════════════════ */
 export default function Swap() {
   const { dexSources, chain } = useNetwork();
-  const heroPulse = getHeroAddress(369) ?? "0x35a51Dfc82032682E4Bda8AAcA87B9Bc386C3D27";
+  const heroPulse = getHeroAddress(369);
+  if (!heroPulse) {
+    throw new Error("PulseChain HERO address missing from shared config");
+  }
 
   return (
     <div className="max-w-2xl mx-auto space-y-6">
