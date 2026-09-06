@@ -333,7 +333,7 @@ export function WalletButton() {
               connectTimeoutRef.current = null;
             }
             toast.success("Wallet connected", {
-              description: `Connected to ${chain.name} via ${connector.name}`,
+              description: `Connected via ${connector.name}`,
             });
             setIsOpen(false);
             setConnectingId(null);

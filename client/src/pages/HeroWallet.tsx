@@ -592,8 +592,6 @@ export default function HeroWallet() {
                   <SelectContent>
                     <SelectItem value="base">BASE</SelectItem>
                     <SelectItem value="pulsechain">PulseChain</SelectItem>
-                    <SelectItem value="ethereum">Ethereum</SelectItem>
-                    <SelectItem value="arbitrum">Arbitrum</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
