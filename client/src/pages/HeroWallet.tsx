@@ -276,7 +276,9 @@ export default function HeroWallet() {
       return;
     }
     // Validate amount within balance
-    const tokenBalance = balances.find(b => b.symbol.toUpperCase() === sanitizedToken);
+    const tokenBalance = balances.find(
+      (b) => b.symbol.toUpperCase() === sanitizedToken && b.chain === sendChain
+    );
     if (!tokenBalance) {
       toast.error("Token balance not found");
       return;
@@ -429,11 +431,25 @@ export default function HeroWallet() {
     }
   };
 
-  const copyAddress = () => {
-    if (address) {
-      navigator.clipboard.writeText(address);
+  const copyAddress = async () => {
+    if (!address) return;
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(address);
+      } else {
+        const textArea = document.createElement("textarea");
+        textArea.value = address;
+        textArea.style.position = "fixed";
+        textArea.style.opacity = "0";
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textArea);
+      }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error("Failed to copy wallet address");
     }
   };
 

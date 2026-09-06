@@ -31,4 +31,18 @@ describe("wallet connect CTA does not route to admin login", () => {
     expect(src).not.toMatch(/href=\{getLoginUrl\(\)\}/);
     expect(src).not.toMatch(/<Link[^>]*href=["']\/login["']/);
   });
+
+  it("App restores /wallet to HeroWallet instead of redirecting to /portfolio", () => {
+    const src = read("../App.tsx");
+    expect(src).toMatch(/const HeroWallet = React\.lazy\(\(\) => import\("\.\/pages\/HeroWallet"\)\);/);
+    expect(src).toMatch(/<Route path="\/wallet" component=\{withLayout\(HeroWallet\)\} \/>/);
+    expect(src).not.toMatch(/<Route path="\/wallet"><Redirect to="\/portfolio" \/><\/Route>/);
+  });
+
+  it("HeroWallet disconnected state includes WalletButton", () => {
+    const src = read("../pages/HeroWallet.tsx");
+    expect(src).toMatch(/import \{ WalletButton \} from "@\/components\/WalletButton";/);
+    expect(src).toMatch(/Connect your wallet to access full features/);
+    expect(src).toMatch(/<WalletButton \/>/);
+  });
 });

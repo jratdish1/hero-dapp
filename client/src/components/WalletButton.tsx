@@ -290,7 +290,7 @@ export function WalletButton() {
         if (c.name === "Injected" && connectors.some((x) => x.name === "MetaMask")) {
           return false;
         }
-        if (c.name === "Safe" && typeof window !== "undefined" && !window.parent) {
+        if (c.name === "Safe" && typeof window !== "undefined" && window.parent === window) {
           return false;
         }
         if (seen.has(c.name)) return false;
@@ -325,7 +325,7 @@ export function WalletButton() {
 
     try {
       connect(
-        { connector, chainId: validChainId },
+        validChainId ? { connector, chainId: validChainId } : { connector },
         {
           onSuccess: () => {
             if (connectTimeoutRef.current) {
