@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { erc20Abi, createPublicClient, http, fallback, formatUnits } from "viem";
-import { useAccount, useChainId } from "wagmi";
+import { useAccount } from "wagmi";
 import {
   CHAINS,
   getRPCs,
@@ -180,8 +180,6 @@ interface UseWalletBalancesOptions {
 export function useWalletBalances(options: UseWalletBalancesOptions = {}): WalletBalances {
   const { readUnconnected = false } = options;
   const { address, isConnected } = useAccount();
-  const wagmiChainId = useChainId();
-
   const [chainStates, setChainStates] = useState<Partial<Record<8453 | 369, ChainBalances>>>({});
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
@@ -191,8 +189,8 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
   const fetchCountRef = useRef(0);
 
   const isUnsupported = useMemo(() => {
-    return !isSupportedChainId(wagmiChainId) && !readUnconnected;
-  }, [wagmiChainId, readUnconnected]);
+    return !([8453, 369] as const).some((chainId) => isSupportedChainId(chainId));
+  }, []);
 
   const fetchBalances = useCallback(async () => {
     const effectiveAddress = address as `0x${string}` | undefined;
@@ -292,7 +290,7 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
       setIsError(false);
       setGlobalError(undefined);
     }
-  }, [address, wagmiChainId, isConnected, readUnconnected, fetchBalances]);
+  }, [address, isConnected, readUnconnected, fetchBalances]);
 
   useEffect(() => {
     return () => {

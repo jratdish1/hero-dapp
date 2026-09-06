@@ -234,6 +234,14 @@ export function WalletButton() {
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
   const { disconnect } = useDisconnect();
+  const isSafeContext = useMemo(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.parent !== window;
+    } catch {
+      return false;
+    }
+  }, []);
 
   // ─── Listen for WalletConnect URI ──────────────────────────────────────
   // When showQrModal is false, wagmi emits a 'message' event with the URI
@@ -290,7 +298,10 @@ export function WalletButton() {
         if (c.name === "Injected" && connectors.some((x) => x.name === "MetaMask")) {
           return false;
         }
-        if (c.name === "Safe" && typeof window !== "undefined" && window.parent === window) {
+        if (c.name === "WalletConnect" && !hasWalletConnect) {
+          return false;
+        }
+        if (c.name === "Safe" && !isSafeContext) {
           return false;
         }
         if (seen.has(c.name)) return false;
@@ -302,7 +313,7 @@ export function WalletButton() {
         const bMeta = getConnectorMeta(b.name);
         return aMeta.priority - bMeta.priority;
       });
-  }, [connectors]);
+  }, [connectors, isSafeContext]);
 
   const handleConnect = (connector: (typeof connectors)[number]) => {
     if (connectingId) return; // Prevent race condition — block while connecting

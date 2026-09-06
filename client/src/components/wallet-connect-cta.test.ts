@@ -44,5 +44,6 @@ describe("wallet connect CTA does not route to admin login", () => {
     expect(src).toMatch(/import \{ WalletButton \} from "@\/components\/WalletButton";/);
     expect(src).toMatch(/Connect your wallet to access full features/);
     expect(src).toMatch(/<WalletButton \/>/);
+    expect(src).toMatch(/b\.chain === sendChain/);
   });
 });
