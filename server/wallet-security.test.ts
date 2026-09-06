@@ -1,4 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import {
+  copyTextToClipboard,
+  sanitizeEnsAvatar,
+} from "../client/src/lib/walletSecurity";
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // WALLET SECURITY TESTS — ENS Avatar Sanitization & Clipboard Fallback
@@ -7,18 +11,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // 1. ENS avatar URL sanitization (prevents XSS via malicious URIs)
 // 2. Clipboard API fallback (ensures copy works on all browsers)
 // ═══════════════════════════════════════════════════════════════════════════════
-
-// ─── ENS Avatar URL Sanitization Logic (mirrors WalletButton.tsx) ────────────
-function sanitizeEnsAvatar(rawUrl: string | undefined): string | undefined {
-  if (!rawUrl) return undefined;
-  try {
-    const url = new URL(rawUrl);
-    if (url.protocol === "https:" || url.protocol === "http:") return rawUrl;
-    return undefined; // Block javascript:, data:, and other protocols
-  } catch {
-    return undefined;
-  }
-}
 
 describe("ENS Avatar URL Sanitization", () => {
   describe("Valid URLs (should pass through)", () => {
@@ -105,34 +97,6 @@ describe("ENS Avatar URL Sanitization", () => {
   });
 });
 
-// ─── Clipboard Fallback Logic ────────────────────────────────────────────────
-// Simulates the clipboard copy logic from WalletButton.tsx
-
-async function copyToClipboard(text: string, navigator: any, document: any): Promise<boolean> {
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return true;
-    } else {
-      // Fallback for browsers without Clipboard API
-      const textArea = document.createElement("textarea");
-      textArea.value = text;
-      textArea.style.position = "fixed";
-      textArea.style.opacity = "0";
-      document.body.appendChild(textArea);
-      textArea.select();
-      const copied = document.execCommand("copy");
-      document.body.removeChild(textArea);
-      if (!copied) {
-        return false;
-      }
-      return true;
-    }
-  } catch {
-    return false;
-  }
-}
-
 describe("Clipboard Fallback", () => {
   describe("Modern Clipboard API path", () => {
     it("uses navigator.clipboard.writeText when available", async () => {
@@ -140,7 +104,10 @@ describe("Clipboard Fallback", () => {
       const mockNavigator = { clipboard: { writeText } };
       const mockDocument = { createElement: vi.fn(), body: { appendChild: vi.fn(), removeChild: vi.fn() } };
 
-      const result = await copyToClipboard("0x1234...abcd", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0x1234...abcd", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(true);
       expect(writeText).toHaveBeenCalledWith("0x1234...abcd");
@@ -152,7 +119,10 @@ describe("Clipboard Fallback", () => {
       const mockNavigator = { clipboard: { writeText } };
       const mockDocument = { createElement: vi.fn(), body: { appendChild: vi.fn(), removeChild: vi.fn() } };
 
-      const result = await copyToClipboard("0x1234...abcd", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0x1234...abcd", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(false);
     });
@@ -172,7 +142,10 @@ describe("Clipboard Fallback", () => {
         execCommand: vi.fn().mockReturnValue(true),
       };
 
-      const result = await copyToClipboard("0xDeadBeef", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0xDeadBeef", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(true);
       expect(mockDocument.createElement).toHaveBeenCalledWith("textarea");
@@ -194,7 +167,10 @@ describe("Clipboard Fallback", () => {
         execCommand: vi.fn().mockReturnValue(true),
       };
 
-      const result = await copyToClipboard("0xTest", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0xTest", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(true);
       expect(mockDocument.execCommand).toHaveBeenCalledWith("copy");
@@ -209,7 +185,10 @@ describe("Clipboard Fallback", () => {
         execCommand: vi.fn().mockReturnValue(true),
       };
 
-      const result = await copyToClipboard("0xFallback", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0xFallback", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(true);
       expect(mockDocument.execCommand).toHaveBeenCalledWith("copy");
@@ -226,7 +205,10 @@ describe("Clipboard Fallback", () => {
         execCommand: vi.fn().mockImplementation(() => { throw new Error("Not supported"); }),
       };
 
-      const result = await copyToClipboard("0xError", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("0xError", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(false);
     });
@@ -236,7 +218,10 @@ describe("Clipboard Fallback", () => {
       const mockNavigator = { clipboard: { writeText } };
       const mockDocument = { createElement: vi.fn(), body: { appendChild: vi.fn(), removeChild: vi.fn() } };
 
-      const result = await copyToClipboard("", mockNavigator, mockDocument);
+      const result = await copyTextToClipboard("", {
+        navigator: mockNavigator,
+        document: mockDocument,
+      });
 
       expect(result).toBe(true);
       expect(writeText).toHaveBeenCalledWith("");

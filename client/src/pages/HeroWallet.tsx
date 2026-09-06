@@ -20,6 +20,7 @@ import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
 import { WalletButton } from "@/components/WalletButton";
+import { copyTextToClipboard } from "@/lib/walletSecurity";
 import { useWalletBalances } from "../hooks/useWalletBalances";
 
 // ─── Error Boundary ─────────────────────────────────────────────────────────
@@ -386,6 +387,10 @@ export default function HeroWallet() {
       toast.error("Invalid token symbol");
       return;
     }
+    if (bridgeFrom === bridgeTo) {
+      toast.error("Select different source and destination chains");
+      return;
+    }
     try {
       const res = await fetch(`${WALLET_API}/api/wallet/bridge`, {
         method: 'POST',
@@ -433,25 +438,11 @@ export default function HeroWallet() {
 
   const copyAddress = async () => {
     if (!address) return;
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(address);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = address;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.select();
-        const copied = document.execCommand("copy");
-        document.body.removeChild(textArea);
-        if (!copied) {
-          throw new Error("Copy command was unsuccessful");
-        }
-      }
+    const copied = await copyTextToClipboard(address);
+    if (copied) {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       toast.error("Failed to copy wallet address");
     }
   };

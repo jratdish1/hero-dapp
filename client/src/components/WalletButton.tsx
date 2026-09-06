@@ -35,6 +35,7 @@ const MAINNET_CHAIN_ID = 1;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress, formatUnits } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
+import { copyTextToClipboard, sanitizeEnsAvatar } from "@/lib/walletSecurity";
 import { QRCodeSVG } from "qrcode.react";
 
 // ─── Jazzicon-style gradient avatar ─────────────────────────────────────
@@ -110,23 +111,12 @@ function WcQrModal({
   const [copied, setCopied] = useState(false);
 
   const copyUri = async () => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(uri);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = uri;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.select();
-        document.execCommand("copy");
-        document.body.removeChild(textArea);
-      }
+    const copied = await copyTextToClipboard(uri);
+    if (copied) {
       setCopied(true);
       toast.success("Link copied to clipboard");
       setTimeout(() => setCopied(false), 2000);
-    } catch {
+    } else {
       toast.error("Failed to copy link");
     }
   };
@@ -277,17 +267,7 @@ export function WalletButton() {
     query: { enabled: !!ensName, staleTime: 1000 * 60 * 60 },
   });
 
-  // SECURITY: Sanitize ENS avatar URL to prevent XSS via malicious URIs
-  const ensAvatar = useMemo(() => {
-    if (!rawEnsAvatar) return undefined;
-    try {
-      const url = new URL(rawEnsAvatar);
-      if (url.protocol === 'https:' || url.protocol === 'http:') return rawEnsAvatar;
-      return undefined; // Block javascript:, data:, and other protocols
-    } catch {
-      return undefined;
-    }
-  }, [rawEnsAvatar]);
+  const ensAvatar = useMemo(() => sanitizeEnsAvatar(rawEnsAvatar), [rawEnsAvatar]);
 
   // Deduplicate and sort connectors
   const sortedConnectors = useMemo(() => {
@@ -418,29 +398,13 @@ export function WalletButton() {
   const copyAddress = async () => {
     if (!address || !isAddress(address)) return;
     const checksummedAddr = getAddress(address);
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(checksummedAddr);
-      } else {
-        // Fallback for browsers without Clipboard API
-        const textArea = document.createElement('textarea');
-        textArea.value = checksummedAddr;
-        textArea.style.position = 'fixed';
-        textArea.style.opacity = '0';
-        document.body.appendChild(textArea);
-        textArea.select();
-        const copied = document.execCommand('copy');
-        document.body.removeChild(textArea);
-        if (!copied) {
-          throw new Error("Copy command was unsuccessful");
-        }
-      }
+    const copied = await copyTextToClipboard(checksummedAddr);
+    if (copied) {
       setIsCopied(true);
       toast.success("Address copied to clipboard");
       if (copyTimeoutRef.current) clearTimeout(copyTimeoutRef.current);
       copyTimeoutRef.current = setTimeout(() => setIsCopied(false), 2000);
-    } catch (err) {
-      console.error('Clipboard copy failed:', err);
+    } else {
       toast.error("Failed to copy address");
     }
   };
@@ -776,7 +740,13 @@ export function WalletButton() {
             )}
 
             <div className="text-center text-xs text-muted-foreground pt-1">
-              By connecting, you agree to the Terms of Service
+              By connecting, you agree to the{" "}
+              <a
+                href="/beta-disclaimer"
+                className="text-hero-orange hover:underline"
+              >
+                Terms of Service
+              </a>
             </div>
           </>
         )}
