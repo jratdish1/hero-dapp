@@ -314,6 +314,9 @@ export function WalletButton() {
         return aMeta.priority - bMeta.priority;
       });
   }, [connectors, isSafeContext]);
+  const hasWalletConnectConnector = sortedConnectors.some(
+    (connector) => connector.name === "WalletConnect"
+  );
 
   const handleConnect = (connector: (typeof connectors)[number]) => {
     if (connectingId) return; // Prevent race condition — block while connecting
@@ -712,7 +715,7 @@ export function WalletButton() {
                     Ledger / Trezor
                   </div>
                   <div className="text-xs text-muted-foreground">
-                    {hasWalletConnect
+                    {hasWalletConnectConnector
                       ? "Connect via WalletConnect QR code above"
                       : "Connect via MetaMask (Ledger/Trezor integration)"}
                   </div>
@@ -751,7 +754,7 @@ export function WalletButton() {
             </div>
 
             {/* ─── WalletConnect status ────────────────────────────────── */}
-            {!hasWalletConnect && (
+            {!hasWalletConnectConnector && (
               <div className="rounded-lg bg-muted/50 p-2.5 text-center">
                 <p className="text-xs text-muted-foreground">
                   <QrCode className="inline h-3 w-3 mr-1" />

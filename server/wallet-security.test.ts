@@ -121,8 +121,11 @@ async function copyToClipboard(text: string, navigator: any, document: any): Pro
       textArea.style.opacity = "0";
       document.body.appendChild(textArea);
       textArea.select();
-      document.execCommand("copy");
+      const copied = document.execCommand("copy");
       document.body.removeChild(textArea);
+      if (!copied) {
+        return false;
+      }
       return true;
     }
   } catch {
