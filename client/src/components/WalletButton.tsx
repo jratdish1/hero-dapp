@@ -31,9 +31,7 @@ import {
   useEnsName,
   useEnsAvatar,
 } from "wagmi";
-// ENS resolution requires mainnet (chainId 1) but wagmi Register only supports 369/8453.
-// We cast to satisfy typings; useEnsName/useEnsAvatar still query mainnet RPC internally.
-const MAINNET_CHAIN_ID = 1 as unknown as 369;
+const MAINNET_CHAIN_ID = 1;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress, formatUnits } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
@@ -211,6 +209,7 @@ export function WalletButton() {
   const [wcUri, setWcUri] = useState<string | null>(null);
   const [showWcQr, setShowWcQr] = useState(false);
   const connectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const connectAttemptRef = useRef(0);
 
   // Cleanup timeout on unmount
   useEffect(() => {
@@ -320,6 +319,8 @@ export function WalletButton() {
 
   const handleConnect = (connector: (typeof connectors)[number]) => {
     if (connectingId) return; // Prevent race condition — block while connecting
+    const attemptId = connectAttemptRef.current + 1;
+    connectAttemptRef.current = attemptId;
     setConnectingId(connector.uid);
 
     // Safety timeout: reset connectingId after 30s to prevent permanent blocking
@@ -329,6 +330,9 @@ export function WalletButton() {
     const connectorUid = connector.uid;
     connectTimeoutRef.current = setTimeout(() => {
       setConnectingId((current) => {
+        if (attemptId !== connectAttemptRef.current) {
+          return current;
+        }
         if (current === connectorUid) {
           toast.error("Connection timed out");
           setShowWcQr(false);
@@ -345,6 +349,7 @@ export function WalletButton() {
         validChainId ? { connector, chainId: validChainId } : { connector },
         {
           onSuccess: () => {
+            if (attemptId !== connectAttemptRef.current) return;
             if (connectTimeoutRef.current) {
               clearTimeout(connectTimeoutRef.current);
               connectTimeoutRef.current = null;
@@ -358,6 +363,7 @@ export function WalletButton() {
             setWcUri(null);
           },
           onError: (err) => {
+            if (attemptId !== connectAttemptRef.current) return;
             if (connectTimeoutRef.current) {
               clearTimeout(connectTimeoutRef.current);
               connectTimeoutRef.current = null;
@@ -379,6 +385,7 @@ export function WalletButton() {
         }
       );
     } catch {
+      if (attemptId !== connectAttemptRef.current) return;
       if (connectTimeoutRef.current) {
         clearTimeout(connectTimeoutRef.current);
         connectTimeoutRef.current = null;
@@ -623,6 +630,11 @@ export function WalletButton() {
       onOpenChange={(open) => {
         setIsOpen(open);
         if (!open) {
+          connectAttemptRef.current += 1;
+          if (connectTimeoutRef.current) {
+            clearTimeout(connectTimeoutRef.current);
+            connectTimeoutRef.current = null;
+          }
           setShowWcQr(false);
           setWcUri(null);
           setConnectingId(null);
