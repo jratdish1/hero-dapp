@@ -15,11 +15,15 @@ import {
 } from "lucide-react";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useAccount } from "wagmi";
-import { isAddress } from "viem";
 import { toast } from "sonner";
 import DiscoverTab from "@/components/DiscoverTab";
 import { Compass } from "lucide-react";
 import { WalletButton } from "@/components/WalletButton";
+import {
+  sanitizeWalletTokenSymbol,
+  validateBridgeRequest,
+  validateSendRequest,
+} from "@/lib/heroWalletValidation";
 import { copyTextToClipboard } from "@/lib/walletSecurity";
 import { useWalletBalances } from "../hooks/useWalletBalances";
 
@@ -242,53 +246,19 @@ export default function HeroWallet() {
     };
   }, [isConnected, address, fetchGas, fetchApprovals, fetchPrivacyBalance]);
 
-  // Validate and sanitize token symbol input (allow only alphanumeric uppercase, max length 10)
-  const sanitizeTokenSymbol = (input: string) => {
-    return input.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 10);
-  };
-
-  // Validate token symbol against known tokens in balances or allowlist (simple allowlist here)
-  const isValidTokenSymbol = (symbol: string) => {
-    if (!symbol) return false;
-    const allowlist = balances.map((b) => b.symbol.toUpperCase());
-    return allowlist.includes(symbol.toUpperCase());
-  };
-
   const handleSend = async () => {
-    // Validate recipient address
-    if (!sendTo || !isAddress(sendTo)) {
-      toast.error("Invalid recipient address");
+    const validation = validateSendRequest({
+      sendTo,
+      sendAmount,
+      sendToken,
+      sendChain,
+      balances,
+    });
+    if ("error" in validation) {
+      toast.error(validation.error);
       return;
     }
-    // Validate amount positive number
-    const amountNum = Number(sendAmount);
-    if (isNaN(amountNum) || amountNum <= 0) {
-      toast.error("Invalid amount");
-      return;
-    }
-    // Validate token symbol sanitized and allowed
-    const sanitizedToken = sanitizeTokenSymbol(sendToken);
-    if (!sanitizedToken) {
-      toast.error("Invalid token symbol");
-      return;
-    }
-    if (!isValidTokenSymbol(sanitizedToken)) {
-      toast.error("Token not supported or unknown");
-      return;
-    }
-    // Validate amount within balance
-    const tokenBalance = balances.find(
-      (b) => b.symbol.toUpperCase() === sanitizedToken && b.chain === sendChain
-    );
-    if (!tokenBalance) {
-      toast.error("Token balance not found");
-      return;
-    }
-    const balanceNum = Number(tokenBalance.balance);
-    if (amountNum > balanceNum) {
-      toast.error("Amount exceeds balance");
-      return;
-    }
+    const { sanitizedToken } = validation;
 
     try {
       const res = await fetch(`${WALLET_API}/api/wallet/send`, {
@@ -323,7 +293,7 @@ export default function HeroWallet() {
       toast.error("Enter valid amount to shield");
       return;
     }
-    const sanitizedToken = sanitizeTokenSymbol(shieldToken);
+    const sanitizedToken = sanitizeWalletTokenSymbol(shieldToken);
     if (!sanitizedToken) {
       toast.error("Invalid token symbol");
       return;
@@ -382,15 +352,17 @@ export default function HeroWallet() {
       toast.error("Enter valid bridge amount");
       return;
     }
-    const sanitizedToken = sanitizeTokenSymbol(bridgeToken);
-    if (!sanitizedToken) {
-      toast.error("Invalid token symbol");
+    const validation = validateBridgeRequest({
+      bridgeFrom,
+      bridgeTo,
+      bridgeAmount,
+      bridgeToken,
+    });
+    if ("error" in validation) {
+      toast.error(validation.error);
       return;
     }
-    if (bridgeFrom === bridgeTo) {
-      toast.error("Select different source and destination chains");
-      return;
-    }
+    const { sanitizedToken } = validation;
     try {
       const res = await fetch(`${WALLET_API}/api/wallet/bridge`, {
         method: 'POST',
@@ -594,7 +566,7 @@ export default function HeroWallet() {
                 <Input
                   id="sendToken"
                   value={sendToken}
-                  onChange={(e) => setSendToken(sanitizeTokenSymbol(e.target.value))}
+                  onChange={(e) => setSendToken(sanitizeWalletTokenSymbol(e.target.value))}
                   placeholder="ETH, HERO, USDC..."
                   className="bg-gray-800 border-gray-600 text-white"
                   aria-label="Token symbol to send"
@@ -668,7 +640,7 @@ export default function HeroWallet() {
                   <Input
                     id="shieldToken"
                     value={shieldToken}
-                    onChange={(e) => setShieldToken(sanitizeTokenSymbol(e.target.value))}
+                    onChange={(e) => setShieldToken(sanitizeWalletTokenSymbol(e.target.value))}
                     placeholder="HERO"
                     className="bg-gray-800 border-gray-600 text-white"
                     aria-label="Token symbol to shield"
@@ -788,7 +760,7 @@ export default function HeroWallet() {
                 <Input
                   id="bridgeToken"
                   value={bridgeToken}
-                  onChange={(e) => setBridgeToken(sanitizeTokenSymbol(e.target.value))}
+                  onChange={(e) => setBridgeToken(sanitizeWalletTokenSymbol(e.target.value))}
                   placeholder="HERO"
                   className="bg-gray-800 border-gray-600 text-white"
                   aria-label="Token symbol to bridge"

@@ -31,12 +31,13 @@ import {
   useEnsName,
   useEnsAvatar,
 } from "wagmi";
-const MAINNET_CHAIN_ID = 1;
 import { normalize } from "viem/ens";
 import { getAddress, isAddress, formatUnits } from "viem";
 import { hasWalletConnect } from "../lib/wagmi";
 import { copyTextToClipboard, sanitizeEnsAvatar } from "@/lib/walletSecurity";
 import { QRCodeSVG } from "qrcode.react";
+
+const MAINNET_CHAIN_ID = 1;
 
 // ─── Jazzicon-style gradient avatar ─────────────────────────────────────
 function generateGradient(address: string): string {
@@ -222,7 +223,7 @@ export function WalletButton() {
     query: { enabled: !!address && !!validChainId },
   });
   const { connect, connectors, isPending: isConnecting } = useConnect();
-  const { disconnect } = useDisconnect();
+  const { disconnectAsync } = useDisconnect();
   const isSafeContext = useMemo(() => {
     if (typeof window === "undefined") return false;
     try {
@@ -379,7 +380,7 @@ export function WalletButton() {
 
   const handleDisconnect = async () => {
     try {
-      await disconnect();
+      await disconnectAsync();
       setShowDetails(false);
       toast.success("Wallet disconnected");
     } catch {
