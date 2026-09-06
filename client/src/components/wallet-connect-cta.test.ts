@@ -44,6 +44,10 @@ describe("wallet connect CTA does not route to admin login", () => {
     expect(src).toMatch(/import \{ WalletButton \} from "@\/components\/WalletButton";/);
     expect(src).toMatch(/Connect your wallet to access full features/);
     expect(src).toMatch(/<WalletButton \/>/);
+  });
+
+  it("HeroWallet send validation checks the selected chain balance", () => {
+    const src = read("../pages/HeroWallet.tsx");
     expect(src).toMatch(/b\.chain === sendChain/);
   });
 });

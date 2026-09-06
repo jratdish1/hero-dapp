@@ -320,6 +320,9 @@ export function WalletButton() {
     setConnectingId(connector.uid);
 
     // Safety timeout: reset connectingId after 30s to prevent permanent blocking
+    if (connectTimeoutRef.current) {
+      clearTimeout(connectTimeoutRef.current);
+    }
     const connectorUid = connector.uid;
     connectTimeoutRef.current = setTimeout(() => {
       setConnectingId((current) => {
@@ -416,8 +419,11 @@ export function WalletButton() {
         textArea.style.opacity = '0';
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand('copy');
+        const copied = document.execCommand('copy');
         document.body.removeChild(textArea);
+        if (!copied) {
+          throw new Error("Copy command was unsuccessful");
+        }
       }
       setIsCopied(true);
       toast.success("Address copied to clipboard");

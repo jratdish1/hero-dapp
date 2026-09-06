@@ -443,8 +443,11 @@ export default function HeroWallet() {
         textArea.style.opacity = "0";
         document.body.appendChild(textArea);
         textArea.select();
-        document.execCommand("copy");
+        const copied = document.execCommand("copy");
         document.body.removeChild(textArea);
+        if (!copied) {
+          throw new Error("Copy command was unsuccessful");
+        }
       }
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
