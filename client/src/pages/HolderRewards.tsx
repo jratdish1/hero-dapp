@@ -53,8 +53,17 @@ export default function HolderRewards() {
   // BigInt-only eligibility threshold (1,000 HERO) — no Number conversion before compare
   const HERO_ELIGIBILITY_THRESHOLD_WEI = 1000n * 10n ** 18n;
   const isEligible = walletConnected && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
-  // Only show a decided balance once reads settle; while loading or on RPC error, show "…" instead of a false zero
-  const balanceKnown = walletConnected && !balancesLoading && !balancesError;
+  // Gate the decision on COMPLETED HERO reads: every supported chain that lists HERO must have
+  // finished its fetch (status no longer "loading") and the overall hook must not be loading/erroring.
+  // A chain whose reads failed (status "error") or never settled keeps the decision in "Checking".
+  const heroReadsSettled = React.useMemo(() => {
+    if (balancesLoading || balancesError) return false;
+    for (const chain of Object.values(chains)) {
+      if (chain && chain.status === "loading" || chain?.status === "error") return false;
+    }
+    return true;
+  }, [chains, balancesLoading, balancesError]);
+  const balanceKnown = walletConnected && heroReadsSettled;
   const userBalance = !walletConnected
     ? "0"
     : balanceKnown
