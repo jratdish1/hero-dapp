@@ -53,7 +53,6 @@ export default function HolderRewards() {
   }, [chains]);
   // BigInt-only eligibility threshold (1,000 HERO) — no Number conversion before compare
   const HERO_ELIGIBILITY_THRESHOLD_WEI = 1000n * 10n ** 18n;
-  const isEligible = walletConnected && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
   // Gate the decision on COMPLETED reads for the CURRENT address: the hook resets BOTH chain
   // entries to status 'loading' on every mount/address change (useWalletBalances.ts:223), so
   // requiring BOTH supported chain IDs to be present with a settled, non-error status proves
@@ -80,6 +79,9 @@ export default function HolderRewards() {
     return true;
   }, [chains, address, fetchedAddress, balancesLoading, balancesError]);
   const balanceKnown = walletConnected && heroReadsSettled;
+  // Eligibility is derived ONLY from known-current-account data: during the account-switch
+  // window or any unsettled read, isEligible is false rather than the previous account's value.
+  const isEligible = balanceKnown && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
   const userBalance = !walletConnected
     ? "0"
     : balanceKnown
