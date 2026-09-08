@@ -611,13 +611,18 @@ export function trpcRouteLimiter(req: Request, res: Response, next: NextFunction
     return mediaUploadLimiter(req, res, next);
   }
 
-  // DAO proposal creation
-  if (url.includes("dao.createProposal") || url.includes("dao.create")) {
+  // Wallet binding challenge issuance — dedicated limiter (previously defined but never wired)
+  if (url.includes("dao.wallet.bindForVoting") || url.includes("wallet.bind")) {
+    return walletLimiter(req, res, next);
+  }
+
+  // DAO proposal creation (real procedure paths: dao.proposals.create)
+  if (url.includes("dao.proposals.create") || url.includes("dao.createProposal") || url.includes("dao.create")) {
     return daoProposalLimiter(req, res, next);
   }
 
-  // DAO voting
-  if (url.includes("dao.vote") || url.includes("dao.castVote")) {
+  // DAO voting (real procedure path: dao.votes.cast)
+  if (url.includes("dao.votes.cast") || url.includes("dao.vote") || url.includes("dao.castVote")) {
     return daoVoteLimiter(req, res, next);
   }
 

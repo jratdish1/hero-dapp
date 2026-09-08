@@ -1,4 +1,6 @@
 import { trpc } from "@/lib/trpc";
+import { useAccount } from "wagmi";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 /**
  * HERO DAO — Proposals Page with RNG Fallback
  * 
@@ -197,7 +199,8 @@ export default function DAOProposals() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasVoted, setHasVoted] = useState(false);
-  const [walletConnected, setWalletConnected] = useState(false);
+  const { isConnected } = useAccount();
+  const walletConnected = isConnected;
 
   // Live data from tRPC DAO backend
   const { data: liveProposals, isLoading: proposalsLoading } = trpc.dao.proposals.list.useQuery({ limit: 10 });
@@ -308,12 +311,7 @@ export default function DAOProposals() {
           {!walletConnected && (
             <div className="mb-6 p-4 bg-gray-800/50 border border-gray-700 rounded-lg text-center">
               <p className="text-sm text-gray-400 mb-3">Connect your wallet to vote</p>
-              <button
-                onClick={() => setWalletConnected(true)}
-                className="px-6 py-2 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
-              >
-                Connect Wallet
-              </button>
+              <ConnectWalletPrompt message="Connect your wallet to vote" variant="inline" />
             </div>
           )}
 

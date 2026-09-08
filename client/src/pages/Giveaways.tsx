@@ -1,4 +1,5 @@
 import { useAccount } from "wagmi";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 import { trpc } from "@/lib/trpc";
 /**
  * HERO Community Giveaways/Raffles Page
@@ -189,8 +190,8 @@ function RaffleCard({ raffle, onEnter }: { raffle: RaffleDisplay; onEnter: (id: 
 
 export default function Giveaways() {
   const [raffles, setRaffles] = useState<RaffleDisplay[]>([]);
-  const { address } = useAccount();
-  const [walletConnected, setWalletConnected] = useState(false);
+  const { address, isConnected } = useAccount();
+  const walletConnected = isConnected;
 
   useEffect(() => {
     // Mock data — replace with tRPC calls
@@ -270,12 +271,7 @@ export default function Giveaways() {
       {!walletConnected && (
         <div className="mb-6 p-4 bg-gray-800/50 border border-gray-700 rounded-lg text-center">
           <p className="text-sm text-gray-400 mb-3">Connect your wallet to enter raffles</p>
-          <button
-            onClick={() => setWalletConnected(true)}
-            className="px-6 py-2 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
-          >
-            Connect Wallet
-          </button>
+          <ConnectWalletPrompt message="Connect your wallet to enter raffles" variant="inline" />
         </div>
       )}
 

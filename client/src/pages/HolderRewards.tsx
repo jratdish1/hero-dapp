@@ -6,6 +6,9 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAccount } from "wagmi";
+import { useWalletBalances } from "@/hooks/useWalletBalances";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -32,9 +35,25 @@ interface RewardRoundDisplay {
 
 export default function HolderRewards() {
   const [rounds, setRounds] = useState<RewardRoundDisplay[]>([]);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [userBalance, setUserBalance] = useState('0');
-  const [isEligible, setIsEligible] = useState(false);
+  const { isConnected } = useAccount();
+  const walletConnected = isConnected;
+  const { chains } = useWalletBalances();
+
+  // Real HERO balance across chains (Base + PulseChain), derived from the shared hook
+  const heroBalanceWei = React.useMemo(() => {
+    let total = 0n;
+    for (const chain of Object.values(chains)) {
+      const hero = chain?.tokens?.find((t: any) => t.symbol === "HERO");
+      if (hero?.rawBalance) {
+        try { total += BigInt(hero.rawBalance); } catch { /* skip malformed */ }
+      }
+    }
+    return total;
+  }, [chains]);
+  const userBalance = walletConnected
+    ? (() => { try { return Number(heroBalanceWei / 10n ** 12n) / 1e6; } catch { return 0; } })().toLocaleString(undefined, { maximumFractionDigits: 0 })
+    : "0";
+  const isEligible = walletConnected && Number(heroBalanceWei) >= 1000n * 10n ** 18n;
 
   useEffect(() => {
     // Mock data — replace with tRPC
@@ -85,12 +104,7 @@ export default function HolderRewards() {
         {!walletConnected ? (
           <div className="text-center">
             <p className="text-sm text-gray-400 mb-3">Connect wallet to check eligibility</p>
-            <button
-              onClick={() => { setWalletConnected(true); setUserBalance('125,000'); setIsEligible(true); }}
-              className="px-6 py-2 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
-            >
-              Connect Wallet
-            </button>
+            <ConnectWalletPrompt message="Connect wallet to check eligibility" variant="inline" />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
