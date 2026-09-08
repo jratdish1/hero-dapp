@@ -106,8 +106,10 @@ async function fetchChainBalances(
     if (signal?.aborted) return { status: "error", tokens: [] };
     try {
       const nativeBal = await client.getBalance({ address });
-      if (nativeBal > 0n) {
+      {
         const nativeToken = tokens.find((t) => t.isNative);
+        // Retain the native read even at zero — presence distinguishes "read succeeded"
+        // from "read failed (omitted)". Consumers filter zero balances for display.
         allBalances.push({
           symbol: chainConfig.nativeSymbol,
           name: chainConfig.nativeName,
@@ -137,8 +139,10 @@ async function fetchChainBalances(
       if (Array.isArray(results)) {
         results.forEach((result, i) => {
           if (result && typeof result === "object" && "status" in result && "result" in result) {
-            if (result.status === "success" && result.result > 0n) {
+            if (result.status === "success") {
               const token = erc20Tokens[i];
+              // Retain ALL successful reads — including zero balances — so token presence
+              // distinguishes "read succeeded (possibly zero)" from "read failed (omitted)".
               allBalances.push({
                 symbol: token.symbol,
                 name: token.name ?? token.symbol,
