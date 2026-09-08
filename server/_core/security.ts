@@ -615,39 +615,32 @@ export function trpcRouteLimiter(req: Request, res: Response, next: NextFunction
   } catch {
     procedurePath = "";
   }
-  // Comma-separated batch: check each procedure path independently
+  // Comma-separated batch: classify EVERY procedure first, then apply the strictest
+  // applicable limiter so a cheap procedure cannot raise a batch's allowance above
+  // what its most-limited member requires (e.g. wallet.bind + proposals.create).
   const procedures = procedurePath.split(",").map((s) => s.trim()).filter(Boolean);
 
   const matchesAny = (...needles: string[]) =>
     procedures.some((proc) => needles.some((n) => proc === n || proc.endsWith("." + n)));
 
-  // AI Chat endpoints — strictest limit
+  // Ordered strictest -> loosest: the first category any batch member matches wins.
   if (matchesAny("assistant.chat", "assistant.stream")) {
     return aiChatLimiter(req, res, next);
   }
-
-  // Media upload endpoints
   if (matchesAny("media.upload", "media.create")) {
     return mediaUploadLimiter(req, res, next);
   }
-
-  // Wallet binding challenge issuance — dedicated limiter (previously defined but never wired)
-  if (matchesAny("dao.wallet.bindforvoting", "wallet.bind")) {
-    return walletLimiter(req, res, next);
-  }
-
-  // DAO proposal creation (real procedure paths: dao.proposals.create)
   if (matchesAny("dao.proposals.create", "dao.createproposal", "dao.create")) {
     return daoProposalLimiter(req, res, next);
   }
-
-  // DAO voting (real procedure path: dao.votes.cast)
   if (matchesAny("dao.votes.cast", "dao.vote", "dao.castvote")) {
     return daoVoteLimiter(req, res, next);
   }
-
-  // Price feed / market data
-  if (procedures.some((proc) => proc.split(".").pop()?.startsWith("prices") || proc.endsWith("buyandburn") || proc.endsWith("farmpools"))) {
+  if (matchesAny("dao.wallet.bindforvoting", "wallet.bind")) {
+    return walletLimiter(req, res, next);
+  }
+  // Price feed / market data — match the NAMESPACE (prices.overview, prices.ticker, ...)
+  if (procedures.some((proc) => proc.startsWith("prices.") || proc === "prices" || proc.endsWith(".buyandburn") || proc.endsWith(".farmpools"))) {
     return priceFeedLimiter(req, res, next);
   }
 
