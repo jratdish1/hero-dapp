@@ -22,21 +22,33 @@ Disallow: /
 
 User-agent: ClaudeBot
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: GPTBot
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: Google-Extended
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: PerplexityBot
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: OAI-SearchBot
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: ChatGPT-User
 Allow: /
+Disallow: /api/
+Disallow: /login
 
 User-agent: meta-externalagent
 Disallow: /
