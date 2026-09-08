@@ -599,35 +599,55 @@ export function schemaPreValidator(req: Request, res: Response, next: NextFuncti
 // This middleware inspects the tRPC procedure path in the URL and applies
 // the appropriate rate limiter based on the operation type.
 export function trpcRouteLimiter(req: Request, res: Response, next: NextFunction) {
-  const url = req.originalUrl || req.url;
+  // Parse ONLY the tRPC procedure path from the URL — never the full URL, whose query
+  // string is attacker-controlled and could otherwise reroute limiter selection
+  // (e.g. /api/trpc/dao.proposals.create?x=wallet.bind). Batches are comma-separated
+  // procedure paths; every procedure in a batch must agree on the limiter or the
+  // strictest applicable one is chosen.
+  const fullUrl = req.originalUrl || req.url;
+  let procedurePath = "";
+  try {
+    const pathOnly = fullUrl.split("?")[0];
+    const trpcIndex = pathOnly.indexOf("/api/trpc/");
+    if (trpcIndex !== -1) {
+      procedurePath = decodeURIComponent(pathOnly.slice(trpcIndex + "/api/trpc/".length)).toLowerCase();
+    }
+  } catch {
+    procedurePath = "";
+  }
+  // Comma-separated batch: check each procedure path independently
+  const procedures = procedurePath.split(",").map((s) => s.trim()).filter(Boolean);
+
+  const matchesAny = (...needles: string[]) =>
+    procedures.some((proc) => needles.some((n) => proc === n || proc.endsWith("." + n)));
 
   // AI Chat endpoints — strictest limit
-  if (url.includes("assistant.chat") || url.includes("assistant.stream")) {
+  if (matchesAny("assistant.chat", "assistant.stream")) {
     return aiChatLimiter(req, res, next);
   }
 
   // Media upload endpoints
-  if (url.includes("media.upload") || url.includes("media.create")) {
+  if (matchesAny("media.upload", "media.create")) {
     return mediaUploadLimiter(req, res, next);
   }
 
   // Wallet binding challenge issuance — dedicated limiter (previously defined but never wired)
-  if (url.includes("dao.wallet.bindForVoting") || url.includes("wallet.bind")) {
+  if (matchesAny("dao.wallet.bindforvoting", "wallet.bind")) {
     return walletLimiter(req, res, next);
   }
 
   // DAO proposal creation (real procedure paths: dao.proposals.create)
-  if (url.includes("dao.proposals.create") || url.includes("dao.createProposal") || url.includes("dao.create")) {
+  if (matchesAny("dao.proposals.create", "dao.createproposal", "dao.create")) {
     return daoProposalLimiter(req, res, next);
   }
 
   // DAO voting (real procedure path: dao.votes.cast)
-  if (url.includes("dao.votes.cast") || url.includes("dao.vote") || url.includes("dao.castVote")) {
+  if (matchesAny("dao.votes.cast", "dao.vote", "dao.castvote")) {
     return daoVoteLimiter(req, res, next);
   }
 
   // Price feed / market data
-  if (url.includes("prices.") || url.includes("buyAndBurn") || url.includes("farmPools")) {
+  if (procedures.some((proc) => proc.split(".").pop()?.startsWith("prices") || proc.endsWith("buyandburn") || proc.endsWith("farmpools"))) {
     return priceFeedLimiter(req, res, next);
   }
 
