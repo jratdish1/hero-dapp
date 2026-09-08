@@ -9,6 +9,7 @@ import React, { useState, useEffect } from 'react';
 import { useAccount } from "wagmi";
 import { useWalletBalances } from "@/hooks/useWalletBalances";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { SUPPORTED_CHAIN_IDS, type SupportedChainId } from "@/lib/config";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -53,13 +54,16 @@ export default function HolderRewards() {
   // BigInt-only eligibility threshold (1,000 HERO) — no Number conversion before compare
   const HERO_ELIGIBILITY_THRESHOLD_WEI = 1000n * 10n ** 18n;
   const isEligible = walletConnected && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
-  // Gate the decision on COMPLETED HERO reads: every supported chain that lists HERO must have
-  // finished its fetch (status no longer "loading") and the overall hook must not be loading/erroring.
-  // A chain whose reads failed (status "error") or never settled keeps the decision in "Checking".
+  // Gate the decision on COMPLETED reads for the CURRENT address: the hook resets BOTH chain
+  // entries to status 'loading' on every mount/address change (useWalletBalances.ts:223), so
+  // requiring BOTH supported chain IDs to be present with a settled, non-error status proves
+  // the current address's reads finished. Empty/stale chains (missing entries) fail the gate.
   const heroReadsSettled = React.useMemo(() => {
     if (balancesLoading || balancesError) return false;
-    for (const chain of Object.values(chains)) {
-      if (chain && chain.status === "loading" || chain?.status === "error") return false;
+    for (const chainId of SUPPORTED_CHAIN_IDS) {
+      const chain = chains[chainId as SupportedChainId];
+      if (!chain) return false; // not yet initialized for this address fetch
+      if (chain.status === "loading" || chain.status === "error") return false;
     }
     return true;
   }, [chains, balancesLoading, balancesError]);
