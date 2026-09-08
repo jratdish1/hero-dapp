@@ -37,7 +37,7 @@ export default function HolderRewards() {
   const [rounds, setRounds] = useState<RewardRoundDisplay[]>([]);
   const { isConnected } = useAccount();
   const walletConnected = isConnected;
-  const { chains } = useWalletBalances();
+  const { chains, isLoading: balancesLoading, isError: balancesError } = useWalletBalances();
 
   // Real HERO balance across chains (Base + PulseChain), derived from the shared hook
   const heroBalanceWei = React.useMemo(() => {
@@ -50,10 +50,16 @@ export default function HolderRewards() {
     }
     return total;
   }, [chains]);
-  const userBalance = walletConnected
-    ? (() => { try { return Number(heroBalanceWei / 10n ** 12n) / 1e6; } catch { return 0; } })().toLocaleString(undefined, { maximumFractionDigits: 0 })
-    : "0";
-  const isEligible = walletConnected && Number(heroBalanceWei) >= 1000n * 10n ** 18n;
+  // BigInt-only eligibility threshold (1,000 HERO) — no Number conversion before compare
+  const HERO_ELIGIBILITY_THRESHOLD_WEI = 1000n * 10n ** 18n;
+  const isEligible = walletConnected && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
+  // Only show a decided balance once reads settle; while loading or on RPC error, show "…" instead of a false zero
+  const balanceKnown = walletConnected && !balancesLoading && !balancesError;
+  const userBalance = !walletConnected
+    ? "0"
+    : balanceKnown
+      ? (() => { try { return Number(heroBalanceWei / 10n ** 12n) / 1e6; } catch { return 0; } })().toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : "…";
 
   useEffect(() => {
     // Mock data — replace with tRPC
@@ -115,7 +121,7 @@ export default function HolderRewards() {
             <div className="bg-gray-800/50 rounded-lg p-4">
               <p className="text-xs text-gray-500">Eligibility</p>
               <p className={`text-xl font-bold ${isEligible ? 'text-green-400' : 'text-red-400'}`}>
-                {isEligible ? '✅ Eligible' : '❌ Need 1,000+ HERO'}
+                {!balanceKnown ? '… Checking balance' : isEligible ? '✅ Eligible' : '❌ Need 1,000+ HERO'}
               </p>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-4">
