@@ -1,0 +1,844 @@
+import { isValidAmount, isValidChainId, sanitizeString } from "../lib/validation";
+import { SlippageSelector } from "@/components/SlippageSelector";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { CommaInput } from "@/components/CommaInput";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Wallet, Send, ArrowDownToLine, Shield, ShieldOff, ArrowLeftRight,
+  RefreshCw, Eye, EyeOff, Copy, Check, AlertTriangle, Fuel,
+  Lock, Unlock, Globe, Coins, Activity, FileWarning
+} from "lucide-react";
+import { useNetwork } from "../contexts/NetworkContext";
+import { useAccount } from "wagmi";
+import { toast } from "sonner";
+import DiscoverTab from "@/components/DiscoverTab";
+import { Compass } from "lucide-react";
+import { WalletButton } from "@/components/WalletButton";
+import {
+  sanitizeWalletTokenSymbol,
+  validateBridgeRequest,
+  validateSendRequest,
+} from "@/lib/heroWalletValidation";
+import { copyTextToClipboard } from "@/lib/walletSecurity";
+import { useWalletBalances } from "../hooks/useWalletBalances";
+
+// ─── Error Boundary ─────────────────────────────────────────────────────────
+import { Component, type ReactNode, type ErrorInfo } from "react";
+
+class ErrorBoundary extends Component<{ children: ReactNode }, { hasError: boolean }> {
+  constructor(props: { children: ReactNode }) {
+    super(props);
+    this.state = { hasError: false };
+  }
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error("[ErrorBoundary]", error, errorInfo);
+  }
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div role="alert" className="p-6 text-center text-red-500">
+          <h2 className="text-xl font-bold mb-2">Something went wrong</h2>
+          <p className="text-gray-400">Please refresh the page or try again later.</p>
+          <button onClick={() => this.setState({ hasError: false })} className="mt-4 px-4 py-2 bg-green-600 text-white rounded">
+            Try Again
+          </button>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+
+// Wallet API base URL — used for gas, approvals, privacy, send, bridge, revoke (not yet deployed)
+const WALLET_API = "";
+
+// ─── Balance fetch hook (delegates to shared useWalletBalances) ───────────────
+
+type WalletApiChain = "base" | "pulsechain";
+
+function getWalletApiChain(chainId: number | undefined): WalletApiChain {
+  if (chainId === 369) return "pulsechain";
+  if (chainId === 8453) return "base";
+  return "base";
+}
+
+// Re-export the shared hook. The internal TokenBalance uses chain: string for UI.
+function useFetchBalances() {
+  // Use the shared wallet balances hook
+  const { chains, isLoading, refetch } = useWalletBalances();
+
+  // Map from ChainBalances to the legacy TokenBalance[] format used by HeroWallet UI
+  const balances = useMemo<TokenBalance[]>(() => {
+    const result: TokenBalance[] = [];
+    for (const [chainIdStr, state] of Object.entries(chains)) {
+      if (!state || state.status === "loading" || state.status === "unsupported") continue;
+      const chainKey = chainIdStr === "369" ? "pulsechain" : "base";
+      for (const token of state.tokens ?? []) {
+        result.push({
+          symbol: token.symbol,
+          name: token.name,
+          balance: token.balance,
+          valueUsd: "0",
+          address: token.address,
+          decimals: token.decimals,
+          chain: chainKey,
+        });
+      }
+      if (state.nativeBalance) {
+        result.push({
+          symbol: state.nativeBalance.symbol,
+          name: state.nativeBalance.name,
+          balance: state.nativeBalance.balance,
+          valueUsd: "0",
+          address: "0x0000000000000000000000000000000000000000",
+          decimals: state.nativeBalance.decimals,
+          chain: chainKey,
+        });
+      }
+    }
+    return result;
+  }, [chains]);
+
+  return { balances, loading: isLoading, refetch };
+}
+
+// Re-export TokenBalance for internal use
+interface TokenBalance {
+  symbol: string;
+  name: string;
+  balance: string;
+  valueUsd: string;
+  address: string;
+  decimals: number;
+  chain: string;
+}
+
+interface GasPrice {
+  chain: string;
+  fast: string;
+  standard: string;
+  slow: string;
+  nativePrice: string;
+}
+
+interface Approval {
+  token: string;
+  spender: string;
+  spenderName: string;
+  allowance: string;
+  risk: 'low' | 'medium' | 'high';
+}
+
+interface PrivacyBalance {
+  symbol: string;
+  shieldedAmount: string;
+  chain: string;
+}
+
+export default function HeroWallet() {
+  const { address, isConnected } = useAccount();
+  const { chainId } = useNetwork();
+  const walletApiChain = getWalletApiChain(chainId);
+  const [activeTab, setActiveTab] = useState("overview");
+  const [gasData, setGasData] = useState<GasPrice[]>([]);
+  const [approvals, setApprovals] = useState<Approval[]>([]);
+  const [privacyBalances, setPrivacyBalances] = useState<PrivacyBalance[]>([]);
+  const [showPrivateBalances, setShowPrivateBalances] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [slippage, setSlippage] = useState(0.5);
+
+  // Send form
+  const [sendTo, setSendTo] = useState("");
+  const [sendAmount, setSendAmount] = useState("");
+  const [sendToken, setSendToken] = useState("ETH");
+  const [sendChain, setSendChain] = useState("base");
+
+  // Shield form
+  const [shieldAmount, setShieldAmount] = useState("");
+  const [shieldToken, setShieldToken] = useState("HERO");
+
+  // Bridge form
+  const [bridgeFrom, setBridgeFrom] = useState("base");
+  const [bridgeTo, setBridgeTo] = useState("pulsechain");
+  const [bridgeAmount, setBridgeAmount] = useState("");
+  const [bridgeToken, setBridgeToken] = useState("HERO");
+
+  // Use reusable balances hook
+  const { balances, loading, refetch: fetchBalances } = useFetchBalances();
+
+  // AbortControllers for fetches
+  const gasAbortController = useRef<AbortController | null>(null);
+  const approvalsAbortController = useRef<AbortController | null>(null);
+  const privacyAbortController = useRef<AbortController | null>(null);
+
+  const fetchGas = useCallback(async () => {
+    if (gasAbortController.current) gasAbortController.current.abort();
+    const abortController = new AbortController();
+    gasAbortController.current = abortController;
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/gas`, { signal: abortController.signal });
+      if (res.ok) {
+        const data = await res.json();
+        setGasData(data.gas || []);
+      }
+    } catch (e) {
+      if ((e as any).name !== "AbortError") {
+        console.error("Gas fetch error:", e);
+      }
+    }
+  }, []);
+
+  const fetchApprovals = useCallback(async () => {
+    if (!address) return;
+    if (approvalsAbortController.current) approvalsAbortController.current.abort();
+    const abortController = new AbortController();
+    approvalsAbortController.current = abortController;
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/approvals?address=${encodeURIComponent(address)}`, { signal: abortController.signal });
+      if (res.ok) {
+        const data = await res.json();
+        setApprovals(data.approvals || []);
+      }
+    } catch (e) {
+      if ((e as any).name !== "AbortError") {
+        console.error("Approvals fetch error:", e);
+      }
+    }
+  }, [address]);
+
+  const fetchPrivacyBalance = useCallback(async () => {
+    if (!address) return;
+    if (privacyAbortController.current) privacyAbortController.current.abort();
+    const abortController = new AbortController();
+    privacyAbortController.current = abortController;
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/privacy/balance?address=${encodeURIComponent(address)}`, { signal: abortController.signal });
+      if (res.ok) {
+        const data = await res.json();
+        setPrivacyBalances(data.balances || []);
+      }
+    } catch (e) {
+      if ((e as any).name !== "AbortError") {
+        console.error("Privacy balance error:", e);
+      }
+    }
+  }, [address]);
+
+  useEffect(() => {
+    if (isConnected && address) {
+      fetchGas();
+      fetchApprovals();
+      fetchPrivacyBalance();
+    }
+    return () => {
+      gasAbortController.current?.abort();
+      approvalsAbortController.current?.abort();
+      privacyAbortController.current?.abort();
+    };
+  }, [isConnected, address, fetchGas, fetchApprovals, fetchPrivacyBalance]);
+
+  const handleSend = async () => {
+    const validation = validateSendRequest({
+      sendTo,
+      sendAmount,
+      sendToken,
+      sendChain,
+      balances,
+    });
+    if ("error" in validation) {
+      toast.error(validation.error);
+      return;
+    }
+    const { sanitizedToken } = validation;
+
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          from: address,
+          to: sendTo,
+          amount: sendAmount,
+          token: sanitizedToken,
+          chain: sendChain
+        })
+      });
+      if (res.ok) {
+        const data = await res.json();
+        toast.success(`TX sent: ${data.txHash?.slice(0, 10)}...`);
+        setSendTo("");
+        setSendAmount("");
+        setSendToken("ETH");
+        fetchBalances();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Send failed");
+      }
+    } catch (e) {
+      toast.error("Network error");
+    }
+  };
+
+  const handleShield = async () => {
+    if (!shieldAmount || Number(shieldAmount) <= 0) {
+      toast.error("Enter valid amount to shield");
+      return;
+    }
+    const sanitizedToken = sanitizeWalletTokenSymbol(shieldToken);
+    if (!sanitizedToken) {
+      toast.error("Invalid token symbol");
+      return;
+    }
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/privacy/shield`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address,
+          amount: shieldAmount,
+          token: sanitizedToken,
+          chain: walletApiChain
+        })
+      });
+      if (res.ok) {
+        toast.success("Tokens shielded successfully (Railgun)");
+        setShieldAmount("");
+        setShieldToken("HERO");
+        fetchPrivacyBalance();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Shield failed");
+      }
+    } catch (e) {
+      toast.error("Network error");
+    }
+  };
+
+  const handleUnshield = async (token: string, amount: string) => {
+    if (!amount || Number(amount) <= 0) {
+      toast.error("Invalid unshield amount");
+      return;
+    }
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/privacy/unshield`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, amount, token, chain: walletApiChain })
+      });
+      if (res.ok) {
+        toast.success("Tokens unshielded");
+        fetchPrivacyBalance();
+        fetchBalances();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Unshield failed");
+      }
+    } catch (e) {
+      toast.error("Unshield failed");
+    }
+  };
+
+  const handleBridge = async () => {
+    if (!bridgeAmount || Number(bridgeAmount) <= 0) {
+      toast.error("Enter valid bridge amount");
+      return;
+    }
+    const validation = validateBridgeRequest({
+      bridgeFrom,
+      bridgeTo,
+      bridgeAmount,
+      bridgeToken,
+    });
+    if ("error" in validation) {
+      toast.error(validation.error);
+      return;
+    }
+    const { sanitizedToken } = validation;
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/bridge`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          address,
+          fromChain: bridgeFrom,
+          toChain: bridgeTo,
+          amount: bridgeAmount,
+          token: sanitizedToken,
+          slippage
+        })
+      });
+      if (res.ok) {
+        toast.success("Bridge initiated!");
+        setBridgeAmount("");
+        setBridgeToken("HERO");
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Bridge failed");
+      }
+    } catch (e) {
+      toast.error("Network error");
+    }
+  };
+
+  const handleRevoke = async (token: string, spender: string) => {
+    try {
+      const res = await fetch(`${WALLET_API}/api/wallet/revoke`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ address, token, spender, chain: walletApiChain })
+      });
+      if (res.ok) {
+        toast.success("Approval revoked");
+        fetchApprovals();
+      } else {
+        const err = await res.json();
+        toast.error(err.error || "Revoke failed");
+      }
+    } catch (e) {
+      toast.error("Revoke failed");
+    }
+  };
+
+  const copyAddress = async () => {
+    if (!address) return;
+    const copied = await copyTextToClipboard(address);
+    if (copied) {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } else {
+      toast.error("Failed to copy wallet address");
+    }
+  };
+
+  const totalValue = balances.reduce((sum, b) => sum + parseFloat(b.valueUsd || "0"), 0);
+
+  if (!isConnected) {
+    return (
+      <div className="container mx-auto px-4 py-8 space-y-8">
+        <Card className="max-w-md mx-auto bg-black/95 border-yellow-500/30">
+          <CardContent className="p-8 text-center">
+            <Wallet className="w-16 h-16 mx-auto mb-4 text-yellow-400" aria-hidden="true" />
+            <h2 className="text-2xl font-bold text-white mb-2">HERO Wallet</h2>
+            <p className="text-gray-400 mb-6">Connect your wallet to access full features</p>
+            <p className="text-sm text-gray-500">
+              Send, receive, bridge, swap, stake, and shield your tokens with Railgun privacy.
+            </p>
+            <div className="mt-6 flex justify-center">
+              <WalletButton />
+            </div>
+          </CardContent>
+        </Card>
+        <div>
+          <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
+            <Compass className="w-5 h-5 text-yellow-400" aria-hidden="true" />
+            Discover DApps
+          </h2>
+          <DiscoverTab />
+        </div>
+      </div>
+    );
+  }
+  return (
+    <ErrorBoundary>
+    <div className="container mx-auto px-4 py-8 space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold text-white flex items-center gap-3">
+            <Wallet className="w-8 h-8 text-yellow-400" aria-hidden="true" />
+            HERO Wallet
+          </h1>
+          <div className="flex items-center gap-2 mt-2">
+            <span className="text-gray-400 font-mono text-sm" aria-label="Wallet address">
+              {address?.slice(0, 6)}...{address?.slice(-4)}
+            </span>
+            <button onClick={copyAddress} className="text-gray-500 hover:text-yellow-400" aria-label="Copy wallet address">
+              {copied ? <Check className="w-4 h-4" aria-hidden="true" /> : <Copy className="w-4 h-4" aria-hidden="true" />}
+            </button>
+          </div>
+        </div>
+        <div className="text-right">
+          <p className="text-sm text-gray-400">Total Portfolio</p>
+          <p className="text-3xl font-bold text-white" aria-label={`Total portfolio value $${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}`}>
+            ${totalValue.toLocaleString(undefined, { minimumFractionDigits: 2 })}
+          </p>
+        </div>
+      </div>
+
+      {/* Gas Bar */}
+      {gasData.length > 0 && (
+        <div className="flex gap-3 overflow-x-auto pb-2" role="list" aria-label="Gas prices">
+          {gasData.map(g => (
+            <Badge key={g.chain} variant="outline" className="border-gray-700 text-gray-300 whitespace-nowrap" role="listitem">
+              <Fuel className="w-3 h-3 mr-1" aria-hidden="true" />
+              {g.chain}: {g.standard} gwei
+            </Badge>
+          ))}
+        </div>
+      )}
+
+      {/* Main Tabs */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full" role="tablist" aria-label="Wallet main tabs">
+        <TabsList className="bg-black/95 border border-gray-700 w-full justify-start overflow-x-auto">
+          <TabsTrigger value="overview" role="tab" aria-selected={activeTab === "overview"}>Overview</TabsTrigger>
+          <TabsTrigger value="send" role="tab" aria-selected={activeTab === "send"}>Send</TabsTrigger>
+          <TabsTrigger value="privacy" role="tab" aria-selected={activeTab === "privacy"}>Privacy</TabsTrigger>
+          <TabsTrigger value="bridge" role="tab" aria-selected={activeTab === "bridge"}>Bridge</TabsTrigger>
+          <TabsTrigger value="approvals" role="tab" aria-selected={activeTab === "approvals"}>Approvals</TabsTrigger>
+          <TabsTrigger value="discover" role="tab" aria-selected={activeTab === "discover"}>🧭 Discover</TabsTrigger>
+        </TabsList>
+
+        {/* OVERVIEW TAB */}
+        <TabsContent value="overview" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <div className="flex justify-between items-center">
+            <h3 className="text-lg font-semibold text-white">Token Balances</h3>
+            <Button variant="ghost" size="sm" onClick={fetchBalances} disabled={loading} aria-label="Refresh balances">
+              <RefreshCw className={`w-4 h-4 mr-1 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
+              Refresh
+            </Button>
+          </div>
+
+          {balances.length === 0 ? (
+            <Card className="bg-black/95 border-gray-700">
+              <CardContent className="p-8 text-center text-gray-400">
+                <Coins className="w-12 h-12 mx-auto mb-3 opacity-50" aria-hidden="true" />
+                <p>No balances found. Connect wallet and refresh.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-2">
+              {balances.map((token, i) => (
+                <Card key={i} className="bg-black/95 border-gray-700 hover:border-yellow-500/30 transition-colors">
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-yellow-500/20 flex items-center justify-center">
+                        <Coins className="w-4 h-4 text-yellow-400" aria-hidden="true" />
+                      </div>
+                      <div>
+                        <p className="font-semibold text-white">{sanitizeString(token.symbol)}</p>
+                        <p className="text-xs text-gray-500">{token.chain}</p>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <p className="font-mono text-white">{parseFloat(token.balance).toLocaleString()}</p>
+                      <p className="text-xs text-gray-400">${parseFloat(token.valueUsd).toFixed(2)}</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </TabsContent>
+
+        {/* SEND TAB */}
+        <TabsContent value="send" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Send className="w-5 h-5 text-yellow-400" aria-hidden="true" />
+                Send Tokens
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <label htmlFor="sendChain" className="text-sm text-gray-400 mb-1 block">Chain</label>
+                <Select value={sendChain} onValueChange={setSendChain} aria-label="Select chain to send tokens">
+                  <SelectTrigger id="sendChain" className="bg-gray-800 border-gray-600 text-white">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="base">BASE</SelectItem>
+                    <SelectItem value="pulsechain">PulseChain</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <label htmlFor="sendToken" className="text-sm text-gray-400 mb-1 block">Token</label>
+                <Input
+                  id="sendToken"
+                  value={sendToken}
+                  onChange={(e) => setSendToken(sanitizeWalletTokenSymbol(e.target.value))}
+                  placeholder="ETH, HERO, USDC..."
+                  className="bg-gray-800 border-gray-600 text-white"
+                  aria-label="Token symbol to send"
+                />
+              </div>
+              <div>
+                <label htmlFor="sendTo" className="text-sm text-gray-400 mb-1 block">Recipient Address</label>
+                <Input
+                  id="sendTo"
+                  value={sendTo}
+                  onChange={(e) => setSendTo(e.target.value.trim())}
+                  placeholder="0x..."
+                  className="bg-gray-800 border-gray-600 text-white font-mono"
+                  aria-label="Recipient address"
+                />
+              </div>
+              <div>
+                <label htmlFor="sendAmount" className="text-sm text-gray-400 mb-1 block">Amount</label>
+                <CommaInput
+                  id="sendAmount"
+                  value={sendAmount}
+                  onChange={setSendAmount}
+                  placeholder="0.0"
+                  className="bg-gray-800 border-gray-600 text-white"
+                />
+              </div>
+              <Button onClick={handleSend} className="w-full bg-yellow-500 hover:bg-yellow-600 text-black font-bold" aria-label="Send transaction">
+                <Send className="w-4 h-4 mr-2" aria-hidden="true" />
+                Send Transaction
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Receive */}
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <ArrowDownToLine className="w-5 h-5 text-green-400" aria-hidden="true" />
+                Receive
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="bg-gray-800 rounded-lg p-4 text-center">
+                <p className="text-sm text-gray-400 mb-2">Your Address</p>
+                <p className="font-mono text-white text-sm break-all" aria-label="Your wallet address">{address}</p>
+                <Button variant="outline" size="sm" onClick={copyAddress} className="mt-3" aria-label="Copy wallet address">
+                  {copied ? <Check className="w-4 h-4 mr-1" aria-hidden="true" /> : <Copy className="w-4 h-4 mr-1" aria-hidden="true" />}
+                  {copied ? "Copied!" : "Copy Address"}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* PRIVACY TAB (Railgun) */}
+        <TabsContent value="privacy" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Shield className="w-5 h-5 text-purple-400" aria-hidden="true" />
+                Railgun Privacy Shield
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-400">
+                Shield your tokens using Railgun zero-knowledge proofs. Shielded tokens are invisible on-chain.
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="shieldToken" className="text-sm text-gray-400 mb-1 block">Token</label>
+                  <Input
+                    id="shieldToken"
+                    value={shieldToken}
+                    onChange={(e) => setShieldToken(sanitizeWalletTokenSymbol(e.target.value))}
+                    placeholder="HERO"
+                    className="bg-gray-800 border-gray-600 text-white"
+                    aria-label="Token symbol to shield"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="shieldAmount" className="text-sm text-gray-400 mb-1 block">Amount</label>
+                  <Input
+                    id="shieldAmount"
+                    value={shieldAmount}
+                    onChange={(e) => setShieldAmount(e.target.value)}
+                    placeholder="0.0"
+                    inputMode="decimal"
+                    min="0"
+                    step="any"
+                    className="bg-gray-800 border-gray-600 text-white"
+                    aria-label="Amount to shield"
+                  />
+                </div>
+              </div>
+              <Button onClick={handleShield} className="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold" aria-label="Shield tokens">
+                <Lock className="w-4 h-4 mr-2" aria-hidden="true" />
+                Shield Tokens
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Private Balances */}
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <EyeOff className="w-5 h-5 text-purple-400" aria-hidden="true" />
+                  Shielded Balances
+                </span>
+                <Button variant="ghost" size="sm" onClick={() => setShowPrivateBalances(!showPrivateBalances)} aria-label={showPrivateBalances ? "Hide shielded balances" : "Show shielded balances"}>
+                  {showPrivateBalances ? <Eye className="w-4 h-4" aria-hidden="true" /> : <EyeOff className="w-4 h-4" aria-hidden="true" />}
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {privacyBalances.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No shielded balances</p>
+              ) : (
+                <div className="space-y-2">
+                  {privacyBalances.map((pb, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-purple-400" aria-hidden="true" />
+                        <span className="text-white">{pb.symbol}</span>
+                        <Badge variant="outline" className="text-xs">{pb.chain}</Badge>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono text-white" aria-label={`Shielded amount of ${pb.symbol}`}>
+                          {showPrivateBalances ? pb.shieldedAmount : "••••••"}
+                        </span>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleUnshield(pb.symbol, pb.shieldedAmount)}
+                          className="text-yellow-400 hover:text-yellow-300"
+                          aria-label={`Unshield ${pb.symbol} tokens`}
+                        >
+                          <Unlock className="w-4 h-4" aria-hidden="true" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* BRIDGE TAB */}
+        <TabsContent value="bridge" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <ArrowLeftRight className="w-5 h-5 text-blue-400" aria-hidden="true" />
+                Cross-Chain Bridge
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label htmlFor="bridgeFrom" className="text-sm text-gray-400 mb-1 block">From</label>
+                  <Select value={bridgeFrom} onValueChange={setBridgeFrom} aria-label="Select source chain for bridge">
+                    <SelectTrigger id="bridgeFrom" className="bg-gray-800 border-gray-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="base">BASE</SelectItem>
+                      <SelectItem value="pulsechain">PulseChain</SelectItem>
+                      <SelectItem value="ethereum">Ethereum</SelectItem>
+                      <SelectItem value="arbitrum">Arbitrum</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label htmlFor="bridgeTo" className="text-sm text-gray-400 mb-1 block">To</label>
+                  <Select value={bridgeTo} onValueChange={setBridgeTo} aria-label="Select destination chain for bridge">
+                    <SelectTrigger id="bridgeTo" className="bg-gray-800 border-gray-600 text-white">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="base">BASE</SelectItem>
+                      <SelectItem value="pulsechain">PulseChain</SelectItem>
+                      <SelectItem value="ethereum">Ethereum</SelectItem>
+                      <SelectItem value="arbitrum">Arbitrum</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div>
+                <label htmlFor="bridgeToken" className="text-sm text-gray-400 mb-1 block">Token</label>
+                <Input
+                  id="bridgeToken"
+                  value={bridgeToken}
+                  onChange={(e) => setBridgeToken(sanitizeWalletTokenSymbol(e.target.value))}
+                  placeholder="HERO"
+                  className="bg-gray-800 border-gray-600 text-white"
+                  aria-label="Token symbol to bridge"
+                />
+              </div>
+              <div>
+                <label htmlFor="bridgeAmount" className="text-sm text-gray-400 mb-1 block">Amount</label>
+                <Input
+                  id="bridgeAmount"
+                  value={bridgeAmount}
+                  onChange={(e) => setBridgeAmount(e.target.value)}
+                  placeholder="0.0"
+                  inputMode="decimal"
+                  min="0"
+                  step="any"
+                  className="bg-gray-800 border-gray-600 text-white"
+                  aria-label="Amount to bridge"
+                />
+              </div>
+              <SlippageSelector value={slippage} onChange={setSlippage} />
+              <Button onClick={handleBridge} className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold" aria-label="Bridge tokens">
+                <Globe className="w-4 h-4 mr-2" aria-hidden="true" />
+                Bridge Tokens
+              </Button>
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* APPROVALS TAB */}
+        <TabsContent value="approvals" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <Card className="bg-black/95 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <FileWarning className="w-5 h-5 text-orange-400" aria-hidden="true" />
+                Token Approvals Audit
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {approvals.length === 0 ? (
+                <p className="text-gray-500 text-center py-4">No active approvals found</p>
+              ) : (
+                <div className="space-y-2">
+                  {approvals.map((a, i) => (
+                    <div key={i} className="flex items-center justify-between p-3 bg-gray-800 rounded-lg">
+                      <div>
+                        <p className="text-white font-medium">{a.token}</p>
+                        <p className="text-xs text-gray-400">Spender: {a.spenderName || a.spender.slice(0, 10) + "..."}</p>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <Badge variant={a.risk === 'high' ? 'destructive' : a.risk === 'medium' ? 'default' : 'secondary'}>
+                          {a.risk}
+                        </Badge>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleRevoke(a.token, a.spender)}
+                          aria-label={`Revoke approval for ${a.token} spender ${a.spenderName || a.spender}`}
+                        >
+                          Revoke
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <p className="text-xs text-gray-500 mt-4">
+                <AlertTriangle className="w-3 h-3 inline mr-1" aria-hidden="true" />
+                High-risk approvals allow unlimited token spending. Revoke unused approvals to protect your funds.
+              </p>
+            </CardContent>
+          </Card>
+        </TabsContent>
+        {/* DISCOVER TAB */}
+        <TabsContent value="discover" className="space-y-4" role="tabpanel" tabIndex={0}>
+          <DiscoverTab />
+        </TabsContent>
+      </Tabs>
+    </div>
+    </ErrorBoundary>
+  );
+}

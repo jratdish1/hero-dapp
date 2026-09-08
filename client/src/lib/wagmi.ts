@@ -1,6 +1,7 @@
 import { http, fallback, createConfig } from "wagmi";
 import type { Chain } from "viem";
 import { injected } from "wagmi";
+import { mainnet } from "wagmi/chains";
 import {
   metaMask,
   coinbaseWallet,
@@ -126,14 +127,25 @@ const baseTransport = fallback([
   }),
 ]);
 
+const mainnetTransport = fallback(
+  mainnet.rpcUrls.default.http.map((url) =>
+    http(url, {
+      timeout: 10_000,
+      retryCount: 1,
+      retryDelay: 500,
+    })
+  )
+);
+
 // ─── Wagmi Config ───────────────────────────────────────────────────────
 // SECURITY: reconnectOnMount disabled — users must explicitly click
 // "Connect Wallet" each session. This prevents auto-connecting to
 // potentially compromised or stale wallet sessions.
 export const wagmiConfig = createConfig({
-  chains: [pulsechain, base],
+  chains: [mainnet, pulsechain, base],
   connectors: connectorList,
   transports: {
+    [mainnet.id]: mainnetTransport,
     [pulsechain.id]: pulseChainTransport,
     [base.id]: baseTransport,
   },

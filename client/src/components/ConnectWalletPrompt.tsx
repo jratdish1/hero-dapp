@@ -1,62 +1,86 @@
 /**
- * ConnectWalletPrompt — minimal build-compatibility stub.
+ * ConnectWalletPrompt — Inline wallet connection prompt
  *
- * The original ConnectWalletPrompt source was removed in a prior commit.
- * This stub restores build compatibility by rendering a minimal
- * "connect wallet" prompt card.
+ * Renders a full-featured "Connect Wallet" call-to-action with the
+ * WalletButton modal trigger, supporting injected wallets (MetaMask,
+ * Rabby, Brave, Frame, etc.) and WalletConnect (Trust Wallet, Ledger,
+ * Rainbow, 300+ mobile wallets via QR code).
  *
- * NO wallet custody logic.
- * NO private key handling.
- * NO contract writes.
- * NO new API calls.
- *
- * build-hotfix: stale ConnectWalletPrompt source restored as minimal stub.
- * fu-02: added optional subMessage, icon, variant props for caller compatibility.
+ * Usage:
+ *   import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+ *   {!isConnected && <ConnectWalletPrompt message="Connect your wallet to vote." />}
  */
-import { Link } from "wouter";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
-import { Wallet } from "lucide-react";
-import { getLoginUrl } from "@/const";
+import { Wallet, QrCode, Shield } from "lucide-react";
+import { WalletButton } from "./WalletButton";
+import { hasWalletConnect } from "../lib/wagmi";
 
-export interface ConnectWalletPromptProps {
+interface ConnectWalletPromptProps {
+  /** Context-specific message shown above the connect button */
   message?: string;
-  /** Optional secondary message shown below the primary message. */
+  /** Optional sub-message shown below the connect button */
   subMessage?: string;
-  /** Optional icon override (emoji or short string). Accepted for caller compatibility. */
-  icon?: string;
-  /** Optional visual variant. Accepted for caller compatibility but not visually differentiated in stub. */
-  variant?: string;
+  /** Visual variant — "card" (default) or "inline" */
+  variant?: "card" | "inline";
+  /** Icon to show at top — defaults to Wallet */
+  icon?: "wallet" | "shield" | "qr";
 }
 
 export function ConnectWalletPrompt({
-  message = "Connect your wallet to continue",
+  message = "Connect your wallet to continue.",
   subMessage,
-  // icon and variant are accepted for caller compatibility but not rendered differently in this stub
-  icon: _icon,
-  variant: _variant,
+  variant = "card",
+  icon = "wallet",
 }: ConnectWalletPromptProps) {
+  const IconComponent =
+    icon === "shield" ? Shield : icon === "qr" ? QrCode : Wallet;
+
+  if (variant === "inline") {
+    return (
+      <div className="flex items-center gap-3 p-3 rounded-lg border border-border/50 bg-card/50">
+        <IconComponent className="h-5 w-5 text-hero-orange flex-shrink-0" />
+        <p className="text-sm text-muted-foreground flex-1">{message}</p>
+        <WalletButton />
+      </div>
+    );
+  }
+
   return (
-    <Card className="border-amber-500/20 bg-amber-500/5">
-      <CardContent className="flex flex-col items-center gap-4 py-10 text-center">
-        <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-          <Wallet className="w-6 h-6 text-amber-400" />
-        </div>
-        <p className="text-muted-foreground text-sm max-w-xs">{message}</p>
+    <div className="flex flex-col items-center justify-center py-10 px-6 rounded-2xl border border-border/50 bg-card/30 text-center space-y-4">
+      {/* Icon */}
+      <div className="flex items-center justify-center w-14 h-14 rounded-full bg-hero-orange/10 border border-hero-orange/20">
+        <IconComponent className="h-7 w-7 text-hero-orange" />
+      </div>
+
+      {/* Message */}
+      <div className="space-y-1.5">
+        <p className="font-semibold text-foreground text-base">{message}</p>
         {subMessage && (
-          <p className="text-muted-foreground text-xs max-w-xs opacity-75">{subMessage}</p>
+          <p className="text-sm text-muted-foreground max-w-xs">{subMessage}</p>
         )}
-        <Link href={getLoginUrl()}>
-          <Button
-            variant="outline"
-            className="border-amber-500/40 text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
-          >
-            Connect Wallet
-          </Button>
-        </Link>
-      </CardContent>
-    </Card>
+      </div>
+
+      {/* Wallet connect button */}
+      <WalletButton />
+
+      {/* Supported wallets hint */}
+      <div className="flex flex-wrap items-center justify-center gap-2 pt-1">
+        <span className="text-xs text-muted-foreground">Supports:</span>
+        <span className="text-xs bg-muted/50 rounded-full px-2 py-0.5 text-muted-foreground">
+          🦊 MetaMask
+        </span>
+        <span className="text-xs bg-muted/50 rounded-full px-2 py-0.5 text-muted-foreground">
+          🔵 Coinbase
+        </span>
+        <span className="text-xs bg-muted/50 rounded-full px-2 py-0.5 text-muted-foreground">
+          🌐 Rabby / Brave
+        </span>
+        {hasWalletConnect && (
+          <span className="text-xs bg-blue-500/10 border border-blue-500/20 rounded-full px-2 py-0.5 text-blue-400">
+            <QrCode className="inline h-3 w-3 mr-1" />
+            WalletConnect
+          </span>
+        )}
+      </div>
+    </div>
   );
 }
-
-export default ConnectWalletPrompt;
