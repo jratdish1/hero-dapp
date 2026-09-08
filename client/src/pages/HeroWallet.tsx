@@ -83,6 +83,8 @@ function useFetchBalances() {
       if (!state || state.status === "loading" || state.status === "unsupported") continue;
       const chainKey = chainIdStr === "369" ? "pulsechain" : "base";
       for (const token of state.tokens ?? []) {
+        // The shared hook now retains successful zero reads; filter them for display.
+        if (token.rawBalance === 0n) continue;
         result.push({
           symbol: token.symbol,
           name: token.name,
@@ -93,7 +95,7 @@ function useFetchBalances() {
           chain: chainKey,
         });
       }
-      if (state.nativeBalance) {
+      if (state.nativeBalance && state.nativeBalance.rawBalance > 0n) {
         result.push({
           symbol: state.nativeBalance.symbol,
           name: state.nativeBalance.name,

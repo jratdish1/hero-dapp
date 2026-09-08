@@ -6,6 +6,10 @@
  */
 
 import React, { useState, useEffect } from 'react';
+import { useAccount } from "wagmi";
+import { useWalletBalances } from "@/hooks/useWalletBalances";
+import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { SUPPORTED_CHAIN_IDS, type SupportedChainId } from "@/lib/config";
 
 // ─── Types ───────────────────────────────────────────────────────
 
@@ -32,9 +36,57 @@ interface RewardRoundDisplay {
 
 export default function HolderRewards() {
   const [rounds, setRounds] = useState<RewardRoundDisplay[]>([]);
-  const [walletConnected, setWalletConnected] = useState(false);
-  const [userBalance, setUserBalance] = useState('0');
-  const [isEligible, setIsEligible] = useState(false);
+  const { address, isConnected } = useAccount();
+  const walletConnected = isConnected;
+  const { chains, fetchedAddress, isLoading: balancesLoading, isError: balancesError } = useWalletBalances();
+
+  // Real HERO balance across chains (Base + PulseChain), derived from the shared hook
+  const heroBalanceWei = React.useMemo(() => {
+    let total = 0n;
+    for (const chain of Object.values(chains)) {
+      const hero = chain?.tokens?.find((t: any) => t.symbol === "HERO");
+      if (hero?.rawBalance) {
+        try { total += BigInt(hero.rawBalance); } catch { /* skip malformed */ }
+      }
+    }
+    return total;
+  }, [chains]);
+  // BigInt-only eligibility threshold (1,000 HERO) — no Number conversion before compare
+  const HERO_ELIGIBILITY_THRESHOLD_WEI = 1000n * 10n ** 18n;
+  // Gate the decision on COMPLETED reads for the CURRENT address: the hook resets BOTH chain
+  // entries to status 'loading' on every mount/address change (useWalletBalances.ts:223), so
+  // requiring BOTH supported chain IDs to be present with a settled, non-error status proves
+  // the current address's reads finished. Additionally, on a 'success' chain the HERO entry
+  // must be present (a successful-but-missing HERO read means the balanceOf multicall failed
+  // silently and was omitted — keep Checking). On a 'zero' chain all reads returned empty, so
+  // HERO=0 is confirmed.
+  const heroReadsSettled = React.useMemo(() => {
+    if (balancesLoading || balancesError) return false;
+    // Bind results to the CURRENT account: during the account-switch window the hook still
+    // holds the previous address's chains until its effect re-runs — reject that as unsettled.
+    if (!address || !fetchedAddress || fetchedAddress !== address) return false;
+    for (const chainId of SUPPORTED_CHAIN_IDS) {
+      const chain = chains[chainId as SupportedChainId];
+      if (!chain) return false; // not yet initialized for this address fetch
+      // Only a 'success' chain with a HERO entry proves the HERO read completed.
+      // 'zero' now means NO successful reads (all failed) since successful zero
+      // reads are retained by the hook — treat it as unsettled. 'loading'/'error'
+      // and missing HERO entries (silent failure) likewise stay in 'Checking'.
+      if (chain.status !== "success") return false;
+      const hasHeroEntry = chain.tokens.some((t: any) => t.symbol === "HERO");
+      if (!hasHeroEntry) return false;
+    }
+    return true;
+  }, [chains, address, fetchedAddress, balancesLoading, balancesError]);
+  const balanceKnown = walletConnected && heroReadsSettled;
+  // Eligibility is derived ONLY from known-current-account data: during the account-switch
+  // window or any unsettled read, isEligible is false rather than the previous account's value.
+  const isEligible = balanceKnown && heroBalanceWei >= HERO_ELIGIBILITY_THRESHOLD_WEI;
+  const userBalance = !walletConnected
+    ? "0"
+    : balanceKnown
+      ? (() => { try { return Number(heroBalanceWei / 10n ** 12n) / 1e6; } catch { return 0; } })().toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : "…";
 
   useEffect(() => {
     // Mock data — replace with tRPC
@@ -85,12 +137,7 @@ export default function HolderRewards() {
         {!walletConnected ? (
           <div className="text-center">
             <p className="text-sm text-gray-400 mb-3">Connect wallet to check eligibility</p>
-            <button
-              onClick={() => { setWalletConnected(true); setUserBalance('125,000'); setIsEligible(true); }}
-              className="px-6 py-2 bg-green-500 text-black font-bold rounded-lg hover:bg-green-400 transition-colors"
-            >
-              Connect Wallet
-            </button>
+            <ConnectWalletPrompt message="Connect wallet to check eligibility" variant="inline" />
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -101,7 +148,7 @@ export default function HolderRewards() {
             <div className="bg-gray-800/50 rounded-lg p-4">
               <p className="text-xs text-gray-500">Eligibility</p>
               <p className={`text-xl font-bold ${isEligible ? 'text-green-400' : 'text-red-400'}`}>
-                {isEligible ? '✅ Eligible' : '❌ Need 1,000+ HERO'}
+                {!balanceKnown ? '… Checking balance' : isEligible ? '✅ Eligible' : '❌ Need 1,000+ HERO'}
               </p>
             </div>
             <div className="bg-gray-800/50 rounded-lg p-4">
