@@ -66,12 +66,13 @@ export default function HolderRewards() {
     for (const chainId of SUPPORTED_CHAIN_IDS) {
       const chain = chains[chainId as SupportedChainId];
       if (!chain) return false; // not yet initialized for this address fetch
-      if (chain.status === "loading" || chain.status === "error") return false;
-      if (chain.status === "success") {
-        const hasHeroEntry = chain.tokens.some((t: any) => t.symbol === "HERO") || chain.nativeBalance?.symbol === "HERO";
-        if (!hasHeroEntry) return false; // HERO read failed silently on this chain
-      }
-      // status 'zero': all reads (incl. HERO) confirmed empty — a settled zero is a known value
+      // Only a 'success' chain with a HERO entry proves the HERO read completed.
+      // 'zero' now means NO successful reads (all failed) since successful zero
+      // reads are retained by the hook — treat it as unsettled. 'loading'/'error'
+      // and missing HERO entries (silent failure) likewise stay in 'Checking'.
+      if (chain.status !== "success") return false;
+      const hasHeroEntry = chain.tokens.some((t: any) => t.symbol === "HERO");
+      if (!hasHeroEntry) return false;
     }
     return true;
   }, [chains, balancesLoading, balancesError]);
