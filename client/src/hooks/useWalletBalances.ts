@@ -48,6 +48,8 @@ export interface ChainBalances {
 export interface WalletBalances {
   /** ChainId → per-chain balance data */
   chains: Partial<Record<8453 | 369, ChainBalances>>;
+  /** The address the current chains data was fetched for (null when cleared/disconnected) */
+  fetchedAddress: `0x${string}` | null;
   /** true while any chain is loading */
   isLoading: boolean;
   /** true when any chain has an error (network issues, RPC failures) */
@@ -185,6 +187,7 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
   const { readUnconnected = false } = options;
   const { address, isConnected } = useAccount();
   const [chainStates, setChainStates] = useState<Partial<Record<8453 | 369, ChainBalances>>>({});
+  const [fetchedAddress, setFetchedAddress] = useState<`0x${string}` | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [isError, setIsError] = useState(false);
   const [globalError, setGlobalError] = useState<string | undefined>();
@@ -227,6 +230,9 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
       initialStates[cid] = { chainId: cid, status: "loading", tokens: [] };
     }
     setChainStates(initialStates);
+    // Bind this fetch cycle to the address it is reading — consumers can detect
+    // stale results during the account-switch window before the effect re-runs.
+    setFetchedAddress(effectiveAddress);
     setIsLoading(true);
     setIsError(false);
     setGlobalError(undefined);
@@ -305,6 +311,9 @@ export function useWalletBalances(options: UseWalletBalancesOptions = {}): Walle
 
   return {
     chains: chainStates,
+    /** The address the current chainStates were fetched for (null when cleared/disconnected).
+     *  Compare against useAccount().address to detect the account-switch window. */
+    fetchedAddress,
     isLoading,
     isError,
     isUnsupported,

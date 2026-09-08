@@ -36,9 +36,9 @@ interface RewardRoundDisplay {
 
 export default function HolderRewards() {
   const [rounds, setRounds] = useState<RewardRoundDisplay[]>([]);
-  const { isConnected } = useAccount();
+  const { address, isConnected } = useAccount();
   const walletConnected = isConnected;
-  const { chains, isLoading: balancesLoading, isError: balancesError } = useWalletBalances();
+  const { chains, fetchedAddress, isLoading: balancesLoading, isError: balancesError } = useWalletBalances();
 
   // Real HERO balance across chains (Base + PulseChain), derived from the shared hook
   const heroBalanceWei = React.useMemo(() => {
@@ -63,6 +63,9 @@ export default function HolderRewards() {
   // HERO=0 is confirmed.
   const heroReadsSettled = React.useMemo(() => {
     if (balancesLoading || balancesError) return false;
+    // Bind results to the CURRENT account: during the account-switch window the hook still
+    // holds the previous address's chains until its effect re-runs — reject that as unsettled.
+    if (!address || !fetchedAddress || fetchedAddress !== address) return false;
     for (const chainId of SUPPORTED_CHAIN_IDS) {
       const chain = chains[chainId as SupportedChainId];
       if (!chain) return false; // not yet initialized for this address fetch
@@ -75,7 +78,7 @@ export default function HolderRewards() {
       if (!hasHeroEntry) return false;
     }
     return true;
-  }, [chains, balancesLoading, balancesError]);
+  }, [chains, address, fetchedAddress, balancesLoading, balancesError]);
   const balanceKnown = walletConnected && heroReadsSettled;
   const userBalance = !walletConnected
     ? "0"
