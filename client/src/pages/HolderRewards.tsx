@@ -57,13 +57,21 @@ export default function HolderRewards() {
   // Gate the decision on COMPLETED reads for the CURRENT address: the hook resets BOTH chain
   // entries to status 'loading' on every mount/address change (useWalletBalances.ts:223), so
   // requiring BOTH supported chain IDs to be present with a settled, non-error status proves
-  // the current address's reads finished. Empty/stale chains (missing entries) fail the gate.
+  // the current address's reads finished. Additionally, on a 'success' chain the HERO entry
+  // must be present (a successful-but-missing HERO read means the balanceOf multicall failed
+  // silently and was omitted — keep Checking). On a 'zero' chain all reads returned empty, so
+  // HERO=0 is confirmed.
   const heroReadsSettled = React.useMemo(() => {
     if (balancesLoading || balancesError) return false;
     for (const chainId of SUPPORTED_CHAIN_IDS) {
       const chain = chains[chainId as SupportedChainId];
       if (!chain) return false; // not yet initialized for this address fetch
       if (chain.status === "loading" || chain.status === "error") return false;
+      if (chain.status === "success") {
+        const hasHeroEntry = chain.tokens.some((t: any) => t.symbol === "HERO") || chain.nativeBalance?.symbol === "HERO";
+        if (!hasHeroEntry) return false; // HERO read failed silently on this chain
+      }
+      // status 'zero': all reads (incl. HERO) confirmed empty — a settled zero is a known value
     }
     return true;
   }, [chains, balancesLoading, balancesError]);
