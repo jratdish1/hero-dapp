@@ -115,6 +115,19 @@ jobs:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         run: node scripts/check-csp-routes.mjs
 
+      - name: Exercise HERO swap intent confirm gate
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 120s \
+            node scripts/check-swap-intent-confirm.mjs \
+            > swap-intent-e2e.log 2>&1
+          status=$?
+          cat swap-intent-e2e.log
+          exit "$status"
+
       - name: Exercise Radix dialog scroll lock under production CSP
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
@@ -127,7 +140,7 @@ jobs:
           node scripts/check-landing-bundle.mjs 2>&1 | tee landing-bundle-report.txt
 
       - name: Upload exact-head landing and recovery evidence
-        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json', 'scroll-lock-csp-report.json') != ''
+        if: always() && hashFiles('landing-bundle-report.txt', 'bootstrap-recovery.log', 'bootstrap-recovery-report.json', 'generic-error-focus.log', 'generic-error-focus-report.json', 'csp-contract-report.json', 'csp-browser-report.json', 'swap-intent-e2e.log', 'swap-intent-e2e-report.json', 'scroll-lock-csp-report.json') != ''
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: landing-evidence-${{ github.sha }}
@@ -139,6 +152,8 @@ jobs:
             generic-error-focus-report.json
             csp-contract-report.json
             csp-browser-report.json
+            swap-intent-e2e.log
+            swap-intent-e2e-report.json
             scroll-lock-csp-report.json
             dist/public/.vite/manifest.json
             dist/public/assets/DappBootstrap-*.js
