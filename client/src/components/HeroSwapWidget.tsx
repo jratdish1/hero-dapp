@@ -118,9 +118,11 @@ export default function HeroSwapWidget({
     else if (isPulseChain || chainId === 369) setActiveChain("pulsechain");
   }, [chainId, isBase, isPulseChain]);
 
-  // A chain change invalidates a prior review/confirmation. The user must review again.
+  // A chain change invalidates and removes the old review so route labels can never
+  // describe a different chain from the intent that was reviewed.
   useEffect(() => {
     if (!intentReview || activeChain === intentReview.chain) return;
+    setIntentReview(null);
     setIntentConfirmed(false);
     setIntentError("Chain changed after review. Review the intent again before continuing.");
   }, [activeChain, intentReview]);
@@ -130,6 +132,7 @@ export default function HeroSwapWidget({
   const primaryIntentDex = dexEntries[0]?.[1];
   const heroAddress = getHeroAddress(activeChain === "base" ? 8453 : 369) ?? "";
   const nativeToken = activeChain === "base" ? "ETH" : "PLS";
+  const intentReviewMatchesChain = intentReview?.chain === activeChain;
 
   const resetIntentReview = () => {
     setIntentReview(null);
@@ -166,6 +169,7 @@ export default function HeroSwapWidget({
       return;
     }
     if (status === "chain-changed") {
+      setIntentReview(null);
       setIntentConfirmed(false);
       setIntentError("Chain changed after review. Review the intent again before continuing.");
       return;
@@ -184,6 +188,7 @@ export default function HeroSwapWidget({
     if (status === "ready") return;
 
     event.preventDefault();
+    if (status === "chain-changed") setIntentReview(null);
     setIntentConfirmed(false);
     setIntentError(
       status === "expired"
@@ -303,7 +308,7 @@ export default function HeroSwapWidget({
             </div>
           )}
 
-          {intentReview && (
+          {intentReview && intentReviewMatchesChain && (
             <div className="space-y-2 rounded-md border border-border/60 bg-background/50 p-3" data-testid="swap-intent-review">
               <div className="flex items-center justify-between gap-3">
                 <div>
@@ -319,13 +324,13 @@ export default function HeroSwapWidget({
                   <div className="font-medium text-foreground">{primaryIntentDex?.name ?? "Unavailable"}</div>
                 </div>
                 <div className="rounded bg-secondary/40 px-2 py-1.5">
-                  <span className="text-muted-foreground">Max slippage setting</span>
+                  <span className="text-muted-foreground">Local slippage preference</span>
                   <div className="font-medium text-foreground">{slippage}%</div>
                 </div>
               </div>
 
               <p className="text-[10px] text-muted-foreground leading-relaxed">
-                This is a route preview, not an executable price quote. Final output, fees, spender, deadline, and transaction details must be reviewed in the selected DEX and again in your connected wallet.
+                This is a route preview, not an executable price quote. The local slippage preference is not transferred to the external DEX. Final output, fees, spender, deadline, slippage, transaction details, and wallet signature must be reviewed there.
               </p>
 
               {!intentConfirmed ? (
