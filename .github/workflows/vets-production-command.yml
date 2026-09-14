@@ -186,8 +186,8 @@ jobs:
             ' <<<"$jobs" >/dev/null
           }
 
-          require_workflow_run ci.yml test-build-scan
-          require_workflow_run security-and-quality.yml repository-safety
+          require_workflow_run ci.yml CI
+          require_workflow_run security-and-quality.yml "Security and Quality"
 
   deploy:
     name: Execute protected production workflow
