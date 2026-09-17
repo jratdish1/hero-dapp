@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 
 const STORAGE_KEY = "hero-dapp-intro-completed";
 const VIDEO_URL = "/hero-explainer-edited.mp4";
-const POSTER_URL = "/hero-explainer-poster.webp";
+const POSTER_URL = "/hero-soldier.webp"; // retarget: hero-explainer-poster.webp absent from client/public (404)
 const HERO_LOGO_URL = "/hero-soldier.webp";
 
 type Step = "video" | "disclaimer";
