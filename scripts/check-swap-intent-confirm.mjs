@@ -219,16 +219,18 @@ async function main() {
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
   });
-  const address = server.address();
-  if (!address || typeof address === 'string') throw new Error('Static server address missing');
 
-  const chromeBin = process.env.CHROME_BIN;
-  if (!chromeBin || !existsSync(chromeBin)) throw new Error('CHROME_BIN is required');
-  const chrome = await launchChrome(chromeBin);
-  const client = new Cdp(chrome.url);
-  await client.connect();
-
+  let chrome;
+  let client;
   try {
+    const address = server.address();
+    if (!address || typeof address === 'string') throw new Error('Static server address missing');
+
+    const chromeBin = process.env.CHROME_BIN;
+    if (!chromeBin || !existsSync(chromeBin)) throw new Error('CHROME_BIN is required');
+    chrome = await launchChrome(chromeBin);
+    client = new Cdp(chrome.url);
+    await client.connect();
     await Promise.all([
       client.send('Page.enable'),
       client.send('Runtime.enable'),
@@ -327,8 +329,8 @@ async function main() {
     writeFileSync(REPORT, `${JSON.stringify(result, null, 2)}\n`);
     console.log('HERO swap intent confirm browser gate: PASS');
   } finally {
-    client.close();
-    await chrome.close().catch(() => {});
+    if (client) client.close();
+    if (chrome) await chrome.close().catch(() => {});
     await new Promise(resolve => server.close(resolve));
   }
 }
