@@ -12,6 +12,7 @@ import {
   expectedWalletChainId,
   getIntentHandoffStatus,
   parseHeroSwapIntent,
+  walletChainIdForIntentHandoff,
   type HeroSwapIntent,
 } from "@/lib/swap-intent";
 import {
@@ -97,8 +98,16 @@ export default function HeroSwapWidget({
   showStats = true,
 }: HeroSwapWidgetProps) {
   const chainId = useChainId();
-  const { isConnected } = useAccount();
-  const { isBase, isPulseChain } = useNetwork();
+  const { isConnected, chainId: connectorChainId } = useAccount();
+  const { isBase, isPulseChain, isUnsupportedChain } = useNetwork();
+  // useChainId() stays on the last configured chain when the wallet moves to
+  // a network outside the wagmi config. Handoff must use the connector chain.
+  const intentWalletChainId = walletChainIdForIntentHandoff(
+    isConnected,
+    chainId,
+    isUnsupportedChain,
+    connectorChainId,
+  );
   const [activeChain, setActiveChain] = useState<"base" | "pulsechain">(
     isBase ? "base" : isPulseChain ? "pulsechain" : defaultChain,
   );
@@ -165,11 +174,15 @@ export default function HeroSwapWidget({
       return;
     }
 
-    if (isConnected && chainId !== expectedWalletChainId(parsed.chain)) {
+    if (
+      intentWalletChainId != null
+      && intentWalletChainId !== expectedWalletChainId(parsed.chain)
+    ) {
+      const observedChain = intentWalletChainId > 0 ? intentWalletChainId : "unsupported";
       setIntentReview(null);
       setIntentConfirmed(false);
       setIntentError(
-        `Connected wallet chainId ${chainId} does not match intent chain ${parsed.chain}. Switch network, then review again.`,
+        `Connected wallet chainId ${observedChain} does not match intent chain ${parsed.chain}. Switch network, then review again.`,
       );
       return;
     }
@@ -182,14 +195,14 @@ export default function HeroSwapWidget({
 
   const handleConfirmIntent = () => {
     if (!intentReview) return;
-    const status = getIntentHandoffStatus(intentReview, activeChain, false, Date.now(), isConnected ? chainId : null);
+    const status = getIntentHandoffStatus(intentReview, activeChain, false, Date.now(), intentWalletChainId);
     if (status === "expired") {
       setIntentConfirmed(false);
       setIntentError("Intent review expired. Review it again before continuing.");
       return;
     }
     if (status === "chain-changed" || status === "wallet-chain-mismatch") {
-      if (status === "chain-changed") setIntentReview(null);
+      setIntentReview(null);
       setIntentConfirmed(false);
       setIntentError(handoffBlockMessage(status));
       return;
@@ -204,11 +217,11 @@ export default function HeroSwapWidget({
       event.preventDefault();
       return;
     }
-    const status = getIntentHandoffStatus(intentReview, activeChain, intentConfirmed, Date.now(), isConnected ? chainId : null);
+    const status = getIntentHandoffStatus(intentReview, activeChain, intentConfirmed, Date.now(), intentWalletChainId);
     if (status === "ready") return;
 
     event.preventDefault();
-    if (status === "chain-changed") setIntentReview(null);
+    if (status === "chain-changed" || status === "wallet-chain-mismatch") setIntentReview(null);
     setIntentConfirmed(false);
     setIntentError(handoffBlockMessage(status));
   };

@@ -85,6 +85,37 @@ export function expectedWalletChainId(chain: HeroSwapChain): number {
   return chain === "base" ? 8453 : 369;
 }
 
+/**
+ * Chain id for intent review, confirm, and handoff.
+ *
+ * `configuredChainId` comes from wagmi `useChainId()` and only tracks chains
+ * in the wagmi config. After the wallet switches to an unconfigured network
+ * it keeps the previous id, which can still match the intent. Unsupported
+ * wallets use the connector chain instead, or a non-matching id when that
+ * chain is unknown, so the handoff fails closed.
+ */
+export function walletChainIdForIntentHandoff(
+  isConnected: boolean,
+  configuredChainId: number,
+  isUnsupportedChain: boolean,
+  connectorChainId?: number | null,
+): number | null {
+  if (!isConnected) return null;
+  if (isUnsupportedChain) {
+    // A connector id that still equals the configured id is the stale value
+    // useChainId() would report. Do not treat it as the wallet network.
+    if (
+      connectorChainId != null
+      && Number.isFinite(connectorChainId)
+      && connectorChainId !== configuredChainId
+    ) {
+      return connectorChainId;
+    }
+    return -1;
+  }
+  return configuredChainId;
+}
+
 export function getIntentHandoffStatus(
   intent: HeroSwapIntent,
   currentChain: HeroSwapChain,
