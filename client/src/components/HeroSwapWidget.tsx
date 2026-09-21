@@ -9,6 +9,7 @@ import { useNetwork } from "@/contexts/NetworkContext";
 import { getHeroAddress } from "@/lib/config";
 import {
   describeHeroSwapIntent,
+  expectedWalletChainId,
   getIntentHandoffStatus,
   parseHeroSwapIntent,
   type HeroSwapIntent,
@@ -140,6 +141,16 @@ export default function HeroSwapWidget({
     setIntentError(null);
   };
 
+
+  const handoffBlockMessage = (status: ReturnType<typeof getIntentHandoffStatus>) => {
+    if (status === "expired") return "Intent review expired. Review it again before continuing.";
+    if (status === "chain-changed") return "Chain changed after review. Review the intent again before continuing.";
+    if (status === "wallet-chain-mismatch") {
+      return "Connected wallet is on a different chain than this intent. Switch wallet network to match, then review again.";
+    }
+    return "Explicit confirmation is required before the intent handoff.";
+  };
+
   const handleIntentTextChange = (value: string) => {
     setIntentText(value);
     if (intentReview || intentConfirmed) resetIntentReview();
@@ -154,6 +165,15 @@ export default function HeroSwapWidget({
       return;
     }
 
+    if (isConnected && chainId !== expectedWalletChainId(parsed.chain)) {
+      setIntentReview(null);
+      setIntentConfirmed(false);
+      setIntentError(
+        `Connected wallet chainId ${chainId} does not match intent chain ${parsed.chain}. Switch network, then review again.`,
+      );
+      return;
+    }
+
     setActiveChain(parsed.chain);
     setIntentReview(parsed);
     setIntentConfirmed(false);
@@ -162,16 +182,16 @@ export default function HeroSwapWidget({
 
   const handleConfirmIntent = () => {
     if (!intentReview) return;
-    const status = getIntentHandoffStatus(intentReview, activeChain, false);
+    const status = getIntentHandoffStatus(intentReview, activeChain, false, Date.now(), isConnected ? chainId : null);
     if (status === "expired") {
       setIntentConfirmed(false);
       setIntentError("Intent review expired. Review it again before continuing.");
       return;
     }
-    if (status === "chain-changed") {
-      setIntentReview(null);
+    if (status === "chain-changed" || status === "wallet-chain-mismatch") {
+      if (status === "chain-changed") setIntentReview(null);
       setIntentConfirmed(false);
-      setIntentError("Chain changed after review. Review the intent again before continuing.");
+      setIntentError(handoffBlockMessage(status));
       return;
     }
 
@@ -184,19 +204,13 @@ export default function HeroSwapWidget({
       event.preventDefault();
       return;
     }
-    const status = getIntentHandoffStatus(intentReview, activeChain, intentConfirmed);
+    const status = getIntentHandoffStatus(intentReview, activeChain, intentConfirmed, Date.now(), isConnected ? chainId : null);
     if (status === "ready") return;
 
     event.preventDefault();
     if (status === "chain-changed") setIntentReview(null);
     setIntentConfirmed(false);
-    setIntentError(
-      status === "expired"
-        ? "Intent review expired. Review it again before continuing."
-        : status === "chain-changed"
-          ? "Chain changed after review. Review the intent again before continuing."
-          : "Explicit confirmation is required before the intent handoff.",
-    );
+    setIntentError(handoffBlockMessage(status));
   };
 
   return (
@@ -349,16 +363,23 @@ export default function HeroSwapWidget({
                     Confirmed. No transaction has been signed or broadcast.
                   </div>
                   {primaryIntentDex && (
-                    <a
-                      href={primaryIntentDex.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      onClick={guardIntentHandoff}
-                      className="flex w-full items-center justify-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-bold text-green-300 hover:bg-green-500/15"
-                      data-testid="swap-intent-handoff"
-                    >
-                      Continue to {primaryIntentDex.name} <ExternalLink className="h-3 w-3" />
-                    </a>
+                    <div className="space-y-2">
+                      <p className="text-[10px] text-muted-foreground leading-relaxed">
+                        Opens {primaryIntentDex.name} as a generic DEX link. Confirmed amount{" "}
+                        <span className="font-mono text-foreground">{intentReview.amountIn} {intentReview.fromToken}</span>{" "}
+                        is not prefilled into the destination URL — enter and verify it on the DEX before signing.
+                      </p>
+                      <a
+                        href={primaryIntentDex.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={guardIntentHandoff}
+                        className="flex w-full items-center justify-center gap-2 rounded-md border border-green-500/30 bg-green-500/10 px-3 py-2 text-xs font-bold text-green-300 hover:bg-green-500/15"
+                        data-testid="swap-intent-handoff"
+                      >
+                        Open {primaryIntentDex.name} (amount not prefilled) <ExternalLink className="h-3 w-3" />
+                      </a>
+                    </div>
                   )}
                 </div>
               )}

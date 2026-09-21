@@ -75,4 +75,17 @@ describe("HERO swap intent gate", () => {
       ),
     ).toBe("expired");
   });
+
+  it("fails closed when the connected wallet chainId mismatches the intent", () => {
+    const intent = expectIntent(
+      parseHeroSwapIntent("swap 0.01 ETH to HERO on BASE", "base", 30_000),
+    );
+
+    expect(getIntentHandoffStatus(intent, "base", true, 30_001, 369)).toBe(
+      "wallet-chain-mismatch",
+    );
+    expect(getIntentHandoffStatus(intent, "base", true, 30_001, 8453)).toBe("ready");
+    expect(getIntentHandoffStatus(intent, "base", true, 30_001, null)).toBe("ready");
+  });
 });
+

@@ -14,7 +14,8 @@ export type IntentHandoffStatus =
   | "needs-confirm"
   | "ready"
   | "expired"
-  | "chain-changed";
+  | "chain-changed"
+  | "wallet-chain-mismatch";
 
 export const HERO_SWAP_INTENT_TTL_MS = 2 * 60 * 1000;
 
@@ -80,13 +81,25 @@ export function parseHeroSwapIntent(
   };
 }
 
+export function expectedWalletChainId(chain: HeroSwapChain): number {
+  return chain === "base" ? 8453 : 369;
+}
+
 export function getIntentHandoffStatus(
   intent: HeroSwapIntent,
   currentChain: HeroSwapChain,
   confirmed: boolean,
   nowMs = Date.now(),
+  walletChainId?: number | null,
 ): IntentHandoffStatus {
   if (currentChain !== intent.chain) return "chain-changed";
+  if (
+    walletChainId != null
+    && Number.isFinite(walletChainId)
+    && walletChainId !== expectedWalletChainId(intent.chain)
+  ) {
+    return "wallet-chain-mismatch";
+  }
   if (nowMs >= intent.expiresAtMs) return "expired";
   return confirmed ? "ready" : "needs-confirm";
 }
