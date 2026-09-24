@@ -14,7 +14,8 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { erc20Abi, createPublicClient, http, fallback, formatUnits } from "viem";
+import { erc20Abi, createPublicClient, http, fallback, formatUnits, type PublicClient, type Transport } from "viem";
+import { base, pulsechain } from "viem/chains";
 import { useAccount } from "wagmi";
 import {
   CHAINS,
@@ -23,7 +24,7 @@ import {
   isSupportedChainId,
 } from "@/lib/config";
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────────────
 
 export type BalanceStatus = "unsupported" | "loading" | "error" | "zero" | "success";
 
@@ -62,20 +63,33 @@ export interface WalletBalances {
   refetch: () => void;
 }
 
-// ─── RPC Client Cache ─────────────────────────────────────────────────────────
+// ─── RPC Client Cache ─────────────────────────────────────────────────────────────────────
 
-const rpcClientCache: Record<number, ReturnType<typeof createPublicClient>> = {};
+const rpcClientCache: Partial<Record<number, PublicClient>> = {};
 
-function getChainClient(chainId: number): ReturnType<typeof createPublicClient> | null {
+/**
+ * viem chain objects carry the Multicall3 address (0xcA11…CA11 on Base and PulseChain).
+ * Without `chain`, `client.multicall` throws "client chain not configured. multicallAddress is
+ * required", so every ERC-20 balance read failed and the whole chain reported "error"
+ * (found in review 2026-09-24; regression test in useWalletBalances.test.ts).
+ */
+const VIEM_CHAINS = { 8453: base, 369: pulsechain } as const;
+
+export function createChainClient(chainId: 8453 | 369, transport: Transport): PublicClient {
+  return createPublicClient({ chain: VIEM_CHAINS[chainId], transport }) as PublicClient;
+}
+
+function getChainClient(chainId: number): PublicClient | null {
   if (!isSupportedChainId(chainId)) return null;
   if (rpcClientCache[chainId]) return rpcClientCache[chainId];
 
   const rpcs = getRPCs(chainId);
   if (!rpcs.length) return null;
 
-  const client = createPublicClient({
-    transport: fallback(rpcs.map((r) => http(r, { timeout: 10000, retryCount: 1 }))),
-  });
+  const client = createChainClient(
+    chainId,
+    fallback(rpcs.map((r) => http(r, { timeout: 10000, retryCount: 1 })))
+  );
   rpcClientCache[chainId] = client;
   return client;
 }
@@ -171,7 +185,7 @@ async function fetchChainBalances(
   }
 }
 
-// ─── Main Hook ────────────────────────────────────────────────────────────────
+// ─── Main Hook ────────────────────────────────────────────────────────────────────────────
 
 interface UseWalletBalancesOptions {
   /** If true, reads balances from both chains even if disconnected */
