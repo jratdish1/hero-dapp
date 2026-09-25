@@ -11,7 +11,6 @@
  * Unsupported chains: canMint = false, chainSupported = false.
  */
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
-import { parseEther } from 'viem';
 import { HERO_CARDS_ABI } from './heroCards-abi';
 import {
   getHeroCardsConfig,
@@ -19,10 +18,9 @@ import {
   getHeroCardsExplorerTxUrl,
   HERO_CARDS_MAX_SUPPLY,
   HERO_CARDS_MAX_PER_WALLET,
-  HERO_CARDS_MINT_PRICE_ETH,
-  HERO_CARDS_WHITELIST_PRICE_ETH,
   type HeroCardsChainConfig,
 } from './heroCards-config';
+import { readPrice, mintValueWei, formatPrice } from './heroCards-pricing';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export enum MintPhase {
@@ -91,6 +89,18 @@ export function useHeroCards() {
     chainId: chainId,
     query: { enabled: chainSupported },
   });
+
+  const { data: whitelistPriceRaw } = useReadContract({
+    address: contractAddress,
+    abi: HERO_CARDS_ABI,
+    functionName: 'whitelistPrice',
+    chainId: chainId,
+    query: { enabled: chainSupported },
+  });
+
+  // Payments are bound to the prices the contract reports. No read = no mint.
+  const mintPriceWei = readPrice(mintPriceRaw);
+  const whitelistPriceWei = readPrice(whitelistPriceRaw);
 
   // ─── User Stats ───────────────────────────────────────────────────────────
   const { data: userBalance } = useReadContract({
@@ -161,10 +171,10 @@ export function useHeroCards() {
     if (phase === MintPhase.CLOSED) {
       throw new Error('Minting is currently closed');
     }
-    const price = phase === MintPhase.WHITELIST
-      ? parseEther(HERO_CARDS_WHITELIST_PRICE_ETH)
-      : parseEther(HERO_CARDS_MINT_PRICE_ETH);
-    const totalValue = price * BigInt(quantity);
+    const totalValue = mintValueWei(
+      phase === MintPhase.WHITELIST ? whitelistPriceWei : mintPriceWei,
+      quantity,
+    );
 
     writeContract({
       address: contractAddress,
@@ -178,7 +188,7 @@ export function useHeroCards() {
 
   function whitelistMint(quantity: number, proof: `0x${string}`[]) {
     if (!address || !contractAddress || !chainSupported) return;
-    const totalValue = parseEther(HERO_CARDS_WHITELIST_PRICE_ETH) * BigInt(quantity);
+    const totalValue = mintValueWei(whitelistPriceWei, quantity);
 
     writeContract({
       address: contractAddress,
@@ -200,7 +210,10 @@ export function useHeroCards() {
   const holderTier = Number(holderTierRaw ?? 0) as HolderTier;
   const feeDiscount = Number(feeDiscountRaw ?? 0) / 100; // bps → %
   const remaining = HERO_CARDS_MAX_SUPPLY - Number(totalMinted ?? 0);
+  const activePriceWei = mintPhase === MintPhase.WHITELIST ? whitelistPriceWei : mintPriceWei;
+  const pricesLoaded = activePriceWei !== undefined;
   const canMint = chainSupported &&
+    pricesLoaded &&
     mintPhase !== MintPhase.CLOSED &&
     Number(userMinted ?? 0) < HERO_CARDS_MAX_PER_WALLET &&
     remaining > 0;
@@ -222,8 +235,9 @@ export function useHeroCards() {
     maxSupply: HERO_CARDS_MAX_SUPPLY,
     remaining,
     mintPhase,
-    mintPrice: HERO_CARDS_MINT_PRICE_ETH,
-    whitelistPrice: HERO_CARDS_WHITELIST_PRICE_ETH,
+    mintPrice: formatPrice(mintPriceWei),
+    whitelistPrice: formatPrice(whitelistPriceWei),
+    pricesLoaded,
 
     // User
     isConnected,
@@ -253,3 +267,4 @@ export function useHeroCards() {
     refetchMinted,
   };
 }
+

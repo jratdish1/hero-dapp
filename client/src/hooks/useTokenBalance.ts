@@ -22,6 +22,12 @@ export function useTokenBalance(
     },
   });
 
+  const erc20Enabled =
+    isConnected &&
+    !!walletAddress &&
+    !isNative &&
+    tokenAddress !== "0x0000000000000000000000000000000000000000";
+
   // ERC-20 balance
   const erc20Result = useReadContract({
     address: tokenAddress as Address,
@@ -29,13 +35,23 @@ export function useTokenBalance(
     functionName: "balanceOf",
     args: walletAddress ? [walletAddress] : undefined,
     chainId: chainId as 369 | 8453,
-    query: {
-      enabled:
-        isConnected &&
-        !!walletAddress &&
-        !isNative &&
-        tokenAddress !== "0x0000000000000000000000000000000000000000",
-    },
+    query: { enabled: erc20Enabled },
+  });
+
+  // Real token metadata. Tokens are not all 18 decimals (e.g. USDC = 6).
+  const decimalsResult = useReadContract({
+    address: tokenAddress as Address,
+    abi: erc20Abi,
+    functionName: "decimals",
+    chainId: chainId as 369 | 8453,
+    query: { enabled: erc20Enabled, staleTime: Infinity },
+  });
+  const symbolResult = useReadContract({
+    address: tokenAddress as Address,
+    abi: erc20Abi,
+    functionName: "symbol",
+    chainId: chainId as 369 | 8453,
+    query: { enabled: erc20Enabled, staleTime: Infinity },
   });
 
   if (isNative || tokenAddress === "0x0000000000000000000000000000000000000000") {
@@ -49,14 +65,23 @@ export function useTokenBalance(
     };
   }
 
+  const decimals = resolveTokenDecimals(decimalsResult.data);
   return {
-    balance: erc20Result.data as bigint | undefined,
-    decimals: 18, // default; caller can override
-    symbol: "",
-    isLoading: erc20Result.isLoading,
-    isError: erc20Result.isError,
+    // Never format a balance with a guessed decimals value: hide it until decimals() is known.
+    balance: decimals === undefined ? undefined : (erc20Result.data as bigint | undefined),
+    decimals: decimals ?? 18,
+    decimalsKnown: decimals !== undefined,
+    symbol: (symbolResult.data as string | undefined) ?? "",
+    isLoading: erc20Result.isLoading || decimalsResult.isLoading,
+    isError: erc20Result.isError || decimalsResult.isError,
     refetch: erc20Result.refetch,
   };
+}
+
+/** Accept only a sane ERC-20 decimals() result (0..36); anything else is "unknown". */
+export function resolveTokenDecimals(raw: unknown): number | undefined {
+  const n = typeof raw === "bigint" ? Number(raw) : raw;
+  return typeof n === "number" && Number.isInteger(n) && n >= 0 && n <= 36 ? n : undefined;
 }
 
 /**
