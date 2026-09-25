@@ -41,7 +41,6 @@ const EcosystemDirectory = React.lazy(() => import("./pages/EcosystemDirectory")
 const DexAnalytics = React.lazy(() => import("./pages/DexAnalytics"));
 const BuyAndBurn = React.lazy(() => import("./pages/BuyAndBurn"));
 const NFTMint = React.lazy(() => import("./pages/NFTMint"));
-const DAOProposals = React.lazy(() => import("./pages/DAOProposals"));
 const Giveaways = React.lazy(() => import("./pages/Giveaways"));
 const HolderRewards = React.lazy(() => import("./pages/HolderRewards"));
 const SpinWheel = React.lazy(() => import("./pages/SpinWheel"));
@@ -127,7 +126,8 @@ function Router() {
       <Route path="/dex-analytics" component={withLayout(DexAnalytics)} />
       <Route path="/burn" component={withLayout(BuyAndBurn)} />
       <Route path="/nft-mint" component={withLayout(NFTMint)} />
-      <Route path="/dao-proposals" component={withLayout(DAOProposals)} />
+      {/* Legacy simulated-vote page retired: DAO is advisory-only (#76). */}
+      <Route path="/dao-proposals"><Redirect to="/dao/proposals" /></Route>
       <Route path="/giveaways" component={withLayout(Giveaways)} />
       <Route path="/holder-rewards" component={withLayout(HolderRewards)} />
       <Route path="/spin" component={withLayout(SpinWheel)} />
@@ -191,3 +191,4 @@ function App() {
   );
 }
 export default App;
+
