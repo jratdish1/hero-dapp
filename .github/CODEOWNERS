@@ -1,0 +1,7 @@
+# Security Patrol stopgap: owner review required for CI/workflow and repo-config changes.
+# Ryze's GitHub App holds workflows:write + actions:write, so any workflow edits on
+# feature branches must get owner review before merge.
+/.github/ @jratdish1
+/.github/workflows/ @jratdish1
+/CODEOWNERS @jratdish1
+/.github/CODEOWNERS @jratdish1
