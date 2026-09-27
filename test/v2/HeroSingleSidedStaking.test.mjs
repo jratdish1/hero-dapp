@@ -148,6 +148,7 @@ describe("HeroSingleSidedStaking", function () {
     it("only owner can fund; zero reward rejected", async function () {
       await expect(staking.connect(alice).notifyRewardAmount(E(1)))
         .to.be.revertedWithCustomError(staking, "OwnableUnauthorizedAccount");
+      // No funding and no surplus -> nothing to stream.
       await expect(staking.notifyRewardAmount(0)).to.be.revertedWithCustomError(staking, "ZeroAmount");
     });
 
@@ -239,6 +240,46 @@ describe("HeroSingleSidedStaking", function () {
       expect(accruedUnpaid).to.equal(0n);
       expect(scheduled).to.equal(0n);
       expect(unallocated).to.be.closeTo(E(700), E(1));
+    });
+
+    // Audit M-1 regression: stranded HERO must be recyclable to stakers, never to the owner.
+    it("notify(0) recycles rewards stranded during a zero-staker period", async function () {
+      await fund(E(700));
+      await increase(WEEK + 1);
+      await stake(alice, E(1_000));
+      const ownerBefore = await hero.balanceOf(owner.address);
+      await expect(staking.notifyRewardAmount(0)).to.emit(staking, "SurplusRecycled");
+      expect(await hero.balanceOf(owner.address)).to.equal(ownerBefore); // owner took nothing
+      await increase(WEEK + 1);
+      expect(await staking.earned(alice.address)).to.be.closeTo(E(700), E(1));
+      await staking.connect(alice).exit();
+      expect(await hero.balanceOf(await staking.getAddress())).to.be.lt(E(1));
+    });
+
+    it("notify(0) recycles HERO donated directly to the contract", async function () {
+      await stake(alice, E(1_000));
+      await hero.connect(bob).transfer(await staking.getAddress(), E(350));
+      await expect(staking.notifyRewardAmount(0))
+        .to.emit(staking, "SurplusRecycled").withArgs(E(350));
+      await increase(WEEK + 1);
+      expect(await staking.earned(alice.address)).to.be.closeTo(E(350), E(1));
+      await assertSolvent();
+    });
+
+    it("notify(0) with no surplus reverts; principal is never recycled", async function () {
+      await stake(alice, E(50_000));
+      await expect(staking.notifyRewardAmount(0)).to.be.revertedWithCustomError(staking, "ZeroAmount");
+      expect(await staking.rewardRate()).to.equal(0n);
+    });
+
+    it("new funding plus surplus are streamed together; solvency holds", async function () {
+      await stake(alice, E(1_000));
+      await hero.connect(bob).transfer(await staking.getAddress(), E(100));
+      await fund(E(700));
+      expect((await staking.rewardRate()) * BigInt(WEEK)).to.be.closeTo(E(800), E(1));
+      await assertSolvent();
+      const [, , , , unallocated] = await staking.rewardReserveStatus();
+      expect(unallocated).to.be.lt(E(1));
     });
   });
 

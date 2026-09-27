@@ -73,6 +73,7 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
     event RewardPaid(address indexed user, uint256 reward);
     event RewardsDurationUpdated(uint256 newDuration);
     event Recovered(address indexed token, uint256 amount);
+    event SurplusRecycled(uint256 amount);
 
     // ─── Errors ───────────────────────────────────────────────────────────────
     error ZeroAddress();
@@ -256,35 +257,40 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
 
     // ─── Owner: reward funding ────────────────────────────────────────────────
     /**
-     * @notice Pull `reward` HERO from the caller and stream it (plus any leftover of the
-     *         current period) over rewardsDuration.
+     * @notice Pull `reward` HERO from the caller (0 allowed) and stream it, plus any leftover
+     *         of the current period and any unallocated HERO, over rewardsDuration.
      * @dev    Reverts unless balance >= principal + accrued-unpaid + new full schedule.
-     *         Staked principal can therefore never be promised as rewards.
+     *         Staked principal can therefore never be promised as rewards. Calling with 0
+     *         recycles stranded HERO (donations, zero-staker periods, dust) to stakers.
      */
     function notifyRewardAmount(uint256 reward) external onlyOwner nonReentrant updateReward(address(0)) {
-        if (reward == 0) revert ZeroAmount();
-
-        uint256 before = hero.balanceOf(address(this));
-        hero.safeTransferFrom(msg.sender, address(this), reward);
-        uint256 received = hero.balanceOf(address(this)) - before;
-        if (received == 0) revert ZeroAmount();
-
-        uint256 newRate;
-        if (block.timestamp >= periodFinish) {
-            newRate = received / rewardsDuration;
-        } else {
-            uint256 leftover = (periodFinish - block.timestamp) * rewardRate;
-            newRate = (received + leftover) / rewardsDuration;
+        uint256 received;
+        if (reward != 0) {
+            uint256 before = hero.balanceOf(address(this));
+            hero.safeTransferFrom(msg.sender, address(this), reward);
+            received = hero.balanceOf(address(this)) - before;
+            if (received == 0) revert ZeroAmount();
         }
+
+        // Everything above principal + accrued-unpaid + the remaining schedule is unallocated
+        // (new funding, direct donations, rewards streamed while nobody was staked, rounding
+        // dust). It is streamed to stakers. It can never go to the owner.
+        uint256 leftover = block.timestamp < periodFinish ? (periodFinish - block.timestamp) * rewardRate : 0;
+        uint256 obligations = _totalSupply + (totalRewardsAccrued - totalRewardsPaid) + leftover;
+        uint256 balance = hero.balanceOf(address(this));
+        uint256 unallocated = balance > obligations ? balance - obligations : 0;
+
+        uint256 newRate = (leftover + unallocated) / rewardsDuration;
         if (newRate == 0) revert ZeroAmount();
 
+        // Defence in depth: principal is never promised as rewards.
         uint256 required = _totalSupply + (totalRewardsAccrued - totalRewardsPaid) + newRate * rewardsDuration;
-        uint256 available = hero.balanceOf(address(this));
-        if (required > available) revert RewardTooHigh(required, available);
+        if (required > balance) revert RewardTooHigh(required, balance);
 
         rewardRate = newRate;
         lastUpdateTime = block.timestamp;
         periodFinish = block.timestamp + rewardsDuration;
+        if (unallocated > received) emit SurplusRecycled(unallocated - received);
         emit RewardAdded(received, newRate, periodFinish);
     }
 
