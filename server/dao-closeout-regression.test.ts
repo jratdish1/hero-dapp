@@ -98,4 +98,30 @@ describe("DAO exact-head closeout regressions", () => {
     expect(lockfile).not.toContain("ip-address@10.3.1:");
     expect(lockfile).not.toContain("ip-address@10.2.0:");
   });
+
+  it("pins the reviewed adm-zip security release in manifest and lockfile", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const lockfile = readFileSync("pnpm-lock.yaml", "utf8");
+    expect(manifest.pnpm?.overrides?.["adm-zip"]).toBe("0.6.1");
+    expect(lockfile).toContain("adm-zip: 0.6.1");
+    expect(lockfile).toContain("adm-zip@0.6.1:");
+    expect(lockfile).toContain("sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==");
+    expect(lockfile).not.toContain("adm-zip@0.4.16:");
+    expect(lockfile).not.toContain("adm-zip@0.5.");
+  });
+
+  it("pins the reviewed undici security release in manifest and lockfile", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const lockfile = readFileSync("pnpm-lock.yaml", "utf8");
+    expect(manifest.pnpm?.overrides?.["undici"]).toBe("6.28.1");
+    expect(lockfile).toContain("undici: 6.28.1");
+    expect(lockfile).toContain("undici@6.28.1:");
+    expect(lockfile).toContain("sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==");
+    expect(lockfile).not.toContain("undici@6.27.0:");
+    expect(lockfile).not.toContain("undici@6.21.");
+  });
 });
