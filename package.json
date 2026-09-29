@@ -154,6 +154,8 @@
       "lodash-es": ">=4.17.24",
       "ws": ">=8.21.0",
       "ip-address": "10.5.1",
+      "adm-zip": "0.6.1",
+      "undici": "6.28.1",
       "dompurify": ">=3.4.13",
       "mdast-util-to-hast": ">=13.2.1",
       "mermaid": ">=11.16.1",

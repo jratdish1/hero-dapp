@@ -21,6 +21,8 @@ overrides:
   lodash-es: '>=4.17.24'
   ws: '>=8.21.0'
   ip-address: 10.5.1
+  adm-zip: 0.6.1
+  undici: 6.28.1
   dompurify: '>=3.4.13'
   mdast-util-to-hast: '>=13.2.1'
   mermaid: '>=11.16.1'
@@ -2823,9 +2825,9 @@ packages:
   add@2.0.6:
     resolution: {integrity: sha512-j5QzrmsokwWWp6kUcJQySpbG+xfOBqqKnup3OIk1pz+kB/80SLorZ9V8zHFLO92Lcd+hbvq8bT+zOGoPkmBV0Q==}
 
-  adm-zip@0.4.16:
-    resolution: {integrity: sha512-TFi4HBKSGfIKsK5YCkKaaFG2m4PEDyViZmEwof3MTIgzimHLto6muaHVpbrljdIvIrFZzEq/p4nafOeLcYegrg==}
-    engines: {node: '>=0.3.0'}
+  adm-zip@0.6.1:
+    resolution: {integrity: sha512-Xwrja8nx9e5o2N1my4DsKCeKpdrnACyr1wtbPxBDgGzKzKyE9kRtBFA8mWldI+RVlD7CBZNWY/wQ2+ydwOR6kQ==}
+    engines: {node: '>=14.0'}
 
   aes-js@4.0.0-beta.5:
     resolution: {integrity: sha512-G965FqalsNyrPqgEGON7nIx1e/OVENSgiEIzyC63haUMuvNnwIgIjMs52hlTCKhkBny7A2ORNlfY9Zu+jmGk1Q==}
@@ -5479,10 +5481,6 @@ packages:
   undici-types@7.14.0:
     resolution: {integrity: sha512-QQiYxHuyZ9gQUIrmPo3IA+hUl4KYk8uSA7cHrcKd/l3p1OTpZcM0Tbp9x7FAtXdAYhlasd60ncPpgu6ihG6TOA==}
 
-  undici@6.27.0:
-    resolution: {integrity: sha512-YmfV3YnEDzXRC5lZ2jWtWWHKGUm1zIt8AhesR1tens+HTNv+YZlN/dp6G727LOvMJ8xjP9Be7Y2Sdr96LDm+pg==}
-    engines: {node: '>=18.17'}
-
   undici@6.28.1:
     resolution: {integrity: sha512-zWpdTVD54H48CIybL0rWQ3ukpb9d23wM7eH5RtfdmeP70cWHNjtfo7P4vZX+5CoDcO53J4Pu5uXp7lNfjc6DRA==}
     engines: {node: '>=18.17'}
@@ -7146,7 +7144,7 @@ snapshots:
       fast-equals: 5.4.0
       json-stream-stringify: 3.1.6
       rfdc: 1.4.1
-      undici: 6.27.0
+      undici: 6.28.1
 
   '@nomicfoundation/hardhat-utils@4.1.9':
     dependencies:
@@ -9068,7 +9066,7 @@ snapshots:
 
   add@2.0.6: {}
 
-  adm-zip@0.4.16: {}
+  adm-zip@0.6.1: {}
 
   aes-js@4.0.0-beta.5: {}
 
@@ -10154,7 +10152,7 @@ snapshots:
       '@nomicfoundation/hardhat-zod-utils': 3.0.5(zod@3.25.76)
       '@nomicfoundation/solidity-analyzer': 0.1.2
       '@sentry/core': 9.47.1
-      adm-zip: 0.4.16
+      adm-zip: 0.6.1
       chokidar: 4.0.3
       enquirer: 2.4.1
       ethereum-cryptography: 2.2.1
@@ -12035,8 +12033,6 @@ snapshots:
   undici-types@6.19.8: {}
 
   undici-types@7.14.0: {}
-
-  undici@6.27.0: {}
 
   undici@6.28.1: {}
 
