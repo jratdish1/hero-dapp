@@ -91,10 +91,11 @@ describe("DAO exact-head closeout regressions", () => {
       pnpm?: { overrides?: Record<string, string> };
     };
     const lockfile = readFileSync("pnpm-lock.yaml", "utf8");
-    expect(manifest.pnpm?.overrides?.["ip-address"]).toBe("10.3.1");
-    expect(lockfile).toContain("ip-address: 10.3.1");
-    expect(lockfile).toContain("ip-address@10.3.1:");
-    expect(lockfile).toContain("sha512-1e9d3kb97NHJTIJDZW9rKqW2h6+dFa50Dy0fpPSMQp2ADje5gvKsXmdiK6dwY5t76TaTt5+P5N1Y/LoToIxP6g==");
+    expect(manifest.pnpm?.overrides?.["ip-address"]).toBe("10.5.1");
+    expect(lockfile).toContain("ip-address: 10.5.1");
+    expect(lockfile).toContain("ip-address@10.5.1:");
+    expect(lockfile).toContain("sha512-EXujUp9jyOI/chPgtqk6uy7fDq8AeCB/WlfEuPg9LN0fN9lzKAKfuDYi60SMhHwgUiEhZvVYsbGZN+RUU1INiA==");
+    expect(lockfile).not.toContain("ip-address@10.3.1:");
     expect(lockfile).not.toContain("ip-address@10.2.0:");
   });
 });
