@@ -20,7 +20,7 @@ overrides:
   lodash: '>=4.17.23'
   lodash-es: '>=4.17.24'
   ws: '>=8.21.0'
-  ip-address: 10.5.1
+  ip-address: 10.7.1
   adm-zip: 0.6.1
   undici: 6.28.1
   dompurify: '>=3.4.16'
@@ -36,6 +36,7 @@ overrides:
   body-parser@<1.20.6: 1.20.6
   bn.js@<4.12.3: ^4.12.3
   bn.js@>=5.0.0 <5.2.3: ^5.2.5
+  brace-expansion@>=2.0.0 <2.1.7: 2.1.7
 
 patchedDependencies:
   wouter@3.7.1:
@@ -2950,8 +2951,8 @@ packages:
   brace-expansion@1.1.21:
     resolution: {integrity: sha512-9zeA+KLZNNzglF2TPKRQEDyx6Yby7daAkuy8MiPzpXPsYDWi/DRM8jmwUDxokQjYqBpv5DgPiwD4h4ZZSy1Ujw==}
 
-  brace-expansion@2.1.1:
-    resolution: {integrity: sha512-WR1cURNjuvBLMZBMbqM0UoE+WAfdUcEV1ccD8PVBVOI+Z3ND4+SZbN8RsfT2bMuG1qwz5RFvPukSZm5fF2D5eA==}
+  brace-expansion@2.1.7:
+    resolution: {integrity: sha512-uZbew1NqdmPDTMJ8ah1y+b+9QEJrfkXFk3RcTQw3X0jW/xRUvFKsg1CfQdSYGdTbXZWExtU3J3ccxtnfw1Fi0g==}
 
   brorand@1.1.0:
     resolution: {integrity: sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==}
@@ -4082,8 +4083,8 @@ packages:
     resolution: {integrity: sha512-5Hh7Y1wQbvY5ooGgPbDaL5iYLAPzMTUrjMulskHLH6wnv/A+1q5rgEaiuqEjB+oxGXIVZs1FF+R/KPN3ZSQYYg==}
     engines: {node: '>=12'}
 
-  ip-address@10.5.1:
-    resolution: {integrity: sha512-EXujUp9jyOI/chPgtqk6uy7fDq8AeCB/WlfEuPg9LN0fN9lzKAKfuDYi60SMhHwgUiEhZvVYsbGZN+RUU1INiA==}
+  ip-address@10.7.1:
+    resolution: {integrity: sha512-4OUAqU9Z1i3vCnS05hzGiFnEMDpQ+62pAD/MVQOp83fYyNC8GleCqaS0QikQBmcWCrKFiUs/B8ztRRiYOAXuCA==}
     engines: {node: '>= 12'}
 
   ipaddr.js@1.9.1:
@@ -9183,7 +9184,7 @@ snapshots:
       balanced-match: 1.0.2
       concat-map: 0.0.1
 
-  brace-expansion@2.1.1:
+  brace-expansion@2.1.7:
     dependencies:
       balanced-match: 1.0.2
 
@@ -9919,7 +9920,7 @@ snapshots:
   express-rate-limit@8.3.2(express@4.21.2):
     dependencies:
       express: 4.21.2
-      ip-address: 10.5.1
+      ip-address: 10.7.1
 
   express@4.21.2:
     dependencies:
@@ -10387,7 +10388,7 @@ snapshots:
 
   internmap@2.0.3: {}
 
-  ip-address@10.5.1: {}
+  ip-address@10.7.1: {}
 
   ipaddr.js@1.9.1: {}
 
@@ -11043,7 +11044,7 @@ snapshots:
 
   minimatch@9.0.9:
     dependencies:
-      brace-expansion: 2.1.1
+      brace-expansion: 2.1.7
 
   minimist@1.2.8: {}
 
