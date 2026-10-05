@@ -156,7 +156,7 @@
       "ip-address": "10.5.1",
       "adm-zip": "0.6.1",
       "undici": "6.28.1",
-      "dompurify": ">=3.4.13",
+      "dompurify": ">=3.4.16",
       "mdast-util-to-hast": ">=13.2.1",
       "mermaid": ">=11.16.1",
       "esbuild": ">=0.28.1",
