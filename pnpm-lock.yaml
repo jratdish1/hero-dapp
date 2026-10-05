@@ -28,7 +28,7 @@ overrides:
   mermaid: '>=11.16.1'
   esbuild: '>=0.28.1'
   postcss: '>=8.5.18'
-  axios: 1.18.1
+  axios: 1.20.0
   path-to-regexp: 0.1.13
   form-data: '>=4.0.6'
   serialize-javascript: '>=7.0.5'
@@ -173,8 +173,8 @@ importers:
         specifier: 2.7.0
         version: 2.7.0(@types/react@19.2.1)(react@19.2.1)
       axios:
-        specifier: 1.18.1
-        version: 1.18.1
+        specifier: 1.20.0
+        version: 1.20.0
       class-variance-authority:
         specifier: ^0.7.1
         version: 0.7.1
@@ -2910,8 +2910,8 @@ packages:
     resolution: {integrity: sha512-NZKeq9AfyQvEeNlN0zSYAaWrmBffJh3IELMZfRpJVWgrpEbtEpnjvzqBPf+mxoI287JohRDoa+/nsfqqiZmF6g==}
     engines: {node: '>= 6.0.0'}
 
-  axios@1.18.1:
-    resolution: {integrity: sha512-3nTvFlvpn9Zu/RkHUqtc7/+al4UpRW5az71ap5zccp6e8RAYEzhMTecX8Dz1wWDYrPpUoB1HAQEGEAEvUr7S9g==}
+  axios@1.20.0:
+    resolution: {integrity: sha512-r8aOh8j9cGKpgQAqpzrUHnSIc6a59Y3Xf/cv8sy1DrHCkZHzQGEuoq1tARk6qSyDdtQGSDgpb9kFlruzPvrgwg==}
 
   bail@2.0.2:
     resolution: {integrity: sha512-0xO6mYd7JB2YesxDKplafRpsiOzPt9V02ddPCLbY1xYGPOX24NTyN50qnUxgCPcSoYMhKpAuBTjQoRZCAkUDRw==}
@@ -9133,7 +9133,7 @@ snapshots:
 
   aws-ssl-profiles@1.1.2: {}
 
-  axios@1.18.1:
+  axios@1.20.0:
     dependencies:
       follow-redirects: 1.16.0
       form-data: 4.0.6
