@@ -169,7 +169,13 @@
       "protobufjs@<7.6.5": "7.6.5",
       "body-parser@<1.20.6": "1.20.6",
       "bn.js@<4.12.3": "^4.12.3",
-      "bn.js@>=5.0.0 <5.2.3": "^5.2.5"
+      "bn.js@>=5.0.0 <5.2.3": "^5.2.5",
+      "postcss-selector-parser": ">=7.1.6",
+      "source-map-js": ">=1.2.2",
+      "katex": ">=0.18.2",
+      "brace-expansion@>=2.0.0 <2.1.7": "2.1.7",
+      "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
+      "browserslist": ">=4.28.7"
     },
     "ignoredBuiltDependencies": [
       "@tailwindcss/oxide",
