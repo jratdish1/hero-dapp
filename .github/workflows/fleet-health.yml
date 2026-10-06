@@ -103,29 +103,6 @@ jobs:
               fi
             HEALTHCHECK
 
-      - name: VPS2 Health Check (if accessible)
-        if: always()
-        uses: appleboy/ssh-action@v1.0.3
-        continue-on-error: true
-        with:
-          host: ${{ secrets.VDS_HOST }}
-          username: root
-          key: ${{ secrets.VDS_SSH_KEY }}
-          script: |
-            ssh root@62.146.179.233 << 'VPS2CHECK' 2>/dev/null || echo "VPS2 not accessible from VDS"
-              echo "========================================="
-              echo "  VPS2 HEALTH CHECK"
-              echo "========================================="
-              pm2 list 2>/dev/null || echo "PM2 not installed"
-              echo ""
-              echo "--- Git Repos ---"
-              for dir in /var/www/*; do
-                if [ -d "$dir/.git" ]; then
-                  echo "$dir: $(cd $dir && git log --oneline -1)"
-                fi
-              done
-            VPS2CHECK
-
       - name: VDS Health Check
         if: always()
         uses: appleboy/ssh-action@v1.0.3
