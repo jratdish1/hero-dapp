@@ -124,4 +124,23 @@ describe("DAO exact-head closeout regressions", () => {
     expect(lockfile).not.toContain("undici@6.27.0:");
     expect(lockfile).not.toContain("undici@6.21.");
   });
+
+  it("pins the reviewed proxy-addr and compression security releases in manifest and lockfile", () => {
+    const manifest = JSON.parse(readFileSync("package.json", "utf8")) as {
+      dependencies?: Record<string, string>;
+      pnpm?: { overrides?: Record<string, string> };
+    };
+    const lockfile = readFileSync("pnpm-lock.yaml", "utf8");
+    // GHSA-jqcg-44mw-7w3h: express -> proxy-addr <2.0.8 (critical)
+    expect(manifest.pnpm?.overrides?.["proxy-addr"]).toBe("2.0.8");
+    expect(lockfile).toContain("proxy-addr: 2.0.8");
+    expect(lockfile).toContain("proxy-addr@2.0.8:");
+    expect(lockfile).toContain("sha512-5nnx0yGyVUcY6t9RnWcARWtwT9F1D8O9rt08htPvnd49W1IgZtmLkhu9WfMzQj1cFxjHIO6connUNVW5k7AVyQ==");
+    expect(lockfile).not.toContain("proxy-addr@2.0.7:");
+    // GHSA-vc2v-76pw-4v95: compression <1.8.2 (high)
+    expect(manifest.dependencies?.["compression"]).toBe("^1.8.2");
+    expect(lockfile).toContain("compression@1.8.2:");
+    expect(lockfile).toContain("sha512-o8vI5RE5A6EVVOd9o41jKp41aJom+QTEO/Bx8MYNjexMo/Bv2WOjUfZr+aL0WnYSgymUy6zeguqLTsIhV0gMvQ==");
+    expect(lockfile).not.toContain("compression@1.8.1:");
+  });
 });
