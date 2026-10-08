@@ -12,6 +12,7 @@ import FloatingSocial from "./components/FloatingSocial";
 // Critical path: Home loads eagerly (landing page)
 import Home from "./pages/Home";
 import NotFound from "@/pages/NotFound";
+import { HERO_INCIDENT_MAINTENANCE } from "./lib/incident-flags";
 
 // Lazy-loaded pages (code-split chunks loaded on demand)
 const LoginPage = React.lazy(() => import("./pages/LoginPage"));
@@ -55,6 +56,20 @@ const CreateProposal = React.lazy(() => import("./pages/dao").then(m => ({ defau
 const Treasury = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Treasury })));
 const Delegates = React.lazy(() => import("./pages/dao").then(m => ({ default: m.Delegates })));
 const DaoDashboard = React.lazy(() => import("./pages/dao").then(m => ({ default: m.DaoDashboard })));
+const IncidentMaintenancePage = React.lazy(() => import("./components/IncidentMaintenancePage"));
+
+// Incident kill-switch: while maintenance is on, every route that can start a
+// wallet write, signature, or approval renders the maintenance page (titled
+// with the paused feature) instead of the feature itself.
+function paused(
+  Page: React.LazyExoticComponent<React.ComponentType<any>>,
+  feature: string,
+): React.ComponentType<any> {
+  if (!HERO_INCIDENT_MAINTENANCE) return Page;
+  return function PausedFeature() {
+    return <IncidentMaintenancePage feature={feature} />;
+  };
+}
 
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
@@ -69,7 +84,7 @@ function PageLoader() {
 }
 
 // Route wrapper with Suspense for lazy-loaded pages
-function withLayout(Page: React.LazyExoticComponent<React.ComponentType<any>>) {
+function withLayout(Page: React.ComponentType<any>) {
   return function LayoutWrapped() {
     return (
       <Suspense fallback={<PageLoader />}>
@@ -96,15 +111,16 @@ function Router() {
     <Switch>
       <Route path="/login" component={withSuspense(LoginPage)} />
       <Route path="/" component={Home} />
+      {/* /swap stays reachable: it performs no in-app wallet write (external DEX handoff links only) and shows the incident banner. */}
       <Route path="/swap" component={withLayout(Swap)} />
-      <Route path="/wallet" component={withLayout(HeroWallet)} />
+      <Route path="/wallet" component={withLayout(paused(HeroWallet, "HERO Wallet"))} />
       <Route path="/portfolio" component={withLayout(Portfolio)} />
       <Route path="/dashboard" component={withLayout(Dashboard)} />
-      <Route path="/dca" component={withLayout(DcaOrders)} />
-      <Route path="/limits" component={withLayout(LimitOrders)} />
-      <Route path="/approvals" component={withLayout(Approvals)} />
-      <Route path="/bootcamp" component={withLayout(Farm)} />
-      <Route path="/stake" component={withLayout(Stake)} />
+      <Route path="/dca" component={withLayout(paused(DcaOrders, "DCA Orders"))} />
+      <Route path="/limits" component={withLayout(paused(LimitOrders, "Limit Orders"))} />
+      <Route path="/approvals" component={withLayout(paused(Approvals, "Token Approvals"))} />
+      <Route path="/bootcamp" component={withLayout(paused(Farm, "Boot Camp"))} />
+      <Route path="/stake" component={withLayout(paused(Stake, "HERO Stake"))} />
       <Route path="/media" component={withLayout(MediaHub)} />
       <Route path="/ai" component={withLayout(AiAssistant)} />
       <Route path="/tokenomics" component={withLayout(Tokenomics)} />
@@ -112,25 +128,25 @@ function Router() {
       <Route path="/ecosystem" component={withLayout(Ecosystem)} />
       <Route path="/community" component={withLayout(Blog)} />
       <Route path="/community-hub" component={withLayout(CommunityHub)} />
-      <Route path="/dao" component={withLayout(DaoDashboard)} />
-      <Route path="/dao/proposals" component={withLayout(Proposals)} />
-      <Route path="/dao/proposals/create" component={withLayout(CreateProposal)} />
-      <Route path="/dao/proposals/:id" component={withLayout(ProposalDetail)} />
-      <Route path="/dao/treasury" component={withLayout(Treasury)} />
-      <Route path="/dao/delegates" component={withLayout(Delegates)} />
-      <Route path="/stake/base" component={withLayout(BaseStake)} />
-      <Route path="/stake/dai" component={withLayout(HeroStake)} />
-      <Route path="/bots" component={withLayout(AbleBots)} />
+      <Route path="/dao" component={withLayout(paused(DaoDashboard, "HERO Advisory Governance"))} />
+      <Route path="/dao/proposals" component={withLayout(paused(Proposals, "DAO Proposals"))} />
+      <Route path="/dao/proposals/create" component={withLayout(paused(CreateProposal, "Create DAO Proposal"))} />
+      <Route path="/dao/proposals/:id" component={withLayout(paused(ProposalDetail, "DAO Proposal Voting"))} />
+      <Route path="/dao/treasury" component={withLayout(paused(Treasury, "DAO Treasury"))} />
+      <Route path="/dao/delegates" component={withLayout(paused(Delegates, "DAO Delegates"))} />
+      <Route path="/stake/base" component={withLayout(paused(BaseStake, "HERO Stake (Base)"))} />
+      <Route path="/stake/dai" component={withLayout(paused(HeroStake, "HERO Stake → DAI"))} />
+      <Route path="/bots" component={withLayout(paused(AbleBots, "ABLE Bots"))} />
       <Route path="/start" component={withLayout(Onboarding)} />
       <Route path="/explainer" component={withLayout(Explainer)} />
       <Route path="/directory" component={withLayout(EcosystemDirectory)} />
       <Route path="/dex-analytics" component={withLayout(DexAnalytics)} />
-      <Route path="/burn" component={withLayout(BuyAndBurn)} />
-      <Route path="/nft-mint" component={withLayout(NFTMint)} />
-      <Route path="/dao-proposals" component={withLayout(DAOProposals)} />
-      <Route path="/giveaways" component={withLayout(Giveaways)} />
-      <Route path="/holder-rewards" component={withLayout(HolderRewards)} />
-      <Route path="/spin" component={withLayout(SpinWheel)} />
+      <Route path="/burn" component={withLayout(paused(BuyAndBurn, "Buy & Burn"))} />
+      <Route path="/nft-mint" component={withLayout(paused(NFTMint, "HERO Cards NFT Mint"))} />
+      <Route path="/dao-proposals" component={withLayout(paused(DAOProposals, "DAO Voting"))} />
+      <Route path="/giveaways" component={withLayout(paused(Giveaways, "Giveaways"))} />
+      <Route path="/holder-rewards" component={withLayout(paused(HolderRewards, "Holder Rewards"))} />
+      <Route path="/spin" component={withLayout(paused(SpinWheel, "Spin the Wheel"))} />
       <Route path="/beta-disclaimer" component={withSuspense(BetaDisclaimer)} />
       <Route path="/disclaimer" component={withSuspense(BetaDisclaimer)} />
       {/* Redirect aliases for common URL variants */}
