@@ -153,3 +153,6 @@ dist/
 artifacts/
 cache/
 .env.dao.local
+# Security: prevent accidental commit of host-coupled runtime artifacts
+/public/assets
+/index.js
