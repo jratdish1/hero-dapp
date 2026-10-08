@@ -9,7 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import PriceTicker from "./PriceTicker";
 import ScrollToTop from "./ScrollToTop";
 import IntroOverlay from "./IntroOverlay";
-import { HERO_INCIDENT_MAINTENANCE, HERO_INCIDENT_MESSAGE } from "../lib/incident-flags";
+import IncidentBanner from "./IncidentBanner";
 import LanguageSelector from "./LanguageSelector";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -396,15 +396,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </header>
-          {HERO_INCIDENT_MAINTENANCE && (
-            <div
-              role="alert"
-              data-testid="hero-incident-banner"
-              className="w-full bg-amber-500/15 border-b border-amber-500/40 text-amber-200 text-sm px-4 py-2 text-center"
-            >
-              {HERO_INCIDENT_MESSAGE}
-            </div>
-          )}
+          <IncidentBanner />
           {/* Page content */}
           <div className="flex-1 p-4 md:p-6 lg:p-8">
             {children}
