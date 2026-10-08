@@ -1,8 +1,9 @@
 name: Fleet Health Check
 
+# SECURITY (2026-10-07 incident): the daily schedule was removed. This repo is
+# PUBLIC, so every run publishes PM2 / nginx / port / docker inventory of fleet
+# hosts to world-readable Actions logs. Manual dispatch only.
 on:
-  schedule:
-    - cron: '0 6 * * *'  # Daily at 6 AM UTC
   workflow_dispatch:
     inputs:
       action:
@@ -12,7 +13,6 @@ on:
         type: choice
         options:
           - status
-          - restart-all
           - fix-regen-valor
           - diagnose-regen-valor
 
@@ -63,12 +63,10 @@ jobs:
 
               # Action-specific commands
               ACTION="${{ inputs.action || 'status' }}"
-              if [ "$ACTION" = "restart-all" ]; then
-                echo ">>> Restarting all PM2 processes..."
-                pm2 restart all
-                pm2 save
-                echo ">>> Done!"
-              elif [ "$ACTION" = "fix-regen-valor" ]; then
+              # SECURITY: 'restart-all' (pm2 restart all + pm2 save) was removed. It would
+              # restart processes that were deliberately stopped during an incident
+              # (e.g. the HeroABLE bots that hold the burned 0x5f1d signer).
+              if [ "$ACTION" = "fix-regen-valor" ]; then
                 echo ">>> Fixing regen-valor..."
                 cd /var/www/regen-valor 2>/dev/null || {
                   echo "ERROR: /var/www/regen-valor does not exist!"
