@@ -198,6 +198,33 @@ const REVOKE_ONLY_ROUTE = '/approvals';
 const WRITE_CONTROL = /\b(stake|unstake|claim|mint|spin|vote|approve|revoke|send|bridge|withdraw|deposit|create proposal|submit|enter raffle|buy|burn|swap)\b/i;
 const REVOKE_CONTROL = /^\s*revoke\s*$/i;
 
+// IR P2 (LHWU / LInQ): Page.navigate can return before the new document replaces
+// the previous one (or return errorText without rejecting), and the maintenance
+// markers are identical on every paused route. Mark the outgoing document, reject
+// navigation errors, and only inspect once a NEW document is on the requested
+// pathname and (for paused routes) the maintenance element carries data-route
+// equal to that route.
+const STALE_DOC_FLAG = '__heroIncidentGatePreviousDocument';
+
+async function navigateFresh(client, origin, route) {
+  await evaluate(client, `window.${STALE_DOC_FLAG} = true`).catch(() => {});
+  const nav = await client.send('Page.navigate', { url: `${origin}${route}` });
+  if (nav.errorText) throw new Error(`${route}: navigation failed: ${nav.errorText}`);
+  await waitFor(
+    client,
+    `${route} fresh document`,
+    `window.${STALE_DOC_FLAG} !== true && location.pathname === ${JSON.stringify(route)} && document.readyState !== 'loading'`,
+  );
+}
+
+function freshRoutePredicate(route, expectPaused) {
+  const here = `window.${STALE_DOC_FLAG} !== true && location.pathname === ${JSON.stringify(route)}`;
+  const banner = `document.querySelector('[data-testid="hero-incident-banner"]') !== null`;
+  return expectPaused
+    ? `${here} && document.querySelector('[data-testid="hero-incident-route-paused"][data-route=${JSON.stringify(JSON.stringify(route)).slice(1, -1)}]') !== null && ${banner}`
+    : `${here} && ${banner}`;
+}
+
 async function main() {
   const indexPath = path.join(OUTPUT, 'index.html');
   if (!existsSync(indexPath)) throw new Error('Production build is missing');
@@ -254,6 +281,8 @@ async function main() {
         .map(el => (el.textContent || el.value || '').trim())
         .filter(text => ${WRITE_CONTROL}.test(text));
       return {
+        pathname: location.pathname,
+        pausedRoute: paused?.getAttribute('data-route') ?? null,
         banner: !!banner,
         bannerRole: banner?.getAttribute('role') ?? null,
         paused: !!paused,
@@ -264,16 +293,13 @@ async function main() {
 
     for (const route of [...PAUSED_ROUTES, ...BANNER_ONLY_ROUTES]) {
       const expectPaused = PAUSED_ROUTES.includes(route);
-      await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}${route}` });
-      await waitFor(
-        client,
-        `${route} maintenance render`,
-        expectPaused
-          ? `document.querySelector('[data-testid="hero-incident-route-paused"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`
-          : `document.querySelector('[data-testid="hero-incident-banner"]') !== null`,
-      );
+      await navigateFresh(client, `http://127.0.0.1:${address.port}`, route);
+      await waitFor(client, `${route} maintenance render`, freshRoutePredicate(route, expectPaused));
       const state = await evaluate(client, inspect);
       results.push({ route, ...state });
+      if (state.pathname !== route || (expectPaused && state.pausedRoute !== route)) {
+        throw new Error(`${route}: inspected a different route's render: ${JSON.stringify(state)}`);
+      }
       if (!state.banner || state.bannerRole !== 'status' || state.alertBanners !== 0) {
         throw new Error(`${route}: banner missing or wrong role: ${JSON.stringify(state)}`);
       }
@@ -301,8 +327,8 @@ async function main() {
         approveControls: controls.filter(text => /\\bapprove\\b/i.test(text)),
       };
     })()`;
-    await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}${REVOKE_ONLY_ROUTE}` });
-    await waitFor(client, `${REVOKE_ONLY_ROUTE} revoke note`, `document.querySelector('[data-testid="hero-incident-revoke-note"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`);
+    await navigateFresh(client, `http://127.0.0.1:${address.port}`, REVOKE_ONLY_ROUTE);
+    await waitFor(client, `${REVOKE_ONLY_ROUTE} revoke note`, `window.${STALE_DOC_FLAG} !== true && location.pathname === ${JSON.stringify(REVOKE_ONLY_ROUTE)} && document.querySelector('[data-testid="hero-incident-revoke-note"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`);
     const approvalsBefore = await evaluate(client, approvalsState);
     if (approvalsBefore.paused) throw new Error(`${REVOKE_ONLY_ROUTE}: must not render the maintenance page (revoke stays enabled)`);
     if (!approvalsBefore.revokeLink || approvalsBefore.bannerRole !== 'status') {

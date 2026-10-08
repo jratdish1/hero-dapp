@@ -1,4 +1,4 @@
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { HERO_INCIDENT_MESSAGE } from "../lib/incident-flags";
 
 /**
@@ -8,9 +8,13 @@ import { HERO_INCIDENT_MESSAGE } from "../lib/incident-flags";
  * write, sign, or approve action.
  */
 export default function IncidentMaintenancePage({ feature }: { feature?: string }) {
+  // data-route ties this render to the route it was mounted for, so the CI
+  // incident gate can prove it is inspecting that route's own fresh render.
+  const [location] = useLocation();
   return (
     <div
       data-testid="hero-incident-route-paused"
+      data-route={location}
       className="max-w-2xl mx-auto mt-8 rounded-xl border border-amber-500/40 bg-amber-500/10 p-6 text-center"
     >
       {feature && <p className="text-sm font-semibold tracking-wide text-amber-200/80 mb-1">{feature}</p>}

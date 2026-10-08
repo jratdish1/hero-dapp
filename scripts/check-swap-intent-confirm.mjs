@@ -178,6 +178,85 @@ async function waitFor(client, label, expression, timeoutMs = 30_000) {
   throw new Error(`${label} timed out; lastValue=${JSON.stringify(lastValue)}`);
 }
 
+// HERO incident 2026-10-07 (HERO signer compromise), Escalation GO (a) 8:02 PM PT:
+// this gate is incident-scoped. It reads the same build-time flag the app uses
+// (client/src/lib/incident-flags.ts: VITE_HERO_INCIDENT_MAINTENANCE, default ON
+// unless exactly "false") and that check-incident-maintenance.mjs asserts.
+//   - Flag ON:  /swap must render the maintenance pause, with no swap form and no
+//               enabled wallet write / sign control, and the page must not ask the
+//               wallet provider to send or sign anything.
+//   - Flag OFF: the ORIGINAL swap-intent assertions below run unchanged, so this
+//               gate re-arms automatically when /swap is un-paused.
+// Build and run this script with the same VITE_HERO_INCIDENT_MAINTENANCE value.
+const HERO_INCIDENT_MAINTENANCE = (process.env.VITE_HERO_INCIDENT_MAINTENANCE ?? 'true') !== 'false';
+const SWAP_WRITE_OR_SIGN_CONTROL = /\b(swap|approve|confirm|sign|send|submit|review intent|buy|sell|bridge|deposit|withdraw)\b/i;
+const WALLET_WRITE_METHODS = [
+  'eth_sendTransaction', 'eth_sendRawTransaction', 'eth_sign', 'personal_sign',
+  'eth_signTransaction', 'eth_signTypedData', 'eth_signTypedData_v3', 'eth_signTypedData_v4',
+  'wallet_sendCalls', 'wallet_addEthereumChain', 'wallet_switchEthereumChain',
+];
+
+// Passive EIP-1193 recorder: records every method the page asks the wallet for and
+// refuses write / sign methods. Installed only in maintenance mode.
+const WALLET_RECORDER = `(() => {
+  const writes = ${JSON.stringify(WALLET_WRITE_METHODS)};
+  const calls = [];
+  window.__heroIncidentWalletCalls = calls;
+  const provider = {
+    isHeroIncidentRecorder: true,
+    request: async ({ method } = {}) => {
+      calls.push(String(method));
+      if (writes.includes(method)) throw Object.assign(new Error('blocked by incident gate'), { code: 4001 });
+      if (method === 'eth_chainId') return '0x2105';
+      if (method === 'net_version') return '8453';
+      if (method === 'eth_accounts') return [];
+      return null;
+    },
+    on() {}, removeListener() {},
+  };
+  Object.defineProperty(window, 'ethereum', { value: provider, configurable: true });
+})()`;
+
+async function assertSwapMaintenancePause(client) {
+  await waitFor(
+    client,
+    '/swap maintenance pause',
+    `location.pathname === '/swap' && document.querySelector('[data-testid="hero-incident-route-paused"][data-route="/swap"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`,
+  );
+  // Give any lazily mounted swap UI a chance to appear before asserting absence.
+  await sleep(1_500);
+  const state = await evaluate(client, `(() => {
+    const paused = document.querySelector('[data-testid="hero-incident-route-paused"]');
+    const banner = document.querySelector('[data-testid="hero-incident-banner"]');
+    const enabled = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"], a[role="button"]'))
+      .filter(el => !el.disabled && el.getAttribute('aria-disabled') !== 'true')
+      .map(el => (el.textContent || el.value || '').trim());
+    return {
+      paused: !!paused,
+      banner: !!banner,
+      bannerRole: banner?.getAttribute('role') ?? null,
+      swapIntentInput: !!document.querySelector('input[aria-label="HERO swap intent"]'),
+      swapIntentNodes: document.querySelectorAll('[data-testid^="swap-intent"]').length,
+      pausedFormFields: paused ? paused.querySelectorAll('form, input, select, textarea').length : -1,
+      writeOrSignControls: enabled.filter(text => ${SWAP_WRITE_OR_SIGN_CONTROL}.test(text)),
+      walletCalls: Array.isArray(window.__heroIncidentWalletCalls) ? window.__heroIncidentWalletCalls.slice() : null,
+    };
+  })()`);
+  if (!state.paused || !state.banner || state.bannerRole !== 'status') {
+    throw new Error(`/swap maintenance pause not rendered: ${JSON.stringify(state)}`);
+  }
+  if (state.swapIntentInput || state.swapIntentNodes > 0 || state.pausedFormFields !== 0) {
+    throw new Error(`/swap exposes a swap form while paused: ${JSON.stringify(state)}`);
+  }
+  if (state.writeOrSignControls.length > 0) {
+    throw new Error(`/swap exposes an enabled wallet write/sign control while paused: ${JSON.stringify(state.writeOrSignControls)}`);
+  }
+  if (!Array.isArray(state.walletCalls)) throw new Error('/swap wallet recorder missing');
+  const writeCalls = state.walletCalls.filter(method => WALLET_WRITE_METHODS.includes(method));
+  if (writeCalls.length > 0) throw new Error(`/swap requested wallet write/sign while paused: ${JSON.stringify(writeCalls)}`);
+  return state;
+}
+
 async function main() {
   const indexPath = path.join(OUTPUT, 'index.html');
   if (!existsSync(indexPath)) throw new Error('Production build is missing');
@@ -236,7 +315,25 @@ async function main() {
       client.send('Runtime.enable'),
       client.send('Network.enable'),
     ]);
-    await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/swap` });
+    if (HERO_INCIDENT_MAINTENANCE) {
+      await client.send('Page.addScriptToEvaluateOnNewDocument', { source: WALLET_RECORDER });
+    }
+    const swapNav = await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/swap` });
+    if (HERO_INCIDENT_MAINTENANCE && swapNav.errorText) throw new Error(`/swap navigation failed: ${swapNav.errorText}`);
+
+    if (HERO_INCIDENT_MAINTENANCE) {
+      const paused = await assertSwapMaintenancePause(client);
+      writeFileSync(REPORT, `${JSON.stringify({
+        timestamp: new Date().toISOString(),
+        result: 'PASS',
+        mode: 'incident-maintenance',
+        path: '/swap',
+        paused,
+      }, null, 2)}\n`);
+      console.log('HERO swap intent confirm browser gate: PASS (incident maintenance ON: /swap paused, no swap form, no wallet write/sign)');
+      return;
+    }
+    // Flag OFF: original swap-intent assertions, unchanged.
 
     await waitFor(
       client,
