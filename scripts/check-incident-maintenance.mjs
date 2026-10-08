@@ -179,19 +179,24 @@ async function waitFor(client, label, expression, timeoutMs = 30_000) {
 }
 
 // HERO incident 2026-10-07: with HERO_INCIDENT_MAINTENANCE on (the default),
-// every wallet-write route must render the maintenance page, the banner must be
-// present (as role="status", never role="alert"), and no enabled write control
-// may be exposed. /swap and / keep rendering (no in-app wallet write) but must
-// show the banner.
+// every wallet-write route (including /swap) must render the maintenance page,
+// the banner must be present (as role="status", never role="alert"), and no
+// enabled write control may be exposed. / keeps rendering with the banner.
+// /approvals is the single live write surface: revoke must stay enabled and no
+// enabled non-revoke approval control (new / non-zero approve) may exist. The
+// approve(spender, 0)-only rule itself is unit-tested in incident-flags.test.ts.
 const PAUSED_ROUTES = [
+  '/swap',
   '/stake', '/stake/base', '/stake/dai',
   '/spin',
   '/dao', '/dao/proposals', '/dao/proposals/create', '/dao/proposals/1', '/dao/treasury', '/dao/delegates', '/dao-proposals',
   '/nft-mint',
-  '/wallet', '/dca', '/limits', '/approvals', '/bootcamp', '/bots', '/burn', '/giveaways', '/holder-rewards',
+  '/wallet', '/dca', '/limits', '/bootcamp', '/bots', '/burn', '/giveaways', '/holder-rewards',
 ];
-const BANNER_ONLY_ROUTES = ['/', '/swap'];
-const WRITE_CONTROL = /\b(stake|unstake|claim|mint|spin|vote|approve|revoke|send|bridge|withdraw|deposit|create proposal|submit|enter raffle|buy|burn)\b/i;
+const BANNER_ONLY_ROUTES = ['/'];
+const REVOKE_ONLY_ROUTE = '/approvals';
+const WRITE_CONTROL = /\b(stake|unstake|claim|mint|spin|vote|approve|revoke|send|bridge|withdraw|deposit|create proposal|submit|enter raffle|buy|burn|swap)\b/i;
+const REVOKE_CONTROL = /^\s*revoke\s*$/i;
 
 async function main() {
   const indexPath = path.join(OUTPUT, 'index.html');
@@ -277,6 +282,45 @@ async function main() {
         throw new Error(`${route}: enabled write control exposed: ${JSON.stringify(state.writeControls)}`);
       }
     }
+
+    // Revoke-only surface.
+    const approvalsState = `(() => {
+      const controls = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'))
+        .filter(el => !el.disabled && el.getAttribute('aria-disabled') !== 'true')
+        .map(el => (el.textContent || el.value || '').trim());
+      const note = document.querySelector('[data-testid="hero-incident-revoke-note"]');
+      const banner = document.querySelector('[data-testid="hero-incident-banner"]');
+      return {
+        banner: !!banner,
+        bannerRole: banner?.getAttribute('role') ?? null,
+        paused: !!document.querySelector('[data-testid="hero-incident-route-paused"]'),
+        note: !!note,
+        revokeLink: !!note?.querySelector('a[href="https://revoke.cash"]'),
+        revokeControls: controls.filter(text => ${REVOKE_CONTROL}.test(text)).length,
+        nonRevokeWriteControls: controls.filter(text => ${WRITE_CONTROL}.test(text) && !${REVOKE_CONTROL}.test(text)),
+        approveControls: controls.filter(text => /\\bapprove\\b/i.test(text)),
+      };
+    })()`;
+    await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}${REVOKE_ONLY_ROUTE}` });
+    await waitFor(client, `${REVOKE_ONLY_ROUTE} revoke note`, `document.querySelector('[data-testid="hero-incident-revoke-note"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`);
+    const approvalsBefore = await evaluate(client, approvalsState);
+    if (approvalsBefore.paused) throw new Error(`${REVOKE_ONLY_ROUTE}: must not render the maintenance page (revoke stays enabled)`);
+    if (!approvalsBefore.revokeLink || approvalsBefore.bannerRole !== 'status') {
+      throw new Error(`${REVOKE_ONLY_ROUTE}: revoke note/link or banner role wrong: ${JSON.stringify(approvalsBefore)}`);
+    }
+    await waitFor(client, `${REVOKE_ONLY_ROUTE} revoke controls`, `Array.from(document.querySelectorAll('button')).some(el => /^\\s*revoke\\s*$/i.test(el.textContent || '') && !el.disabled)`);
+    const approvalsAfter = await evaluate(client, approvalsState);
+    if (approvalsAfter.revokeControls < 1) throw new Error(`${REVOKE_ONLY_ROUTE}: revoke path not enabled: ${JSON.stringify(approvalsAfter)}`);
+    if (approvalsAfter.approveControls.length > 0 || approvalsAfter.nonRevokeWriteControls.length > 0) {
+      throw new Error(`${REVOKE_ONLY_ROUTE}: non-revoke approval/write control exposed: ${JSON.stringify(approvalsAfter)}`);
+    }
+    const revokeClick = await evaluate(client, `(() => {
+      const revoke = Array.from(document.querySelectorAll('button')).find(el => /^\\s*revoke\\s*$/i.test(el.textContent || ''));
+      try { revoke.click(); return { ok: true }; } catch (error) { return { ok: false, error: String(error) }; }
+    })()`);
+    if (!revokeClick.ok) throw new Error(`${REVOKE_ONLY_ROUTE}: revoke click threw: ${revokeClick.error}`);
+    if (!approvalsAfter.note || !approvalsAfter.revokeLink) throw new Error(`${REVOKE_ONLY_ROUTE}: revoke note missing after scan`);
+    results.push({ route: REVOKE_ONLY_ROUTE, before: approvalsBefore, after: approvalsAfter, revokeClick });
 
     writeFileSync(REPORT, `${JSON.stringify({ timestamp: new Date().toISOString(), result: 'PASS', results }, null, 2)}\n`);
     console.log(`HERO incident maintenance browser gate: PASS (${results.length} routes)`);

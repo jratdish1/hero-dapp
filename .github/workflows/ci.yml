@@ -115,19 +115,6 @@ jobs:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
         run: node scripts/check-csp-routes.mjs
 
-      - name: Exercise HERO swap intent confirm gate
-        env:
-          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
-        shell: bash
-        run: |
-          set +e
-          timeout --signal=TERM --kill-after=10s 120s \
-            node scripts/check-swap-intent-confirm.mjs \
-            > swap-intent-e2e.log 2>&1
-          status=$?
-          cat swap-intent-e2e.log
-          exit "$status"
-
       - name: Exercise HERO incident maintenance gate (wallet writes paused)
         env:
           CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
@@ -139,6 +126,19 @@ jobs:
             > incident-maintenance-e2e.log 2>&1
           status=$?
           cat incident-maintenance-e2e.log
+          exit "$status"
+
+      - name: Exercise HERO swap intent confirm gate
+        env:
+          CHROME_BIN: ${{ steps.chrome.outputs.chrome_bin }}
+        shell: bash
+        run: |
+          set +e
+          timeout --signal=TERM --kill-after=10s 120s \
+            node scripts/check-swap-intent-confirm.mjs \
+            > swap-intent-e2e.log 2>&1
+          status=$?
+          cat swap-intent-e2e.log
           exit "$status"
 
       - name: Exercise Radix dialog scroll lock under production CSP
