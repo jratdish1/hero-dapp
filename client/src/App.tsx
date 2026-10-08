@@ -111,14 +111,14 @@ function Router() {
     <Switch>
       <Route path="/login" component={withSuspense(LoginPage)} />
       <Route path="/" component={Home} />
-      {/* /swap stays reachable: it performs no in-app wallet write (external DEX handoff links only) and shows the incident banner. */}
-      <Route path="/swap" component={withLayout(Swap)} />
+      {/* Incident 2026-10-07: every wallet-write route is paused. /approvals stays live (revoke-only, enforced in the page). */}
+      <Route path="/swap" component={withLayout(paused(Swap, "HERO Swap"))} />
       <Route path="/wallet" component={withLayout(paused(HeroWallet, "HERO Wallet"))} />
       <Route path="/portfolio" component={withLayout(Portfolio)} />
       <Route path="/dashboard" component={withLayout(Dashboard)} />
       <Route path="/dca" component={withLayout(paused(DcaOrders, "DCA Orders"))} />
       <Route path="/limits" component={withLayout(paused(LimitOrders, "Limit Orders"))} />
-      <Route path="/approvals" component={withLayout(paused(Approvals, "Token Approvals"))} />
+      <Route path="/approvals" component={withLayout(Approvals)} />
       <Route path="/bootcamp" component={withLayout(paused(Farm, "Boot Camp"))} />
       <Route path="/stake" component={withLayout(paused(Stake, "HERO Stake"))} />
       <Route path="/media" component={withLayout(MediaHub)} />
