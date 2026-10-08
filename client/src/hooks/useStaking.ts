@@ -10,6 +10,7 @@ import { isValidChainId, validateDecimalInput } from "../lib/validation";
 import { STAKING_ABI } from "../lib/staking-abi";
 import { useNetwork } from "../contexts/NetworkContext";
 import { getStakingAddress } from "../lib/config";
+import { assertWalletWritesAllowed } from "../lib/incident-flags";
 
 const ERC20_ABI = [
   {
@@ -265,6 +266,7 @@ export function useStakingActions(overrideChainId?: number) {
     action: StakingAction,
     submit: () => Promise<Hash>,
   ): Promise<Hash> {
+    assertWalletWritesAllowed();
     setPendingAction(action);
     setIsSuccess(false);
     reset();
