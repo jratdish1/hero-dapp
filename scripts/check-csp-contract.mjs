@@ -250,6 +250,26 @@ for (const [index, directives] of nginxDirectiveSets.entries()) {
   comparePolicies(`Nginx policy ${index + 1}`, directives, 'Helmet', helmetDirectives);
 }
 
+// SECURITY (2026-10-07 incident): assert on the evaluated policy, not on
+// source text. No directive may trust a Manus host, and the scheme-wide
+// `https:` source is a reviewed exception limited to img-src and media-src.
+const forbiddenHostPattern = /(^|[/.])manus\.(computer|space|im)(?=$|[/:])|manuscdn\.com/i;
+const schemeWideHttpsAllowed = new Set(['img-src', 'media-src']);
+for (const [label, directives] of [
+  ['Helmet', helmetDirectives],
+  ...nginxDirectiveSets.map((directives, index) => [`Nginx policy ${index + 1}`, directives]),
+]) {
+  for (const [name, values] of directives) {
+    const manusSources = values.filter(value => forbiddenHostPattern.test(value));
+    if (manusSources.length > 0) {
+      fail(`${label} ${name} still trusts Manus hosts: ${JSON.stringify(manusSources)}`);
+    }
+    if (values.includes('https:') && !schemeWideHttpsAllowed.has(name)) {
+      fail(`${label} ${name} uses scheme-wide https: outside the reviewed exception`);
+    }
+  }
+}
+
 const script = nginxDirectives.get('script-src') ?? [];
 if (script.includes("'unsafe-inline'") || script.includes("'unsafe-eval'")) {
   fail('Production script-src permits unsafe inline/eval execution');
