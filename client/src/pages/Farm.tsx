@@ -145,7 +145,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "emit",
     name: "Emit Farm",
-    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/DBvpcPnqKXjgslhY.png",
+    logoUrl: "/partners/emit-farm-logo.png",
     url: "https://emit.farm/farms",
     description:
       "Decentralized yield farming on PulseChain with DAO governance, NFT identity, and community-driven farm proposals.",
@@ -168,7 +168,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
     {
     id: "emit-factory",
     name: "EMIT Factory",
-    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/DBvpcPnqKXjgslhY.png",
+    logoUrl: "/partners/emit-farm-logo.png",
     url: "https://emit.farm/factory",
     description:
       "EMIT Factory — Create and manage custom yield farms on PulseChain. Community-driven farm creation with DAO governance.",
@@ -184,7 +184,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "rhinofi",
     name: "RhinoFi",
-    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/OUdtSGFHDzmjjlNT.jpg",
+    logoUrl: "/partners/rhinofi-logo.png",
     url: "https://www.rhinofi.win/dapp",
     description:
       "Track rewards, manage LPs, and monitor Charging Cycles. Holder earnings and LP reflections paid in WPLS.",
@@ -204,7 +204,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "trufarms",
     name: "TruFarms",
-    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/eTSpAlzgEbCDiqkL.png",
+    logoUrl: "/partners/trufarm-logo.webp",
     url: "https://trufarms.io/farms",
     description:
       "Smarter staking powered by Tru2X. Single-sided staking earns eDAI from volume. Tru2X drives continuous system volume.",
@@ -227,7 +227,7 @@ const PARTNER_FARMS: PartnerFarm[] = [
   {
     id: "trudefi",
     name: "TruDeFi",
-    logoUrl: "https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/eTSpAlzgEbCDiqkL.png",
+    logoUrl: "/partners/trufarm-logo.webp",
     url: "https://double.trudefi.io/",
     description:
       "TruDeFi Double — Double your staking rewards on PulseChain via TruDeFi 2X auto-compounding.",
@@ -1226,7 +1226,7 @@ export default function Farm() {
               </div>
               <div className="px-5 pb-5">
                 <img
-                  src="https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/lvDhqDUcVwjudSTG.jpeg"
+                  src="/partners/defi-closed-loop.jpeg"
                   alt="DeFi Yield Strategies — Closed Loop Ecosystem showing TruFarms, EMIT, SSS Pools, and compound earnings flow"
                   className="w-full rounded-xl border border-border/30"
                   loading="lazy"
