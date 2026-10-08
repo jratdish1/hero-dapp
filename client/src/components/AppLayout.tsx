@@ -9,6 +9,7 @@ import { ThemeToggle } from "./ThemeToggle";
 import PriceTicker from "./PriceTicker";
 import ScrollToTop from "./ScrollToTop";
 import IntroOverlay from "./IntroOverlay";
+import IncidentBanner from "./IncidentBanner";
 import LanguageSelector from "./LanguageSelector";
 import { useNetwork } from "../contexts/NetworkContext";
 import { useLanguage } from "../contexts/LanguageContext";
@@ -395,6 +396,7 @@ export default function AppLayout({ children }: { children: ReactNode }) {
               </div>
             </div>
           </header>
+          <IncidentBanner />
           {/* Page content */}
           <div className="flex-1 p-4 md:p-6 lg:p-8">
             {children}

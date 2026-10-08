@@ -1,5 +1,6 @@
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingSocial from "./components/FloatingSocial";
+import IncidentBanner from "./components/IncidentBanner";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { usePageSEO } from "./hooks/usePageSEO";
 import Home from "./pages/Home";
@@ -17,6 +18,7 @@ export default function LandingApp() {
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable>
         <FloatingSocial />
+        <IncidentBanner />
         <Home />
       </ThemeProvider>
     </ErrorBoundary>

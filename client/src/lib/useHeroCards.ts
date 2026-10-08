@@ -23,6 +23,7 @@ import {
   HERO_CARDS_WHITELIST_PRICE_ETH,
   type HeroCardsChainConfig,
 } from './heroCards-config';
+import { HERO_INCIDENT_MAINTENANCE } from './incident-flags';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export enum MintPhase {
@@ -156,6 +157,9 @@ export function useHeroCards() {
   });
 
   function mint(quantity: number) {
+    if (HERO_INCIDENT_MAINTENANCE) {
+      throw new Error('HERO Cards minting is paused for maintenance');
+    }
     if (!address || !contractAddress || !chainSupported) return;
     const phase = Number(mintPhaseRaw ?? 0) as MintPhase;
     if (phase === MintPhase.CLOSED) {
@@ -177,6 +181,9 @@ export function useHeroCards() {
   }
 
   function whitelistMint(quantity: number, proof: `0x${string}`[]) {
+    if (HERO_INCIDENT_MAINTENANCE) {
+      throw new Error('HERO Cards minting is paused for maintenance');
+    }
     if (!address || !contractAddress || !chainSupported) return;
     const totalValue = parseEther(HERO_CARDS_WHITELIST_PRICE_ETH) * BigInt(quantity);
 
@@ -200,7 +207,8 @@ export function useHeroCards() {
   const holderTier = Number(holderTierRaw ?? 0) as HolderTier;
   const feeDiscount = Number(feeDiscountRaw ?? 0) / 100; // bps → %
   const remaining = HERO_CARDS_MAX_SUPPLY - Number(totalMinted ?? 0);
-  const canMint = chainSupported &&
+  const canMint = !HERO_INCIDENT_MAINTENANCE &&
+    chainSupported &&
     mintPhase !== MintPhase.CLOSED &&
     Number(userMinted ?? 0) < HERO_CARDS_MAX_PER_WALLET &&
     remaining > 0;

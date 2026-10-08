@@ -14,6 +14,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHeroCards, MintPhase, HolderTier, TIER_NAMES, TIER_COLORS } from '../lib/useHeroCards';
 import { HERO_CARDS_BASE_URI, HERO_CARDS_MAX_SUPPLY } from '../lib/heroCards-abi';
+import { HERO_INCIDENT_MAINTENANCE } from '../lib/incident-flags';
 
 // ─── IPFS Gateway for artwork preview ────────────────────────────
 const IPFS_GATEWAY = "https://gateway.lighthouse.storage/ipfs/";
@@ -114,7 +115,7 @@ export default function NFTMint() {
   }, []);
 
   const handleMint = useCallback(() => {
-    if (!canMint) return;
+    if (HERO_INCIDENT_MAINTENANCE || !canMint) return;
     mint(quantity);
   }, [canMint, mint, quantity]);
 
@@ -253,7 +254,14 @@ export default function NFTMint() {
           </div>
 
           {/* Mint Button */}
-          {!isConnected ? (
+          {HERO_INCIDENT_MAINTENANCE ? (
+            <button
+              className="w-full py-4 bg-amber-900/50 text-amber-300 font-bold rounded-lg cursor-not-allowed border border-amber-600"
+              disabled
+            >
+              Minting Paused for Maintenance
+            </button>
+          ) : !isConnected ? (
             <button
               className="w-full py-4 bg-gray-700 text-gray-400 font-bold rounded-lg cursor-not-allowed"
               disabled

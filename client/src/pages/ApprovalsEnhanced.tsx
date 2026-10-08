@@ -13,6 +13,12 @@ import {
   Info, Wallet, Search, Filter, CheckCircle2, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  HERO_INCIDENT_MAINTENANCE,
+  HERO_INCIDENT_REVOKE_NOTE,
+  HERO_INCIDENT_REVOKE_URL,
+  assertApprovalWriteAllowed,
+} from "@/lib/incident-flags";
 
 interface ApprovalEntry {
   id: string;
@@ -114,6 +120,8 @@ export default function ApprovalsEnhanced() {
   };
 
   const handleRevoke = async (approval: ApprovalEntry) => {
+    // Incident maintenance: only revokes (approve(spender, 0)) may proceed.
+    assertApprovalWriteAllowed({ kind: "approve", amount: 0n });
     if (!connected) {
       toast.error("Connect wallet to revoke approvals");
       return;
@@ -143,6 +151,19 @@ export default function ApprovalsEnhanced() {
 
   return (
     <div className="space-y-6">
+      {HERO_INCIDENT_MAINTENANCE && (
+        <div
+          data-testid="hero-incident-revoke-note"
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200"
+        >
+          {HERO_INCIDENT_REVOKE_NOTE}{" "}
+          You can also revoke at{" "}
+          <a href={HERO_INCIDENT_REVOKE_URL} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+            revoke.cash
+          </a>
+          .
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
