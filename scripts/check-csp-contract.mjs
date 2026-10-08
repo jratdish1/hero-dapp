@@ -251,8 +251,12 @@ for (const [index, directives] of nginxDirectiveSets.entries()) {
 }
 
 // SECURITY (2026-10-07 incident): assert on the evaluated policy, not on
-// source text. No directive may trust a Manus host, and the scheme-wide
-// `https:` source is a reviewed exception limited to img-src and media-src.
+// source text. Guarantee (narrow): no directive may NAME a Manus host, and no
+// directive other than img-src/media-src may use the scheme-wide `https:`
+// source. This does NOT block Manus traffic for img-src/media-src: their
+// `https:` source still permits any HTTPS host, Manus included. That is a
+// reviewed, tracked exception (dynamic ENS/user/storage images) pending a
+// host allow-list; connect-src, script-src and frame-src stay explicit.
 const forbiddenHostPattern = /(^|[/.])manus\.(computer|space|im)(?=$|[/:])|manuscdn\.com/i;
 const schemeWideHttpsAllowed = new Set(['img-src', 'media-src']);
 for (const [label, directives] of [
