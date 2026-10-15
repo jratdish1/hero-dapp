@@ -158,8 +158,8 @@ describe("HeroGovernor (BUILD 2)", function () {
       const t = await timelock.getAddress();
       await expect(Gov.deploy(s, t, VOTING_DELAY, VOTING_PERIOD, THRESHOLD, 0))
         .to.be.revertedWithCustomError(Gov, "QuorumOutOfRange");
-      // OZ's own fraction check fires first for > 100.
-      await expect(Gov.deploy(s, t, VOTING_DELAY, VOTING_PERIOD, THRESHOLD, 101)).to.be.revert(ethers);
+      await expect(Gov.deploy(s, t, VOTING_DELAY, VOTING_PERIOD, THRESHOLD, 101))
+        .to.be.revertedWithCustomError(Gov, "QuorumOutOfRange");
     });
 
     it("governor rejects zero addresses", async function () {
@@ -379,6 +379,60 @@ describe("HeroGovernor (BUILD 2)", function () {
       await increase(TIMELOCK_DELAY + 1);
       await governor.execute(targets, values, calldatas, p.descHash);
       expect(await governor.votingPeriod()).to.equal(BigInt(3 * DAY));
+    });
+
+    // Regression (2026-10-15 audit F-1): quorum floor must hold after deploy.
+    it("a passed proposal cannot set quorum to 0 or above 100", async function () {
+      const g = await governor.getAddress();
+      for (const [n, label] of [[0, "quorum zero"], [101, "quorum 101"]]) {
+        const calldatas = [governor.interface.encodeFunctionData("updateQuorumNumerator", [n])];
+        const p = await propose(alice, [g], [0n], calldatas, label);
+        await passToSucceeded(p);
+        await governor.queue([g], [0n], calldatas, p.descHash);
+        await increase(TIMELOCK_DELAY + 1);
+        await expect(governor.execute([g], [0n], calldatas, p.descHash))
+          .to.be.revertedWithCustomError(governor, "QuorumOutOfRange");
+      }
+      expect(await governor["quorumNumerator()"]()).to.equal(QUORUM_PCT);
+    });
+
+    it("a passed proposal can still move quorum inside 1..100", async function () {
+      const g = await governor.getAddress();
+      const calldatas = [governor.interface.encodeFunctionData("updateQuorumNumerator", [10])];
+      const p = await propose(alice, [g], [0n], calldatas, "quorum ten");
+      await passToSucceeded(p);
+      await governor.queue([g], [0n], calldatas, p.descHash);
+      await increase(TIMELOCK_DELAY + 1);
+      await governor.execute([g], [0n], calldatas, p.descHash);
+      expect(await governor["quorumNumerator()"]()).to.equal(10n);
+    });
+
+    // Regression (2026-10-15 audit F-2): timelock delay floor must hold after deploy.
+    it("a passed proposal cannot drop the timelock delay below 1 hour or above 30 days", async function () {
+      const t = await timelock.getAddress();
+      for (const [d, label] of [[0, "delay zero"], [3599, "delay 3599"], [30 * DAY + 1, "delay too long"]]) {
+        const calldatas = [timelock.interface.encodeFunctionData("updateDelay", [d])];
+        const p = await propose(alice, [t], [0n], calldatas, label);
+        await passToSucceeded(p);
+        await governor.queue([t], [0n], calldatas, p.descHash);
+        await increase(TIMELOCK_DELAY + 1);
+        await expect(governor.execute([t], [0n], calldatas, p.descHash))
+          .to.be.revertedWithCustomError(timelock, "DelayOutOfRange");
+      }
+      expect(await timelock.getMinDelay()).to.equal(BigInt(TIMELOCK_DELAY));
+    });
+
+    it("a passed proposal can still move the delay inside bounds; no one else can", async function () {
+      await expect(timelock.connect(guardian).updateDelay(DAY))
+        .to.be.revertedWithCustomError(timelock, "TimelockUnauthorizedCaller");
+      const t = await timelock.getAddress();
+      const calldatas = [timelock.interface.encodeFunctionData("updateDelay", [3 * DAY])];
+      const p = await propose(alice, [t], [0n], calldatas, "delay three days");
+      await passToSucceeded(p);
+      await governor.queue([t], [0n], calldatas, p.descHash);
+      await increase(TIMELOCK_DELAY + 1);
+      await governor.execute([t], [0n], calldatas, p.descHash);
+      expect(await timelock.getMinDelay()).to.equal(BigInt(3 * DAY));
     });
   });
 });

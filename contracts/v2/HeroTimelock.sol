@@ -37,6 +37,15 @@ contract HeroTimelock is TimelockController {
         _grantRole(CANCELLER_ROLE, guardianMultisig);
     }
 
+    /// @notice Keep the 1 hour..30 days delay bounds after deploy too. Without
+    ///         this, a passed proposal could set the delay to 0 and remove the
+    ///         guardian's cancel window for every later proposal.
+    ///         Caller check (timelock itself only) stays in the OZ base.
+    function updateDelay(uint256 newDelay) public override {
+        if (newDelay < MIN_DELAY_FLOOR || newDelay > MIN_DELAY_CEILING) revert DelayOutOfRange(newDelay);
+        super.updateDelay(newDelay);
+    }
+
     function _single(address a) private pure returns (address[] memory arr) {
         arr = new address[](1);
         arr[0] = a;

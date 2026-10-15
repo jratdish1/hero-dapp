@@ -64,8 +64,14 @@ contract HeroGovernor is
         if (address(stakedHeroVotes) == address(0) || address(timelock) == address(0)) {
             revert ZeroAddress();
         }
-        // A zero quorum would let one staker pass anything alone.
-        if (quorumPercent == 0 || quorumPercent > 100) revert QuorumOutOfRange(quorumPercent);
+    }
+
+    /// @dev Quorum must stay 1..100 at deploy AND after any passed proposal.
+    ///      A zero quorum would let one staker pass anything alone.
+    ///      OZ runs this from the constructor and from updateQuorumNumerator.
+    function _updateQuorumNumerator(uint256 newQuorumNumerator) internal override {
+        if (newQuorumNumerator == 0 || newQuorumNumerator > 100) revert QuorumOutOfRange(newQuorumNumerator);
+        super._updateQuorumNumerator(newQuorumNumerator);
     }
 
     // ─── Required overrides (OpenZeppelin 5.x multiple inheritance) ───────────
