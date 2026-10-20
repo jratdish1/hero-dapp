@@ -34,10 +34,6 @@ describe("HeroSingleSidedStaking", function () {
     await hero.connect(owner).approve(await staking.getAddress(), amount);
     return staking.connect(owner).notifyRewardAmount(amount);
   }
-  async function redeployStaking(duration) {
-    const Staking = await ethers.getContractFactory("HeroSingleSidedStaking");
-    staking = await Staking.deploy(owner.address, await hero.getAddress(), duration);
-  }
   async function assertSolvent() {
     const [held, principal, accruedUnpaid, scheduled] = await staking.rewardReserveStatus();
     expect(held).to.be.gte(principal + accruedUnpaid + scheduled);
@@ -237,6 +233,67 @@ describe("HeroSingleSidedStaking", function () {
       expect(await hero.balanceOf(await staking.getAddress())).to.be.lt(E(1));
     });
 
+    it("recycles single-staker rounding excess after exit", async function () {
+      await staking.setRewardsDuration(1);
+      await stake(alice, 3n * E(1) + 1n);
+      await fund(E(1));
+      await increase(2);
+
+      expect(await staking.earned(alice.address)).to.equal(E(1) - 1n);
+      await staking.connect(alice).exit();
+      expect(await staking.totalRewardsReconciled()).to.equal(1n);
+      await stake(bob, E(1));
+      await expect(staking.notifyRewardAmount(0))
+        .to.emit(staking, "SurplusRecycled").withArgs(1n);
+      await increase(2);
+      expect(await staking.earned(bob.address)).to.equal(1n);
+      await staking.connect(bob).getReward();
+      expect(await hero.balanceOf(await staking.getAddress())).to.equal(E(1));
+    });
+
+    it("recycles per-account flooring excess when all stakers exit", async function () {
+      await staking.setRewardsDuration(1);
+      const half = E(1) / 2n;
+      await stake(alice, half);
+      await stake(bob, half);
+      await fund(1n);
+      await increase(2);
+
+      expect(await staking.earned(alice.address)).to.equal(0n);
+      expect(await staking.earned(bob.address)).to.equal(0n);
+      await staking.connect(alice).exit();
+      await staking.connect(bob).exit();
+      const [, , accruedUnpaid] = await staking.rewardReserveStatus();
+      expect(accruedUnpaid).to.equal(0n);
+      await stake(carol, E(1));
+      await expect(staking.notifyRewardAmount(0))
+        .to.emit(staking, "SurplusRecycled").withArgs(1n);
+      await increase(2);
+      expect(await staking.earned(carol.address)).to.equal(1n);
+    });
+
+    it("keeps former stakers' unclaimed rewards reserved while recycling rounding excess", async function () {
+      await staking.setRewardsDuration(1);
+      const principal = 3n * E(1) + 1n;
+      await stake(alice, principal);
+      await fund(E(1));
+      await increase(2);
+
+      const earned = await staking.earned(alice.address);
+      await staking.connect(alice).withdraw(principal);
+      const [, , accruedUnpaid] = await staking.rewardReserveStatus();
+      expect(await staking.totalRewardsOwed()).to.equal(earned);
+      expect(accruedUnpaid).to.equal(earned);
+      await stake(bob, E(1));
+      await expect(staking.notifyRewardAmount(0))
+        .to.emit(staking, "SurplusRecycled").withArgs(1n);
+      await increase(2);
+      expect(await staking.earned(bob.address)).to.equal(1n);
+      const before = await hero.balanceOf(alice.address);
+      await staking.connect(alice).getReward();
+      expect(await hero.balanceOf(alice.address) - before).to.equal(earned);
+    });
+
     it("rewards accrued while nobody is staked are not owed and stay unallocated", async function () {
       await fund(E(700));
       await increase(WEEK + 1);
@@ -274,62 +331,6 @@ describe("HeroSingleSidedStaking", function () {
       await stake(alice, E(50_000));
       await expect(staking.notifyRewardAmount(0)).to.be.revertedWithCustomError(staking, "ZeroAmount");
       expect(await staking.rewardRate()).to.equal(0n);
-    });
-
-    it("recycles rounding dust after a sole staker exits", async function () {
-      await redeployStaking(1);
-      await stake(alice, 3n * E(1) + 1n);
-      await fund(E(1));
-      await increase(2);
-      await staking.connect(alice).exit();
-
-      expect(await hero.balanceOf(await staking.getAddress())).to.equal(1n);
-      expect(await staking.totalRewardsAccrued()).to.equal(await staking.totalRewardsPaid());
-
-      await stake(bob, E(1));
-      await expect(staking.notifyRewardAmount(0)).to.emit(staking, "SurplusRecycled").withArgs(1n);
-      await increase(2);
-      expect(await staking.earned(bob.address)).to.equal(1n);
-      await staking.connect(bob).getReward();
-      expect(await hero.balanceOf(await staking.getAddress())).to.equal(E(1));
-    });
-
-    it("recycles rewards below per-account precision after all stakers exit", async function () {
-      await redeployStaking(1);
-      const halfHero = E(1) / 2n;
-      await stake(alice, halfHero);
-      await stake(bob, halfHero);
-      await fund(1n);
-      await increase(2);
-
-      expect(await staking.earned(alice.address)).to.equal(0n);
-      expect(await staking.earned(bob.address)).to.equal(0n);
-      await staking.connect(alice).exit();
-      await staking.connect(bob).exit();
-      const [, , accruedUnpaid] = await staking.rewardReserveStatus();
-      expect(accruedUnpaid).to.equal(0n);
-
-      await stake(carol, E(1));
-      await expect(staking.notifyRewardAmount(0)).to.emit(staking, "SurplusRecycled").withArgs(1n);
-      await increase(2);
-      expect(await staking.earned(carol.address)).to.equal(1n);
-    });
-
-    it("keeps former stakers' unclaimed rewards reserved when reconciling dust", async function () {
-      await redeployStaking(1);
-      await stake(alice, E(1));
-      await stake(bob, E(1));
-      await fund(E(2));
-      await increase(2);
-
-      await staking.connect(alice).withdraw(E(1));
-      await staking.connect(bob).exit();
-      const [, , accruedUnpaid] = await staking.rewardReserveStatus();
-      expect(accruedUnpaid).to.equal(E(1));
-      await expect(staking.notifyRewardAmount(0)).to.be.revertedWithCustomError(staking, "ZeroAmount");
-
-      await staking.connect(alice).getReward();
-      await expect(staking.notifyRewardAmount(0)).to.be.revertedWithCustomError(staking, "ZeroAmount");
     });
 
     it("new funding plus surplus are streamed together; solvency holds", async function () {

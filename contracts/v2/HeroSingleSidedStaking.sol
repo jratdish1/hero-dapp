@@ -32,9 +32,10 @@ import {Votes} from "@openzeppelin/contracts/governance/utils/Votes.sol";
  *         - First stake auto-self-delegates so stakers have voting power without an
  *           extra transaction. Stakers may re-delegate at any time via delegate().
  *
- * @dev    Unpaid-reward liability is tracked globally with ceiling rounding, so it is
- *         always >= the sum of every account's earned(). This keeps the solvency check
- *         conservative. No off-chain component is in any value path.
+ * @dev    Unpaid-reward liability is tracked globally with ceiling rounding while stake is
+ *         outstanding. Once all stake is withdrawn, exact checkpointed account debts allow
+ *         proven rounding excess to be released without releasing former stakers' rewards.
+ *         No off-chain component is in any value path.
  */
 contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Votes {
     using SafeERC20 for IERC20;
@@ -61,11 +62,14 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
     mapping(address => uint256) private _balances;
 
     // ─── Reward liability accounting (transparency + solvency) ────────────────
-    /// @notice Total rewards accrued to stakers (rounded up, net of reconciled dust).
+    /// @notice Total rewards accrued to stakers (rounded up), all time.
     uint256 public totalRewardsAccrued;
     /// @notice Total rewards paid out to stakers, all time.
     uint256 public totalRewardsPaid;
-    uint256 private _totalClaimableRewards;
+    /// @notice Rewards stored for accounts after checkpointing, less rewards already paid.
+    uint256 public totalRewardsOwed;
+    /// @notice Proven rounding excess released from the conservative accrued liability.
+    uint256 public totalRewardsReconciled;
 
     // ─── Events ───────────────────────────────────────────────────────────────
     event RewardAdded(uint256 reward, uint256 rewardRate, uint256 periodFinish);
@@ -114,9 +118,9 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
         rewardPerTokenStored = newRpt;
         lastUpdateTime = lastTimeRewardApplicable();
         if (account != address(0)) {
-            uint256 accountRewards = earned(account);
-            _totalClaimableRewards += accountRewards - rewards[account];
-            rewards[account] = accountRewards;
+            uint256 updatedRewards = earned(account);
+            totalRewardsOwed += updatedRewards - rewards[account];
+            rewards[account] = updatedRewards;
             userRewardPerTokenPaid[account] = newRpt;
         }
     }
@@ -187,12 +191,12 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
     }
 
     function _accruedUnpaidView() internal view returns (uint256) {
-        uint256 accrued = totalRewardsAccrued;
+        uint256 accrued = totalRewardsAccrued - totalRewardsPaid - totalRewardsReconciled;
         if (_totalSupply != 0) {
             uint256 delta = rewardPerToken() - rewardPerTokenStored;
             accrued += Math.mulDiv(_totalSupply, delta, PRECISION, Math.Rounding.Ceil);
         }
-        return accrued - totalRewardsPaid;
+        return accrued;
     }
 
     // ─── User actions ─────────────────────────────────────────────────────────
@@ -244,18 +248,21 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
             _totalSupply -= amount;
         }
         _transferVotingUnits(msg.sender, address(0), amount);
-        if (_totalSupply == 0) {
-            totalRewardsAccrued = totalRewardsPaid + _totalClaimableRewards;
-        }
         hero.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
+        if (_totalSupply == 0) {
+            uint256 accruedUnpaid = totalRewardsAccrued - totalRewardsPaid - totalRewardsReconciled;
+            if (accruedUnpaid > totalRewardsOwed) {
+                totalRewardsReconciled += accruedUnpaid - totalRewardsOwed;
+            }
+        }
     }
 
     function _getReward() internal {
         uint256 reward = rewards[msg.sender];
         if (reward != 0) {
             rewards[msg.sender] = 0;
-            _totalClaimableRewards -= reward;
+            totalRewardsOwed -= reward;
             totalRewardsPaid += reward;
             hero.safeTransfer(msg.sender, reward);
             emit RewardPaid(msg.sender, reward);
@@ -283,7 +290,8 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
         // (new funding, direct donations, rewards streamed while nobody was staked, rounding
         // dust). It is streamed to stakers. It can never go to the owner.
         uint256 leftover = block.timestamp < periodFinish ? (periodFinish - block.timestamp) * rewardRate : 0;
-        uint256 obligations = _totalSupply + (totalRewardsAccrued - totalRewardsPaid) + leftover;
+        uint256 accruedUnpaid = totalRewardsAccrued - totalRewardsPaid - totalRewardsReconciled;
+        uint256 obligations = _totalSupply + accruedUnpaid + leftover;
         uint256 balance = hero.balanceOf(address(this));
         uint256 unallocated = balance > obligations ? balance - obligations : 0;
 
@@ -291,7 +299,7 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
         if (newRate == 0) revert ZeroAmount();
 
         // Defence in depth: principal is never promised as rewards.
-        uint256 required = _totalSupply + (totalRewardsAccrued - totalRewardsPaid) + newRate * rewardsDuration;
+        uint256 required = _totalSupply + accruedUnpaid + newRate * rewardsDuration;
         if (required > balance) revert RewardTooHigh(required, balance);
 
         rewardRate = newRate;
