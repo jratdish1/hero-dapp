@@ -61,10 +61,11 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
     mapping(address => uint256) private _balances;
 
     // ─── Reward liability accounting (transparency + solvency) ────────────────
-    /// @notice Total rewards accrued to stakers (rounded up), all time.
+    /// @notice Total rewards accrued to stakers (rounded up, net of reconciled dust).
     uint256 public totalRewardsAccrued;
     /// @notice Total rewards paid out to stakers, all time.
     uint256 public totalRewardsPaid;
+    uint256 private _totalClaimableRewards;
 
     // ─── Events ───────────────────────────────────────────────────────────────
     event RewardAdded(uint256 reward, uint256 rewardRate, uint256 periodFinish);
@@ -113,7 +114,9 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
         rewardPerTokenStored = newRpt;
         lastUpdateTime = lastTimeRewardApplicable();
         if (account != address(0)) {
-            rewards[account] = earned(account);
+            uint256 accountRewards = earned(account);
+            _totalClaimableRewards += accountRewards - rewards[account];
+            rewards[account] = accountRewards;
             userRewardPerTokenPaid[account] = newRpt;
         }
     }
@@ -241,6 +244,9 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
             _totalSupply -= amount;
         }
         _transferVotingUnits(msg.sender, address(0), amount);
+        if (_totalSupply == 0) {
+            totalRewardsAccrued = totalRewardsPaid + _totalClaimableRewards;
+        }
         hero.safeTransfer(msg.sender, amount);
         emit Withdrawn(msg.sender, amount);
     }
@@ -249,6 +255,7 @@ contract HeroSingleSidedStaking is Ownable2Step, Pausable, ReentrancyGuard, Vote
         uint256 reward = rewards[msg.sender];
         if (reward != 0) {
             rewards[msg.sender] = 0;
+            _totalClaimableRewards -= reward;
             totalRewardsPaid += reward;
             hero.safeTransfer(msg.sender, reward);
             emit RewardPaid(msg.sender, reward);
