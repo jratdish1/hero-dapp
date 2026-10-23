@@ -1,0 +1,26 @@
+{
+  "_comment": "HERO V3 address config (owner: VETS / jratdish1). Every value is TBD on purpose. Filling any value is a Tier B action that VETS must do. TBD fails closed: script/check_v3_addresses.py --require-final exits 1 while any TBD remains, and the V3 constructors revert on address(0). Never put a KB #776 / KB #792 section 8 address here; CI fails if you do.",
+  "schema": 1,
+  "chains": {
+    "base": {
+      "chainId": 8453,
+      "ownerSafe": "TBD",
+      "autoLiquidityReceiver": "TBD",
+      "donationReceiver": "TBD",
+      "stakeRewardsReceiver": "TBD",
+      "heroToken": "TBD",
+      "heroAble": "TBD",
+      "staking": "TBD"
+    },
+    "pulsechain": {
+      "chainId": 369,
+      "ownerSafe": "TBD",
+      "autoLiquidityReceiver": "TBD",
+      "donationReceiver": "TBD",
+      "stakeRewardsReceiver": "TBD",
+      "heroToken": "TBD",
+      "heroAble": "TBD",
+      "staking": "TBD"
+    }
+  }
+}
