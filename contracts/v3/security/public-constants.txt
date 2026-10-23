@@ -1,0 +1,7 @@
+# 64-hex public constants that the secret scan allows (not keys). Each appears verbatim in verified/vendored source.
+1f984b2c7cbcb7f024e5bdd873d8ca5d64e8696ff219ebede2374bf3217c9b75  Tellor queryId in verified PulseChain Hero.sol (public, on-chain)
+00000000000000000000000000000000000000000000000000000000000000ff  OZ 4.9.0 ShortStrings _FALLBACK_SENTINEL
+360894a13ba1a3210667c828492db98dca3e2076cc3735a920a3ca505d382bbc  EIP-1967 implementation slot = keccak("eip1967.proxy.implementation")-1 (OZ doc comment)
+7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  OZ ECDSA s-mask
+fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141  secp256k1 curve order n (public)
+7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0  secp256k1 n/2 (OZ ECDSA malleability bound)
