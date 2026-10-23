@@ -5,3 +5,14 @@
 7fffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff  OZ ECDSA s-mask
 fffffffffffffffffffffffffffffffebaaedce6af48a03bbfd25e8cd0364141  secp256k1 curve order n (public)
 7fffffffffffffffffffffffffffffff5d576e7357a4501ddfe92f46681b20a0  secp256k1 n/2 (OZ ECDSA malleability bound)
+
+# OpenZeppelin 5.6.1 (vendored verbatim for staking): public bit masks, an ERC-7201 storage slot,
+# an MSB lookup table and ABI-layout comment values. Not secrets; reproducible from the npm tarball.
+0000000000000000ffffffffffffffff0000000000000000ffffffffffffffff  # OZ 5.6.1 utils/Bytes.sol:223 byte-swap/chunk bit mask
+00000000ffffffff00000000ffffffff00000000ffffffff00000000ffffffff  # OZ 5.6.1 utils/Bytes.sol:227 byte-swap/chunk bit mask
+0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff0000ffff  # OZ 5.6.1 utils/Bytes.sol:231 byte-swap/chunk bit mask
+00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff00ff  # OZ 5.6.1 utils/Bytes.sol:235 byte-swap/chunk bit mask
+0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f  # OZ 5.6.1 utils/Bytes.sol:239 byte-swap/chunk bit mask
+9b779b17422d0df92223018b32b4d1fa46e071723d6817e2486d003becc55f00  # OZ 5.6.1 utils/ReentrancyGuard.sol:37 ERC-7201 slot keccak("openzeppelin.storage.ReentrancyGuard")
+0000000000000000000000000000000000000000000000000000000000000020  # OZ 5.6.1 utils/math/Math.sol:417 ABI word 0x20 (comment)
+0000010102020202030303030303030300000000000000000000000000000000  # OZ 5.6.1 utils/math/Math.sol:656 MSB lookup table
