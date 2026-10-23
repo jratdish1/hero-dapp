@@ -18,21 +18,21 @@
 [0xcfa2b3] files=0
 [regex ~735|735 DAI] files=0
 [any functionName *mint*]       1 functionName:"mintPhase"       1 functionName:"mintPrice"       1 functionName:"mintedPerWallet"       1 functionName:"totalMinted" 
-[assets/NFTMint-C7e2VD_6.js writeContract( calls] 0
+[assets/NFTMint-CmasjPkS.js writeContract( calls] 0
 == MUST be present ==
-[Minting paused for security] files=./assets/index-w6u-wTFn.js 
-[Do not send funds, tokens or NFTs to these addresses] files=./assets/index-w6u-wTFn.js 
-[New stakes paused for security] files=./assets/index-w6u-wTFn.js 
-[0x5F1D…[COMPROMISED]…7Dba] files=./assets/index-w6u-wTFn.js 
-[0xdf02…[MALICIOUS]…8792] files=./assets/index-w6u-wTFn.js 
-[0x2dCD…[ATTACKER]…dEC8] files=./assets/index-w6u-wTFn.js 
-[0x5Fad…[COMPROMISED]…97bE] files=./assets/index-w6u-wTFn.js 
-[0xCe60…[COMPROMISED]…7B36] files=./assets/index-w6u-wTFn.js 
-[0xeb2C…[UNVERIFIED]…24e6] files=./assets/index-w6u-wTFn.js 
-[security-notice] files=./assets/index-w6u-wTFn.js 
-[Aviso de seguridad] files=./assets/index-w6u-wTFn.js 
+[Minting paused for security] files=./assets/index-Xk-dUNEB.js 
+[Do not send funds, tokens or NFTs to these addresses] files=./assets/index-Xk-dUNEB.js 
+[New stakes paused for security] files=./assets/index-Xk-dUNEB.js 
+[0x5F1D…[COMPROMISED]…7Dba] files=./assets/index-Xk-dUNEB.js 
+[0xdf02…[MALICIOUS]…8792] files=./assets/index-Xk-dUNEB.js 
+[0x2dCD…[ATTACKER]…dEC8] files=./assets/index-Xk-dUNEB.js 
+[0x5Fad…[COMPROMISED]…97bE] files=./assets/index-Xk-dUNEB.js 
+[0xCe60…[COMPROMISED]…7B36] files=./assets/index-Xk-dUNEB.js 
+[0xeb2C…[UNVERIFIED]…24e6] files=./assets/index-Xk-dUNEB.js 
+[security-notice] files=./assets/index-Xk-dUNEB.js 
+[Aviso de seguridad] files=./assets/index-Xk-dUNEB.js 
 == known remaining full addresses (read-only use, not in notice) ==
-[HeroCards Base 0x5Fad096a…] ./assets/NFTMint-C7e2VD_6.js  (heroCards-config reads; writes removed + blocked)
-[HeroCards PLS 0xCe609B3A…] ./assets/NFTMint-C7e2VD_6.js 
-[donation receiver 0x94e529…] ./assets/Dashboard-C07Q7lZs.js  (TreasuryDisplay balance reads; UI defanged + warning)
+[HeroCards Base 0x5Fad096a…] ./assets/NFTMint-CmasjPkS.js  (heroCards-config reads; writes removed + blocked)
+[HeroCards PLS 0xCe609B3A…] ./assets/NFTMint-CmasjPkS.js 
+[donation receiver 0x94e529…] ./assets/Dashboard-CqYpKSjE.js  (TreasuryDisplay balance reads; UI defanged + warning)
 [ABI entries mint/whitelistMint (ABI JSON only)]       2 name:"mint"       1 name:"whitelistMint" 

@@ -10,6 +10,7 @@ import { isValidChainId, validateDecimalInput } from "../lib/validation";
 import { STAKING_ABI } from "../lib/staking-abi";
 import { useNetwork } from "../contexts/NetworkContext";
 import { getStakingAddress } from "../lib/config";
+import { HERO_STAKE_NEW_DEPOSITS_ENABLED, STAKE_PAUSED_DETAIL } from "../lib/securityContainment";
 
 const ERC20_ABI = [
   {
@@ -276,7 +277,11 @@ export function useStakingActions(overrideChainId?: number) {
     }
   }
 
+  // SECURITY (row 216): defence in depth — new deposits (approve + stake) are
+  // refused at the hook level too, not only by the HeroStake UI. Unstake,
+  // claim and emergency withdraw are untouched.
   const approve = async (amount: string) => {
+    if (!HERO_STAKE_NEW_DEPOSITS_ENABLED) throw new Error(STAKE_PAUSED_DETAIL);
     if (!chainId || !stakingToken || !stakingAddress) throw new Error("Staking is unavailable on this chain");
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid approval amount");
     const parsedAmount = parseUnits(amount, 18);
@@ -292,6 +297,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const stake = async (amount: string) => {
+    if (!HERO_STAKE_NEW_DEPOSITS_ENABLED) throw new Error(STAKE_PAUSED_DETAIL);
     if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid stake amount");
     const parsedAmount = parseUnits(amount, 18);

@@ -1,4 +1,4 @@
-cd /workspace/hero-216/repo/dist/public
+cd "$(git rev-parse --show-toplevel)/dist/public"
 echo "== RED-TEAM bundle grep: dist/public (final build), $(find . -name '*.js' | wc -l) js files =="
 for p in 'functionName:"mint"' 'functionName:"whitelistMint"' '0xeb2C36' '0xeb2c36' '735 DAI' 'fund the contract owner' 'Pending Funding' '0x5F1D1af1' '0x5f1d1af1' '0xdf02e0aa' '0x2dCDEA8a' '0x2dcdea8a' '0x0AFADaF9' '0x0afadaf9' '0x43f319' '0xCFa2b3' '0xcfa2b3'; do
   echo "[$p] files=$(grep -rlF -- "$p" . | wc -l)"; done

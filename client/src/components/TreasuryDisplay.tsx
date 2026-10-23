@@ -1,6 +1,6 @@
 /**
  * TreasuryDisplay — Shows real-time treasury balance for PulseChain + BASE
- * Address: 0x94e52915b99ffdd298939f9e0b4a7af80e6789f7
+ * Address: 0x94e5…89f7 (DO-NOT-FUND / unverified; read-only balance lookups only)
  * Displays native token balance (PLS / ETH) side by side
  * Note: Funds donated to quarterly DAO vote winner
  */

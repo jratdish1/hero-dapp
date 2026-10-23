@@ -25,7 +25,8 @@ import {
   getHeroFeeDiscount,
 } from "./heroCards-holder";
 
-const VALID_WALLET = "0x5F1D1af1EbA90FD4A29e194275c6DfA42f4E7Dba";
+// Synthetic checksummed-format test wallet (never a real/compromised address).
+const VALID_WALLET = "0x1111111111111111111111111111111111111111";
 const INVALID_WALLET = "not-an-address";
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
