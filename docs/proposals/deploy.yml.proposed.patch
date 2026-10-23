@@ -1,0 +1,150 @@
+--- a/.github/workflows/deploy.yml
++++ b/.github/workflows/deploy.yml
+@@ -416,7 +416,39 @@
+           DEPLOY_SHA="$1"
+           DEPLOY_OPERATION="$2"
+           APP_DIR="/var/www/hero-dapp"
+-          HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          HEALTH_PATH='/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          # Origin checks run on the VPS so Cloudflare bot challenges cannot mask them.
++          # 1) Express directly (pm2 hero-dapp, PORT default 3000).
++          # 2) Through the host nginx with SNI pinned to 127.0.0.1, proving /api/ is
++          #    proxied to Express and NOT served by an SPA try_files fallback.
++          HEALTH_PORT="${HERO_HEALTH_PORT:-3000}"
++          HEALTH_URL_ORIGIN="http://127.0.0.1:${HEALTH_PORT}${HEALTH_PATH}"
++          HEALTH_URL_NGINX="https://herobase.io${HEALTH_PATH}"
++          health_json_ok() {
++            # $1 = expected sha, stdin = response body. Requires real tRPC JSON.
++            EXPECTED_SHA="$1" node -e '
++              let b = ""; process.stdin.setEncoding("utf8");
++              process.stdin.on("data", c => { b += c; });
++              process.stdin.on("end", () => {
++                let j; try { j = JSON.parse(b); } catch { process.exit(1); }
++                const d = j?.result?.data?.json ?? j?.result?.data;
++                if (d?.ok !== true || d?.releaseSha !== process.env.EXPECTED_SHA) process.exit(1);
++              });
++            '
++          }
++          health_once() {
++            local expected_sha="$1" body="" ctype=""
++            body="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN" || true)"
++            printf '%s' "$body" | health_json_ok "$expected_sha" || return 1
++            ctype="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              --resolve herobase.io:443:127.0.0.1 -H 'Accept: application/json' \
++              -o "$APP_DIR/.git/vets-health-body.json" -w '%{content_type}' \
++              "$HEALTH_URL_NGINX" || true)"
++            case "$ctype" in application/json*) ;; *) rm -f "$APP_DIR/.git/vets-health-body.json"; return 1 ;; esac
++            health_json_ok "$expected_sha" < "$APP_DIR/.git/vets-health-body.json" || { rm -f "$APP_DIR/.git/vets-health-body.json"; return 1; }
++            rm -f "$APP_DIR/.git/vets-health-body.json"
++          }
+ 
+           for required_command in git node corepack pm2 curl flock; do
+             command -v "$required_command" >/dev/null || exit 1
+@@ -442,12 +474,9 @@
+           MUTATION_STARTED=false
+ 
+           wait_for_health() {
+-            local expected_sha="$1" response=""
++            local expected_sha="$1"
+             for attempt in $(seq 1 10); do
+-              response="$(curl --fail --silent --show-error \
+-                --connect-timeout 5 --max-time 10 "$HEALTH_URL" || true)"
+-              if printf '%s' "$response" | grep -q '"ok":true' && \
+-                 printf '%s' "$response" | grep -q "\"releaseSha\":\"$expected_sha\""; then
++              if health_once "$expected_sha"; then
+                 return 0
+               fi
+               sleep 3
+@@ -605,16 +634,30 @@
+         shell: bash
+         run: |
+           set -euo pipefail
++          # PRECONDITION (owner action, not automatable here): Cloudflare currently
++          # serves a managed bot challenge (HTTP 403, cf-mitigated: challenge) to
++          # datacenter IPs, including GitHub-hosted runners. A WAF custom rule must
++          # skip managed challenges for exactly this path:
++          #   http.request.uri.path eq "/api/trpc/system.health"
++          # Without it this step fails closed (never passes on challenge HTML).
+           health_url='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          body_file="$RUNNER_TEMP/public-health.json"
+           for attempt in $(seq 1 10); do
+-            response="$(curl --fail --silent --show-error \
+-              --connect-timeout 5 --max-time 15 "$health_url" || true)"
+-            if printf '%s' "$response" | grep -q '"ok":true' &&
+-               printf '%s' "$response" | grep -q "\"releaseSha\":\"$DEPLOY_SHA\"" &&
+-               curl --fail --silent --show-error \
+-                 --connect-timeout 5 --max-time 15 --output /dev/null https://herobase.io/; then
+-              exit 0
+-            fi
++            ctype="$(curl --fail --silent --show-error \
++              --connect-timeout 5 --max-time 15 -H 'Accept: application/json' \
++              -o "$body_file" -w '%{content_type}' "$health_url" || true)"
++            case "$ctype" in
++              application/json*)
++                if jq -e --arg sha "$DEPLOY_SHA" \
++                     '(.result.data.json // .result.data) | .ok == true and .releaseSha == $sha' \
++                     "$body_file" >/dev/null 2>&1 &&
++                   curl --fail --silent --show-error \
++                     --connect-timeout 5 --max-time 15 --output /dev/null https://herobase.io/; then
++                  exit 0
++                fi
++                ;;
++              *) printf 'public health returned content-type %s (expected application/json)\n' "${ctype:-none}" ;;
++            esac
+             sleep 5
+           done
+           exit 1
+@@ -658,7 +701,39 @@
+           set -Eeuo pipefail
+           ROLLBACK_SHA="$1"
+           APP_DIR="/var/www/hero-dapp"
+-          HEALTH_URL='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          HEALTH_PATH='/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          # Origin checks run on the VPS so Cloudflare bot challenges cannot mask them.
++          # 1) Express directly (pm2 hero-dapp, PORT default 3000).
++          # 2) Through the host nginx with SNI pinned to 127.0.0.1, proving /api/ is
++          #    proxied to Express and NOT served by an SPA try_files fallback.
++          HEALTH_PORT="${HERO_HEALTH_PORT:-3000}"
++          HEALTH_URL_ORIGIN="http://127.0.0.1:${HEALTH_PORT}${HEALTH_PATH}"
++          HEALTH_URL_NGINX="https://herobase.io${HEALTH_PATH}"
++          health_json_ok() {
++            # $1 = expected sha, stdin = response body. Requires real tRPC JSON.
++            EXPECTED_SHA="$1" node -e '
++              let b = ""; process.stdin.setEncoding("utf8");
++              process.stdin.on("data", c => { b += c; });
++              process.stdin.on("end", () => {
++                let j; try { j = JSON.parse(b); } catch { process.exit(1); }
++                const d = j?.result?.data?.json ?? j?.result?.data;
++                if (d?.ok !== true || d?.releaseSha !== process.env.EXPECTED_SHA) process.exit(1);
++              });
++            '
++          }
++          health_once() {
++            local expected_sha="$1" body="" ctype=""
++            body="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN" || true)"
++            printf '%s' "$body" | health_json_ok "$expected_sha" || return 1
++            ctype="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              --resolve herobase.io:443:127.0.0.1 -H 'Accept: application/json' \
++              -o "$APP_DIR/.git/vets-health-body.json" -w '%{content_type}' \
++              "$HEALTH_URL_NGINX" || true)"
++            case "$ctype" in application/json*) ;; *) rm -f "$APP_DIR/.git/vets-health-body.json"; return 1 ;; esac
++            health_json_ok "$expected_sha" < "$APP_DIR/.git/vets-health-body.json" || { rm -f "$APP_DIR/.git/vets-health-body.json"; return 1; }
++            rm -f "$APP_DIR/.git/vets-health-body.json"
++          }
+           cd "$APP_DIR"
+           exec 9>"$APP_DIR/.git/vets-production.lock"
+           flock -w 1800 9 || exit 75
+@@ -700,10 +775,7 @@
+             });
+           '
+           for attempt in $(seq 1 10); do
+-            response="$(curl --fail --silent --show-error \
+-              --connect-timeout 5 --max-time 10 "$HEALTH_URL" || true)"
+-            if printf '%s' "$response" | grep -q '"ok":true' &&
+-               printf '%s' "$response" | grep -q "\"releaseSha\":\"$ROLLBACK_SHA\""; then
++            if health_once "$ROLLBACK_SHA"; then
+               exit 0
+             fi
+             sleep 3
