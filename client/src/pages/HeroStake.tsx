@@ -36,6 +36,12 @@ import {
   useCountdown,
 } from "@/hooks/useStaking";
 import { getChainConfig } from "@/lib/config";
+import {
+  HERO_STAKE_NEW_DEPOSITS_ENABLED,
+  STAKE_PAUSED_MESSAGE,
+  STAKE_PAUSED_DETAIL,
+} from "@/lib/securityContainment";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // ─── Chain Config ────────────────────────────────────────────────────
 // Local chain display config (derived from shared config)
@@ -121,6 +127,8 @@ export default function HeroStake() {
   const user = useUserStake(activeChainId);
   const actions = useStakingActions(activeChainId);
   const countdown = useCountdown(user.unlockTime);
+  const { t } = useLanguage();
+  const newStakesPaused = !HERO_STAKE_NEW_DEPOSITS_ENABLED;
 
   // ─── Local State ─────────────────────────────────────────────────
   const [stakeAmount, setStakeAmount] = useState("");
@@ -138,6 +146,10 @@ export default function HeroStake() {
 
   // ─── Handlers ────────────────────────────────────────────────────
   const handleStake = async () => {
+    if (newStakesPaused) {
+      toast.error(t(STAKE_PAUSED_MESSAGE), { description: t(STAKE_PAUSED_DETAIL) });
+      return;
+    }
     if (!isValidAmount(stakeAmount)) {
       toast.error("Enter an amount to stake");
       return;
@@ -294,15 +306,12 @@ export default function HeroStake() {
         >
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-red-400">⚠️ Reward Pool Paused — Pending Funding</p>
+            <p className="text-sm font-semibold text-red-400">⚠️ Reward Pool Paused</p>
             <p className="text-xs text-red-400/70 mb-2">
               New stakes and reward claims are temporarily disabled. Emergency withdrawals remain available.
             </p>
-            <div className="bg-black/30 rounded-lg p-2 border border-red-500/20">
-              <p className="text-xs text-yellow-400 font-semibold mb-1">To restart the reward pool, fund the contract owner wallet:</p>
-              <p className="text-xs font-mono text-white/80 break-all">0xeb2C36C1804A8D4c68a2033dEe5ACc1294bD24e6</p>
-              <p className="text-xs text-yellow-400/80 mt-1">Required: ~735 DAI + 0.001 ETH on Base, or ~735 DAI on PulseChain</p>
-            </div>
+            {/* SECURITY (row 216): the "fund the owner wallet" instructions were removed.
+                The staking owner/treasury is unverified; never ask users to send funds to it. */}
           </div>
         </div>
       )}
@@ -396,6 +405,18 @@ export default function HeroStake() {
         </div>
       )}
 
+      {/* SECURITY (row 216): new stakes paused — visible to everyone, connected or not */}
+      {newStakesPaused && (
+        <div
+          role="alert"
+          data-testid="stake-paused-banner"
+          className="mb-6 rounded-lg border-2 border-red-500/60 bg-red-950/40 p-4"
+        >
+          <p className="text-sm font-bold text-red-300">⛔ {t(STAKE_PAUSED_MESSAGE)}</p>
+          <p className="mt-1 text-xs text-red-200/90">{t(STAKE_PAUSED_DETAIL)}</p>
+        </div>
+      )}
+
       {/* Connect Wallet Prompt */}
       {!isConnected ? (
         <ConnectWalletPrompt message="Connect your wallet to stake HERO and earn DAI rewards" />
@@ -449,7 +470,7 @@ export default function HeroStake() {
                       value={stakeAmount}
                       onChange={setStakeAmount}
                       className="bg-black/90 border-[#3D5A3D] text-white"
-                      disabled={isAnyTxPending || stats.isPaused}
+                      disabled={newStakesPaused || isAnyTxPending || stats.isPaused}
                     />
                     <button
                       onClick={handleMaxStake}
@@ -478,9 +499,20 @@ export default function HeroStake() {
                     <span className="text-white">{formatLockPeriod(stats.lockPeriodSeconds)}</span>
                   </div>
                 </div>
+                {newStakesPaused && (
+                  <div
+                    role="alert"
+                    data-testid="stake-paused-notice"
+                    className="rounded-lg p-3 text-xs"
+                    style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.45)" }}
+                  >
+                    <p className="font-semibold text-red-300">{t(STAKE_PAUSED_MESSAGE)}</p>
+                    <p className="text-red-300/80 mt-1">{t(STAKE_PAUSED_DETAIL)}</p>
+                  </div>
+                )}
                 <button
                   onClick={handleStake}
-                  disabled={isAnyTxPending || stats.isPaused || !stakeAmount}
+                  disabled={newStakesPaused || isAnyTxPending || stats.isPaused || !stakeAmount}
                   className="w-full py-3 rounded-xl font-bold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{
                     background: "linear-gradient(135deg, #C8A84B, #a8882b)",
@@ -495,7 +527,7 @@ export default function HeroStake() {
                   ) : (
                     <>
                       <Zap className="w-4 h-4" />
-                      Stake HERO
+                      {newStakesPaused ? t(STAKE_PAUSED_MESSAGE) : "Stake HERO"}
                     </>
                   )}
                 </button>

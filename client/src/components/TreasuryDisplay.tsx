@@ -142,7 +142,10 @@ export default function TreasuryDisplay() {
 
       {/* Address */}
       <p className="text-[10px] font-mono text-muted-foreground mb-3 truncate">
-        {TREASURY_ADDRESS}
+        {`${TREASURY_ADDRESS.slice(0, 6)}…[UNVERIFIED]…${TREASURY_ADDRESS.slice(-4)}`}
+      </p>
+      <p className="text-[10px] font-semibold text-red-400 mb-3" data-testid="treasury-unverified-warning">
+        Security notice: do not send funds directly to this address until it is re-verified.
       </p>
 
       {/* Balances side by side */}

@@ -8,6 +8,7 @@ import { ThemeProvider } from "./contexts/ThemeContext";
 import { NetworkProvider } from "./contexts/NetworkContext";
 import { LanguageProvider } from "./contexts/LanguageContext";
 import FloatingSocial from "./components/FloatingSocial";
+import SecurityNotice from "./components/SecurityNotice";
 
 // Critical path: Home loads eagerly (landing page)
 import Home from "./pages/Home";
@@ -178,6 +179,8 @@ function App() {
           <NetworkProvider>
             <TooltipProvider>
               <Toaster />
+              {/* SECURITY (row 216): site-wide DO-NOT-FUND notice on every route */}
+              <SecurityNotice />
               <Suspense fallback={null}>
                 <ExplainerVideoModal />
               </Suspense>

@@ -1,0 +1,39 @@
+== RED-TEAM bundle grep: dist/public (final build), 533 js files ==
+[functionName:"mint"] files=0
+[functionName:"whitelistMint"] files=0
+[0xeb2C36] files=0
+[0xeb2c36] files=0
+[735 DAI] files=0
+[fund the contract owner] files=0
+[Pending Funding] files=0
+[0x5F1D1af1] files=0
+[0x5f1d1af1] files=0
+[0xdf02e0aa] files=0
+[0x2dCDEA8a] files=0
+[0x2dcdea8a] files=0
+[0x0AFADaF9] files=0
+[0x0afadaf9] files=0
+[0x43f319] files=0
+[0xCFa2b3] files=0
+[0xcfa2b3] files=0
+[regex ~735|735 DAI] files=0
+== MUST be present ==
+[Minting paused for security] files=./assets/index-CnJEkwrw.js 
+[Do not send funds, tokens or NFTs to these addresses] files=./assets/index-CnJEkwrw.js 
+[New stakes paused for security] files=./assets/index-CnJEkwrw.js 
+[0x5F1D…[COMPROMISED]…7Dba] files=./assets/index-CnJEkwrw.js 
+[0xdf02…[MALICIOUS]…8792] files=./assets/index-CnJEkwrw.js 
+[0x2dCD…[ATTACKER]…dEC8] files=./assets/index-CnJEkwrw.js 
+[0x5Fad…[COMPROMISED]…97bE] files=./assets/index-CnJEkwrw.js 
+[0xCe60…[COMPROMISED]…7B36] files=./assets/index-CnJEkwrw.js 
+[0xeb2C…[UNVERIFIED]…24e6] files=./assets/index-CnJEkwrw.js 
+[security-notice] files=./assets/index-CnJEkwrw.js 
+[Aviso de seguridad] files=./assets/index-CnJEkwrw.js 
+== known remaining full addresses (read-only use, not in notice) ==
+[HeroCards Base 0x5Fad096a…] ./assets/NFTMint-BBq1uITo.js   (heroCards-config: totalSupply/phase reads; writes blocked by flag+isBlockedContract)
+[HeroCards PLS 0xCe609B3A…] ./assets/NFTMint-BBq1uITo.js 
+[donation receiver 0x94e529…] ./assets/Dashboard-Bl_lyfGG.js  (TreasuryDisplay balance reads; UI now shows defanged + warning)
+[assets/NFTMint-BBq1uITo.js writeContract( calls] 0
+[ABI entries mint/whitelistMint (ABI JSON only)]       2 name:"mint"       1 name:"whitelistMint" 
+[functionName values in assets/NFTMint-BBq1uITo.js]       1 functionName:"balanceOf"       1 functionName:"canAccessSpinWheel"       1 functionName:"getFeeDiscount"       1 functionName:"getHolderTier"       1 functionName:"isHolder"       1 functionName:"mintPhase"       1 functionName:"mintPrice"       1 functionName:"mintedPerWallet"       1 functionName:"totalMinted" 
+[any functionName mint* anywhere]       1 functionName:"mintPhase"       1 functionName:"mintPrice"       1 functionName:"mintedPerWallet"       1 functionName:"totalMinted" 

@@ -21,6 +21,23 @@ type AllTranslations = Record<Language, TranslationDict>;
 const translations: AllTranslations = {
   en: {}, // English is the default — no translation needed
   es: {
+    // === Security containment (queue row 216, 2026-10-22) ===
+    "Security notice": "Aviso de seguridad",
+    "Do not send funds, tokens or NFTs to these addresses. HERO Cards minting is paused while contracts migrate.": "No envíe fondos, tokens ni NFT a estas direcciones. La acuñación de HERO Cards está en pausa mientras se migran los contratos.",
+    "Addresses are shortened on purpose so they cannot be copied into a wallet.": "Las direcciones están acortadas a propósito para que no se puedan copiar en una billetera.",
+    "Hide for this session": "Ocultar en esta sesión",
+    "Minting paused for security": "Acuñación en pausa por seguridad",
+    "HERO Cards minting is paused: contracts under migration. Do not send funds.": "La acuñación de HERO Cards está en pausa: contratos en migración. No envíe fondos.",
+    "MINT PAUSED": "ACUÑACIÓN EN PAUSA",
+    "The HeroCards contracts on Base and PulseChain are being replaced. Do not mint, buy or send funds to the old contracts from any site.": "Los contratos HeroCards en Base y PulseChain se están reemplazando. No acuñe, compre ni envíe fondos a los contratos antiguos desde ningún sitio.",
+    "New stakes paused for security": "Nuevos stakes en pausa por seguridad",
+    "New HERO stakes are paused while the staking contract is migrated. Existing stakers can still unstake, emergency-withdraw and claim.": "Los nuevos stakes de HERO están en pausa mientras se migra el contrato de staking. Quienes ya tienen stake pueden retirar, hacer retiro de emergencia y reclamar.",
+    "HERO deployer key (stolen)": "Clave del desplegador de HERO (robada)",
+    "Sweeper contract": "Contrato barredor (sweeper)",
+    "Attacker wallet": "Billetera del atacante",
+    "HeroCards NFT contract (admin compromised)": "Contrato NFT HeroCards (administrador comprometido)",
+    "Staking owner / treasury: do not send funds until ownership is re-verified": "Propietario / tesorería del staking: no envíe fondos hasta que se vuelva a verificar la propiedad",
+
     // === Navigation ===
     "Swap": "Intercambiar",
     "Dashboard": "Panel",
@@ -271,6 +288,23 @@ const translations: AllTranslations = {
   },
   // Stub entries for other languages — can be filled in later
   fr: {
+    // === Security containment (queue row 216, 2026-10-22) ===
+    "Security notice": "Avis de sécurité",
+    "Do not send funds, tokens or NFTs to these addresses. HERO Cards minting is paused while contracts migrate.": "N'envoyez ni fonds, ni jetons, ni NFT à ces adresses. Le mint des HERO Cards est suspendu pendant la migration des contrats.",
+    "Addresses are shortened on purpose so they cannot be copied into a wallet.": "Les adresses sont volontairement raccourcies pour ne pas pouvoir être copiées dans un portefeuille.",
+    "Hide for this session": "Masquer pour cette session",
+    "Minting paused for security": "Mint suspendu pour raisons de sécurité",
+    "HERO Cards minting is paused: contracts under migration. Do not send funds.": "Le mint des HERO Cards est suspendu : contrats en cours de migration. N'envoyez pas de fonds.",
+    "MINT PAUSED": "MINT SUSPENDU",
+    "The HeroCards contracts on Base and PulseChain are being replaced. Do not mint, buy or send funds to the old contracts from any site.": "Les contrats HeroCards sur Base et PulseChain sont en cours de remplacement. Ne mintez pas, n'achetez pas et n'envoyez pas de fonds aux anciens contrats, depuis aucun site.",
+    "New stakes paused for security": "Nouveaux stakes suspendus pour raisons de sécurité",
+    "New HERO stakes are paused while the staking contract is migrated. Existing stakers can still unstake, emergency-withdraw and claim.": "Les nouveaux stakes HERO sont suspendus pendant la migration du contrat de staking. Les stakers existants peuvent toujours retirer, faire un retrait d'urgence et réclamer.",
+    "HERO deployer key (stolen)": "Clé du déployeur HERO (volée)",
+    "Sweeper contract": "Contrat de siphonnage (sweeper)",
+    "Attacker wallet": "Portefeuille de l'attaquant",
+    "HeroCards NFT contract (admin compromised)": "Contrat NFT HeroCards (admin compromis)",
+    "Staking owner / treasury: do not send funds until ownership is re-verified": "Propriétaire / trésorerie du staking : n'envoyez pas de fonds tant que la propriété n'est pas revérifiée",
+
     "Swap": "Échanger",
     "Dashboard": "Tableau de Bord",
     "Portfolio": "Portefeuille",
@@ -474,6 +508,23 @@ const translations: AllTranslations = {
     "BASE": "BASE",
   },
   de: {
+    // === Security containment (queue row 216, 2026-10-22) ===
+    "Security notice": "Sicherheitshinweis",
+    "Do not send funds, tokens or NFTs to these addresses. HERO Cards minting is paused while contracts migrate.": "Senden Sie keine Gelder, Token oder NFTs an diese Adressen. Das Minten von HERO Cards ist während der Vertragsmigration pausiert.",
+    "Addresses are shortened on purpose so they cannot be copied into a wallet.": "Die Adressen sind absichtlich gekürzt, damit sie nicht in eine Wallet kopiert werden können.",
+    "Hide for this session": "Für diese Sitzung ausblenden",
+    "Minting paused for security": "Minten aus Sicherheitsgründen pausiert",
+    "HERO Cards minting is paused: contracts under migration. Do not send funds.": "Das Minten von HERO Cards ist pausiert: Verträge werden migriert. Senden Sie keine Gelder.",
+    "MINT PAUSED": "MINTEN PAUSIERT",
+    "The HeroCards contracts on Base and PulseChain are being replaced. Do not mint, buy or send funds to the old contracts from any site.": "Die HeroCards-Verträge auf Base und PulseChain werden ersetzt. Minten, kaufen oder senden Sie keine Gelder an die alten Verträge, von keiner Website aus.",
+    "New stakes paused for security": "Neue Stakes aus Sicherheitsgründen pausiert",
+    "New HERO stakes are paused while the staking contract is migrated. Existing stakers can still unstake, emergency-withdraw and claim.": "Neue HERO-Stakes sind pausiert, während der Staking-Vertrag migriert wird. Bestehende Staker können weiterhin abheben, eine Notabhebung durchführen und Belohnungen beanspruchen.",
+    "HERO deployer key (stolen)": "HERO-Deployer-Schlüssel (gestohlen)",
+    "Sweeper contract": "Sweeper-Vertrag",
+    "Attacker wallet": "Wallet des Angreifers",
+    "HeroCards NFT contract (admin compromised)": "HeroCards-NFT-Vertrag (Admin kompromittiert)",
+    "Staking owner / treasury: do not send funds until ownership is re-verified": "Staking-Eigentümer / Treasury: keine Gelder senden, bis die Eigentümerschaft erneut verifiziert ist",
+
     "Swap": "Tauschen",
     "Dashboard": "Übersicht",
     "Portfolio": "Portfolio",
