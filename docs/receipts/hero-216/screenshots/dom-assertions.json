@@ -1,0 +1,130 @@
+{
+ "00-first-visit-notice-above-intro-modal": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": true,
+  "mintBtnDisabled": true,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "01-landing-notice": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": false,
+  "mintBtnDisabled": null,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": []
+ },
+ "02-nft-mint-pulsechain": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": true,
+  "mintBtnDisabled": true,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "toggle_to_base": "button:has-text(\"Base\")",
+ "03-nft-mint-base": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": true,
+  "mintBtnDisabled": true,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "04-stake-dai": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": false,
+  "mintBtnDisabled": null,
+  "stakeBanner": true,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "toggle_dash_base": "button:has-text(\"Base\")",
+ "05-dashboard-notice-base": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": false,
+  "mintBtnDisabled": null,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "toggle_dash_pls": "button:has-text(\"PLS\")",
+ "06-dashboard-notice-pulsechain": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": false,
+  "mintBtnDisabled": null,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": false,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ },
+ "07-nft-mint-es": {
+  "notice": true,
+  "noticeVisible": true,
+  "items": 6,
+  "mintPanel": true,
+  "mintBtnDisabled": true,
+  "stakeBanner": false,
+  "has735DAI": false,
+  "hasEb2c36": false,
+  "hasFullDeployer": false,
+  "esTitle": true,
+  "switchers": [
+   "\u26a1\nPLS",
+   "\ud83d\udd35\nBASE"
+  ]
+ }
+}

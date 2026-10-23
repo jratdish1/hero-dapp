@@ -1,0 +1,36 @@
+check-csp-contract exit=0
+check-bootstrap-recovery exit=0
+check-generic-error-focus exit=0
+check-csp-routes exit=0
+check-swap-intent-confirm exit=0
+check-scroll-lock-csp exit=0
+check-landing-bundle exit=0
+check-token-registry exit=0
+===== g-check-bootstrap-recovery.log
+Bootstrap recovery browser integration: PASS (/workspace/rt135/bootstrap-recovery-report.json)
+initial-bootstrap-rejection: The secure DApp could not load.; focus=dapp-recovery-title
+route-chunk-rejection: The secure DApp could not load.; focus=dapp-recovery-title
+===== g-check-csp-contract.log
+Production CSP contract: PASS; complete Helmet/Nginx match; transitional style-attribute files=47
+===== g-check-csp-routes.log
+Production CSP route matrix: PASS (/, /wallet, /stake, /dao, /dao/proposals)
+===== g-check-generic-error-focus.log
+Mounted generic error focus: PASS (/workspace/rt135/generic-error-focus-report.json)
+===== g-check-landing-bundle.log
+Built HTML analytics placeholder gate: PASS
+Landing entry: index.html
+Dynamic DApp chunk: _DappBootstrap-CKbkZnof.js
+assets/index-Xk-dUNEB.js: raw=329786 gzip=103424
+assets/index-uQDEm6lN.css: raw=271802 gzip=35612
+Landing static gzip total: 139036 bytes
+Landing static gzip budget: 400000 bytes
+Landing bundle gate: PASS
+===== g-check-scroll-lock-csp.log
+Radix scroll-lock CSP integration: PASS (/workspace/rt135/scroll-lock-csp-report.json)
+===== g-check-swap-intent-confirm.log
+HERO swap intent confirm browser gate: PASS
+===== g-check-token-registry.log
+🔍 Scanning for duplicated token/staking addresses...
+
+✅ No duplicated addresses found. All HERO/VETS/staking addresses are in shared config.
+   (4 known-safe external URL patterns are allowlisted — see FALSE_POSITIVE_ALLOWLIST in this script)

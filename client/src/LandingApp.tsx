@@ -1,5 +1,7 @@
 import ErrorBoundary from "./components/ErrorBoundary";
 import FloatingSocial from "./components/FloatingSocial";
+import SecurityNotice from "./components/SecurityNotice";
+import { LanguageProvider } from "./contexts/LanguageContext";
 import { ThemeProvider } from "./contexts/ThemeContext";
 import { usePageSEO } from "./hooks/usePageSEO";
 import Home from "./pages/Home";
@@ -16,8 +18,12 @@ export default function LandingApp() {
   return (
     <ErrorBoundary>
       <ThemeProvider defaultTheme="dark" switchable>
-        <FloatingSocial />
-        <Home />
+        <LanguageProvider>
+          {/* SECURITY (row 216): DO-NOT-FUND notice also on the public landing page */}
+          <SecurityNotice />
+          <FloatingSocial />
+          <Home />
+        </LanguageProvider>
       </ThemeProvider>
     </ErrorBoundary>
   );
