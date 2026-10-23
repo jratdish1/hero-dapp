@@ -23,8 +23,8 @@ export default function SecurityNotice() {
 
   return (
     <div
-      role="alert"
-      aria-live="polite"
+      role="region"
+      aria-label="Security notice"
       data-testid="security-notice"
       className="relative z-[10000] w-full border-b-4 border-yellow-400 bg-red-800 text-white"
     >

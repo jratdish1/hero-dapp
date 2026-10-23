@@ -15,3 +15,5 @@ Base: `main` @ `4a8775f009750532dd502d5aa5af34042c535945`. Branch: `grokbot/hero
 | sha256 of changed source files | `sha256-changed-src.txt` |
 
 No wallet was connected, no contract was called, and no `.env` or secret was read.
+| Local run of CI browser gates (csp-routes, swap-intent, scroll-lock) | `ci-browser-gates-local.log` (all PASS) |
+| Red-team grep script | `redteam.sh` |
