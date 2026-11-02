@@ -350,7 +350,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </button>
               </div>
             ) : (
-              <WalletButton />
+              // Close the mobile drawer first: its z-[10001] layer would cover the z-50 wallet dialog.
+              <div onClickCapture={() => setSidebarOpen(false)}>
+                <WalletButton />
+              </div>
             )}
             {/* Audit badges */}
             <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-sidebar-border/50">

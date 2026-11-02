@@ -199,13 +199,14 @@ export function useUserStaking(overrideChainId?: number) {
     chainId,
     query: { enabled },
   });
+  // Polled so the page notices the lock expiring; the click-time read still authorises the withdraw.
   const isLockedQuery = useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
     functionName: "isLocked",
     args: address ? [address] : undefined,
     chainId,
-    query: { enabled: Boolean(enabled && address) },
+    query: { enabled: Boolean(enabled && address), refetchInterval: 15_000 },
   });
   const stakeTimestampQuery = useReadContract({
     address: stakingAddress,
@@ -362,42 +363,57 @@ export function useStakingActions(overrideChainId?: number) {
     );
   };
 
-  function submitExitCall(call: StakingExitCall): Promise<Hash> {
+  function exitAccount(): Address {
+    if (!chainId || !stakingAddress || !account) throw new Error("Staking is unavailable on this chain");
+    return account;
+  }
+
+  /** Every exit write is pinned to the account whose on-chain state was checked. */
+  function submitExitCall(call: StakingExitCall, from: Address): Promise<Hash> {
     if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
-    return writeContractAsync({ address: stakingAddress, abi: STAKING_ABI, chainId, ...call } as Parameters<typeof writeContractAsync>[0]);
+    if (account?.toLowerCase() !== from.toLowerCase()) {
+      throw new Error("Wallet account changed during the exit; nothing more was sent. Start again.");
+    }
+    return writeContractAsync({ address: stakingAddress, abi: STAKING_ABI, chainId, account: from, ...call } as Parameters<typeof writeContractAsync>[0]);
   }
 
   /** Fresh on-chain reads at click time; a cached "unlocked" must never authorise a penalised withdraw. */
-  async function readExitState(): Promise<{ isLocked: boolean; pendingRewards: bigint }> {
-    if (!chainId || !stakingAddress || !publicClient || !account) throw new Error("Staking is unavailable on this chain");
+  async function readExitState(from: Address): Promise<{ isLocked: boolean; pendingRewards: bigint }> {
+    if (!chainId || !stakingAddress || !publicClient) throw new Error("Staking is unavailable on this chain");
     const [isLocked, pendingRewards] = await Promise.all([
-      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "isLocked", args: [account] }),
-      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "earned", args: [account] }),
+      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "isLocked", args: [from] }),
+      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "earned", args: [from] }),
     ]);
     return { isLocked, pendingRewards };
   }
 
   /** Plain withdraw. Refused while the contract reports the position locked (it would pay the early-exit penalty). */
   const unstake = async (amount: string) => {
-    if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
+    const from = exitAccount();
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid unstake amount");
     const parsedAmount = parseUnits(amount, 18);
-    const { isLocked } = await readExitState();
+    const { isLocked } = await readExitState(from);
     const [call] = planUnstake(isLocked, parsedAmount);
-    return runAction("unstake", () => submitExitCall(call));
+    return runAction("unstake", () => submitExitCall(call, from));
   };
 
   const claimRewards = async () => {
-    return runAction("claim", () => submitExitCall({ functionName: "claimReward" }));
+    const from = exitAccount();
+    return runAction("claim", () => submitExitCall({ functionName: "claimReward" }, from));
   };
 
-  /** Penalty-free full exit at any time: claimReward() when DAI is owed, then emergencyWithdraw(). */
+  /**
+   * Penalty-free full exit at any time: claimReward() when DAI is owed, then emergencyWithdraw().
+   * skipClaim is the escape hatch: it needs no reads at all, so a failing earned()/isLocked() read
+   * can never block getting the principal back.
+   */
   const emergencyWithdraw = async (options: { skipClaim?: boolean } = {}) => {
-    const { pendingRewards } = await readExitState();
-    const calls = planPenaltyFreeExit(options.skipClaim ? 0n : pendingRewards);
+    const from = exitAccount();
+    const pendingRewards = options.skipClaim ? 0n : (await readExitState(from)).pendingRewards;
+    const calls = planPenaltyFreeExit(pendingRewards);
     let last: Hash | undefined;
     for (const call of calls) {
-      last = await runAction(call.functionName === "claimReward" ? "claim" : "emergency", () => submitExitCall(call));
+      last = await runAction(call.functionName === "claimReward" ? "claim" : "emergency", () => submitExitCall(call, from));
     }
     return last as Hash;
   };
