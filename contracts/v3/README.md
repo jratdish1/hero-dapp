@@ -63,3 +63,7 @@ test/            MiniTest, mocks, constructor/ownership/TBD tests
 script/          check_no_old_addresses.py, verify_provenance.py (read-only)
 security/        old-address-hashes.sha256 (hashes only), provenance.json
 ```
+
+## Staking (draft, needs external audit)
+
+See `STAKING.md`. The port of hero-dapp #119 lives in `src/staking/`, built for cancun (Base only; PulseChain is a Tier B decision). Tests: `FOUNDRY_PROFILE=staking forge test -vv`.
