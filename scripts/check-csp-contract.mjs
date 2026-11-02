@@ -257,7 +257,7 @@ for (const [index, directives] of nginxDirectiveSets.entries()) {
 // `https:` source still permits any HTTPS host, Manus included. That is a
 // reviewed, tracked exception (dynamic ENS/user/storage images) pending a
 // host allow-list; connect-src, script-src and frame-src stay explicit.
-const forbiddenHostPattern = /(^|[/.])manus\.(computer|space|im)(?=$|[/:])|manuscdn\.com/i;
+const forbiddenHostPattern = /(^|[/.])manus[a-z0-9-]*\.(computer|space|im|ai)(?=$|[/:])|manuscdn\.com/i;
 const schemeWideHttpsAllowed = new Set(['img-src', 'media-src']);
 for (const [label, directives] of [
   ['Helmet', helmetDirectives],
@@ -268,7 +268,7 @@ for (const [label, directives] of [
     if (manusSources.length > 0) {
       fail(`${label} ${name} still trusts Manus hosts: ${JSON.stringify(manusSources)}`);
     }
-    if (values.includes('https:') && !schemeWideHttpsAllowed.has(name)) {
+    if (values.some(value => value.toLowerCase() === 'https:') && !schemeWideHttpsAllowed.has(name)) {
       fail(`${label} ${name} uses scheme-wide https: outside the reviewed exception`);
     }
   }
