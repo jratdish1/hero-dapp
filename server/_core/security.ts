@@ -69,7 +69,8 @@ export function cspNonceMiddleware(req: Request, res: Response, next: NextFuncti
 const ALLOWED_ORIGINS = new Set([
   "https://www.herobase.io",
   "https://herobase.io",
-  "https://herodapp-kcdtjud9.manus.space",
+  // SECURITY (2026-10-07 incident): removed the legacy Manus preview origin
+  // https://herodapp-kcdtjud9.manus.space - it must not pass the CSRF origin check.
 ]);
 
 // ─── Helper: Extract real client IP (Cloudflare-aware) ──────────────────
@@ -131,8 +132,9 @@ function buildCspDirectives() {
     "wss://relay.walletconnect.com", "wss://relay.walletconnect.org",
     "https://*.walletconnect.com", "https://*.walletconnect.org",
     "https://*.reown.com",
-    "https://*.manus.computer", "https://*.manus.space",
-    "https://api.manus.im", "https://switch.win", "https://*.switch.win",
+    // SECURITY (2026-10-07 incident): Manus hosts (*.manus.computer, *.manus.space,
+    // api.manus.im) removed from connect-src; the browser has no reason to talk to them.
+    "https://switch.win", "https://*.switch.win",
     ...(isDev ? ["ws:", "wss:"] : []),
   ];
 
@@ -145,7 +147,7 @@ function buildCspDirectives() {
     // Transitional: application and audited third-party components still emit style attributes.
     styleSrcAttr: ["'unsafe-inline'"],
     fontSrc: ["'self'", "data:"],
-    imgSrc: ["'self'", "data:", "blob:", "https:", "https://*.manus.computer", "https://*.manus.space"],
+    imgSrc: ["'self'", "data:", "blob:", "https:"],
     connectSrc,
     frameSrc: ["'self'", "https://*.walletconnect.com", "https://*.walletconnect.org", "https://app.safe.global", "https://app.squirrelswap.pro", "https://*.squirrelswap.pro", "https://transferto.xyz", "https://*.transferto.xyz", "https://www.youtube.com", "https://youtube.com", "https://libertyswap.finance", "https://switch.win", "https://*.switch.win"],
     mediaSrc: ["'self'", "https:", "blob:"],
