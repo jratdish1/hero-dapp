@@ -7,11 +7,15 @@
  *   2. A spin's value = HMAC-SHA256(seed, spin fields + hash of a block mined after the spin request).
  *      The operator cannot change the seed (it is committed), and nobody - operator included - knows the
  *      future block hash when the spin is requested, so a seed-holding insider cannot grind wallets.
- *   3. Every spin request (wallet, day, tier, sequential nonce, request block) is durably recorded BEFORE its
- *      draw block exists, and the draw block is pinned to requestBlockNumber + DRAW_BLOCK_OFFSET. The seed
- *      holder therefore cannot pick a favourable draw block, and cannot silently drop a spin it dislikes:
- *      nonces are contiguous per wallet and day, so a missing result is visible in the published log.
- *   4. After the day ends the seed is revealed; anyone recomputes every spin with verifySpin(), checks the
+ *   3. The wallet signs each spin intent (wallet, day, tier, sequential nonce). A transaction carrying that
+ *      intent and signature, sent by the operator or the wallet, is mined in block N; N is read from the
+ *      chain, never passed in. The draw block is N + DRAW_BLOCK_OFFSET, and recordSpinRequest refuses once
+ *      that block exists. The operator learns the draw hash only after the request is immutably on-chain, so
+ *      it cannot pick a favourable draw block, and a spin it drops after the draw stays visible on-chain
+ *      (and in verifyDayLog as a missing result or nonce gap).
+ *   4. spinValue() derives nothing until verifySpinOnChain() has checked the request tx, the signature, the
+ *      commit tx and the canonical draw hash. Never pay a prize from deriveSpinValue() alone.
+ *   5. After the day ends the seed is revealed; anyone recomputes every spin with verifySpin(), checks the
  *      day's log with verifyDayLog(), and checks chain facts with verifySpinOnChain().
  *
  * Residual trust: the block producer (Base sequencer, PulseChain validators) can still bias a block hash.
@@ -38,6 +42,7 @@ const MAX_WEIGHT = 1_000_000_000;
 const DAY_RX = /^\d{4}-\d{2}-\d{2}$/;
 const ADDR_RX = /^0x[0-9a-fA-F]{40}$/;
 const HASH_RX = /^0x[0-9a-fA-F]{64}$/;
+const SIG_RX = /^0x[0-9a-fA-F]{130}$/;
 const TIERS = new Set(["bronze", "silver", "gold"]);
 const SPAN = 1n << 256n;
 
@@ -56,14 +61,22 @@ export interface SeedStore {
   setCommit(day: string, commitTxHash: string, commitBlockNumber: number): Promise<void>;
 }
 
-export interface SpinRequest {
+/** What the wallet signs (EIP-191 personal_sign of requestIntentLine). */
+export interface SpinRequestIntent {
   chainId: bigint;
   wallet: string;
   day: string;
   tier: string;
   nonce: number; // 0, 1, 2, ... per (wallet, day), no gaps
-  requestBlockNumber: number; // chain head when the request was recorded
 }
+
+export interface SpinRequest extends SpinRequestIntent {
+  requestBlockNumber: number; // block in which the request tx was mined (read from the chain)
+  requestTxHash: string;
+  signature: string; // wallet's signature over requestIntentLine
+}
+
+type RequestFields = Pick<SpinRequest, "chainId" | "wallet" | "day" | "tier" | "nonce" | "requestBlockNumber">;
 
 export interface SpinRequestStore {
   /** Number of requests already recorded for (wallet lower-cased, day); the next nonce must equal it. */
@@ -91,6 +104,7 @@ export interface SpinProof {
   commitment: string;
   commitTxHash: string;
   commitBlockNumber: number;
+  requestTxHash: string;
   requestBlockNumber: number;
   drawBlockNumber: number;
   drawBlockHash: string;
@@ -150,53 +164,134 @@ export async function prepareEpoch(store: SeedStore, day: string): Promise<Epoch
   return record;
 }
 
-function assertRequest(r: SpinRequest): void {
+function assertIntent(r: SpinRequestIntent): void {
   if (typeof r.chainId !== "bigint" || r.chainId <= 0n) throw new SpinRngError("chainId must be a positive bigint");
   if (!ADDR_RX.test(r.wallet)) throw new SpinRngError("wallet must be a 0x address");
   assertDay(r.day);
   if (!TIERS.has(r.tier)) throw new SpinRngError(`tier must be bronze, silver or gold, got ${JSON.stringify(r.tier)}`);
   if (!Number.isSafeInteger(r.nonce) || r.nonce < 0) throw new SpinRngError("nonce must be a non-negative integer");
-  assertBlock(r.requestBlockNumber, "requestBlockNumber");
 }
 
-function sameRequest(a: SpinRequest, b: SpinRequest): boolean {
+function assertRequest(r: SpinRequest): void {
+  assertIntent(r);
+  assertBlock(r.requestBlockNumber, "requestBlockNumber");
+  if (!HASH_RX.test(r.requestTxHash)) throw new SpinRngError("requestTxHash must be 0x + 64 hex");
+  if (!SIG_RX.test(r.signature)) throw new SpinRngError("signature must be 0x + 130 hex");
+}
+
+function sameIntent(a: SpinRequestIntent, b: SpinRequestIntent): boolean {
   return a.chainId === b.chainId && a.wallet.toLowerCase() === b.wallet.toLowerCase() && a.day === b.day
-    && a.tier === b.tier && a.nonce === b.nonce && a.requestBlockNumber === b.requestBlockNumber;
+    && a.tier === b.tier && a.nonce === b.nonce;
+}
+
+function sameRequest(a: RequestFields, b: RequestFields): boolean {
+  return sameIntent(a, b) && a.requestBlockNumber === b.requestBlockNumber;
+}
+
+/** The exact text the wallet signs (EIP-191) to request a spin. */
+export function requestIntentLine(i: SpinRequestIntent): string {
+  assertIntent(i);
+  return [DOMAIN, "intent", i.chainId.toString(), i.wallet.toLowerCase(), i.day, i.tier, String(i.nonce)].join("|");
+}
+
+/** Calldata for the request transaction: the signed intent plus the wallet's signature. */
+export function requestTxData(i: SpinRequestIntent, signature: string): string {
+  if (!SIG_RX.test(signature)) throw new SpinRngError("signature must be 0x + 130 hex");
+  return ethers.hexlify(ethers.toUtf8Bytes(`${requestIntentLine(i)}|${signature.toLowerCase()}`));
+}
+
+export function parseRequestTxData(data: string): { intent: SpinRequestIntent; signature: string } {
+  let text: string;
+  try {
+    text = ethers.toUtf8String(data);
+  } catch {
+    throw new SpinRngError("request calldata is not UTF-8");
+  }
+  const m = /^vets-spin-t2\|v1\|intent\|(\d+)\|(0x[0-9a-f]{40})\|(\d{4}-\d{2}-\d{2})\|(bronze|silver|gold)\|(\d+)\|(0x[0-9a-f]{130})$/.exec(text);
+  if (!m) throw new SpinRngError("not a vets-spin-t2 v1 request");
+  const intent: SpinRequestIntent = { chainId: BigInt(m[1]), wallet: m[2], day: m[3], tier: m[4], nonce: Number(m[5]) };
+  assertIntent(intent);
+  return { intent, signature: m[6] };
 }
 
 /** Canonical one-line form of a recorded request, for the public append-only log. */
 export function requestLogLine(r: SpinRequest): string {
   assertRequest(r);
   return [DOMAIN, "request", r.chainId.toString(), r.wallet.toLowerCase(), r.day, r.tier, String(r.nonce),
-    String(r.requestBlockNumber)].join("|");
+    String(r.requestBlockNumber), r.requestTxHash.toLowerCase()].join("|");
 }
 
 /**
- * Records a spin request before its draw block exists. headBlockNumber is the current chain head; the
- * request is pinned to it and the draw block becomes headBlockNumber + DRAW_BLOCK_OFFSET.
- * Throws (records nothing) unless the day's commitment is mined before the head, the nonce is the next
- * one for this wallet and day, and the record reads back identically.
+ * Checks that requestTxHash is mined, was sent by the operator or the wallet, and carries this exact
+ * intent with a valid wallet signature. Returns the block it was mined in and the signature.
+ */
+async function verifyRequestTx(
+  intent: SpinRequestIntent,
+  requestTxHash: string,
+  operator: string,
+  chain: ChainReader,
+): Promise<{ blockNumber: number; signature: string }> {
+  if (!ADDR_RX.test(operator)) throw new SpinRngError("operator must be a 0x address");
+  const tx = await chain.getTransaction(requestTxHash);
+  if (!tx || tx.blockNumber === null) throw new SpinRngError("request transaction is not mined");
+  const from = tx.from.toLowerCase();
+  if (from !== operator.toLowerCase() && from !== intent.wallet.toLowerCase()) {
+    throw new SpinRngError("request transaction was not sent by the operator or the wallet");
+  }
+  const parsed = parseRequestTxData(tx.data);
+  if (!sameIntent(parsed.intent, intent)) throw new SpinRngError("request transaction carries a different intent");
+  let signer: string;
+  try {
+    signer = ethers.verifyMessage(requestIntentLine(intent), parsed.signature);
+  } catch {
+    throw new SpinRngError("request signature is malformed");
+  }
+  if (signer.toLowerCase() !== intent.wallet.toLowerCase()) throw new SpinRngError("request is not signed by the wallet");
+  return { blockNumber: tx.blockNumber, signature: parsed.signature };
+}
+
+/**
+ * Records a spin request whose signed intent is already mined on-chain, before its draw block exists.
+ * The request block is the block the request tx was mined in (read from the chain), and the draw block
+ * becomes that block + DRAW_BLOCK_OFFSET. Throws (records nothing) unless the request tx verifies, the
+ * draw block does not exist yet, the day's commitment was mined earlier, the nonce is the next one for
+ * this wallet and day, and the record reads back identically.
  */
 export async function recordSpinRequest(
   store: SpinRequestStore,
   epoch: EpochRecord | null,
-  request: Omit<SpinRequest, "requestBlockNumber">,
-  headBlockNumber: number,
+  intent: SpinRequestIntent,
+  requestTxHash: string,
+  operator: string,
+  chain: ChainReader,
 ): Promise<{ request: SpinRequest; drawBlockNumber: number }> {
-  const full: SpinRequest = { ...request, wallet: request.wallet.toLowerCase(), requestBlockNumber: headBlockNumber };
-  assertRequest(full);
-  if (!epoch || epoch.day !== full.day || epoch.commitBlockNumber === undefined || !epoch.commitTxHash) {
-    throw new SpinRngError(`commitment for ${full.day} is not on-chain yet: value spins are paused (fail-closed)`);
+  const wallet = intent.wallet.toLowerCase();
+  assertIntent({ ...intent, wallet });
+  if (!HASH_RX.test(requestTxHash)) throw new SpinRngError("requestTxHash must be 0x + 64 hex");
+  if (!epoch || epoch.day !== intent.day || epoch.commitBlockNumber === undefined || !epoch.commitTxHash) {
+    throw new SpinRngError(`commitment for ${intent.day} is not on-chain yet: value spins are paused (fail-closed)`);
   }
-  if (full.requestBlockNumber <= epoch.commitBlockNumber) {
+  const { blockNumber: requestBlockNumber, signature } = await verifyRequestTx({ ...intent, wallet }, requestTxHash, operator, chain);
+  if (requestBlockNumber <= epoch.commitBlockNumber) {
     throw new SpinRngError("spin requested before the commitment was mined");
   }
+  const drawBlockNumber = requestBlockNumber + DRAW_BLOCK_OFFSET;
+  if ((await chain.getBlockHash(requestBlockNumber)) === null) {
+    throw new SpinRngError("request block is not known to the chain reader");
+  }
+  if ((await chain.getBlockHash(drawBlockNumber)) !== null) {
+    throw new SpinRngError("draw block already exists: request recorded too late (fail-closed)");
+  }
+  const full: SpinRequest = { ...intent, wallet, requestBlockNumber, requestTxHash: requestTxHash.toLowerCase(), signature };
+  assertRequest(full);
   const expected = await store.count(full.wallet, full.day);
   if (full.nonce !== expected) throw new SpinRngError(`nonce must be ${expected} (sequential per wallet and day)`);
   await store.append(full);
   const back = await store.get(full.wallet, full.day, full.nonce);
-  if (!back || !sameRequest(back, full)) throw new SpinRngError("spin request did not persist; do not draw");
-  return { request: full, drawBlockNumber: full.requestBlockNumber + DRAW_BLOCK_OFFSET };
+  if (!back || !sameRequest(back, full) || back.requestTxHash !== full.requestTxHash) {
+    throw new SpinRngError("spin request did not persist; do not draw");
+  }
+  return { request: full, drawBlockNumber };
 }
 
 /** Calldata for a zero-value commit transaction (operator to itself). Timestamped and immutable on-chain. */
@@ -244,14 +339,17 @@ export function deriveSpinValue(seed: string, input: SpinInput): number {
 }
 
 /**
- * Fail-closed gate plus draw. Throws unless the day's commitment was mined before the spin was requested
- * and the spin request was recorded (recordSpinRequest) with exactly these fields.
+ * Fail-closed gate plus draw. Throws unless the spin request was recorded (recordSpinRequest) with exactly
+ * these fields, the day's commitment was mined before the request, and verifySpinOnChain() accepts the
+ * request tx, signature, commit tx and canonical draw hash. Only then is a value derived.
  */
-export function spinValue(
+export async function spinValue(
   record: EpochRecord | null,
   recorded: SpinRequest | null,
   input: SpinInput,
-): { value: number; proof: SpinProof } {
+  operator: string,
+  chain: ChainReader,
+): Promise<{ value: number; proof: SpinProof }> {
   assertInput(input);
   if (!recorded || !sameRequest(recorded, input)) {
     throw new SpinRngError("spin request was not recorded before the draw (fail-closed)");
@@ -266,19 +364,21 @@ export function spinValue(
     throw new SpinRngError("spin requested before the commitment was mined");
   }
   if (commitmentOf(record.seed) !== record.commitment) throw new SpinRngError("stored seed does not match commitment");
-  return {
-    value: deriveSpinValue(record.seed, input),
-    proof: {
-      domain: DOMAIN,
-      day: record.day,
-      commitment: record.commitment,
-      commitTxHash: record.commitTxHash,
-      commitBlockNumber: record.commitBlockNumber,
-      requestBlockNumber: input.requestBlockNumber,
-      drawBlockNumber: input.drawBlockNumber,
-      drawBlockHash: input.drawBlockHash,
-    },
+  const proof: SpinProof = {
+    domain: DOMAIN,
+    day: record.day,
+    commitment: record.commitment,
+    commitTxHash: record.commitTxHash,
+    commitBlockNumber: record.commitBlockNumber,
+    requestTxHash: recorded.requestTxHash,
+    requestBlockNumber: input.requestBlockNumber,
+    drawBlockNumber: input.drawBlockNumber,
+    drawBlockHash: input.drawBlockHash,
   };
+  if (!(await verifySpinOnChain(proof, input, operator, chain))) {
+    throw new SpinRngError("chain facts do not verify (request tx, signature, commit tx or draw hash): no draw");
+  }
+  return { value: deriveSpinValue(record.seed, input), proof };
 }
 
 /**
@@ -301,9 +401,11 @@ export interface ChainReader {
 }
 
 /**
- * Checks what the off-chain proof cannot prove by itself: the commit tx exists, was sent by the operator,
- * carries this day's commitment, and was mined strictly before the request block; and the draw block hash
- * is the canonical hash at the pinned height. Returns false on any mismatch or reader error.
+ * Checks what the off-chain proof cannot prove by itself: the request tx is mined in the request block,
+ * was sent by the operator or the wallet, and carries this intent signed by the wallet; the commit tx was
+ * sent by the operator, carries this day's commitment, and was mined strictly before the request block;
+ * and the draw block hash is the canonical hash at the pinned height. Returns false on any mismatch or
+ * reader error.
  */
 export async function verifySpinOnChain(
   proof: SpinProof,
@@ -317,6 +419,8 @@ export async function verifySpinOnChain(
     if (proof.day !== input.day || proof.requestBlockNumber !== input.requestBlockNumber
       || proof.drawBlockNumber !== input.drawBlockNumber
       || proof.drawBlockHash.toLowerCase() !== input.drawBlockHash.toLowerCase()) return false;
+    const { blockNumber: requestBlock } = await verifyRequestTx(input, proof.requestTxHash, operator, chain);
+    if (requestBlock !== input.requestBlockNumber) return false;
     const tx = await chain.getTransaction(proof.commitTxHash);
     if (!tx || tx.blockNumber === null || tx.blockNumber !== proof.commitBlockNumber) return false;
     if (tx.from.toLowerCase() !== operator.toLowerCase()) return false;
