@@ -33,7 +33,7 @@ export const MINT_PAUSED_DETAIL =
   "HERO Cards minting is paused: contracts under migration. Do not send funds.";
 export const STAKE_PAUSED_MESSAGE = "New stakes paused for security";
 export const STAKE_PAUSED_DETAIL =
-  "New HERO stakes are paused while the staking contract is migrated. Existing stakers can still unstake, emergency-withdraw and claim.";
+  "New HERO stakes are paused while the staking contract is migrated. Existing stakers can always leave with \"Withdraw without penalty\" (claims DAI, then returns all staked HERO). A plain unstake is enabled only after the 7-day lock, because before that the contract sends 10% to the staking treasury.";
 export const SECURITY_NOTICE_TITLE = "Security notice";
 export const SECURITY_NOTICE_TEXT =
   "Do not send funds, tokens or NFTs to these addresses. HERO Cards minting is paused while contracts migrate.";

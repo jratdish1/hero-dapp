@@ -92,9 +92,20 @@ describe("row 216: staking banner removed", () => {
   it("HeroStake keeps unstake / emergency withdraw / claim, and blocks new stakes", () => {
     const src = read("pages/HeroStake.tsx");
     expect(src).toContain("actions.unstake(");
-    expect(src).toContain("actions.emergencyWithdraw()");
+    expect(src).toContain("actions.emergencyWithdraw({ skipClaim })");
     expect(src).toContain("actions.claimRewards()");
     expect(src).toContain("if (newStakesPaused) {");
+  });
+
+  it("F1: the penalty-free exit is not gated on paused(), and the hook never calls getReward or exit", () => {
+    const page = read("pages/HeroStake.tsx");
+    const exitButton = page.indexOf('data-testid="penalty-free-exit"');
+    expect(exitButton).toBeGreaterThan(-1);
+    expect(page.slice(page.lastIndexOf("{", exitButton - 200), exitButton)).not.toContain("isPaused");
+    expect(page).toContain("!user.isUnlocked}");
+    const hook = read("hooks/useStaking.ts");
+    expect(hook).not.toMatch(/functionName: "(getReward|exit|stakingToken|rewardsToken)"/);
+    expect(hook).not.toMatch(/isUnlocked: true/);
   });
 
   it("no client source outside tests contains a full card-216 address", () => {
