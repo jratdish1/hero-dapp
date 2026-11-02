@@ -24,9 +24,14 @@ lbl()  { cast to-check-sum-address "0x$(cast keccak "herobot.v3.dryrun.$1" | cut
 lc()   { echo "$1" | tr 'A-F' 'a-f'; }
 
 HFARG=(); [ "$HF" != auto ] && HFARG=(--hardfork "$HF")
+# Refuse an occupied port: otherwise the new anvil dies and the script mutates whatever is already there.
+if cast chain-id --rpc-url "$LOCAL" >/dev/null 2>&1; then
+  echo "refusing: something already answers on $LOCAL"; exit 3
+fi
 anvil --fork-url "$FORK_RPC" --port "$PORT" "${HFARG[@]}" --silent >/tmp/anvil_$CHAIN.log 2>&1 &
 ANVIL=$!; trap 'kill $ANVIL 2>/dev/null || true' EXIT
 for _ in $(seq 1 60); do cast chain-id --rpc-url "$LOCAL" >/dev/null 2>&1 && break; sleep 0.5; done
+kill -0 "$ANVIL" 2>/dev/null || { echo "refusing: anvil (pid $ANVIL) exited; see /tmp/anvil_$CHAIN.log"; exit 3; }
 
 # ---- fail-closed guards: local anvil only ----
 CV=$(cast rpc --rpc-url "$LOCAL" web3_clientVersion | tr -d '"')
@@ -39,6 +44,9 @@ echo "D1=$D1 OS=$OS USER=$USER (throwaway labels, no keys)"
 # D1 must be fresh on the REAL chain (read-only queries).
 check "D1 real-chain nonce" "$(cast nonce "$D1" --rpc-url "$FORK_RPC")" "0"
 check "D1 real-chain code" "$(cast code "$D1" --rpc-url "$FORK_RPC")" "0x"
+if [ "$FAIL" -gt 0 ]; then
+  echo "refusing: $FAIL preflight check(s) failed; nothing was impersonated or deployed"; exit 4
+fi
 for a in "$D1" "$OS" "$USER"; do
   cast rpc --rpc-url "$LOCAL" anvil_setBalance "$a" 0x33b2e3c9fd0803ce8000000 >/dev/null   # 1e27 wei, local only
   cast rpc --rpc-url "$LOCAL" anvil_impersonateAccount "$a" >/dev/null
@@ -49,7 +57,7 @@ done
 # So the default build (the bytecode the repo ships) is frozen into out-dryrun/ first,
 # and the script reads only from there. PulseX factory uses PUSH0, so the simulator must
 # be >= shanghai on PulseChain (paris simulation fails with NotActivated in createPair).
-forge build -q
+FOUNDRY_PROFILE=default forge build -q
 rm -rf out-dryrun && mkdir -p out-dryrun/pulsechain
 for f in Hero.sol/Hero.json HeroABLE.sol/HeroABLE.json HeroSingleSidedStaking.sol/HeroSingleSidedStaking.json \
          pulsechain/Hero.sol/Hero.json pulsechain/HeroABLE.sol/HeroABLE.json; do

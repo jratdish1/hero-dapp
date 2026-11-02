@@ -40,6 +40,9 @@ contract DryRunV3 {
         bool isBase = chain == keccak256("base");
         require(isBase || chain == keccak256("pulsechain"), "DRYRUN_CHAIN must be base|pulsechain");
         require(block.chainid == (isBase ? 8453 : 369), "unexpected chainid");
+        // D1 is a keyless label, so this only passes under anvil impersonation (--unlocked):
+        // a real broadcast with any private key cannot satisfy it.
+        require(msg.sender == label("D1"), "sender must be the keyless D1 label");
         string memory dir = isBase ? "out-dryrun/" : "out-dryrun/pulsechain/";
         address os = label("OS");
 
