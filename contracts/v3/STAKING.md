@@ -94,6 +94,12 @@ with `--evm-version shanghai` against OZ **5.1.0, 5.2.0, 5.3.0 and 5.4.0**, but 
 
 `FOUNDRY_PROFILE=staking forge test -vv`. The staking build targets cancun (see the PulseChain section),
 so it has its own profile; the default `forge test` runs the paris HERO suite.
-- 22 unit tests port the #119 hardhat suite to Foundry (MiniTest, no forge-std), plus a 256-run fuzz
-  test that checks the solvency invariant across stake, fund, warp and exit sequences.
+- 24 unit tests port the #119 hardhat suite to Foundry (MiniTest, no forge-std), plus a 256-run fuzz
+  test that checks the solvency invariant across stake, fund, warp and exit sequences. This includes
+  #119's rounding-excess regressions (1 s duration, stake `3e18+1`, fund `1e18`): single-staker ceiling
+  excess, per-account flooring, and former-staker reservation. All three fail if the `_totalSupply == 0`
+  reconciliation is removed.
+- `python3 script/check_staking_sync.py` fails if this copy drifts from the sha256 pinned above, or
+  (once #119 is on main) from `contracts/v2/HeroSingleSidedStaking.sol`. Wire it into CI with the
+  other V3 guards.
 - 2 integration tests run against the recovered V3 Hero (Base) with a mock router.

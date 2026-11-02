@@ -192,15 +192,67 @@ contract HeroSingleSidedStakingTest is MiniTest {
         _approxEq(staking.earned(ALICE), 700e18, 1e12, "stranded rewards recycled");
     }
 
-    function test_FormerStakerRewardStaysReserved() public {
-        _stake(ALICE, 100e18);
-        _fund(700e18);
-        vm.warp(block.timestamp + DURATION + 1);
-        vm.prank(ALICE);
-        staking.withdraw(100e18); // leaves rewards unclaimed
-        uint256 owed = staking.rewards(ALICE);
+    // Ported from #119: 1 s duration and stake 3e18+1 force ceiling excess, so these
+    // fail if the totalSupply == 0 reconciliation is removed.
+    function _oneSecondDuration() internal {
         vm.prank(SAFE);
-        try staking.notifyRewardAmount(0) {} catch {}
+        staking.setRewardsDuration(1);
+    }
+
+    function test_RecyclesSingleStakerRoundingExcess() public {
+        _oneSecondDuration();
+        _stake(ALICE, 3e18 + 1);
+        _fund(1e18);
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.earned(ALICE), 1e18 - 1, "floored payout");
+        vm.prank(ALICE);
+        staking.exit();
+        assertEq(staking.totalRewardsReconciled(), 1, "1 wei ceiling excess reconciled");
+        _stake(BOB, 1e18);
+        _fund(0); // reverts with ZeroAmount if nothing was reconciled
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.earned(BOB), 1, "excess re-streamed to the next staker");
+        vm.prank(BOB);
+        staking.getReward();
+        assertEq(hero.balanceOf(address(staking)), 1e18, "only BOB's principal remains");
+    }
+
+    function test_RecyclesPerAccountFlooringExcess() public {
+        _oneSecondDuration();
+        _stake(ALICE, 0.5e18);
+        _stake(BOB, 0.5e18);
+        _fund(1);
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.earned(ALICE), 0, "alice floors to 0");
+        assertEq(staking.earned(BOB), 0, "bob floors to 0");
+        vm.prank(ALICE);
+        staking.exit();
+        vm.prank(BOB);
+        staking.exit();
+        (,, uint256 accruedUnpaid,,) = staking.rewardReserveStatus();
+        assertEq(accruedUnpaid, 0, "flooring dust is not owed");
+        _stake(ALICE, 1e18);
+        _fund(0);
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.earned(ALICE), 1, "flooring dust re-streamed");
+    }
+
+    function test_FormerStakerRewardStaysReserved() public {
+        _oneSecondDuration();
+        uint256 principal = 3e18 + 1;
+        _stake(ALICE, principal);
+        _fund(1e18);
+        vm.warp(block.timestamp + 2);
+        uint256 owed = staking.earned(ALICE);
+        vm.prank(ALICE);
+        staking.withdraw(principal); // leaves rewards unclaimed
+        (,, uint256 accruedUnpaid,,) = staking.rewardReserveStatus();
+        assertEq(staking.totalRewardsOwed(), owed, "owed tracked");
+        assertEq(accruedUnpaid, owed, "only the owed amount stays reserved");
+        _stake(BOB, 1e18);
+        _fund(0); // must succeed: exactly the 1 wei excess is recyclable
+        vm.warp(block.timestamp + 2);
+        assertEq(staking.earned(BOB), 1, "only the excess was re-streamed");
         uint256 before = hero.balanceOf(ALICE);
         vm.prank(ALICE);
         staking.getReward();
