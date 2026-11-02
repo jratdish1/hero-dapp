@@ -10,12 +10,12 @@
 ## HERO Logo Flag Frames (video-frames-hero-flag/) - UPDATED
 Replaced USA flags with HERO branded flags for universal global appeal.
 
-### CDN URLs:
-- hero_flag_frame1.png: https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/uludAnfzpdsmFpDA.png
-- hero_flag_frame2.png: https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/USYIQAGhJBQbKHXe.png
-- hero_flag_frame3.png: https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/norQEgmGzEOBRTZC.png
-- hero_flag_frame4.png: https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/puAVjmWjYZgegJNO.png
-- hero_flag_frame5.png: https://files.manuscdn.com/user_upload_by_module/session_file/310519663472861536/pLumRfdJrPGSnCkc.png
+### Local paths:
+- hero_flag_frame1.png: /video-frames-hero-flag/hero-flag-frame1.png
+- hero_flag_frame2.png: /video-frames-hero-flag/hero-flag-frame2.png
+- hero_flag_frame3.png: /video-frames-hero-flag/hero-flag-frame3.png
+- hero_flag_frame4.png: /video-frames-hero-flag/hero-flag-frame4.png
+- hero_flag_frame5.png: /video-frames-hero-flag/hero-flag-frame5.png
 
 ## Global Music Video Frames (video-frames-global/)
 See video-frames-global/ directory
