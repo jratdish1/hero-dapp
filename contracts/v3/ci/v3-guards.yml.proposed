@@ -1,0 +1,34 @@
+# HERO V3 guards (owner: VETS / jratdish1). Read-only checks; no secrets, no deploys.
+# Fails the PR check if any KB #776 / KB #792 section 8 address appears anywhere under
+# contracts/v3 (including config/v3-addresses.json), or if the V3 address config is malformed.
+name: V3 Guards
+
+on:
+  pull_request:
+    paths:
+      - "contracts/v3/**"
+      - ".github/workflows/v3-guards.yml"  # once installed at this path
+
+permissions:
+  contents: read
+
+jobs:
+  v3-guards:
+    name: V3 Guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    defaults:
+      run:
+        working-directory: contracts/v3
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Old-address guard (KB #776 / #792 s8)
+        run: python3 script/check_no_old_addresses.py
+      - name: V3 address config (TBD allowed, fails on old/zero/malformed)
+        run: python3 script/check_v3_addresses.py
+      - name: V3 address config guard self-test
+        run: python3 script/check_v3_addresses.py --self-test

@@ -63,3 +63,11 @@ test/            MiniTest, mocks, constructor/ownership/TBD tests
 script/          check_no_old_addresses.py, verify_provenance.py (read-only)
 security/        old-address-hashes.sha256 (hashes only), provenance.json
 ```
+
+## Address config (`config/v3-addresses.json`)
+
+- Every V3 address (owner Safe, receivers, deployed HERO/HeroABLE/staking) is listed per chain as `"TBD"`. Filling any value is **Tier B (VETS only)**.
+- `python3 script/check_v3_addresses.py` passes while values are TBD. It fails on malformed or zero addresses, on duplicates, and on any KB #776 / #792 §8 address (hash-matched, printed masked).
+- `python3 script/check_v3_addresses.py --require-final` fails closed while any value is still TBD. Run it before any deploy.
+- `ci/v3-guards.yml.proposed` is a workflow that runs the old-address guard, the config check and its self-test on PRs that touch `contracts/v3/**`. Moving it into `.github/workflows/` turns these checks into a failing PR check. That move needs a token with the GitHub `workflow` scope, which this agent doesn't have, so a maintainer has to do it.
+- Nothing reads this file at runtime yet, so live behavior does not change.
