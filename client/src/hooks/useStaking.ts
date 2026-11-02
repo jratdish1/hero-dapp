@@ -12,6 +12,7 @@ import { useNetwork } from "../contexts/NetworkContext";
 import { getStakingAddress } from "../lib/config";
 import { HERO_STAKE_NEW_DEPOSITS_ENABLED, STAKE_PAUSED_DETAIL } from "../lib/securityContainment";
 import { planPenaltyFreeExit, planUnstake, type StakingExitCall } from "../lib/stakingExit";
+import { assertStakingActionAllowed } from "../lib/incident-flags";
 
 const ERC20_ABI = [
   {
@@ -317,6 +318,7 @@ export function useStakingActions(overrideChainId?: number) {
     action: StakingAction,
     submit: () => Promise<Hash>,
   ): Promise<Hash> {
+    assertStakingActionAllowed(action);
     setPendingAction(action);
     setIsSuccess(false);
     reset();

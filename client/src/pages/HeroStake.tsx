@@ -43,6 +43,7 @@ import {
   STAKE_PAUSED_DETAIL,
 } from "@/lib/securityContainment";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { HERO_INCIDENT_MAINTENANCE } from '../lib/incident-flags';
 
 // ─── Chain Config ────────────────────────────────────────────────────
 // Local chain display config (derived from shared config)
@@ -333,6 +334,13 @@ export default function HeroStake() {
             </p>
             {/* SECURITY (row 216): the "fund the owner wallet" instructions were removed.
                 The staking owner/treasury is unverified; never ask users to send funds to it. */}
+            {HERO_INCIDENT_MAINTENANCE && (
+              <div className="bg-black/30 rounded-lg p-2 border border-amber-500/30">
+                <p className="text-xs text-amber-300 font-semibold">
+                  Do not send funds to any wallet shown on this page. Reward pool funding is paused during key rotation.
+                </p>
+              </div>
+            )}
           </div>
         </div>
       )}

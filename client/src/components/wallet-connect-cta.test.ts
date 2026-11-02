@@ -35,7 +35,8 @@ describe("wallet connect CTA does not route to admin login", () => {
   it("App restores /wallet to HeroWallet instead of redirecting to /portfolio", () => {
     const src = read("../App.tsx");
     expect(src).toMatch(/const HeroWallet = React\.lazy\(\(\) => import\("\.\/pages\/HeroWallet"\)\);/);
-    expect(src).toMatch(/<Route path="\/wallet" component=\{withLayout\(HeroWallet\)\} \/>/);
+    // HERO incident 2026-10-07: the route may be wrapped in paused() (maintenance kill-switch); it must still target HeroWallet, not /portfolio.
+    expect(src).toMatch(/<Route path="\/wallet" component=\{withLayout\((?:HeroWallet|paused\(HeroWallet, "[^"]+"\))\)\} \/>/);
     expect(src).not.toMatch(/<Route path="\/wallet"><Redirect to="\/portfolio" \/><\/Route>/);
   });
 

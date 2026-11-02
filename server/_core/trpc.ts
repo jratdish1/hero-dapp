@@ -3,13 +3,23 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { sql } from "drizzle-orm";
+import { assertIncidentMutationAllowed } from "./incident-maintenance";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
 });
 
 export const router = t.router;
-export const publicProcedure = t.procedure;
+
+// HERO incident 2026-10-07 (IR P2 LInS): every procedure passes this guard,
+// which rejects DAO / spin / giveaway mutations while maintenance is on.
+const incidentMaintenanceGuard = t.middleware(({ path, type, next }) => {
+  assertIncidentMutationAllowed(path, type);
+  return next();
+});
+const baseProcedure = t.procedure.use(incidentMaintenanceGuard);
+
+export const publicProcedure = baseProcedure;
 
 const requireUser = t.middleware(async opts => {
   const { ctx, next } = opts;
@@ -24,9 +34,9 @@ const requireUser = t.middleware(async opts => {
   });
 });
 
-export const protectedProcedure = t.procedure.use(requireUser);
+export const protectedProcedure = baseProcedure.use(requireUser);
 
-export const adminProcedure = t.procedure.use(
+export const adminProcedure = baseProcedure.use(
   t.middleware(async opts => {
     const { ctx, next } = opts;
     if (!ctx.user || ctx.user.role !== 'admin') {
@@ -183,4 +193,4 @@ const userMutationRateLimit = t.middleware(async opts => {
  * Use for all state-changing operations (financial, governance, content creation).
  * Rate state is stored in MySQL `mutation_rate_limits` table for distributed consistency.
  */
-export const rateLimitedMutation = t.procedure.use(requireUser).use(userMutationRateLimit);
+export const rateLimitedMutation = baseProcedure.use(requireUser).use(userMutationRateLimit);
