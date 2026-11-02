@@ -10,6 +10,9 @@ import { isValidChainId, validateDecimalInput } from "../lib/validation";
 import { STAKING_ABI } from "../lib/staking-abi";
 import { useNetwork } from "../contexts/NetworkContext";
 import { getStakingAddress } from "../lib/config";
+import { HERO_STAKE_NEW_DEPOSITS_ENABLED, STAKE_PAUSED_DETAIL } from "../lib/securityContainment";
+import { planPenaltyFreeExit, planUnstake, type StakingExitCall } from "../lib/stakingExit";
+import { assertStakingActionAllowed } from "../lib/incident-flags";
 
 const ERC20_ABI = [
   {
@@ -92,14 +95,28 @@ export function useStakingStats(overrideChainId?: number) {
   const stakingTokenQuery = useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
-    functionName: "stakingToken",
+    functionName: "heroToken",
     chainId,
     query: { enabled },
   });
   const rewardsTokenQuery = useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
-    functionName: "rewardsToken",
+    functionName: "daiToken",
+    chainId,
+    query: { enabled },
+  });
+  const lockPeriodQuery = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "lockPeriod",
+    chainId,
+    query: { enabled },
+  });
+  const penaltyBpsQuery = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "earlyExitPenaltyBps",
     chainId,
     query: { enabled },
   });
@@ -139,9 +156,10 @@ export function useStakingStats(overrideChainId?: number) {
     actualRewardPoolBalance: rewardPoolBalance,
     rewardPoolBalance,
     scheduledRewardsRemaining,
-    lockPeriod: rewardsDurationQuery.data as bigint | undefined,
-    lockPeriodSeconds: rewardsDurationQuery.data as bigint | undefined,
-    penaltyBps: 0n,
+    rewardsDuration: rewardsDurationQuery.data as bigint | undefined,
+    lockPeriod: lockPeriodQuery.data as bigint | undefined,
+    lockPeriodSeconds: lockPeriodQuery.data as bigint | undefined,
+    penaltyBps: penaltyBpsQuery.data as bigint | undefined,
     isPaused: pausedQuery.data as boolean | undefined,
     totalRewardsPaid: 0n,
     rewardRate,
@@ -178,7 +196,31 @@ export function useUserStaking(overrideChainId?: number) {
   const stakingTokenQuery = useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
-    functionName: "stakingToken",
+    functionName: "heroToken",
+    chainId,
+    query: { enabled },
+  });
+  // Polled so the page notices the lock expiring; the click-time read still authorises the withdraw.
+  const isLockedQuery = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "isLocked",
+    args: address ? [address] : undefined,
+    chainId,
+    query: { enabled: Boolean(enabled && address), refetchInterval: 15_000 },
+  });
+  const stakeTimestampQuery = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "stakeTimestamp",
+    args: address ? [address] : undefined,
+    chainId,
+    query: { enabled: Boolean(enabled && address) },
+  });
+  const lockPeriodQuery = useReadContract({
+    address: stakingAddress,
+    abi: STAKING_ABI,
+    functionName: "lockPeriod",
     chainId,
     query: { enabled },
   });
@@ -206,18 +248,28 @@ export function useUserStaking(overrideChainId?: number) {
       userStakeQuery.refetch(),
       rewardsQuery.refetch(),
       stakingTokenQuery.refetch(),
+      isLockedQuery.refetch(),
+      stakeTimestampQuery.refetch(),
       tokenBalanceQuery.refetch(),
       allowanceQuery.refetch(),
     ]);
   };
+
+  // Until the contract answers, the position counts as locked (never as unlocked).
+  const isLocked = isLockedQuery.data as boolean | undefined;
+  const stakeTimestamp = stakeTimestampQuery.data as bigint | undefined;
+  const lockPeriod = lockPeriodQuery.data as bigint | undefined;
+  const unlockTime = isLocked && stakeTimestamp && lockPeriod ? stakeTimestamp + lockPeriod : 0n;
 
   return {
     stakedAmount: userStakeQuery.data as bigint | undefined,
     pendingRewards: rewardsQuery.data as bigint | undefined,
     heroBalance: tokenBalanceQuery.data as bigint | undefined,
     heroAllowance: allowanceQuery.data as bigint | undefined,
-    isUnlocked: true,
-    unlockTime: 0n,
+    isLocked,
+    isUnlocked: isLocked === false,
+    lockStatusKnown: isLocked !== undefined,
+    unlockTime,
     refetchAll,
   };
 }
@@ -227,6 +279,7 @@ export function useStakingActions(overrideChainId?: number) {
   const chainId = supportedChainId(overrideChainId ?? networkChainId);
   const stakingAddress = getStakingAddress(chainId);
   const publicClient = usePublicClient({ chainId });
+  const { address: account } = useAccount();
   const {
     writeContractAsync,
     data: submittedHash,
@@ -241,7 +294,7 @@ export function useStakingActions(overrideChainId?: number) {
   const stakingTokenQuery = useReadContract({
     address: stakingAddress,
     abi: STAKING_ABI,
-    functionName: "stakingToken",
+    functionName: "heroToken",
     chainId,
     query: { enabled: Boolean(chainId && stakingAddress) },
   });
@@ -265,6 +318,7 @@ export function useStakingActions(overrideChainId?: number) {
     action: StakingAction,
     submit: () => Promise<Hash>,
   ): Promise<Hash> {
+    assertStakingActionAllowed(action);
     setPendingAction(action);
     setIsSuccess(false);
     reset();
@@ -276,7 +330,11 @@ export function useStakingActions(overrideChainId?: number) {
     }
   }
 
+  // SECURITY (row 216): defence in depth — new deposits (approve + stake) are
+  // refused at the hook level too, not only by the HeroStake UI. Unstake,
+  // claim and emergency withdraw are untouched.
   const approve = async (amount: string) => {
+    if (!HERO_STAKE_NEW_DEPOSITS_ENABLED) throw new Error(STAKE_PAUSED_DETAIL);
     if (!chainId || !stakingToken || !stakingAddress) throw new Error("Staking is unavailable on this chain");
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid approval amount");
     const parsedAmount = parseUnits(amount, 18);
@@ -292,6 +350,7 @@ export function useStakingActions(overrideChainId?: number) {
   };
 
   const stake = async (amount: string) => {
+    if (!HERO_STAKE_NEW_DEPOSITS_ENABLED) throw new Error(STAKE_PAUSED_DETAIL);
     if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid stake amount");
     const parsedAmount = parseUnits(amount, 18);
@@ -306,43 +365,59 @@ export function useStakingActions(overrideChainId?: number) {
     );
   };
 
-  const unstake = async (amount: string) => {
+  function exitAccount(): Address {
+    if (!chainId || !stakingAddress || !account) throw new Error("Staking is unavailable on this chain");
+    return account;
+  }
+
+  /** Every exit write is pinned to the account whose on-chain state was checked. */
+  function submitExitCall(call: StakingExitCall, from: Address): Promise<Hash> {
     if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
+    if (account?.toLowerCase() !== from.toLowerCase()) {
+      throw new Error("Wallet account changed during the exit; nothing more was sent. Start again.");
+    }
+    return writeContractAsync({ address: stakingAddress, abi: STAKING_ABI, chainId, account: from, ...call } as Parameters<typeof writeContractAsync>[0]);
+  }
+
+  /** Fresh on-chain reads at click time; a cached "unlocked" must never authorise a penalised withdraw. */
+  async function readExitState(from: Address): Promise<{ isLocked: boolean; pendingRewards: bigint }> {
+    if (!chainId || !stakingAddress || !publicClient) throw new Error("Staking is unavailable on this chain");
+    const [isLocked, pendingRewards] = await Promise.all([
+      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "isLocked", args: [from] }),
+      publicClient.readContract({ address: stakingAddress, abi: STAKING_ABI, functionName: "earned", args: [from] }),
+    ]);
+    return { isLocked, pendingRewards };
+  }
+
+  /** Plain withdraw. Refused while the contract reports the position locked (it would pay the early-exit penalty). */
+  const unstake = async (amount: string) => {
+    const from = exitAccount();
     if (!validateDecimalInput(amount, 18)) throw new Error("Invalid unstake amount");
     const parsedAmount = parseUnits(amount, 18);
-    return runAction("unstake", () =>
-      writeContractAsync({
-        address: stakingAddress,
-        abi: STAKING_ABI,
-        functionName: "withdraw",
-        args: [parsedAmount],
-        chainId,
-      }),
-    );
+    const { isLocked } = await readExitState(from);
+    const [call] = planUnstake(isLocked, parsedAmount);
+    return runAction("unstake", () => submitExitCall(call, from));
   };
 
   const claimRewards = async () => {
-    if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
-    return runAction("claim", () =>
-      writeContractAsync({
-        address: stakingAddress,
-        abi: STAKING_ABI,
-        functionName: "getReward",
-        chainId,
-      }),
-    );
+    const from = exitAccount();
+    return runAction("claim", () => submitExitCall({ functionName: "claimReward" }, from));
   };
 
-  const emergencyWithdraw = async () => {
-    if (!chainId || !stakingAddress) throw new Error("Staking is unavailable on this chain");
-    return runAction("emergency", () =>
-      writeContractAsync({
-        address: stakingAddress,
-        abi: STAKING_ABI,
-        functionName: "exit",
-        chainId,
-      }),
-    );
+  /**
+   * Penalty-free full exit at any time: claimReward() when DAI is owed, then emergencyWithdraw().
+   * skipClaim is the escape hatch: it needs no reads at all, so a failing earned()/isLocked() read
+   * can never block getting the principal back.
+   */
+  const emergencyWithdraw = async (options: { skipClaim?: boolean } = {}) => {
+    const from = exitAccount();
+    const pendingRewards = options.skipClaim ? 0n : (await readExitState(from)).pendingRewards;
+    const calls = planPenaltyFreeExit(pendingRewards);
+    let last: Hash | undefined;
+    for (const call of calls) {
+      last = await runAction(call.functionName === "claimReward" ? "claim" : "emergency", () => submitExitCall(call, from));
+    }
+    return last as Hash;
   };
 
   return {

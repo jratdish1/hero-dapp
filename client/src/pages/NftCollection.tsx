@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { SERVICE_BRANCHES } from "@shared/tokens";
 import { useLanguage } from "../contexts/LanguageContext";
+import { HERO_CARDS_MINT_ENABLED, MINT_PAUSED_MESSAGE } from "../lib/securityContainment";
 
 const CDN = "https://d2xsxph8kpxj0f.cloudfront.net/310519663472861536/n6wZKBCrhC57u7dtf5EHg8";
 const HERO_LOGO = "/hero-logo-200.webp";
@@ -575,6 +576,17 @@ export default function NftCollection() {
               </p>
             </CardHeader>
             <CardContent>
+              {/* SECURITY (row 216): HeroCards royalties (ERC-2981) are paid to a receiver the
+                  compromised owner controls, so the embedded marketplace is hidden while paused. */}
+              {!HERO_CARDS_MINT_ENABLED ? (
+                <div data-testid="marketplace-paused" role="alert" className="rounded-lg border-2 border-red-600 bg-red-950/60 p-4">
+                  <p className="text-sm font-bold text-red-300">⛔ {t(MINT_PAUSED_MESSAGE)}</p>
+                  <p className="mt-1 text-xs text-red-200/90">
+                    {t("The HeroCards contracts on Base and PulseChain are being replaced. Do not mint, buy or send funds to the old contracts from any site.")}
+                  </p>
+                </div>
+              ) : (
+              <>
               <div className="w-full rounded-xl overflow-hidden border border-border" style={{ minHeight: '800px' }}>
                 <iframe
                   src="https://app.squirrelswap.pro/#/nutters?tab=marketplace"
@@ -597,6 +609,8 @@ export default function NftCollection() {
                   <ExternalLink className="w-3 h-3" />
                 </a>
               </div>
+              </>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

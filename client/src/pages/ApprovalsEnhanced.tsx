@@ -13,6 +13,12 @@ import {
   Info, Wallet, Search, Filter, CheckCircle2, XCircle,
 } from "lucide-react";
 import { toast } from "sonner";
+import {
+  HERO_INCIDENT_MAINTENANCE,
+  HERO_INCIDENT_REVOKE_NOTE,
+  HERO_INCIDENT_REVOKE_URL,
+  assertApprovalWriteAllowed,
+} from "@/lib/incident-flags";
 
 interface ApprovalEntry {
   id: string;
@@ -114,6 +120,13 @@ export default function ApprovalsEnhanced() {
   };
 
   const handleRevoke = async (approval: ApprovalEntry) => {
+    // Incident maintenance: this list is not wallet-backed, so never report a
+    // simulated revoke as real. Send users to revoke.cash instead.
+    if (HERO_INCIDENT_MAINTENANCE) {
+      toast.info("Revoke approvals directly at revoke.cash during maintenance");
+      return;
+    }
+    assertApprovalWriteAllowed({ kind: "approve", amount: 0n });
     if (!connected) {
       toast.error("Connect wallet to revoke approvals");
       return;
@@ -143,6 +156,19 @@ export default function ApprovalsEnhanced() {
 
   return (
     <div className="space-y-6">
+      {HERO_INCIDENT_MAINTENANCE && (
+        <div
+          data-testid="hero-incident-revoke-note"
+          className="rounded-lg border border-amber-500/40 bg-amber-500/10 p-3 text-sm text-amber-200"
+        >
+          {HERO_INCIDENT_REVOKE_NOTE}{" "}
+          You can also revoke at{" "}
+          <a href={HERO_INCIDENT_REVOKE_URL} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+            revoke.cash
+          </a>
+          .
+        </div>
+      )}
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -278,6 +304,17 @@ export default function ApprovalsEnhanced() {
                       {approval.allowance}
                     </p>
                   </div>
+                  {HERO_INCIDENT_MAINTENANCE ? (
+                    <a
+                      href={HERO_INCIDENT_REVOKE_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      data-testid="hero-incident-external-revoke"
+                      className="inline-flex items-center rounded-md border border-amber-500/40 px-2 py-1 text-xs font-medium text-amber-300 hover:bg-amber-500/10"
+                    >
+                      Check on revoke.cash
+                    </a>
+                  ) : (
                   <Button
                     variant="outline"
                     size="sm"
@@ -292,6 +329,7 @@ export default function ApprovalsEnhanced() {
                     )}
                     <span className="ml-1 hidden sm:inline">Revoke</span>
                   </Button>
+                  )}
                 </div>
               </div>
             </CardContent>

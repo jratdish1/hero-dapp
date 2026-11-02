@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ArrowLeft, ThumbsUp, ThumbsDown, Minus, Clock, CheckCircle, Users, AlertCircle, Link2 } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { HERO_INCIDENT_MAINTENANCE } from "@/lib/incident-flags";
 import { IdentityBadge } from "@/components/WalletIdentity";
 
 interface PendingBinding {
@@ -114,7 +115,7 @@ export default function ProposalDetail() {
   const canVotePolicy = proposal.advisoryVotingEnabled === true && proposal.governanceMode === "advisory" && proposal.snapshotVersion === 1;
 
   const requestWalletBinding = async () => {
-    if (!address) return;
+    if (HERO_INCIDENT_MAINTENANCE || !address) return;
     let walletSignature: `0x${string}` | undefined;
     if (bindingForCurrentWallet) {
       try {
@@ -130,6 +131,7 @@ export default function ProposalDetail() {
     });
   };
   const handleVote = (choice: "for" | "against" | "abstain") => {
+    if (HERO_INCIDENT_MAINTENANCE) return;
     if (!isConnected || !address || !user || !isBoundWallet || hasVoted || !connectedChain || !isChainEligible || !canVotePolicy) return;
     castVote.mutate({
       proposalDbId: proposal.id,

@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { ArrowLeft, FileText } from "lucide-react";
 import { ConnectWalletPrompt } from "@/components/ConnectWalletPrompt";
+import { HERO_INCIDENT_MAINTENANCE, HERO_INCIDENT_WRITE_BLOCKED_ERROR } from "@/lib/incident-flags";
 
 interface PendingBinding {
   walletAddress: string;
@@ -69,6 +70,7 @@ export default function CreateProposal() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
+    if (HERO_INCIDENT_MAINTENANCE) { setError(HERO_INCIDENT_WRITE_BLOCKED_ERROR); return; }
 
     if (!sanitizeString(title.trim())) { setError("Title is required"); return; }
     if (!sanitizeString(description.trim())) { setError("Description is required"); return; }

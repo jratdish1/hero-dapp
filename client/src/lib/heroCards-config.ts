@@ -5,8 +5,10 @@
  * Import from here instead of duplicating addresses or chain IDs across files.
  *
  * Deployed contracts (DO NOT REDEPLOY — read-only reference):
- *   Base Mainnet:      0x5Fad096af059ff9A2167351A0ffc8b45D71897bE
- *   PulseChain Mainnet: 0xCe609B3A82E89FCd4B5e5a29159b051CE86f7B36
+ *   Base Mainnet:      0x5Fad…97bE  (COMPROMISED owner — read-only, writes blocked)
+ *   PulseChain Mainnet: 0xCe60…7B36  (COMPROMISED owner — read-only, writes blocked)
+ * The two constants below are the only plaintext copies (needed for read-only
+ * calls); see lib/securityContainment.ts (queue row 216).
  */
 
 // ─── Chain IDs ────────────────────────────────────────────────────────────────
