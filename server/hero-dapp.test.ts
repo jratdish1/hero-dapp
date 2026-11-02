@@ -1,4 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it } from "vitest";
+
+// These suites assert auth and input validation on mutations that the incident guard pauses by default.
+// Run them with maintenance OFF so a rejection proves the intended check, not the maintenance error;
+// the pause itself is covered in incident-maintenance.test.ts.
+const incidentMaintenanceBefore = process.env.HERO_INCIDENT_MAINTENANCE;
+beforeAll(() => {
+  process.env.HERO_INCIDENT_MAINTENANCE = "false";
+});
+afterAll(() => {
+  if (incidentMaintenanceBefore === undefined) delete process.env.HERO_INCIDENT_MAINTENANCE;
+  else process.env.HERO_INCIDENT_MAINTENANCE = incidentMaintenanceBefore;
+});
 import { appRouter } from "./routers";
 import { COOKIE_NAME } from "../shared/const";
 import type { TrpcContext } from "./_core/context";

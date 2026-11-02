@@ -196,6 +196,10 @@ const PAUSED_ROUTES = [
 ];
 const BANNER_ONLY_ROUTES = ['/'];
 const REVOKE_ONLY_ROUTE = '/approvals';
+// Exit-only surface: existing stakers must be able to leave (penalty-free exit; plain unstake after the
+// lock), so this route stays live, but no enabled control may start a new stake or approval.
+const EXIT_ONLY_ROUTE = '/stake/dai';
+const NEW_DEPOSIT_CONTROL = /\b(stake|approve)\b/i;
 const WRITE_CONTROL = /\b(stake|unstake|claim|mint|spin|vote|approve|revoke|send|bridge|withdraw|deposit|create proposal|submit|enter raffle|buy|burn|swap)\b/i;
 const REVOKE_CONTROL = /^\s*revoke\s*$/i;
 
@@ -348,6 +352,23 @@ async function main() {
     }
     if (!approvalsAfter.note || !approvalsAfter.revokeLink) throw new Error(`${REVOKE_ONLY_ROUTE}: revoke note missing after scan`);
     results.push({ route: REVOKE_ONLY_ROUTE, before: approvalsBefore, after: approvalsAfter });
+
+    await navigateFresh(client, `http://127.0.0.1:${address.port}`, EXIT_ONLY_ROUTE);
+    await waitFor(client, `${EXIT_ONLY_ROUTE} stake-paused banner`, `window.${STALE_DOC_FLAG} !== true && location.pathname === ${JSON.stringify(EXIT_ONLY_ROUTE)} && document.querySelector('[data-testid="stake-paused-banner"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`);
+    const exitState = await evaluate(client, `(() => {
+      const controls = Array.from(document.querySelectorAll('button, [role="button"], input[type="submit"]'))
+        .filter(el => !el.disabled && el.getAttribute('aria-disabled') !== 'true')
+        .map(el => (el.textContent || el.value || '').trim());
+      return {
+        paused: !!document.querySelector('[data-testid="hero-incident-route-paused"]'),
+        newDepositControls: controls.filter(text => ${NEW_DEPOSIT_CONTROL}.test(text)),
+      };
+    })()`);
+    if (exitState.paused) throw new Error(`${EXIT_ONLY_ROUTE}: must stay live so existing stakers can exit`);
+    if (exitState.newDepositControls.length > 0) {
+      throw new Error(`${EXIT_ONLY_ROUTE}: enabled new-stake/approve control exposed: ${JSON.stringify(exitState.newDepositControls)}`);
+    }
+    results.push({ route: EXIT_ONLY_ROUTE, state: exitState });
 
     writeFileSync(REPORT, `${JSON.stringify({ timestamp: new Date().toISOString(), result: 'PASS', results }, null, 2)}\n`);
     console.log(`HERO incident maintenance browser gate: PASS (${results.length} routes)`);
