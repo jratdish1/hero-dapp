@@ -36,14 +36,19 @@ The proposal is shipped as a patch rather than a full `deploy.yml.proposed` copy
   - Check Express directly at `http://127.0.0.1:${HERO_HEALTH_PORT:-3000}/api/trpc/system.health?...`.
   - Then check through the host nginx with `curl --resolve herobase.io:443:127.0.0.1`, and require `content-type: application/json`. This proves nginx proxies `/api/` to Express and catches the SPA-fallback regression.
   - Both responses must parse as JSON with `result.data.json.ok === true` and `releaseSha === <expected sha>`. HTML is rejected even if it contains those strings.
+  - The nginx response file is deleted before each attempt, and any curl failure fails the attempt without reading it, so a body from an earlier attempt can't pass.
+  - The homepage probe (`GET https://herobase.io/`) runs here, through the host nginx, instead of from the runner.
 - **Public verify step (runner):**
   - Require `content-type: application/json`, validate with `jq`, and fail closed on challenge HTML.
+  - The response file is deleted before each attempt, and a failed curl moves on to the next attempt without reading it.
+  - Only the challenge-exempt health path is probed. Cloudflare would still challenge a runner request to `/`, and that would roll back a healthy deploy.
   - Precondition (owner action in Cloudflare, not done here): a WAF custom rule that skips managed challenges for exactly `http.request.uri.path eq "/api/trpc/system.health"`.
 - **Host precondition (owner action, not done here):** the live nginx site has to proxy `/api/` (or `@app`) to the Express process, per `nginx/herobase-cache-headers.conf`. Until it does, the new checks correctly fail.
 
 Local validation of the patch:
 - The YAML parses, and all 16 `run:` blocks plus both remote heredocs pass `bash -n`.
 - Against a mock server, the JSON health body passes, a wrong SHA is rejected, and an HTML body containing `"ok":true` is rejected. The old grep accepts that HTML body.
+- `health_once` with a stubbed curl and a stale healthy body already on disk: it passes when healthy, fails on an nginx 503, on HTML from nginx and on a homepage 403, and never leaves the body file behind.
 
 ## How live herobase.io was last deployed
 

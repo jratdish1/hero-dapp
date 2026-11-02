@@ -1,6 +1,6 @@
 --- a/.github/workflows/deploy.yml
 +++ b/.github/workflows/deploy.yml
-@@ -416,7 +416,39 @@
+@@ -416,7 +416,47 @@ jobs:
            DEPLOY_SHA="$1"
            DEPLOY_OPERATION="$2"
            APP_DIR="/var/www/hero-dapp"
@@ -26,22 +26,30 @@
 +            '
 +          }
 +          health_once() {
-+            local expected_sha="$1" body="" ctype=""
++            local expected_sha="$1" body="" ctype="" body_file="$APP_DIR/.git/vets-health-body.json" rc=0
 +            body="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
-+              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN" || true)"
++              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN")" || return 1
 +            printf '%s' "$body" | health_json_ok "$expected_sha" || return 1
++            # Never judge a body left over from an earlier attempt: delete first, and
++            # treat any curl failure as a failed attempt without reading the file.
++            rm -f "$body_file"
 +            ctype="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
 +              --resolve herobase.io:443:127.0.0.1 -H 'Accept: application/json' \
-+              -o "$APP_DIR/.git/vets-health-body.json" -w '%{content_type}' \
-+              "$HEALTH_URL_NGINX" || true)"
-+            case "$ctype" in application/json*) ;; *) rm -f "$APP_DIR/.git/vets-health-body.json"; return 1 ;; esac
-+            health_json_ok "$expected_sha" < "$APP_DIR/.git/vets-health-body.json" || { rm -f "$APP_DIR/.git/vets-health-body.json"; return 1; }
-+            rm -f "$APP_DIR/.git/vets-health-body.json"
++              -o "$body_file" -w '%{content_type}' "$HEALTH_URL_NGINX")" || rc=1
++            if [ "$rc" -eq 0 ]; then
++              case "$ctype" in application/json*) health_json_ok "$expected_sha" < "$body_file" || rc=1 ;; *) rc=1 ;; esac
++            fi
++            rm -f "$body_file"
++            [ "$rc" -eq 0 ] || return 1
++            # Homepage through the host nginx (origin side), so the public Cloudflare
++            # challenge on "/" cannot fail an otherwise healthy deploy.
++            curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              --resolve herobase.io:443:127.0.0.1 --output /dev/null https://herobase.io/ || return 1
 +          }
  
            for required_command in git node corepack pm2 curl flock; do
              command -v "$required_command" >/dev/null || exit 1
-@@ -442,12 +474,9 @@
+@@ -442,12 +482,9 @@ jobs:
            MUTATION_STARTED=false
  
            wait_for_health() {
@@ -56,7 +64,7 @@
                  return 0
                fi
                sleep 3
-@@ -605,16 +634,30 @@
+@@ -605,16 +642,35 @@ jobs:
          shell: bash
          run: |
            set -euo pipefail
@@ -67,6 +75,8 @@
 +          #   http.request.uri.path eq "/api/trpc/system.health"
 +          # Without it this step fails closed (never passes on challenge HTML).
            health_url='https://herobase.io/api/trpc/system.health?input=%7B%22json%22%3A%7B%22timestamp%22%3A0%7D%7D'
++          # The homepage probe runs on the origin (health_once in the deploy step);
++          # the public check is limited to the challenge-exempt health path.
 +          body_file="$RUNNER_TEMP/public-health.json"
            for attempt in $(seq 1 10); do
 -            response="$(curl --fail --silent --show-error \
@@ -76,17 +86,19 @@
 -               curl --fail --silent --show-error \
 -                 --connect-timeout 5 --max-time 15 --output /dev/null https://herobase.io/; then
 -              exit 0
--            fi
-+            ctype="$(curl --fail --silent --show-error \
++            rm -f "$body_file"
++            if ! ctype="$(curl --fail --silent --show-error \
 +              --connect-timeout 5 --max-time 15 -H 'Accept: application/json' \
-+              -o "$body_file" -w '%{content_type}' "$health_url" || true)"
++              -o "$body_file" -w '%{content_type}' "$health_url")"; then
++              printf 'public health request failed (attempt %s)\n' "$attempt"
++              sleep 5
++              continue
+             fi
 +            case "$ctype" in
 +              application/json*)
 +                if jq -e --arg sha "$DEPLOY_SHA" \
 +                     '(.result.data.json // .result.data) | .ok == true and .releaseSha == $sha' \
-+                     "$body_file" >/dev/null 2>&1 &&
-+                   curl --fail --silent --show-error \
-+                     --connect-timeout 5 --max-time 15 --output /dev/null https://herobase.io/; then
++                     "$body_file" >/dev/null 2>&1; then
 +                  exit 0
 +                fi
 +                ;;
@@ -95,7 +107,7 @@
              sleep 5
            done
            exit 1
-@@ -658,7 +701,39 @@
+@@ -658,7 +714,47 @@ jobs:
            set -Eeuo pipefail
            ROLLBACK_SHA="$1"
            APP_DIR="/var/www/hero-dapp"
@@ -121,22 +133,30 @@
 +            '
 +          }
 +          health_once() {
-+            local expected_sha="$1" body="" ctype=""
++            local expected_sha="$1" body="" ctype="" body_file="$APP_DIR/.git/vets-health-body.json" rc=0
 +            body="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
-+              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN" || true)"
++              -H 'Accept: application/json' "$HEALTH_URL_ORIGIN")" || return 1
 +            printf '%s' "$body" | health_json_ok "$expected_sha" || return 1
++            # Never judge a body left over from an earlier attempt: delete first, and
++            # treat any curl failure as a failed attempt without reading the file.
++            rm -f "$body_file"
 +            ctype="$(curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
 +              --resolve herobase.io:443:127.0.0.1 -H 'Accept: application/json' \
-+              -o "$APP_DIR/.git/vets-health-body.json" -w '%{content_type}' \
-+              "$HEALTH_URL_NGINX" || true)"
-+            case "$ctype" in application/json*) ;; *) rm -f "$APP_DIR/.git/vets-health-body.json"; return 1 ;; esac
-+            health_json_ok "$expected_sha" < "$APP_DIR/.git/vets-health-body.json" || { rm -f "$APP_DIR/.git/vets-health-body.json"; return 1; }
-+            rm -f "$APP_DIR/.git/vets-health-body.json"
++              -o "$body_file" -w '%{content_type}' "$HEALTH_URL_NGINX")" || rc=1
++            if [ "$rc" -eq 0 ]; then
++              case "$ctype" in application/json*) health_json_ok "$expected_sha" < "$body_file" || rc=1 ;; *) rc=1 ;; esac
++            fi
++            rm -f "$body_file"
++            [ "$rc" -eq 0 ] || return 1
++            # Homepage through the host nginx (origin side), so the public Cloudflare
++            # challenge on "/" cannot fail an otherwise healthy deploy.
++            curl --fail --silent --show-error --connect-timeout 5 --max-time 10 \
++              --resolve herobase.io:443:127.0.0.1 --output /dev/null https://herobase.io/ || return 1
 +          }
            cd "$APP_DIR"
            exec 9>"$APP_DIR/.git/vets-production.lock"
            flock -w 1800 9 || exit 75
-@@ -700,10 +775,7 @@
+@@ -700,10 +796,7 @@ jobs:
              });
            '
            for attempt in $(seq 1 10); do
