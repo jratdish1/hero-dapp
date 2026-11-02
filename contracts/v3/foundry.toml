@@ -13,6 +13,8 @@ optimizer_runs = 200
 evm_version = "paris"
 auto_detect_solc = true
 bytecode_hash = "ipfs"
+# The local fork dry-run script reads compiled artifacts (read-only).
+fs_permissions = [{ access = "read", path = "./out-dryrun" }]
 remappings = [
   # HeroABLE (Base) was verified against OpenZeppelin 5.0.0; everything else used 4.9.0.
   "src/base/HeroABLE.sol:@openzeppelin/contracts/=vendor/oz-5.0.0/contracts/",
