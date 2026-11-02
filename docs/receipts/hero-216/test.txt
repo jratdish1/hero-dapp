@@ -1,0 +1,13 @@
+
+> hero-dapp@1.0.0 test /workspace/rt135
+> vitest run
+
+
+ RUN  v4.1.11 /workspace/rt135
+
+
+ Test Files  27 passed (27)
+      Tests  473 passed (473)
+   Start at  00:26:23
+   Duration  2.29s (transform 2.03s, setup 0ms, import 6.95s, tests 1.21s, environment 2ms)
+

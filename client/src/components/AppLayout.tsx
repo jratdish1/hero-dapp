@@ -190,14 +190,14 @@ export default function AppLayout({ children }: { children: ReactNode }) {
         {/* Mobile overlay */}
         {sidebarOpen && (
           <div
-            className="fixed inset-0 bg-black/50 z-40 lg:hidden"
+            className="fixed inset-0 bg-black/50 z-[10000] lg:hidden"
             onClick={() => setSidebarOpen(false)}
           />
         )}
 
         {/* Sidebar */}
         <aside
-          className={`fixed lg:sticky top-0 left-0 z-50 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${
+          className={`fixed lg:sticky top-0 left-0 z-[10001] lg:z-50 h-screen w-64 bg-sidebar border-r border-sidebar-border flex flex-col transition-transform duration-300 ${
             sidebarOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
           }`}
         >
@@ -350,7 +350,10 @@ export default function AppLayout({ children }: { children: ReactNode }) {
                 </button>
               </div>
             ) : (
-              <WalletButton />
+              // Close the mobile drawer first: its z-[10001] layer would cover the z-50 wallet dialog.
+              <div onClickCapture={() => setSidebarOpen(false)}>
+                <WalletButton />
+              </div>
             )}
             {/* Audit badges */}
             <div className="flex items-center justify-center gap-3 mt-3 pt-3 border-t border-sidebar-border/50">

@@ -36,6 +36,13 @@ import {
   useCountdown,
 } from "@/hooks/useStaking";
 import { getChainConfig } from "@/lib/config";
+import { earlyExitPenalty } from "@/lib/stakingExit";
+import {
+  HERO_STAKE_NEW_DEPOSITS_ENABLED,
+  STAKE_PAUSED_MESSAGE,
+  STAKE_PAUSED_DETAIL,
+} from "@/lib/securityContainment";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // ─── Chain Config ────────────────────────────────────────────────────
 // Local chain display config (derived from shared config)
@@ -121,6 +128,8 @@ export default function HeroStake() {
   const user = useUserStake(activeChainId);
   const actions = useStakingActions(activeChainId);
   const countdown = useCountdown(user.unlockTime);
+  const { t } = useLanguage();
+  const newStakesPaused = !HERO_STAKE_NEW_DEPOSITS_ENABLED;
 
   // ─── Local State ─────────────────────────────────────────────────
   const [stakeAmount, setStakeAmount] = useState("");
@@ -138,6 +147,10 @@ export default function HeroStake() {
 
   // ─── Handlers ────────────────────────────────────────────────────
   const handleStake = async () => {
+    if (newStakesPaused) {
+      toast.error(t(STAKE_PAUSED_MESSAGE), { description: t(STAKE_PAUSED_DETAIL) });
+      return;
+    }
     if (!isValidAmount(stakeAmount)) {
       toast.error("Enter an amount to stake");
       return;
@@ -182,25 +195,41 @@ export default function HeroStake() {
         toast.error("Insufficient staked balance", { description: `You have ${formatHero(user.stakedAmount)} HERO staked but tried to unstake ${unstakeAmount}` });
         return;
       }
-      const willPenalize = !user.isUnlocked;
-
-      if (willPenalize) {
-        const penaltyPct = stats.penaltyBps ? Number(stats.penaltyBps) / 100 : 10;
-        toast.warning(`Early unstake — ${penaltyPct}% penalty applies`, {
-          description: "Penalty goes to protocol treasury",
+      // The hook re-reads isLocked on-chain and refuses a penalised withdraw;
+      // this early return only keeps the message specific.
+      if (!user.isUnlocked) {
+        toast.error("Still locked — plain unstake would cost you", {
+          description: `Unstaking now pays ${penaltyPct}% (${formatHero(earlyExitPenalty(amountBigInt, penaltyBpsOrDefault))} HERO) to the staking treasury. Use "Withdraw without penalty" instead.`,
         });
+        return;
       }
 
       toast.info("Unstaking HERO...");
       await actions.unstake(unstakeAmount);
       toast.success("Unstaked successfully!", {
-        description: willPenalize
-          ? "Early exit penalty was applied"
-          : "No penalty — lock period expired",
+        description: "Lock period over: full principal returned",
       });
     } catch (err: any) {
       const msg = err?.shortMessage || err?.message || "Transaction failed";
       toast.error("Unstake failed", { description: msg });
+    }
+  };
+
+  const runPenaltyFreeExit = async (skipClaim: boolean) => {
+    try {
+      toast.info(skipClaim ? "Withdrawing principal..." : "Claiming DAI, then withdrawing principal...");
+      await actions.emergencyWithdraw({ skipClaim });
+      toast.success("Withdrawal complete", { description: "Full staked HERO returned with no penalty" });
+    } catch (err: any) {
+      const msg = err?.shortMessage || err?.message || "Transaction failed";
+      if (skipClaim) {
+        toast.error("Withdraw failed", { description: msg });
+        return;
+      }
+      toast.error("Withdraw stopped", {
+        description: `${msg}. If the DAI claim keeps failing you can withdraw the principal alone; unclaimed DAI is then forfeited.`,
+        action: { label: "Withdraw principal only", onClick: () => void runPenaltyFreeExit(true) },
+      });
     }
   };
 
@@ -230,10 +259,14 @@ export default function HeroStake() {
   };
 
   // ─── Derived Values ──────────────────────────────────────────────
-  const penaltyPct = stats.penaltyBps ? (Number(stats.penaltyBps) / 100).toFixed(0) : "10";
+  // Live contracts charge 1000 bps; until the read returns, show that rather than zero.
+  const penaltyBpsOrDefault = stats.penaltyBps ?? 1000n;
+  const penaltyPct = (Number(penaltyBpsOrDefault) / 100).toFixed(0);
+  const unstakeAmountWei = isValidAmount(unstakeAmount) ? parseUnits(unstakeAmount, 18) : 0n;
+  const lockedPenaltyHero = formatHero(earlyExitPenalty(unstakeAmountWei || (user.stakedAmount ?? 0n), penaltyBpsOrDefault));
   const hasStake = Boolean(user.stakedAmount && user.stakedAmount > 0n);
   const hasPendingRewards = Boolean(user.pendingRewards && user.pendingRewards > 0n);
-  const isAnyTxPending = actions.isApproving || actions.isStaking || actions.isUnstaking || actions.isClaiming || actions.isConfirming;
+  const isAnyTxPending = actions.isApproving || actions.isStaking || actions.isUnstaking || actions.isClaiming || actions.isEmergencyWithdrawing || actions.isConfirming;
 
   // ─── Render ──────────────────────────────────────────────────────
   return (
@@ -294,15 +327,12 @@ export default function HeroStake() {
         >
           <AlertTriangle className="w-5 h-5 text-red-400 shrink-0" />
           <div className="flex-1">
-            <p className="text-sm font-semibold text-red-400">⚠️ Reward Pool Paused — Pending Funding</p>
+            <p className="text-sm font-semibold text-red-400">⚠️ Reward Pool Paused</p>
             <p className="text-xs text-red-400/70 mb-2">
               New stakes and reward claims are temporarily disabled. Emergency withdrawals remain available.
             </p>
-            <div className="bg-black/30 rounded-lg p-2 border border-red-500/20">
-              <p className="text-xs text-yellow-400 font-semibold mb-1">To restart the reward pool, fund the contract owner wallet:</p>
-              <p className="text-xs font-mono text-white/80 break-all">0xeb2C36C1804A8D4c68a2033dEe5ACc1294bD24e6</p>
-              <p className="text-xs text-yellow-400/80 mt-1">Required: ~735 DAI + 0.001 ETH on Base, or ~735 DAI on PulseChain</p>
-            </div>
+            {/* SECURITY (row 216): the "fund the owner wallet" instructions were removed.
+                The staking owner/treasury is unverified; never ask users to send funds to it. */}
           </div>
         </div>
       )}
@@ -396,6 +426,18 @@ export default function HeroStake() {
         </div>
       )}
 
+      {/* SECURITY (row 216): new stakes paused — visible to everyone, connected or not */}
+      {newStakesPaused && (
+        <div
+          role="alert"
+          data-testid="stake-paused-banner"
+          className="mb-6 rounded-lg border-2 border-red-500/60 bg-red-950/40 p-4"
+        >
+          <p className="text-sm font-bold text-red-300">⛔ {t(STAKE_PAUSED_MESSAGE)}</p>
+          <p className="mt-1 text-xs text-red-200/90">{t(STAKE_PAUSED_DETAIL)}</p>
+        </div>
+      )}
+
       {/* Connect Wallet Prompt */}
       {!isConnected ? (
         <ConnectWalletPrompt message="Connect your wallet to stake HERO and earn DAI rewards" />
@@ -449,7 +491,7 @@ export default function HeroStake() {
                       value={stakeAmount}
                       onChange={setStakeAmount}
                       className="bg-black/90 border-[#3D5A3D] text-white"
-                      disabled={isAnyTxPending || stats.isPaused}
+                      disabled={newStakesPaused || isAnyTxPending || stats.isPaused}
                     />
                     <button
                       onClick={handleMaxStake}
@@ -478,9 +520,20 @@ export default function HeroStake() {
                     <span className="text-white">{formatLockPeriod(stats.lockPeriodSeconds)}</span>
                   </div>
                 </div>
+                {newStakesPaused && (
+                  <div
+                    role="alert"
+                    data-testid="stake-paused-notice"
+                    className="rounded-lg p-3 text-xs"
+                    style={{ background: "rgba(239,68,68,0.12)", border: "1px solid rgba(239,68,68,0.45)" }}
+                  >
+                    <p className="font-semibold text-red-300">{t(STAKE_PAUSED_MESSAGE)}</p>
+                    <p className="text-red-300/80 mt-1">{t(STAKE_PAUSED_DETAIL)}</p>
+                  </div>
+                )}
                 <button
                   onClick={handleStake}
-                  disabled={isAnyTxPending || stats.isPaused || !stakeAmount}
+                  disabled={newStakesPaused || isAnyTxPending || stats.isPaused || !stakeAmount}
                   className="w-full py-3 rounded-xl font-bold text-base transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{
                     background: "linear-gradient(135deg, #C8A84B, #a8882b)",
@@ -495,7 +548,7 @@ export default function HeroStake() {
                   ) : (
                     <>
                       <Zap className="w-4 h-4" />
-                      Stake HERO
+                      {newStakesPaused ? t(STAKE_PAUSED_MESSAGE) : "Stake HERO"}
                     </>
                   )}
                 </button>
@@ -537,6 +590,7 @@ export default function HeroStake() {
                 </div>
                 {!user.isUnlocked && hasStake && (
                   <div
+                    data-testid="early-exit-penalty-warning"
                     className="rounded-lg p-3 text-xs"
                     style={{
                       background: "rgba(224,90,90,0.08)",
@@ -545,8 +599,9 @@ export default function HeroStake() {
                   >
                     <p style={{ color: "#e05a5a" }}>
                       <AlertTriangle className="w-3 h-3 inline mr-1" />
-                      Early unstaking incurs a {penaltyPct}% penalty on your staked HERO.
-                      Penalty goes to the protocol treasury.
+                      {user.lockStatusKnown
+                        ? <>Still locked: a plain unstake now pays {penaltyPct}% ({lockedPenaltyHero} HERO) to the staking treasury, so it is disabled. Use &ldquo;Withdraw without penalty&rdquo; below to get your full principal back.</>
+                        : <>Checking your lock status on-chain. Unstake stays disabled until the contract answers.</>}
                     </p>
                   </div>
                 )}
@@ -566,7 +621,7 @@ export default function HeroStake() {
                 )}
                 <button
                   onClick={handleUnstake}
-                  disabled={isAnyTxPending || !hasStake || !unstakeAmount}
+                  disabled={isAnyTxPending || !hasStake || !unstakeAmount || !user.isUnlocked}
                   className="w-full py-3 rounded-xl font-bold text-base transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   style={{
                     background: user.isUnlocked
@@ -584,23 +639,16 @@ export default function HeroStake() {
                   ) : (
                     <>
                       <Unlock className="w-4 h-4" />
-                      {user.isUnlocked ? "Unstake HERO" : "Unstake HERO (Penalty Applies)"}
+                      {user.isUnlocked ? "Unstake HERO" : `Unstake disabled while locked (${penaltyPct}% penalty)`}
                     </>
                   )}
                 </button>
 
-                {/* Emergency Withdraw (only when paused) */}
-                {stats.isPaused && hasStake && (
+                {/* Penalty-free exit: claimReward() then emergencyWithdraw(); works locked or not */}
+                {hasStake && (
                   <button
-                    onClick={async () => {
-                      try {
-                        toast.info("Emergency withdraw...");
-                        await actions.emergencyWithdraw();
-                        toast.success("Emergency withdrawal complete");
-                      } catch (err: any) {
-                        toast.error("Failed", { description: err?.shortMessage || err?.message });
-                      }
-                    }}
+                    data-testid="penalty-free-exit"
+                    onClick={() => void runPenaltyFreeExit(false)}
                     disabled={isAnyTxPending}
                     className="w-full py-2 rounded-xl text-sm font-medium transition-all"
                     style={{
@@ -610,7 +658,7 @@ export default function HeroStake() {
                     }}
                   >
                     <AlertTriangle className="w-3 h-3 inline mr-1" />
-                    Emergency Withdraw (Forfeits Rewards)
+                    Withdraw without penalty (claims DAI first, returns all staked HERO)
                   </button>
                 )}
               </>

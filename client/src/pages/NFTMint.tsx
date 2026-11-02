@@ -14,6 +14,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useHeroCards, MintPhase, HolderTier, TIER_NAMES, TIER_COLORS } from '../lib/useHeroCards';
 import { HERO_CARDS_BASE_URI, HERO_CARDS_MAX_SUPPLY } from '../lib/heroCards-abi';
+import { MINT_PAUSED_MESSAGE, MINT_PAUSED_DETAIL } from '../lib/securityContainment';
+import { useLanguage } from '../contexts/LanguageContext';
 
 // ─── IPFS Gateway for artwork preview ────────────────────────────
 const IPFS_GATEWAY = "https://gateway.lighthouse.storage/ipfs/";
@@ -89,8 +91,9 @@ export default function NFTMint() {
     // Holder Utility
     isHolder, holderTier, tierName, tierColor, feeDiscount, canSpin,
     // Mint Actions
-    mint, isMinting, isConfirming, mintSuccess, mintError, mintTxHash, mintTxExplorerUrl, refetchMinted,
+    mintPaused, mint, isMinting, isConfirming, mintSuccess, mintError, mintTxHash, mintTxExplorerUrl, refetchMinted,
   } = useHeroCards();
+  const { t } = useLanguage();
 
   const [quantity, setQuantity] = useState(1);
   const [previewId, setPreviewId] = useState(1);
@@ -114,9 +117,9 @@ export default function NFTMint() {
   }, []);
 
   const handleMint = useCallback(() => {
-    if (!canMint) return;
+    if (mintPaused || !canMint) return;
     mint(quantity);
-  }, [canMint, mint, quantity]);
+  }, [mintPaused, canMint, mint, quantity]);
 
   const currentPrice = mintPhase === MintPhase.WHITELIST ? whitelistPrice : mintPrice;
   const totalCost = (parseFloat(currentPrice) * quantity).toFixed(4);
@@ -139,7 +142,16 @@ export default function NFTMint() {
             }
           </p>
         )}
-        <PhaseBadge phase={mintPhase} />
+        {mintPaused ? (
+          <span
+            data-testid="mint-paused-badge"
+            className="px-3 py-1 rounded-full text-xs font-bold bg-red-900/60 text-red-300 border border-red-600"
+          >
+            {t('MINT PAUSED')}
+          </span>
+        ) : (
+          <PhaseBadge phase={mintPhase} />
+        )}
       </div>
 
       {/* Supply Progress Bar */}
@@ -198,6 +210,27 @@ export default function NFTMint() {
 
         {/* Mint Panel */}
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+          {mintPaused ? (
+            <div data-testid="mint-paused-panel" role="alert">
+              <h2 className="text-lg font-bold text-red-300 mb-4">{t(MINT_PAUSED_MESSAGE)}</h2>
+              <div className="bg-red-950/60 border-2 border-red-600 rounded-lg p-4 mb-6">
+                <p className="text-red-200 text-sm font-semibold">{t(MINT_PAUSED_DETAIL)}</p>
+                <p className="text-red-300/80 text-xs mt-2">
+                  {t('The HeroCards contracts on Base and PulseChain are being replaced. Do not mint, buy or send funds to the old contracts from any site.')}
+                </p>
+              </div>
+              <button
+                type="button"
+                data-testid="mint-paused-button"
+                className="w-full py-4 bg-gray-800 text-gray-400 font-bold rounded-lg cursor-not-allowed border border-red-700"
+                disabled
+                aria-disabled="true"
+              >
+                {t(MINT_PAUSED_MESSAGE)}
+              </button>
+            </div>
+          ) : (
+          <>
           <h2 className="text-lg font-bold text-white mb-6">Mint Your HERO Card</h2>
 
           {/* Price Info */}
@@ -329,6 +362,8 @@ export default function NFTMint() {
                 View on {chainName} Explorer →
               </a>
             </div>
+          )}
+          </>
           )}
         </div>
       </div>

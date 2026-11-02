@@ -9,6 +9,13 @@
  *   - PulseChain (369) — native currency: PLS
  *
  * Unsupported chains: canMint = false, chainSupported = false.
+ *
+ * SECURITY CONTAINMENT (queue row 216, 2026-10-22): minting is PAUSED by the
+ * single flag HERO_CARDS_MINT_ENABLED in ./securityContainment. While it is
+ * false, the mint/whitelistMint functions are replaced by no-tx stubs (the
+ * write path is dead code and is removed from the production bundle), and
+ * canMint is always false. Compromised contract addresses are blocked even if
+ * the flag is flipped.
  */
 import { useReadContract, useWriteContract, useWaitForTransactionReceipt, useAccount, useChainId } from 'wagmi';
 import { parseEther } from 'viem';
@@ -23,6 +30,7 @@ import {
   HERO_CARDS_WHITELIST_PRICE_ETH,
   type HeroCardsChainConfig,
 } from './heroCards-config';
+import { HERO_CARDS_MINT_ENABLED, MINT_PAUSED_DETAIL, isBlockedContract } from './securityContainment';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 export enum MintPhase {
@@ -155,40 +163,52 @@ export function useHeroCards() {
     hash: mintTxHash,
   });
 
-  function mint(quantity: number) {
-    if (!address || !contractAddress || !chainSupported) return;
-    const phase = Number(mintPhaseRaw ?? 0) as MintPhase;
-    if (phase === MintPhase.CLOSED) {
-      throw new Error('Minting is currently closed');
-    }
-    const price = phase === MintPhase.WHITELIST
-      ? parseEther(HERO_CARDS_WHITELIST_PRICE_ETH)
-      : parseEther(HERO_CARDS_MINT_PRICE_ETH);
-    const totalValue = price * BigInt(quantity);
+  const mintAllowed = HERO_CARDS_MINT_ENABLED && !isBlockedContract(contractAddress);
 
-    writeContract({
-      address: contractAddress,
-      abi: HERO_CARDS_ABI,
-      functionName: 'mint',
-      args: [BigInt(quantity)],
-      value: totalValue,
-      chainId: chainId,
-    });
+  function pausedMint(..._args: unknown[]): never {
+    throw new Error(MINT_PAUSED_DETAIL);
   }
 
-  function whitelistMint(quantity: number, proof: `0x${string}`[]) {
-    if (!address || !contractAddress || !chainSupported) return;
-    const totalValue = parseEther(HERO_CARDS_WHITELIST_PRICE_ETH) * BigInt(quantity);
+  // When HERO_CARDS_MINT_ENABLED is the literal `false`, the bundler drops the
+  // real write-path branch below, so no mint transaction can be sent.
+  const mint: (quantity: number) => void = HERO_CARDS_MINT_ENABLED
+    ? (quantity: number) => {
+        if (!mintAllowed || !address || !contractAddress || !chainSupported) return;
+        const phase = Number(mintPhaseRaw ?? 0) as MintPhase;
+        if (phase === MintPhase.CLOSED) {
+          throw new Error('Minting is currently closed');
+        }
+        const price = phase === MintPhase.WHITELIST
+          ? parseEther(HERO_CARDS_WHITELIST_PRICE_ETH)
+          : parseEther(HERO_CARDS_MINT_PRICE_ETH);
+        const totalValue = price * BigInt(quantity);
 
-    writeContract({
-      address: contractAddress,
-      abi: HERO_CARDS_ABI,
-      functionName: 'whitelistMint',
-      args: [BigInt(quantity), proof],
-      value: totalValue,
-      chainId: chainId,
-    });
-  }
+        writeContract({
+          address: contractAddress,
+          abi: HERO_CARDS_ABI,
+          functionName: 'mint',
+          args: [BigInt(quantity)],
+          value: totalValue,
+          chainId: chainId,
+        });
+      }
+    : pausedMint;
+
+  const whitelistMint: (quantity: number, proof: `0x${string}`[]) => void = HERO_CARDS_MINT_ENABLED
+    ? (quantity: number, proof: `0x${string}`[]) => {
+        if (!mintAllowed || !address || !contractAddress || !chainSupported) return;
+        const totalValue = parseEther(HERO_CARDS_WHITELIST_PRICE_ETH) * BigInt(quantity);
+
+        writeContract({
+          address: contractAddress,
+          abi: HERO_CARDS_ABI,
+          functionName: 'whitelistMint',
+          args: [BigInt(quantity), proof],
+          value: totalValue,
+          chainId: chainId,
+        });
+      }
+    : pausedMint;
 
   // ─── Explorer Link ────────────────────────────────────────────────────────
   const mintTxExplorerUrl = mintTxHash
@@ -200,7 +220,8 @@ export function useHeroCards() {
   const holderTier = Number(holderTierRaw ?? 0) as HolderTier;
   const feeDiscount = Number(feeDiscountRaw ?? 0) / 100; // bps → %
   const remaining = HERO_CARDS_MAX_SUPPLY - Number(totalMinted ?? 0);
-  const canMint = chainSupported &&
+  const canMint = mintAllowed &&
+    chainSupported &&
     mintPhase !== MintPhase.CLOSED &&
     Number(userMinted ?? 0) < HERO_CARDS_MAX_PER_WALLET &&
     remaining > 0;
@@ -242,6 +263,7 @@ export function useHeroCards() {
     canSpin: Boolean(canSpin),
 
     // Mint Actions
+    mintPaused: !mintAllowed,
     mint,
     whitelistMint,
     isMinting,
