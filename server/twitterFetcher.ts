@@ -9,6 +9,7 @@
  */
 
 import { callDataApi } from "./_core/dataApi";
+import { xApiConfigured, xGetUserId, xGetUserTweetsLegacy } from "./xApi";
 import type { InsertInfluencerMention } from "../drizzle/schema";
 
 // ─── Constants ──────────────────────────────────────────────────
@@ -177,6 +178,8 @@ export function parseTweet(raw: RawTweetData): ParsedMention | null {
 /** Get @HERO501c3 rest_id from username */
 export async function getHeroRestId(): Promise<string | null> {
   try {
+    // Preferred source: official X API v2 (server-side X_BEARER_TOKEN).
+    if (xApiConfigured()) return await xGetUserId(HERO_TWITTER_USERNAME);
     const result = await callDataApi("Twitter/get_user_profile_by_username", {
       query: { username: HERO_TWITTER_USERNAME },
     }) as any;
@@ -192,6 +195,14 @@ export async function getHeroRestId(): Promise<string | null> {
 /** Fetch tweets from @HERO501c3 timeline (includes RTs of mentions) */
 export async function fetchHeroTweets(restId: string, count = 20): Promise<ParsedMention[]> {
   try {
+    if (xApiConfigured()) {
+      const legacy = await xGetUserTweetsLegacy(restId, count);
+      const parsedX = legacy.map(t => parseTweet(t)).filter((t): t is ParsedMention => t !== null);
+      console.log(`[TwitterFetcher] X API v2: ${parsedX.length} tweets from @${HERO_TWITTER_USERNAME}`);
+      return parsedX;
+    }
+
+    // Legacy Manus Forge Data API path (retired 2026-10; kept only as a fallback).
     const result = await callDataApi("Twitter/get_user_tweets", {
       query: { user: restId, count: String(count) },
     }) as any;
