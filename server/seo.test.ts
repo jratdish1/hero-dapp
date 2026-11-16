@@ -13,6 +13,15 @@ describe('SEO Improvements', () => {
     it('has robots meta tag allowing indexing', () => {
       expect(indexHtml).toContain('<meta name="robots" content="index, follow"');
     });
+
+    it('has crawlable footer nav links outside #root', () => {
+      expect(indexHtml).toContain('id="hero-seo-nav"');
+      expect(indexHtml).toContain('href="/bootcamp"');
+      expect(indexHtml).toContain('href="/swap"');
+      const rootIdx = indexHtml.indexOf('id="root"');
+      const navIdx = indexHtml.indexOf('id="hero-seo-nav"');
+      expect(navIdx).toBeGreaterThan(rootIdx);
+    });
   });
 
   describe('JSON-LD Structured Data', () => {
@@ -113,9 +122,14 @@ describe('SEO Improvements', () => {
       expect(sitemapXml).toContain('<loc>https://herobase.io/ai</loc>');
     });
 
-    it('has 18 total URLs', () => {
+    it('has lastmod on every entry and 36 indexable URLs', () => {
       const urlCount = (sitemapXml.match(/<url>/g) || []).length;
-      expect(urlCount).toBe(23);
+      const lastmodCount = (sitemapXml.match(/<lastmod>/g) || []).length;
+      expect(urlCount).toBe(36);
+      expect(lastmodCount).toBe(36);
+      expect(sitemapXml).toContain('<loc>https://herobase.io/bootcamp</loc>');
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/farm</loc>');
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/login</loc>');
     });
   });
 
@@ -133,6 +147,17 @@ describe('SEO Improvements', () => {
 
     it('references the sitemap', () => {
       expect(robotsTxt).toContain('Sitemap: https://herobase.io/sitemap.xml');
+    });
+
+    it('allows GPTBot, ClaudeBot and Google-Extended without a conflicting Disallow: /', () => {
+      for (const bot of ['GPTBot', 'ClaudeBot', 'Google-Extended']) {
+        const idx = robotsTxt.indexOf(`User-agent: ${bot}`);
+        expect(idx).toBeGreaterThan(-1);
+        const body = robotsTxt.slice(idx).split(/\nUser-agent:/)[0];
+        expect(body).toContain('Allow: /');
+        expect(body).not.toMatch(/Disallow: \/\s*$/m);
+        expect(body).not.toContain('Disallow: /\n');
+      }
     });
   });
 
