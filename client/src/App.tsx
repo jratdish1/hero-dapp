@@ -13,7 +13,7 @@ import SecurityNotice from "./components/SecurityNotice";
 // Critical path: Home loads eagerly (landing page)
 import Home from "./pages/Home";
 import NotFound from "@/pages/NotFound";
-import { HERO_INCIDENT_MAINTENANCE } from "./lib/incident-flags";
+import { HERO_INCIDENT_MAINTENANCE, HERO_V3_CONTRACTS_LIVE } from "./lib/incident-flags";
 
 // Lazy-loaded pages (code-split chunks loaded on demand)
 const LoginPage = React.lazy(() => import("./pages/LoginPage"));
@@ -72,6 +72,19 @@ function paused(
   };
 }
 
+// DAO, single-sided staking and swap: "Coming soon" placeholder until the new
+// (v3) contracts are deployed AND maintenance is lifted. Renders the same
+// data-testid as the maintenance page so the CI incident gate still applies.
+function comingSoon(
+  Page: React.LazyExoticComponent<React.ComponentType<any>>,
+  feature: string,
+): React.ComponentType<any> {
+  if (!HERO_INCIDENT_MAINTENANCE && HERO_V3_CONTRACTS_LIVE) return Page;
+  return function ComingSoonFeature() {
+    return <IncidentMaintenancePage feature={feature} variant="coming-soon" />;
+  };
+}
+
 // Loading fallback for lazy-loaded routes
 function PageLoader() {
   return (
@@ -113,7 +126,7 @@ function Router() {
       <Route path="/login" component={withSuspense(LoginPage)} />
       <Route path="/" component={Home} />
       {/* Incident 2026-10-07: every wallet-write route is paused. /approvals stays live (revoke-only, enforced in the page). */}
-      <Route path="/swap" component={withLayout(paused(Swap, "HERO Swap"))} />
+      <Route path="/swap" component={withLayout(comingSoon(Swap, "HERO Swap"))} />
       <Route path="/wallet" component={withLayout(paused(HeroWallet, "HERO Wallet"))} />
       <Route path="/portfolio" component={withLayout(Portfolio)} />
       <Route path="/dashboard" component={withLayout(Dashboard)} />
@@ -121,7 +134,7 @@ function Router() {
       <Route path="/limits" component={withLayout(paused(LimitOrders, "Limit Orders"))} />
       <Route path="/approvals" component={withLayout(Approvals)} />
       <Route path="/bootcamp" component={withLayout(paused(Farm, "Boot Camp"))} />
-      <Route path="/stake" component={withLayout(paused(Stake, "HERO Stake"))} />
+      <Route path="/stake" component={withLayout(comingSoon(Stake, "HERO Stake"))} />
       <Route path="/media" component={withLayout(MediaHub)} />
       <Route path="/ai" component={withLayout(AiAssistant)} />
       <Route path="/tokenomics" component={withLayout(Tokenomics)} />
@@ -129,13 +142,13 @@ function Router() {
       <Route path="/ecosystem" component={withLayout(Ecosystem)} />
       <Route path="/community" component={withLayout(Blog)} />
       <Route path="/community-hub" component={withLayout(CommunityHub)} />
-      <Route path="/dao" component={withLayout(paused(DaoDashboard, "HERO Advisory Governance"))} />
-      <Route path="/dao/proposals" component={withLayout(paused(Proposals, "DAO Proposals"))} />
-      <Route path="/dao/proposals/create" component={withLayout(paused(CreateProposal, "Create DAO Proposal"))} />
-      <Route path="/dao/proposals/:id" component={withLayout(paused(ProposalDetail, "DAO Proposal Voting"))} />
-      <Route path="/dao/treasury" component={withLayout(paused(Treasury, "DAO Treasury"))} />
-      <Route path="/dao/delegates" component={withLayout(paused(Delegates, "DAO Delegates"))} />
-      <Route path="/stake/base" component={withLayout(paused(BaseStake, "HERO Stake (Base)"))} />
+      <Route path="/dao" component={withLayout(comingSoon(DaoDashboard, "HERO Advisory Governance"))} />
+      <Route path="/dao/proposals" component={withLayout(comingSoon(Proposals, "DAO Proposals"))} />
+      <Route path="/dao/proposals/create" component={withLayout(comingSoon(CreateProposal, "Create DAO Proposal"))} />
+      <Route path="/dao/proposals/:id" component={withLayout(comingSoon(ProposalDetail, "DAO Proposal Voting"))} />
+      <Route path="/dao/treasury" component={withLayout(comingSoon(Treasury, "DAO Treasury"))} />
+      <Route path="/dao/delegates" component={withLayout(comingSoon(Delegates, "DAO Delegates"))} />
+      <Route path="/stake/base" component={withLayout(comingSoon(BaseStake, "HERO Stake (Base)"))} />
       {/* /stake/dai stays live so existing stakers can exit; new approve/stake is blocked in useStakingActions. */}
       <Route path="/stake/dai" component={withLayout(HeroStake)} />
       <Route path="/bots" component={withLayout(paused(AbleBots, "ABLE Bots"))} />
@@ -145,7 +158,7 @@ function Router() {
       <Route path="/dex-analytics" component={withLayout(DexAnalytics)} />
       <Route path="/burn" component={withLayout(paused(BuyAndBurn, "Buy & Burn"))} />
       <Route path="/nft-mint" component={withLayout(paused(NFTMint, "HERO Cards NFT Mint"))} />
-      <Route path="/dao-proposals" component={withLayout(paused(DAOProposals, "DAO Voting"))} />
+      <Route path="/dao-proposals" component={withLayout(comingSoon(DAOProposals, "DAO Voting"))} />
       <Route path="/giveaways" component={withLayout(paused(Giveaways, "Giveaways"))} />
       <Route path="/holder-rewards" component={withLayout(paused(HolderRewards, "Holder Rewards"))} />
       <Route path="/spin" component={withLayout(paused(SpinWheel, "Spin the Wheel"))} />

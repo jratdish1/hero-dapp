@@ -43,3 +43,11 @@ describe("HERO incident maintenance flags", () => {
     expect(() => assertStakingActionAllowed("stake", false)).not.toThrow();
   });
 });
+
+describe("v3 coming-soon placeholders (t116u 2026-11-16)", () => {
+  it("defaults to placeholders: v3 contracts are not live unless explicitly enabled", async () => {
+    const flags = await import("./incident-flags");
+    expect(flags.HERO_V3_CONTRACTS_LIVE).toBe(false);
+    expect(flags.HERO_COMING_SOON_MESSAGE).toMatch(/new smart contracts/);
+  });
+});
