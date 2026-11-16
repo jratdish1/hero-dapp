@@ -122,14 +122,16 @@ describe('SEO Improvements', () => {
       expect(sitemapXml).toContain('<loc>https://herobase.io/ai</loc>');
     });
 
-    it('has lastmod on every entry and 36 indexable URLs', () => {
+    it('has lastmod on every entry and 34 indexable URLs', () => {
       const urlCount = (sitemapXml.match(/<url>/g) || []).length;
       const lastmodCount = (sitemapXml.match(/<lastmod>/g) || []).length;
-      expect(urlCount).toBe(36);
-      expect(lastmodCount).toBe(36);
+      expect(urlCount).toBe(34);
+      expect(lastmodCount).toBe(34);
       expect(sitemapXml).toContain('<loc>https://herobase.io/bootcamp</loc>');
       expect(sitemapXml).not.toContain('<loc>https://herobase.io/farm</loc>');
       expect(sitemapXml).not.toContain('<loc>https://herobase.io/login</loc>');
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/swap</loc>');
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/nft</loc>');
     });
   });
 

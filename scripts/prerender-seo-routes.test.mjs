@@ -39,8 +39,10 @@ describe("prerender-seo-routes", () => {
     const xml = sitemapXml(REAL_ROUTES, "2026-11-16");
     assert.match(xml, /<lastmod>2026-11-16<\/lastmod>/);
     assert.match(xml, /<loc>https:\/\/herobase.io\/bootcamp<\/loc>/);
-    assert.equal(xml.includes("https://herobase.io/farm"), false);
-    assert.equal(xml.includes("https://herobase.io/login"), false);
+    assert.equal(xml.includes("<loc>https://herobase.io/farm</loc>"), false);
+    assert.equal(xml.includes("<loc>https://herobase.io/swap</loc>"), false);
+    assert.equal(xml.includes("<loc>https://herobase.io/nft</loc>"), false);
+    assert.equal(xml.includes("<loc>https://herobase.io/login</loc>"), false);
     assert.equal((xml.match(/<url>/g) || []).length, REAL_ROUTES.filter((r) => r.index).length);
   });
 

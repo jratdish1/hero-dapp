@@ -23,7 +23,7 @@ const ORIGIN = "https://herobase.io";
 /** Real SPA routes from client/src/App.tsx (exact paths, not redirects). */
 export const REAL_ROUTES = [
   { path: "/", title: "HERO Dapp - PulseChain DEX Aggregator", description: "Trade $HERO and $VETS on PulseChain and BASE. DEX aggregator with gasless swaps, DCA orders, limit orders, portfolio tracking, and LP staking.", changefreq: "weekly", priority: "1.0", index: true },
-  { path: "/swap", title: "Swap | HERO Dapp", description: "Swap $HERO, $VETS and other tokens on PulseChain and BASE with the HERO DEX aggregator.", changefreq: "daily", priority: "0.9", index: true },
+  { path: "/swap", title: "Swap | HERO Dapp", description: "Swap $HERO, $VETS and other tokens on PulseChain and BASE with the HERO DEX aggregator.", changefreq: "daily", priority: "0.9", index: false, robots: "noindex, nofollow" },
   { path: "/wallet", title: "Wallet | HERO Dapp", description: "Open the in-app HERO Wallet to view balances and manage assets in the HERO ecosystem.", changefreq: "weekly", priority: "0.6", index: true },
   { path: "/portfolio", title: "Portfolio | HERO Dapp", description: "Track your HERO and VETS portfolio, balances and performance in the HERO Dapp.", changefreq: "daily", priority: "0.7", index: true },
   { path: "/dashboard", title: "Dashboard | HERO Dapp", description: "Your HERO Dapp dashboard for trading, staking and ecosystem activity.", changefreq: "daily", priority: "0.8", index: true },
@@ -37,7 +37,7 @@ export const REAL_ROUTES = [
   { path: "/media", title: "Media | HERO Dapp", description: "News, videos and media from the HERO ecosystem and VIC Foundation.", changefreq: "weekly", priority: "0.6", index: true },
   { path: "/ai", title: "AI Assistant | HERO Dapp", description: "Ask the HERO AI assistant about the Dapp, tokenomics and ecosystem.", changefreq: "monthly", priority: "0.6", index: true },
   { path: "/tokenomics", title: "Tokenomics | HERO Dapp", description: "HERO tokenomics: supply, utility and how the token supports the VIC Foundation mission.", changefreq: "monthly", priority: "0.8", index: true },
-  { path: "/nft", title: "NFT Collection | HERO Dapp", description: "Explore the HERO military-rank NFT collection.", changefreq: "weekly", priority: "0.7", index: true },
+  { path: "/nft", title: "NFT Collection | HERO Dapp", description: "Explore the HERO military-rank NFT collection.", changefreq: "weekly", priority: "0.7", index: false, robots: "noindex, nofollow" },
   { path: "/ecosystem", title: "Ecosystem | HERO Dapp", description: "Discover projects and partners in the HERO and VIC Foundation ecosystem.", changefreq: "monthly", priority: "0.6", index: true },
   { path: "/community", title: "Community | HERO Dapp", description: "Community updates, posts and resources from HERO and the VIC Foundation.", changefreq: "weekly", priority: "0.7", index: true },
   { path: "/community-hub", title: "Community Hub | HERO Dapp", description: "The HERO Community Hub for galleries, events and member highlights.", changefreq: "weekly", priority: "0.6", index: true },
