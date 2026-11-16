@@ -1,0 +1,23 @@
+/* grok-chat widget styles. Override colors per site with the --gc-* variables. */
+.gc-root{--gc-accent:#c9a84c;--gc-bg:#0f1621;--gc-fg:#f2f2f2;--gc-muted:#9aa4b2;--gc-user:#1f3a5f;position:fixed;right:18px;bottom:18px;z-index:2147483000;font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.gc-launch{width:56px;height:56px;border-radius:50%;border:0;background:var(--gc-accent);color:#111;font-size:24px;cursor:pointer;box-shadow:0 6px 20px rgba(0,0,0,.35)}
+.gc-launch:focus-visible,.gc-send:focus-visible,.gc-close:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.gc-panel{position:absolute;right:0;bottom:70px;width:min(360px,calc(100vw - 36px));height:min(520px,calc(100vh - 110px));display:flex;flex-direction:column;background:var(--gc-bg);color:var(--gc-fg);border:1px solid rgba(255,255,255,.12);border-radius:14px;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.45)}
+.gc-panel[hidden]{display:none}
+.gc-head{display:flex;justify-content:space-between;align-items:center;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+.gc-title{font-weight:700}.gc-sub{font-size:12px;color:var(--gc-muted)}
+.gc-close{background:none;border:0;color:var(--gc-fg);font-size:22px;cursor:pointer;line-height:1}
+.gc-log{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:8px}
+.gc-msg{max-width:88%;padding:8px 11px;border-radius:12px;white-space:pre-wrap;word-wrap:break-word}
+.gc-assistant{align-self:flex-start;background:rgba(255,255,255,.07)}
+.gc-user{align-self:flex-end;background:var(--gc-user)}
+.gc-wait{opacity:.6}
+.gc-msg a,.gc-foot a{color:var(--gc-accent)}
+.gc-form{display:flex;gap:8px;padding:10px;border-top:1px solid rgba(255,255,255,.1)}
+.gc-form[hidden]{display:none}
+.gc-input{flex:1;resize:none;border-radius:8px;border:1px solid rgba(255,255,255,.2);background:rgba(255,255,255,.05);color:var(--gc-fg);padding:8px;font:inherit}
+.gc-send{border:0;border-radius:8px;background:var(--gc-accent);color:#111;font-weight:700;padding:8px 12px;cursor:pointer}
+.gc-send:disabled{opacity:.5;cursor:default}
+.gc-gate{padding:12px;border-top:1px solid rgba(255,255,255,.1);font-size:13px}
+.gc-foot{padding:8px 12px;font-size:11px;color:var(--gc-muted);border-top:1px solid rgba(255,255,255,.08)}
+@media (prefers-reduced-motion:no-preference){.gc-launch{transition:transform .15s}.gc-launch:hover{transform:scale(1.06)}}
