@@ -82,6 +82,8 @@
   <body>
     <div id="root"><main role="main" style="min-height:100vh;background:#0a0a0a;color:#fafafa"><div style="width:100%;background:linear-gradient(to right,#000,rgb(15,12,8),#000);padding:8px 0;border-bottom:1px solid rgba(255,140,0,0.2)"><p style="text-align:center;font-size:14px;font-weight:700;letter-spacing:0.25em;text-transform:uppercase;color:#ff8c00;font-family:Inter,system-ui,sans-serif;margin:0">HERO Dapp — Built for Veterans, by Veterans</p></div><div style="width:100%;height:60vh;min-height:400px;max-height:700px;background:#111"><img src="/hero-banner-sm.webp" alt="" style="width:100%;height:100%;object-fit:cover" fetchpriority="high"/></div></main></div>
     <script type="module" src="/src/main.tsx"></script>
+    <!-- Grok-4.3 help widget: assets + /api/grok-chat are served by the grok-chat sidecar via nginx (see grok-chat/README.md). Harmless 404 until deployed. -->
+    <script src="/grok-chat/grok-chat.js" defer data-endpoint="/api/grok-chat" data-title="HERO Dapp Help" data-greeting="Hi! Ask me where to find swaps, staking, DCA, the DAO, and more." data-fallback-url="https://t.me/VetsInCrypto" data-fallback-label="Telegram support" data-notice="AI answers can be wrong. Not financial advice. Never share your seed phrase."></script>
   </body>
 
 </html>

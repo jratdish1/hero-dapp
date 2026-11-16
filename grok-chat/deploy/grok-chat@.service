@@ -1,0 +1,29 @@
+# /etc/systemd/system/grok-chat@.service — one instance per site: grok-chat@vicfoundation, ...
+# Secrets: /etc/grok-chat/%i.env (root:grokchat 0640) holds XAI_API_KEY and the site vars.
+[Unit]
+Description=Grok chat sidecar (%i)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=grokchat
+Group=grokchat
+EnvironmentFile=/etc/grok-chat/%i.env
+WorkingDirectory=/opt/grok-chat/%i
+ExecStart=/usr/bin/env node /opt/grok-chat/%i/server/grok-chat-server.mjs
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/log/grok-chat
+ProtectKernelTunables=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_INET AF_INET6
+MemoryMax=256M
+CPUQuota=50%
+
+[Install]
+WantedBy=multi-user.target
