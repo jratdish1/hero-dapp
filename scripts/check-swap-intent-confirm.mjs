@@ -189,6 +189,13 @@ async function waitFor(client, label, expression, timeoutMs = 30_000) {
 //               gate re-arms automatically when /swap is un-paused.
 // Build and run this script with the same VITE_HERO_INCIDENT_MAINTENANCE value.
 const HERO_INCIDENT_MAINTENANCE = (process.env.VITE_HERO_INCIDENT_MAINTENANCE ?? 'true') !== 'false';
+// /swap is also a "Coming soon" placeholder until VITE_HERO_V3_CONTRACTS_LIVE is
+// exactly "true" (client/src/App.tsx comingSoon()). The original swap-intent
+// assertions only apply once BOTH maintenance is off AND v3 is live; otherwise the
+// gate asserts the placeholder (no form, no wallet write/sign). Without this, the
+// maintenance-off / v3-off build failed this gate and the original checks never ran.
+const HERO_V3_CONTRACTS_LIVE = (process.env.VITE_HERO_V3_CONTRACTS_LIVE ?? 'false') === 'true';
+const SWAP_GATED = HERO_INCIDENT_MAINTENANCE || !HERO_V3_CONTRACTS_LIVE;
 const SWAP_WRITE_OR_SIGN_CONTROL = /\b(swap|approve|confirm|sign|send|submit|review intent|buy|sell|bridge|deposit|withdraw)\b/i;
 const WALLET_WRITE_METHODS = [
   'eth_sendTransaction', 'eth_sendRawTransaction', 'eth_sign', 'personal_sign',
@@ -221,7 +228,7 @@ async function assertSwapMaintenancePause(client) {
   await waitFor(
     client,
     '/swap maintenance pause',
-    `location.pathname === '/swap' && document.querySelector('[data-testid="hero-incident-route-paused"][data-route="/swap"]') !== null && document.querySelector('[data-testid="hero-incident-banner"]') !== null`,
+    `location.pathname === '/swap' && document.querySelector('[data-testid="hero-incident-route-paused"][data-route="/swap"]') !== null${HERO_INCIDENT_MAINTENANCE ? ` && document.querySelector('[data-testid="hero-incident-banner"]') !== null` : ''}`,
   );
   // Give any lazily mounted swap UI a chance to appear before asserting absence.
   await sleep(1_500);
@@ -242,7 +249,7 @@ async function assertSwapMaintenancePause(client) {
       walletCalls: Array.isArray(window.__heroIncidentWalletCalls) ? window.__heroIncidentWalletCalls.slice() : null,
     };
   })()`);
-  if (!state.paused || !state.banner || state.bannerRole !== 'status') {
+  if (!state.paused || (HERO_INCIDENT_MAINTENANCE && (!state.banner || state.bannerRole !== 'status'))) {
     throw new Error(`/swap maintenance pause not rendered: ${JSON.stringify(state)}`);
   }
   if (state.swapIntentInput || state.swapIntentNodes > 0 || state.pausedFormFields !== 0) {
@@ -315,25 +322,25 @@ async function main() {
       client.send('Runtime.enable'),
       client.send('Network.enable'),
     ]);
-    if (HERO_INCIDENT_MAINTENANCE) {
+    if (SWAP_GATED) {
       await client.send('Page.addScriptToEvaluateOnNewDocument', { source: WALLET_RECORDER });
     }
     const swapNav = await client.send('Page.navigate', { url: `http://127.0.0.1:${address.port}/swap` });
-    if (HERO_INCIDENT_MAINTENANCE && swapNav.errorText) throw new Error(`/swap navigation failed: ${swapNav.errorText}`);
+    if (SWAP_GATED && swapNav.errorText) throw new Error(`/swap navigation failed: ${swapNav.errorText}`);
 
-    if (HERO_INCIDENT_MAINTENANCE) {
+    if (SWAP_GATED) {
       const paused = await assertSwapMaintenancePause(client);
       writeFileSync(REPORT, `${JSON.stringify({
         timestamp: new Date().toISOString(),
         result: 'PASS',
-        mode: 'incident-maintenance',
+        mode: HERO_INCIDENT_MAINTENANCE ? 'incident-maintenance' : 'coming-soon-v3-not-live',
         path: '/swap',
         paused,
       }, null, 2)}\n`);
-      console.log('HERO swap intent confirm browser gate: PASS (incident maintenance ON: /swap paused, no swap form, no wallet write/sign)');
+      console.log(`HERO swap intent confirm browser gate: PASS (${HERO_INCIDENT_MAINTENANCE ? 'incident maintenance ON' : 'v3 not live'}: /swap paused, no swap form, no wallet write/sign)`);
       return;
     }
-    // Flag OFF: original swap-intent assertions, unchanged.
+    // Maintenance OFF and v3 live: original swap-intent assertions, unchanged.
 
     await waitFor(
       client,

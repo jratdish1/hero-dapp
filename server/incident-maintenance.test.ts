@@ -6,8 +6,13 @@ import {
   INCIDENT_ALLOWED_MUTATIONS,
   INCIDENT_PAUSED_MUTATIONS,
   INCIDENT_SERVER_PAUSED_ERROR,
+  INCIDENT_DCA_RESUME_ERROR,
+  V3_GATED_MUTATIONS,
+  V3_NOT_LIVE_ERROR,
+  assertDcaStatusAllowed,
   assertIncidentMutationAllowed,
   isServerIncidentMaintenanceOn,
+  isServerV3ContractsLive,
 } from "./_core/incident-maintenance";
 import { appRouter } from "./routers";
 
@@ -48,8 +53,34 @@ describe("server incident maintenance flag", () => {
   it("rejects every paused mutation while ON and allows them while OFF", () => {
     for (const path of INCIDENT_PAUSED_MUTATIONS) {
       expect(() => assertIncidentMutationAllowed(path, "mutation", {})).toThrow(INCIDENT_SERVER_PAUSED_ERROR);
-      expect(() => assertIncidentMutationAllowed(path, "mutation", { HERO_INCIDENT_MAINTENANCE: "false" })).not.toThrow();
+      expect(() =>
+        assertIncidentMutationAllowed(path, "mutation", { HERO_INCIDENT_MAINTENANCE: "false", HERO_V3_CONTRACTS_LIVE: "true" }),
+      ).not.toThrow();
     }
+  });
+
+  it("keeps DAO and swap writes closed until v3 is live, even with maintenance OFF", () => {
+    expect(isServerV3ContractsLive({})).toBe(false);
+    expect(isServerV3ContractsLive({ HERO_V3_CONTRACTS_LIVE: "1" })).toBe(false);
+    expect(isServerV3ContractsLive({ HERO_V3_CONTRACTS_LIVE: "TRUE" })).toBe(false);
+    expect(isServerV3ContractsLive({ HERO_V3_CONTRACTS_LIVE: "true" })).toBe(true);
+    const off = { HERO_INCIDENT_MAINTENANCE: "false" };
+    for (const path of V3_GATED_MUTATIONS) {
+      expect(path.startsWith("dao.") || path === "swap.record").toBe(true);
+      expect(() => assertIncidentMutationAllowed(path, "mutation", off)).toThrow(V3_NOT_LIVE_ERROR);
+      expect(() => assertIncidentMutationAllowed(path, "query", off)).not.toThrow();
+    }
+    // Every dao.* mutation is gated; non-DAO paused mutations reopen with maintenance alone.
+    for (const path of INCIDENT_PAUSED_MUTATIONS) {
+      if (path.startsWith("dao.")) expect(V3_GATED_MUTATIONS.has(path)).toBe(true);
+    }
+    expect(() => assertIncidentMutationAllowed("spin.execute", "mutation", off)).not.toThrow();
+  });
+
+  it("dca.updateStatus may pause or cancel during maintenance but not resume", () => {
+    expect(() => assertDcaStatusAllowed("active", {})).toThrow(INCIDENT_DCA_RESUME_ERROR);
+    for (const st of ["paused", "completed", "cancelled"]) expect(() => assertDcaStatusAllowed(st, {})).not.toThrow();
+    expect(() => assertDcaStatusAllowed("active", { HERO_INCIDENT_MAINTENANCE: "false" })).not.toThrow();
   });
 
   it("never blocks queries or unrelated mutations", () => {
@@ -119,5 +150,20 @@ describe("tRPC router honours the incident pause", () => {
       heroBalance: "1",
     }).catch(e => e);
     expect(error?.message).not.toBe(INCIDENT_SERVER_PAUSED_ERROR);
+  });
+
+  it("rejects dao.votes.cast with the v3 error when maintenance is OFF but v3 is not live", async () => {
+    process.env.HERO_INCIDENT_MAINTENANCE = "false";
+    delete process.env.HERO_V3_CONTRACTS_LIVE;
+    const caller = appRouter.createCaller(ctxWithBoundWallet());
+    const error = await (caller.dao.votes.cast as (i: unknown) => Promise<unknown>)({}).catch((e: unknown) => e);
+    expect(error).toBeInstanceOf(TRPCError);
+    expect((error as TRPCError).message).toBe(V3_NOT_LIVE_ERROR);
+  });
+
+  it("rejects resuming a DCA order through the router during maintenance", async () => {
+    delete process.env.HERO_INCIDENT_MAINTENANCE;
+    const caller = appRouter.createCaller(ctxWithBoundWallet());
+    await expect(caller.dca.updateStatus({ orderId: 1, status: "active" })).rejects.toThrow(INCIDENT_DCA_RESUME_ERROR);
   });
 });
