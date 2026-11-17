@@ -11,9 +11,17 @@ import { upsertInfluencerMention, getInfluencerMentionByTweetId, saveMvsContent,
 import { alertNewMention } from "./telegramBot";
 import { notifyOwner } from "./_core/notification";
 import { callDataApi } from "./_core/dataApi";
+import { xApiConfigured, xGetUserId, xGetUserTweetsLegacy } from "./xApi";
 
-// Default: every 4 hours (in ms)
-const DEFAULT_INTERVAL_MS = 4 * 60 * 60 * 1000;
+// Default: every 4 hours (in ms). Override with X_FEED_INTERVAL_HOURS, clamped to 1h..24h.
+// The upper clamp matters: setInterval treats any delay above 2^31-1 ms (~596h, or
+// Infinity) as 1 ms, which would hammer the paid X API in a tight loop.
+export function resolveIntervalMs(raw: string | undefined = process.env.X_FEED_INTERVAL_HOURS): number {
+  const hours = Number(raw);
+  const safe = Number.isFinite(hours) && hours > 0 ? Math.min(24, Math.max(1, hours)) : 4;
+  return safe * 60 * 60 * 1000;
+}
+const DEFAULT_INTERVAL_MS = resolveIntervalMs();
 const FETCH_COUNT = 40;
 const CRYPMVS_USERNAME = "CrypMvs";
 
@@ -25,6 +33,7 @@ let lastRunResult: { fetched: number; newCount: number; alertsSent: number; mvsN
 /** Fetch @CrypMvs rest_id */
 async function getCrypMvsRestId(): Promise<string | null> {
   try {
+    if (xApiConfigured()) return await xGetUserId(CRYPMVS_USERNAME);
     const result = await callDataApi("Twitter/get_user_profile_by_username", {
       query: { username: CRYPMVS_USERNAME },
     }) as any;
@@ -46,18 +55,27 @@ async function fetchCrypMvsContent(): Promise<number> {
       return 0;
     }
 
-    const result = await callDataApi("Twitter/get_user_tweets", {
-      query: { user: restId, count: String(20) },
-    }) as any;
+    // Normalise both sources into a flat list of legacy tweet results.
+    const tweetResults: any[] = [];
+    if (xApiConfigured()) {
+      tweetResults.push(...(await xGetUserTweetsLegacy(restId, 20)));
+    } else {
+      const result = await callDataApi("Twitter/get_user_tweets", {
+        query: { user: restId, count: String(20) },
+      }) as any;
+      const instructions = result?.result?.timeline?.instructions || [];
+      for (const instruction of instructions) {
+        if (instruction.type !== "TimelineAddEntries") continue;
+        for (const entry of instruction.entries || []) {
+          if (!entry.entryId?.startsWith("tweet-")) continue;
+          const tr = entry.content?.itemContent?.tweet_results?.result;
+          if (tr) tweetResults.push(tr);
+        }
+      }
+    }
 
-    const instructions = result?.result?.timeline?.instructions || [];
-    for (const instruction of instructions) {
-      if (instruction.type !== "TimelineAddEntries") continue;
-      const entries = instruction.entries || [];
-      for (const entry of entries) {
-        if (!entry.entryId?.startsWith("tweet-")) continue;
-        const tweetResult = entry.content?.itemContent?.tweet_results?.result;
-        if (!tweetResult) continue;
+    {
+      for (const tweetResult of tweetResults) {
 
         const legacy = tweetResult.legacy;
         if (!legacy) continue;
