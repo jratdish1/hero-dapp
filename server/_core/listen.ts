@@ -12,8 +12,9 @@ export type ListenOptions = {
  */
 export function resolveListenOptions(env: NodeJS.ProcessEnv = process.env): ListenOptions {
   const host = (env.HOST && env.HOST.trim()) || "127.0.0.1";
-  const raw = env.PORT ?? "3000";
-  const port = Number.parseInt(String(raw), 10);
+  const raw = String(env.PORT ?? "3000").trim();
+  // Digits only: parseInt would silently accept "3000abc" or "8080.5".
+  const port = /^\d+$/.test(raw) ? Number(raw) : Number.NaN;
   if (!Number.isInteger(port) || port < 1 || port > 65535) {
     throw new Error(`Invalid PORT: ${raw}`);
   }

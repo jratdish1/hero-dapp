@@ -21,13 +21,21 @@ describe("resolveListenOptions", () => {
   test("rejects an invalid PORT", () => {
     expect(() => resolveListenOptions({ PORT: "nope" })).toThrow(/Invalid PORT/);
   });
+
+  test("rejects trailing junk, decimals, zero and out-of-range PORT", () => {
+    for (const bad of ["3000abc", "8080.5", "0", "65536", "-1", ""]) {
+      expect(() => resolveListenOptions({ PORT: bad })).toThrow(/Invalid PORT/);
+    }
+  });
 });
 
 describe("listenOrFail", () => {
   const servers: ReturnType<typeof createServer>[] = [];
   afterEach(async () => {
     await Promise.all(
-      servers.splice(0).map(
+      // Only close servers that actually bound; closing the rejected one throws
+      // ERR_SERVER_NOT_RUNNING and used to fail this suite in teardown.
+      servers.splice(0).filter((s) => s.listening).map(
         (s) =>
           new Promise<void>((resolve, reject) => {
             s.close((err) => (err ? reject(err) : resolve()));
