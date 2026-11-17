@@ -23,6 +23,19 @@ export const HERO_INCIDENT_MESSAGE =
   "Existing stakers can still leave with \"Withdraw without penalty\" (claims DAI, then returns all staked HERO); a plain unstake opens after the 7-day lock. Revoke token approvals directly at revoke.cash. " +
   "Your funds are not affected by viewing this site. Do not send funds to any HERO contract or wallet address until this notice is removed.";
 
+/**
+ * DAO, single-sided staking (SSS) and swap stay as "Coming soon" placeholders
+ * until the replacement (v3) contracts are deployed and verified, even after
+ * the incident banner is lifted. Only the exact build-time value "true" turns
+ * the real pages back on (owner VETS GO, t116u 2026-11-16).
+ */
+export const HERO_V3_CONTRACTS_LIVE: boolean =
+  (import.meta.env.VITE_HERO_V3_CONTRACTS_LIVE ?? "false") === "true";
+
+export const HERO_COMING_SOON_MESSAGE =
+  "is being rebuilt on new smart contracts. It will return here once the new contracts are deployed and verified. " +
+  "Until then there is nothing to connect, approve, or sign on this page, and no HERO contract or wallet address should be used.";
+
 export const HERO_INCIDENT_WRITE_BLOCKED_ERROR =
   "Wallet transactions and signatures are paused for maintenance";
 

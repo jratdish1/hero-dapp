@@ -75,7 +75,39 @@ export function isIncidentPausedMutation(path: string, type: string): boolean {
   return type === "mutation" && INCIDENT_PAUSED_MUTATIONS.has(path);
 }
 
-/** Throws a PRECONDITION_FAILED TRPCError for a paused mutation while maintenance is on. */
+/**
+ * Server mirror of the client's VITE_HERO_V3_CONTRACTS_LIVE "Coming soon" gate.
+ * DAO and swap stay closed until the v3 contracts are deployed and verified, even
+ * after maintenance is turned off, so a direct /api/trpc call cannot create
+ * proposals, votes or swap records while the UI says the feature does not exist.
+ * Default OFF: only an exact "true" in HERO_V3_CONTRACTS_LIVE opens them.
+ */
+export const V3_GATED_MUTATIONS: ReadonlySet<string> = new Set([
+  "dao.wallet.bindForVoting",
+  "dao.proposals.create",
+  "dao.proposals.updateStatus",
+  "dao.votes.cast",
+  "dao.delegates.register",
+  "dao.delegates.update",
+  "dao.delegations.create",
+  "dao.delegations.revoke",
+  "dao.treasury.record",
+  "swap.record",
+]);
+
+export const V3_NOT_LIVE_ERROR =
+  "Coming soon: DAO and swap writes open after the HERO v3 contracts are deployed and verified.";
+
+export function isServerV3ContractsLive(
+  env: Record<string, string | undefined> = process.env,
+): boolean {
+  return env.HERO_V3_CONTRACTS_LIVE === "true";
+}
+
+/**
+ * Throws a PRECONDITION_FAILED TRPCError for a paused mutation while maintenance is
+ * on, and for a v3-gated mutation until HERO_V3_CONTRACTS_LIVE is exactly "true".
+ */
 export function assertIncidentMutationAllowed(
   path: string,
   type: string,
@@ -83,5 +115,21 @@ export function assertIncidentMutationAllowed(
 ): void {
   if (isServerIncidentMaintenanceOn(env) && isIncidentPausedMutation(path, type)) {
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: INCIDENT_SERVER_PAUSED_ERROR });
+  }
+  if (type === "mutation" && V3_GATED_MUTATIONS.has(path) && !isServerV3ContractsLive(env)) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: V3_NOT_LIVE_ERROR });
+  }
+}
+
+export const INCIDENT_DCA_RESUME_ERROR =
+  "Paused for maintenance (HERO incident): DCA orders can be paused or cancelled, not resumed.";
+
+/** dca.updateStatus is allowed during maintenance only when it reduces exposure. */
+export function assertDcaStatusAllowed(
+  status: string,
+  env: Record<string, string | undefined> = process.env,
+): void {
+  if (status === "active" && isServerIncidentMaintenanceOn(env)) {
+    throw new TRPCError({ code: "PRECONDITION_FAILED", message: INCIDENT_DCA_RESUME_ERROR });
   }
 }

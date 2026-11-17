@@ -3,7 +3,7 @@ import { initTRPC, TRPCError } from "@trpc/server";
 import superjson from "superjson";
 import type { TrpcContext } from "./context";
 import { sql } from "drizzle-orm";
-import { assertIncidentMutationAllowed } from "./incident-maintenance";
+import { assertDcaStatusAllowed, assertIncidentMutationAllowed } from "./incident-maintenance";
 
 const t = initTRPC.context<TrpcContext>().create({
   transformer: superjson,
@@ -13,8 +13,14 @@ export const router = t.router;
 
 // HERO incident 2026-10-07 (IR P2 LInS): every procedure passes this guard,
 // which rejects DAO / spin / giveaway mutations while maintenance is on.
-const incidentMaintenanceGuard = t.middleware(({ path, type, next }) => {
+const incidentMaintenanceGuard = t.middleware(async ({ path, type, next, getRawInput }) => {
   assertIncidentMutationAllowed(path, type);
+  // dca.updateStatus stays open in maintenance only to pause/cancel; resuming
+  // ("active") is rejected here, before the handler runs.
+  if (type === "mutation" && path === "dca.updateStatus") {
+    const raw = (await getRawInput()) as { status?: unknown } | undefined;
+    assertDcaStatusAllowed(String(raw?.status ?? ""));
+  }
   return next();
 });
 const baseProcedure = t.procedure.use(incidentMaintenanceGuard);
