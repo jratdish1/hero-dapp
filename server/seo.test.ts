@@ -98,14 +98,18 @@ describe('SEO Improvements', () => {
     });
 
     it('includes all core DeFi pages', () => {
-      const corePages = ['/swap', '/dashboard', '/stake', '/tokenomics', '/portfolio', '/dca', '/limits'];
+      const corePages = ['/dashboard', '/stake', '/tokenomics', '/portfolio', '/dca', '/limits'];
       for (const page of corePages) {
         expect(sitemapXml).toContain(`<loc>https://herobase.io${page}</loc>`);
       }
     });
 
-    it('includes NFT and community pages', () => {
-      expect(sitemapXml).toContain('<loc>https://herobase.io/nft</loc>');
+    it('omits the paused /swap and /nft routes (incident maintenance, noindex)', () => {
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/swap</loc>');
+      expect(sitemapXml).not.toContain('<loc>https://herobase.io/nft</loc>');
+    });
+
+    it('includes media and community pages', () => {
       expect(sitemapXml).toContain('<loc>https://herobase.io/media</loc>');
       expect(sitemapXml).toContain('<loc>https://herobase.io/community</loc>');  // /blog was renamed to /community
     });

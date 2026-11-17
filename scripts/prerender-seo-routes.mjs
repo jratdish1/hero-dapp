@@ -8,14 +8,15 @@
  *   - sitemap.xml with lastmod (indexable 200 routes only)
  *   - robots.txt with a single consistent Allow for GPTBot, ClaudeBot, Google-Extended
  *   - 404.html
- *   - nginx/herobase-spa-allowlist.conf (deploy snippet)
+ *   - ../nginx/herobase-spa-allowlist.conf (deploy snippet, outside the docroot)
  *
  * Usage:
  *   node scripts/prerender-seo-routes.mjs --shell <index.html> --out <dir>
  *   --lastmod YYYY-MM-DD (default: today UTC date)
+ *   --nginx-out <dir> (default: <out>/../nginx; never inside <out>)
  */
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ORIGIN = "https://herobase.io";
@@ -122,7 +123,10 @@ function escapeRe(s) {
   return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-export function applyHead(shell, { path, title, description, robots }) {
+export function applyHead(shell, { path, title, description, robots, index }) {
+  // A route kept out of the sitemap must also carry noindex; otherwise it inherits
+  // the shell's "index, follow" (e.g. /dao/proposals/create).
+  if (index === false && !robots) robots = "noindex, follow";
   const canon = canonicalFor(path);
   let html = shell;
   html = html.replace(/<title>[\s\S]*?<\/title>/i, `<title>${title}</title>`);
@@ -316,11 +320,12 @@ export function notFoundHtml(shell) {
 }
 
 function parseArgs(argv) {
-  const out = { shell: "", outDir: "", lastmod: new Date().toISOString().slice(0, 10) };
+  const out = { shell: "", outDir: "", nginxOut: "", lastmod: new Date().toISOString().slice(0, 10) };
   for (let i = 0; i < argv.length; i++) {
     if (argv[i] === "--shell") out.shell = argv[++i];
     else if (argv[i] === "--out") out.outDir = argv[++i];
     else if (argv[i] === "--lastmod") out.lastmod = argv[++i];
+    else if (argv[i] === "--nginx-out") out.nginxOut = argv[++i];
   }
   return out;
 }
@@ -364,7 +369,13 @@ function main() {
   writeFileSync(join(outDir, "sitemap.xml"), sitemapXml(REAL_ROUTES, args.lastmod));
   writeFileSync(join(outDir, "robots.txt"), robotsTxt());
 
-  const nginxDir = join(outDir, "nginx");
+  // Deploy snippets go next to the docroot, never inside it: anything under
+  // dist/public is served by nginx (try_files $uri) and would expose server config.
+  const nginxDir = args.nginxOut ? resolve(args.nginxOut) : resolve(outDir, "..", "nginx");
+  if (nginxDir === outDir || nginxDir.startsWith(outDir + sep)) {
+    console.error(`refusing to write nginx snippets inside the public docroot: ${nginxDir}`);
+    process.exit(2);
+  }
   mkdirSync(nginxDir, { recursive: true });
   writeFileSync(join(nginxDir, "herobase-spa-allowlist.conf"), nginxSnippet());
   writeFileSync(join(nginxDir, "herobase-seo-map.conf"), nginxMap());

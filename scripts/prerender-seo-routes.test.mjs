@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, it } from "node:test";
@@ -82,6 +82,17 @@ describe("prerender-seo-routes", () => {
     assert.match(readFileSync(join(out, "sitemap.xml"), "utf8"), /<lastmod>2026-11-16<\/lastmod>/);
     assert.match(readFileSync(join(out, "robots.txt"), "utf8"), /User-agent: GPTBot\nAllow: \//);
     assert.match(readFileSync(join(out, "404.html"), "utf8"), /Page not found/);
-    assert.match(readFileSync(join(out, "nginx/herobase-spa-allowlist.conf"), "utf8"), /=404;/);
+    assert.match(readFileSync(join(dir, "nginx/herobase-spa-allowlist.conf"), "utf8"), /=404;/);
+    assert.equal(existsSync(join(out, "nginx")), false, "nginx config must not land in the public docroot");
+    assert.match(readFileSync(join(out, "dao/proposals/create/index.html"), "utf8"), /<meta name="robots" content="noindex, follow" \/>/);
+    const bad = spawnSync(process.execPath, [script, "--shell", shell, "--out", out, "--nginx-out", join(out, "nginx")], { encoding: "utf8" });
+    assert.equal(bad.status, 2);
+  });
+
+  it("every non-indexed route gets a noindex robots meta", () => {
+    const shell = '<meta name="robots" content="index, follow" /><body></body>';
+    for (const route of REAL_ROUTES.filter((r) => !r.index)) {
+      assert.match(applyHead(shell, route), /content="noindex,/, route.path);
+    }
   });
 });
