@@ -12,6 +12,8 @@
 
 const X_API_BASE = (process.env.X_API_BASE_URL || "https://api.x.com/2").replace(/\/$/, "");
 
+export const X_API_TIMEOUT_MS = 15_000;
+
 const TWEET_FIELDS = [
   "created_at",
   "public_metrics",
@@ -100,8 +102,11 @@ async function xGet<T>(path: string, params: Record<string, string>): Promise<T>
   if (!token) throw new Error("X_BEARER_TOKEN is not configured");
   const url = new URL(`${X_API_BASE}${path}`);
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  // Bounded: a hung request would otherwise hold mentionScheduler's isRunning
+  // flag forever and silently stop every future refresh cycle.
   const res = await fetch(url, {
     headers: { authorization: `Bearer ${token}`, accept: "application/json" },
+    signal: AbortSignal.timeout(X_API_TIMEOUT_MS),
   });
   if (!res.ok) {
     // Never echo the token; status + short body is enough to diagnose 401/403/429.

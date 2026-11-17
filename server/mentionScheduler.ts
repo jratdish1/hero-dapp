@@ -13,8 +13,15 @@ import { notifyOwner } from "./_core/notification";
 import { callDataApi } from "./_core/dataApi";
 import { xApiConfigured, xGetUserId, xGetUserTweetsLegacy } from "./xApi";
 
-// Default: every 4 hours (in ms). Override with X_FEED_INTERVAL_HOURS (min 1h to respect X API cost/limits).
-const DEFAULT_INTERVAL_MS = Math.max(1, Number(process.env.X_FEED_INTERVAL_HOURS) || 4) * 60 * 60 * 1000;
+// Default: every 4 hours (in ms). Override with X_FEED_INTERVAL_HOURS, clamped to 1h..24h.
+// The upper clamp matters: setInterval treats any delay above 2^31-1 ms (~596h, or
+// Infinity) as 1 ms, which would hammer the paid X API in a tight loop.
+export function resolveIntervalMs(raw: string | undefined = process.env.X_FEED_INTERVAL_HOURS): number {
+  const hours = Number(raw);
+  const safe = Number.isFinite(hours) && hours > 0 ? Math.min(24, Math.max(1, hours)) : 4;
+  return safe * 60 * 60 * 1000;
+}
+const DEFAULT_INTERVAL_MS = resolveIntervalMs();
 const FETCH_COUNT = 40;
 const CRYPMVS_USERNAME = "CrypMvs";
 

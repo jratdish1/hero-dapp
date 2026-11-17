@@ -1,5 +1,6 @@
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { toLegacyTweet, xApiConfigured, xGetUserTweetsLegacy } from "./xApi";
+import { toLegacyTweet, xApiConfigured, xGetUserTweetsLegacy, X_API_TIMEOUT_MS } from "./xApi";
+import { resolveIntervalMs } from "./mentionScheduler";
 import { parseTweet } from "./twitterFetcher";
 
 const includes = {
@@ -68,5 +69,34 @@ describe("xApi adapter", () => {
     vi.stubGlobal("fetch", vi.fn(async () => new Response("Unauthorized", { status: 401, statusText: "Unauthorized" })));
     await expect(xGetUserTweetsLegacy("1")).rejects.toThrow(/401/);
     await expect(xGetUserTweetsLegacy("1")).rejects.not.toThrow(/secret-xyz/);
+  });
+
+  it("bounds every X API request with an abort timeout", async () => {
+    process.env.X_BEARER_TOKEN = "t";
+    const fetchMock = vi.fn(async () => new Response(JSON.stringify({ data: [], includes }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await xGetUserTweetsLegacy("1");
+    const [, init] = fetchMock.mock.calls[0] as unknown as [URL, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+    expect(X_API_TIMEOUT_MS).toBeLessThanOrEqual(30_000);
+  });
+});
+
+describe("X feed interval", () => {
+  const H = 60 * 60 * 1000;
+  it("defaults to 4h and clamps to 1h..24h", () => {
+    expect(resolveIntervalMs(undefined)).toBe(4 * H);
+    expect(resolveIntervalMs("abc")).toBe(4 * H);
+    expect(resolveIntervalMs("0")).toBe(4 * H);
+    expect(resolveIntervalMs("-5")).toBe(4 * H);
+    expect(resolveIntervalMs("0.25")).toBe(1 * H);
+    expect(resolveIntervalMs("6")).toBe(6 * H);
+    expect(resolveIntervalMs("1000")).toBe(24 * H);
+    expect(resolveIntervalMs("Infinity")).toBe(4 * H);
+  });
+  it("never exceeds the setInterval 32-bit limit", () => {
+    for (const v of ["596", "597", "100000", "1e308"]) {
+      expect(resolveIntervalMs(v)).toBeLessThanOrEqual(2 ** 31 - 1);
+    }
   });
 });
