@@ -85,7 +85,7 @@ export default function NFTMint() {
     // Collection
     totalMinted, maxSupply, remaining, mintPhase, mintPrice, whitelistPrice,
     // User
-    isConnected, address, userBalance, userMinted, maxMintable, canMint,
+    isConnected, address, userBalance, userMinted, maxMintable, canMint, pricesLoaded,
     // Holder Utility
     isHolder, holderTier, tierName, tierColor, feeDiscount, canSpin,
     // Mint Actions
@@ -119,7 +119,8 @@ export default function NFTMint() {
   }, [canMint, mint, quantity]);
 
   const currentPrice = mintPhase === MintPhase.WHITELIST ? whitelistPrice : mintPrice;
-  const totalCost = (parseFloat(currentPrice) * quantity).toFixed(4);
+  const unitPrice = parseFloat(currentPrice);
+  const totalCost = Number.isFinite(unitPrice) ? (unitPrice * quantity).toFixed(4) : "\u2014";
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
@@ -272,7 +273,7 @@ export default function NFTMint() {
               className="w-full py-4 bg-gray-700 text-gray-400 font-bold rounded-lg cursor-not-allowed"
               disabled
             >
-              {remaining === 0 ? 'SOLD OUT' : 'Wallet Limit Reached'}
+              {!pricesLoaded ? 'Loading On-Chain Price...' : remaining === 0 ? 'SOLD OUT' : 'Wallet Limit Reached'}
             </button>
           ) : (
             <button
@@ -390,3 +391,4 @@ export default function NFTMint() {
     </div>
   );
 }
+
